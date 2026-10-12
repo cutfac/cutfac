@@ -4,6 +4,8 @@ export interface FactoryDesktop {
   openWorkspace: () => Promise<boolean>;
   /** Show a workspace file or folder in Finder / Explorer. `path` is absolute. */
   revealPath: (path: string) => Promise<void>;
+  /** The operating system and its version, such as `macOS 15.4.0`. */
+  platform: string;
 }
 
 declare global {

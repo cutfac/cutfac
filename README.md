@@ -61,6 +61,14 @@ bun run dist:desktop   # self-contained macOS app in release/, with the server c
 The app runs the same server as `factory serve` as a sidecar on `127.0.0.1` and opens the board in
 its window.
 
+### Feedback form
+
+"Send feedback" in the sidebar opens a [Tally](https://tally.so) form in the browser. Set
+`VITE_FEEDBACK_FORM_ID` in `.env` (see `.env.example`) or the environment before building the web
+UI; without it the entry is hidden. The link fills the form's hidden fields `version`, `locale` and
+`platform` (`macOS 15.4.0` in the desktop app, `web` in a browser), so the form needs hidden fields
+with those names. Nothing is sent until the form is submitted.
+
 ## Workspace layout
 
 ```

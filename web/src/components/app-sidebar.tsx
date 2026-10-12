@@ -6,6 +6,7 @@ import {
   FactoryIcon,
   FolderOpenIcon,
   LibraryIcon,
+  MessageSquareIcon,
   PackageIcon,
   PlugZapIcon,
   PlusIcon,
@@ -40,6 +41,7 @@ import {
 import { api, type ItemSummary, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
+import { feedbackUrl } from "../lib/feedback.ts";
 
 /** Every piece of sidebar copy lives here, so translating the app means editing one place. */
 export const NAV_LABELS = {
@@ -51,6 +53,7 @@ export const NAV_LABELS = {
   calendar: "Calendar",
   product: "Product",
   setup: "Setup",
+  sendFeedback: "Send feedback",
   videos: "Videos",
   allVideos: "All videos",
   toggle: "Toggle sidebar",
@@ -60,6 +63,13 @@ export const NAV_LABELS = {
       ? `${item.title} (${item.status}, ${item.openFeedback} open feedback)`
       : `${item.title} (${item.status})`,
 } as const;
+
+/** Undefined unless the build names a feedback form, so forks don't send feedback to ours. */
+const FEEDBACK_URL = feedbackUrl(import.meta.env.VITE_FEEDBACK_FORM_ID, {
+  version: import.meta.env.APP_VERSION,
+  locale: navigator.language,
+  platform: desktop?.platform ?? "web",
+});
 
 interface MainNavItem {
   view: string;
@@ -299,6 +309,21 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
             <PlugZapIcon />
             <span>{NAV_LABELS.setup}</span>
           </LinkRow>
+          {FEEDBACK_URL === undefined ? null : (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip={NAV_LABELS.sendFeedback}
+                // The desktop app hands new-window links to the default browser.
+                render={
+                  // oxlint-disable-next-line jsx-a11y/control-has-associated-label -- the label is the button's children
+                  <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer" />
+                }
+              >
+                <MessageSquareIcon />
+                <span>{NAV_LABELS.sendFeedback}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
         <SidebarTrigger
           title={NAV_LABELS.toggle}
