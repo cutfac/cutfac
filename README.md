@@ -1,18 +1,127 @@
-# Content Factory
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
+    <img alt="Content Factory logo" src=".github/assets/logo-light.svg" width="88">
+  </picture>
+</p>
 
-A local-first content factory for short-form marketing (TikTok, Reels, Shorts), built for solo
-developers who market their own app. Bring your own agent: Claude Code or Codex does the work
-through MCP, and you review everything on a local web board.
+<h1 align="center">Content Factory</h1>
 
-- **References**: drop a video or paste a URL. The factory extracts scene cuts, hook frames, a
-  contact sheet, and audio, and your agent writes the analysis.
-- **Formats**: reusable recipes distilled from references (hook rules, beats, duration, checks,
-  optional render template).
-- **Items**: one publishable post per folder, `[9x16]`-prefixed media, status from `idea` to
-  `published`, with timecoded review feedback, upload checks, schedule, and metrics.
-- **Product**: your app's positioning, CTA rules, and reviewed captures. Every agent run reads it.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL%203.0-blue.svg" alt="License: AGPL-3.0"></a>
+  <img src="https://img.shields.io/badge/macOS-app-000000?logo=apple&logoColor=white" alt="macOS app">
+  <img src="https://img.shields.io/badge/Bun-1.3%2B-000000?logo=bun&logoColor=white" alt="Bun 1.3+">
+  <img src="https://img.shields.io/badge/MCP-server-000000?logo=modelcontextprotocol&logoColor=white" alt="MCP server">
+</p>
 
-Everything is plain folders and YAML on your machine. Nothing is uploaded.
+<div align="center">
+  <strong>
+    Content Factory is a local-first studio for short-form marketing videos, made for solo developers who market their own app. Your own coding agent does the work, and you review it on a board.
+    <br /><br />
+    Get the signed Mac app, or build the open-source edition yourself.
+  </strong>
+</div>
+
+<p align="center">
+  <br />
+  <a href="#quick-start"><strong>Quick start »</strong></a>
+  <br /><br />
+  <a href="docs/architecture.md">Architecture</a>
+  ·
+  <a href="https://github.com/w00ing/content-factory/issues">Issues</a>
+  ·
+  <a href="https://wyverselabs.com">Wyverse Labs</a>
+</p>
+
+<p align="center"><strong>Made for:</strong></p>
+<p align="center">
+  <img src="https://img.shields.io/badge/TikTok-000000?logo=tiktok&logoColor=white" alt="TikTok">
+  <img src="https://img.shields.io/badge/Instagram%20Reels-E4405F?logo=instagram&logoColor=white" alt="Instagram Reels">
+  <img src="https://img.shields.io/badge/YouTube%20Shorts-FF0000?logo=youtubeshorts&logoColor=white" alt="YouTube Shorts">
+</p>
+
+<p align="center"><strong>With your own agent:</strong></p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Claude%20Code-D97757?logo=claude&logoColor=white" alt="Claude Code">
+  <img src="https://img.shields.io/badge/Codex-000000" alt="Codex">
+  <img src="https://img.shields.io/badge/Any%20MCP%20client-444444?logo=modelcontextprotocol&logoColor=white" alt="Any MCP client">
+</p>
+
+<br />
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/editor-dark.png">
+    <img alt="The editor: a part of the timeline and a box on the video are selected, and the agent's reply sits in the chat beside it" src=".github/assets/editor-light.png">
+  </picture>
+</p>
+
+## ✨ Features
+
+- **Point at what to change.** Drag across the timeline to pick a part, draw a box on the video, and
+  say what should change. Your agent edits the file, then you compare before and after and keep it
+  or restore the old one.
+- **One board for every post.** Each video moves from idea to drafting, review, approved, scheduled
+  and published, with timecoded feedback and upload checks along the way.
+- **References in, formats out.** Drop a video or paste a URL. The factory pulls scene cuts, hook
+  frames, a contact sheet and the audio, your agent writes the analysis, and the patterns that work
+  become reusable formats.
+- **Your product in every run.** Import positioning and screenshots from an App Store, Google Play
+  or landing page URL. Every agent run reads it, so hooks and CTAs stay on message.
+- **Calendar and metrics.** Plan each post per platform, then log views, likes and comments after it
+  goes out.
+- **Bring your own agent.** Claude Code and Codex connect through the built-in MCP server and run
+  on your machine. Without one, "Copy prompt" hands the request to any agent you like.
+- **Files, not a database.** A workspace is plain folders and YAML, so it works with Git, Finder and
+  your editor.
+- **English and Korean.**
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/board-dark.png">
+    <img alt="The board: videos in idea, drafting, review and approved columns, each with a cover and its format" src=".github/assets/board-light.png">
+  </picture>
+</p>
+
+## Mac app vs. open source
+
+The Mac app, Content Factory Solo, is built from this repository. Both have the same features, and
+we don't lock any of them behind a license key. Paying gets you a signed build that updates itself,
+plus content we prepare for you.
+
+| Area                                                         | Solo (Mac app)                                    | Open source (this repository)                  |
+| ------------------------------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
+| **Cost**                                                     | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
+| **Setup**                                                    | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
+| **Updates**                                                  | Install themselves                                | Pull and rebuild                               |
+| **Board, editor, references, formats, calendar, MCP server** | Included                                          | Included                                       |
+| **Agents**                                                   | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
+| **Reference feed and format packs**                          | Included once they ship                           | Not included                                   |
+| **Data**                                                     | Plain folders on your Mac                         | Plain folders on your machine                  |
+| **If you stop paying**                                       | The app keeps working at the last version you had | Not applicable                                 |
+| **Source and changes**                                       | Built from this repository                        | Fork and modify under the AGPL-3.0             |
+
+## Privacy
+
+- This repository is the open-source edition of Content Factory. The Mac app is built from the same
+  code.
+- Your workspace stays on your disk. There's no account and no telemetry, and your videos and files
+  are never uploaded.
+- Agents run on your machine with your own Claude Code or Codex login. Content Factory never asks
+  for, stores or forwards your API keys.
+- The server listens on `127.0.0.1` unless you pass `--host`.
+- It only goes online when you ask it to: importing a product page, fetching a URL reference with
+  your own `yt-dlp`, or opening the feedback form.
+- Study references you're allowed to download, and don't repost other people's videos.
+
+## Tech stack
+
+- [Bun](https://bun.sh) for the runtime, server, tests and the compiled sidecar
+- [Effect](https://effect.website) v4 for the core and the server
+- React 19, Vite, Tailwind CSS v4 and [shadcn/ui](https://ui.shadcn.com), with the React Compiler
+- Electron for the Mac app
+- ffmpeg and ffprobe for media, with optional `yt-dlp` and `whisper`
+- oxlint and oxfmt
 
 ## Requirements
 
