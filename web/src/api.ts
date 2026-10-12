@@ -225,6 +225,70 @@ export interface ItemDoc {
   updated?: string;
 }
 
+/** A saved copy of a media file, kept so any change to it can be undone. */
+export interface MediaVersion {
+  id: string;
+  /** The media file this is a version of. */
+  media: string;
+  /** Item-relative path of the copy. */
+  file: string;
+  at: string;
+  size: number;
+}
+
+export interface MediaHead {
+  version: string;
+  size: number;
+  mtime: number;
+}
+
+/**
+ * Why a media file changed: an agent's `edit`, a `restore` to before a request, a `version`
+ * picked from the history, or a change made `outside` any request.
+ */
+export type MediaCause = "edit" | "restore" | "version" | "outside";
+
+export interface MediaChange {
+  kind: "media";
+  id: string;
+  at: string;
+  media: string;
+  from: string;
+  to: string;
+  cause: MediaCause;
+  feedbackId?: string;
+}
+
+export type DetailField = "title" | "status" | "hook" | "caption" | "notes";
+
+/** Item fields as a change left them; `null` is a field that was not set. */
+export interface DetailValues {
+  title?: string;
+  status?: Status;
+  hook?: string | null;
+  caption?: string | null;
+  notes?: string | null;
+}
+
+export interface DetailsChange {
+  kind: "details";
+  id: string;
+  at: string;
+  before: DetailValues;
+  after: DetailValues;
+}
+
+export type HistoryEntry = MediaChange | DetailsChange;
+
+/** Saved media versions and the item's undo stack. */
+export interface HistoryDoc {
+  /** Entries before this index are applied; the ones after it can be redone. */
+  cursor: number;
+  entries: HistoryEntry[];
+  versions: MediaVersion[];
+  heads: Partial<Record<string, MediaHead>>;
+}
+
 export interface ItemDetail {
   id: string;
   dir: string;
@@ -235,6 +299,7 @@ export interface ItemDetail {
   /** Markdown files in the item folder, by file name. */
   docs: Partial<Record<string, string>>;
   doc: ItemDoc;
+  history: HistoryDoc;
   updatedAt: number;
 }
 
@@ -403,6 +468,21 @@ export const api = {
   restoreEdit: (id: string, feedbackId: string) =>
     send<ItemDetail, { feedbackId: string }>("POST", `/api/item/edit/restore${q(id)}`, {
       feedbackId,
+    }),
+  /** Take back the item's latest change: an edit, a rollback, or a field. */
+  undo: (id: string) => send<ItemDetail, {}>("POST", `/api/item/history/undo${q(id)}`, {}),
+  redo: (id: string) => send<ItemDetail, {}>("POST", `/api/item/history/redo${q(id)}`, {}),
+  /** Undo or redo up to the state right after `entryId`, or back to the start without one. */
+  goTo: (id: string, entryId: string | undefined) =>
+    send<ItemDetail, { entryId?: string }>(
+      "POST",
+      `/api/item/history/goto${q(id)}`,
+      entryId === undefined ? {} : { entryId },
+    ),
+  /** Put a saved version back in place, as a change of its own that can be undone. */
+  restoreVersion: (id: string, versionId: string) =>
+    send<ItemDetail, { versionId: string }>("POST", `/api/item/history/version${q(id)}`, {
+      versionId,
     }),
   verify: (id: string) => request<MediaReport[]>(`/api/item/verify${q(id)}`),
   agents: () => request<AgentStatus[]>("/api/agents"),

@@ -4,7 +4,9 @@ import {
   CircleXIcon,
   ClapperboardIcon,
   PlusIcon,
+  Redo2Icon,
   ShieldCheckIcon,
+  Undo2Icon,
 } from "lucide-react";
 import {
   useEffect,
@@ -52,11 +54,15 @@ import {
 } from "../api.ts";
 import { agentLabel, Chat } from "../components/editor/chat.tsx";
 import { Details } from "../components/editor/details.tsx";
+import { Hint, keepFocus } from "../components/editor/hint.tsx";
+import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { EDIT_KEYS, onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
+import { redoable, undoable } from "../lib/history.ts";
 import { Player } from "../lib/player.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import {
@@ -119,6 +125,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
+  // The server refuses to step through the history while an agent writes to the item.
+  const running = item !== undefined && (item.running || run.status === "running");
+  const history = useItemHistory(setData);
   const t = useMessages();
 
   useEffect(
@@ -160,6 +169,19 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     setMediaName(name);
     clear();
   }
+
+  /** Undo or redo a change to the item, when there is one to take back or make again. */
+  function edit(command: EditCommand) {
+    if (item === undefined || running) return;
+
+    const entry = command === "undo" ? undoable(item.history) : redoable(item.history);
+
+    if (entry !== undefined) history.step(command, item.id);
+  }
+
+  const onEdit = useEffectEvent(edit);
+
+  useEffect(() => onEditCommand((command) => onEdit(command)), []);
 
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     if (event.metaKey || event.ctrlKey || event.altKey || within(event.target, TEXT_ENTRY)) return;
@@ -238,12 +260,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     );
   }
 
-  const running = item.running || run.status === "running";
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
-        <Toolbar item={item} running={running} agent={run.agent} onItem={setData} />
+        <Toolbar item={item} running={running} agent={run.agent} onItem={setData} onEdit={edit} />
         {media === undefined ? (
           <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
         ) : (
@@ -307,6 +327,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             <TabsList className="w-full">
               <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
               <TabsTrigger value="checks">{t.item.checks}</TabsTrigger>
+              <TabsTrigger value="history">{t.item.history}</TabsTrigger>
               <TabsTrigger value="details">{t.item.details}</TabsTrigger>
             </TabsList>
           </div>
@@ -342,6 +363,17 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               <Checks id={item.id} />
             </div>
           </TabsContent>
+          <TabsContent value="history" className="min-h-0 overflow-y-auto">
+            <div className="p-4">
+              <HistoryPanel
+                item={item}
+                running={running}
+                onGoTo={(entryId) => history.goTo(item.id, entryId)}
+                onRestore={(version) => history.restore(item.id, version)}
+                onPreview={() => player.pause()}
+              />
+            </div>
+          </TabsContent>
           <TabsContent value="details" className="min-h-0 overflow-y-auto">
             <div className="p-4">
               <Details item={item} onItem={setData} />
@@ -358,11 +390,13 @@ function Toolbar({
   running,
   agent,
   onItem,
+  onEdit,
 }: {
   item: ItemDetail;
   running: boolean;
   agent: LiveRun["agent"];
   onItem: (item: ItemDetail) => void;
+  onEdit: (command: EditCommand) => void;
 }) {
   const t = useMessages();
   const statuses = STATUSES.map((status) => ({ value: status, label: t.status[status] }));
@@ -380,6 +414,32 @@ function Toolbar({
           {t.item.editing(agentLabel(agent) ?? t.chat.agent)}
         </Badge>
       ) : null}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <Hint label={t.history.undo} keys={EDIT_KEYS.undo}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t.history.undo}
+            disabled={running || undoable(item.history) === undefined}
+            onMouseDown={keepFocus}
+            onClick={() => onEdit("undo")}
+          >
+            <Undo2Icon />
+          </Button>
+        </Hint>
+        <Hint label={t.history.redo} keys={EDIT_KEYS.redo}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t.history.redo}
+            disabled={running || redoable(item.history) === undefined}
+            onMouseDown={keepFocus}
+            onClick={() => onEdit("redo")}
+          >
+            <Redo2Icon />
+          </Button>
+        </Hint>
+      </div>
       <Select
         items={statuses}
         value={item.doc.status}
@@ -387,7 +447,7 @@ function Toolbar({
           if (status !== null) api.updateItem(item.id, { status }).then(onItem, showError);
         }}
       >
-        <SelectTrigger size="sm" className="ml-auto" aria-label={t.item.status}>
+        <SelectTrigger size="sm" aria-label={t.item.status}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>

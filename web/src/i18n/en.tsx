@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { AgentChoice, Status } from "../api.ts";
+import type { AgentChoice, DetailField, Status } from "../api.ts";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
@@ -222,6 +222,7 @@ export const en = {
     chat: "Chat",
     checks: "Checks",
     details: "Details",
+    history: "History",
     editing: (agent: string) => `${agent} is editing`,
     status: "Status",
     noMediaTitle: "No video yet",
@@ -253,6 +254,45 @@ export const en = {
     likes: "Likes",
     shares: "Shares",
     saves: "Saves",
+  },
+  history: {
+    undo: "Undo",
+    redo: "Redo",
+    undone: (change: string) => `Undone: ${change}`,
+    redone: (change: string) => `Redone: ${change}`,
+    backTo: (change: string) => `Back to right after: ${change}`,
+    backToOriginal: "Back to the original",
+    restoredVersion: (media: string) => `Restored an earlier ${media}`,
+    running: "An agent is working on this item. Wait for it or stop it before going back.",
+    emptyTitle: "No changes yet",
+    emptyBody:
+      "Edits, rollbacks, and changes to the details land here, and you can step back to any of them.",
+    changes: "Changes",
+    changesHint:
+      "Click a change to go back to right after it. Undone changes stay until you make a new one.",
+    original: "Original",
+    originalHint: "Before the first change recorded here",
+    now: "Now",
+    undoneHint: "Undone. Click to redo up to here.",
+    versions: "Saved versions",
+    versionsHint: "Every version each file has had. Restoring one is a change you can undo, too.",
+    restore: "Restore",
+    inUse: "In use",
+    edit: (request: string) => `Edit “${request}”`,
+    editMedia: (media: string) => `Edit to ${media}`,
+    rollback: (media: string) => `Rolled back ${media}`,
+    version: (media: string) => `Restored an earlier ${media}`,
+    outside: (media: string) => `Changed ${media} outside a request`,
+    renamed: (title: string) => `Renamed to “${title}”`,
+    moved: (status: string) => `Moved to ${status}`,
+    changed: (fields: string) => `Changed the ${fields}`,
+    fields: {
+      title: "title",
+      status: "status",
+      hook: "hook",
+      caption: "caption",
+      notes: "notes",
+    } satisfies Record<DetailField, string>,
   },
   chat: {
     /** Names a run that has not said which agent it is. */
