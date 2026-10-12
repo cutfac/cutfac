@@ -1,0 +1,21 @@
+# Your app. Every agent run reads this before writing copy or picking visuals.
+name: My App
+oneLiner: One sentence on what the app does for whom.
+audience: Who the content is for (level, platform habits, language).
+stores:
+  appStore: ""
+  googlePlay: ""
+  web: ""
+cta:
+  default: Search "My App" on the App Store or Google Play.
+  firstComment: ""
+brand:
+  colors:
+    ink: "#26211a"
+    background: "#f6f4ee"
+    accent: "#357a4d"
+  fonts: []
+  voice: Plain, specific, no hype.
+rules:
+  - Only show app UI from reviewed captures in product/captures/.
+  - Product claims must match what the app actually does today.
