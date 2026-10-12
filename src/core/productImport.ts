@@ -1,345 +1,492 @@
-import { readFile } from "node:fs/promises";
-import { parse } from "yaml";
+import { Effect, Option, Predicate, Result, Schema } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/http";
+
+import { FetchFailed, InvalidRequest } from "./errors.ts";
 import { getProduct, PRODUCT_FILE } from "./library.ts";
 import { Product } from "./schema.ts";
-import type { Workspace } from "./workspace.ts";
+import { PRODUCT_TEMPLATE } from "./templates.ts";
+import { Workspace, decodeYaml, nowIso } from "./workspace.ts";
 
 export type ListingSource = "appStore" | "googlePlay" | "web";
 
+export type StoreSource = Exclude<ListingSource, "web">;
+
+const STORE_SOURCES: ReadonlyArray<StoreSource> = ["appStore", "googlePlay"];
+
+/** Store links found on a landing page. */
+export interface StoreLinks {
+  readonly appStore?: string | undefined;
+  readonly googlePlay?: string | undefined;
+}
+
 /** What a store page or landing page tells us about an app. */
 export interface Listing {
-  source: ListingSource;
-  url: string;
-  name: string;
-  summary: string;
-  description: string;
-  developer?: string;
-  category?: string;
-  themeColor?: string;
-  icon?: string;
-  screenshots: string[];
-  /** Store links found on a landing page. */
-  links: Partial<Record<ListingSource, string>>;
+  readonly source: ListingSource;
+  readonly url: string;
+  readonly name: string;
+  readonly summary: string;
+  readonly description: string;
+  readonly developer?: string | undefined;
+  readonly category?: string | undefined;
+  readonly themeColor?: string | undefined;
+  readonly icon?: string | undefined;
+  readonly screenshots: ReadonlyArray<string>;
+  readonly links: StoreLinks;
 }
+
+export type Listings = readonly [Listing, ...Array<Listing>];
 
 export interface ImportResult {
-  product: Product;
-  listings: Listing[];
-  files: string[];
-  warnings: string[];
+  readonly product: Product;
+  readonly listings: Listings;
+  readonly files: ReadonlyArray<string>;
+  readonly warnings: ReadonlyArray<string>;
 }
 
-type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+/** The fields of an iTunes lookup result the import reads. */
+export const AppStoreLookup = Schema.Struct({
+  results: Schema.Array(
+    Schema.Struct({
+      trackName: Schema.optional(Schema.String),
+      trackViewUrl: Schema.optional(Schema.String),
+      description: Schema.optional(Schema.String),
+      sellerName: Schema.optional(Schema.String),
+      artistName: Schema.optional(Schema.String),
+      primaryGenreName: Schema.optional(Schema.String),
+      artworkUrl512: Schema.optional(Schema.String),
+      screenshotUrls: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ),
+});
+
+export type AppStoreLookup = typeof AppStoreLookup.Type;
+
+/** The JSON-LD block a Google Play page describes its app with. */
+const PlayApp = Schema.Struct({
+  "@type": Schema.Literal("SoftwareApplication"),
+  name: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.String),
+  applicationCategory: Schema.optional(Schema.String),
+  image: Schema.optional(Schema.String),
+  author: Schema.optional(Schema.Struct({ name: Schema.optional(Schema.String) })),
+});
+
+type PlayApp = typeof PlayApp.Type;
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+
 const MAX_SCREENSHOTS = 8;
+
 export const STORE_DIR = "store";
+
 const TEMPLATE_NAME = "My App";
 
 export function detectSource(url: string): ListingSource {
-  const host = new URL(url).hostname;
+  const host = URL.parse(url)?.hostname;
+
   if (host === "apps.apple.com" || host === "itunes.apple.com") return "appStore";
+
   if (host === "play.google.com") return "googlePlay";
+
   return "web";
 }
 
-export async function fetchListing(url: string, fetchFn: Fetch = fetch): Promise<Listing> {
+const fetchFailed = (url: string) => (error: { readonly message: string }) =>
+  new FetchFailed({ message: `${url}: ${error.message}` });
+
+const get = (url: string) =>
+  HttpClient.get(url, { headers: { "user-agent": UA, "accept-language": "en" } }).pipe(
+    Effect.flatMap(HttpClientResponse.filterStatusOk),
+    Effect.mapError(fetchFailed(url)),
+  );
+
+const getText = (url: string) =>
+  get(url).pipe(Effect.flatMap((response) => Effect.mapError(response.text, fetchFailed(url))));
+
+/** Read one App Store, Google Play, or landing page. */
+export const fetchListing = Effect.fn("productImport.fetchListing")(function* (url: string) {
+  if (!URL.canParse(url)) return yield* new InvalidRequest({ message: `Not a URL: ${url}` });
   const source = detectSource(url);
+
   if (source === "appStore") {
     const id = /id(\d+)/.exec(url)?.[1];
-    if (!id) throw new Error(`No app id in App Store URL: ${url}`);
-    const country = /apps\.apple\.com\/([a-z]{2})\//.exec(url)?.[1] ?? "us";
-    const res = await get(fetchFn, `https://itunes.apple.com/lookup?id=${id}&country=${country}`);
-    return parseAppStoreLookup(await res.json(), url);
-  }
-  if (source === "googlePlay") {
-    const id = new URL(url).searchParams.get("id");
-    if (!id) throw new Error(`No package id in Google Play URL: ${url}`);
-    const page = `https://play.google.com/store/apps/details?id=${encodeURIComponent(id)}&hl=en&gl=US`;
-    return parsePlayHtml(await (await get(fetchFn, page)).text(), url);
-  }
-  return parseWebHtml(await (await get(fetchFn, url)).text(), url);
-}
 
-export function parseAppStoreLookup(body: unknown, url: string): Listing {
-  const app = (body as { results?: Record<string, unknown>[] }).results?.[0];
-  if (!app) throw new Error(`App Store lookup found nothing for ${url}`);
-  const str = (k: string) => (typeof app[k] === "string" ? (app[k] as string) : undefined);
-  const description = str("description") ?? "";
-  const shots = Array.isArray(app.screenshotUrls) ? (app.screenshotUrls as string[]) : [];
-  return compact({
+    if (id === undefined)
+      return yield* new InvalidRequest({ message: `No app id in App Store URL: ${url}` });
+    const country = /apps\.apple\.com\/([a-z]{2})\//.exec(url)?.[1] ?? "us";
+    const lookupUrl = `https://itunes.apple.com/lookup?id=${id}&country=${country}`;
+
+    const lookup = yield* get(lookupUrl).pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(AppStoreLookup)),
+      Effect.mapError(fetchFailed(lookupUrl)),
+    );
+
+    return yield* Effect.fromOption(
+      parseAppStoreLookup(lookup, url),
+      () => new FetchFailed({ message: `App Store lookup found nothing for ${url}` }),
+    );
+  }
+
+  if (source === "googlePlay") {
+    const id = URL.parse(url)?.searchParams.get("id") ?? null;
+
+    if (id === null || id === "") {
+      return yield* new InvalidRequest({ message: `No package id in Google Play URL: ${url}` });
+    }
+
+    const page = `https://play.google.com/store/apps/details?id=${encodeURIComponent(id)}&hl=en&gl=US`;
+
+    return parsePlayHtml(yield* getText(page), url);
+  }
+
+  return parseWebHtml(yield* getText(url), url);
+});
+
+export function parseAppStoreLookup(lookup: AppStoreLookup, url: string): Option.Option<Listing> {
+  const app = lookup.results[0];
+
+  if (app === undefined) return Option.none();
+  const description = app.description ?? "";
+
+  return Option.some({
     source: "appStore",
-    url: str("trackViewUrl")?.replace(/\?.*$/, "") ?? url,
-    name: str("trackName") ?? "",
+    url: app.trackViewUrl?.replace(/\?.*$/, "") ?? url,
+    name: app.trackName ?? "",
     summary: firstSentence(description),
     description,
-    developer: str("sellerName") ?? str("artistName"),
-    category: str("primaryGenreName"),
-    icon: str("artworkUrl512"),
+    developer: app.sellerName ?? app.artistName,
+    category: app.primaryGenreName,
+    icon: app.artworkUrl512,
     // mzstatic thumbnails accept any size suffix; ask for full-width originals.
-    screenshots: shots.map((s) => s.replace(/\/\d+x\d+bb\.(\w+)$/, "/1290x0w.$1")),
+    screenshots: (app.screenshotUrls ?? []).map((shot) =>
+      shot.replace(/\/\d+x\d+bb\.(\w+)$/, "/1290x0w.$1"),
+    ),
     links: {},
   });
 }
 
 export function parsePlayHtml(html: string, url: string): Listing {
-  const ld = jsonLd(html).find((d) => d["@type"] === "SoftwareApplication") ?? {};
-  const text = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const app = Option.getOrElse(playApp(html), (): PlayApp => ({ "@type": "SoftwareApplication" }));
   const fullDescription = /data-g-id="description"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1];
-  const shots = [...html.matchAll(/<img[^>]*data-screenshot-index[^>]*>/g)]
-    .map((m) => attr(m[0], "src"))
-    .filter((s): s is string => Boolean(s))
-    .map((s) => s.replace(/=[^=/]*$/, "=h2048"));
-  const name =
-    text(ld.name) ?? meta(html, "og:title")?.replace(/ - Apps on Google Play$/, "") ?? "";
-  const description = fullDescription ? htmlText(fullDescription) : (text(ld.description) ?? "");
-  const icon = text(ld.image);
-  return compact({
+
+  const shots = Array.from(html.matchAll(/<img[^>]*data-screenshot-index[^>]*>/g), (match) =>
+    attr(match[0], "src"),
+  ).flatMap((src) => (src === undefined || src === "" ? [] : [src.replace(/=[^=/]*$/, "=h2048")]));
+
+  const name = app.name ?? meta(html, "og:title")?.replace(/ - Apps on Google Play$/, "") ?? "";
+
+  const description =
+    fullDescription === undefined ? (app.description ?? "") : htmlText(fullDescription);
+
+  return {
     source: "googlePlay",
     url,
     name,
-    summary: text(ld.description) ?? firstSentence(description),
+    summary: app.description ?? firstSentence(description),
     description,
-    developer: text((ld.author as Record<string, unknown> | undefined)?.name),
-    category: text(ld.applicationCategory)?.toLowerCase().replace(/_/g, " "),
-    icon: icon ? `${icon}=s512` : undefined,
+    developer: app.author?.name,
+    category: app.applicationCategory?.toLowerCase().replace(/_/g, " "),
+    icon: app.image === undefined ? undefined : `${app.image}=s512`,
     screenshots: [...new Set(shots)],
     links: {},
-  });
+  };
 }
 
 export function parseWebHtml(html: string, url: string): Listing {
   const title =
     meta(html, "og:title") ?? htmlText(/<title[^>]*>([\s\S]*?)<\/title>/.exec(html)?.[1] ?? "");
+
   const summary = meta(html, "og:description") ?? meta(html, "description") ?? "";
-  const links: Listing["links"] = {};
-  for (const m of html.matchAll(
-    /href="(https:\/\/(?:apps\.apple\.com|play\.google\.com)[^"]+)"/g,
-  )) {
-    const link = decodeEntities(m[1]!);
-    const source = detectSource(link);
-    if (source === "appStore" && /id\d+/.test(link)) links.appStore ??= link;
-    if (source === "googlePlay" && /[?&]id=/.test(link)) links.googlePlay ??= link;
-  }
+
+  const storeLinks = Array.from(
+    html.matchAll(/href="(https:\/\/(?:apps\.apple\.com|play\.google\.com)[^"]+)"/g),
+    (match) => decodeEntities(match[1] ?? ""),
+  );
+
   const image = meta(html, "og:image");
-  return compact({
+
+  return {
     source: "web",
     url,
-    name: meta(html, "og:site_name") ?? title.split(/\s[-–—|:]\s/)[0]!.trim(),
+    name: meta(html, "og:site_name") ?? (title.split(/\s[-–—|:]\s/)[0] ?? title).trim(),
     summary,
     description: summary,
     themeColor: meta(html, "theme-color"),
-    icon: image ? new URL(image, url).href : undefined,
+    icon: image === undefined ? undefined : URL.parse(image, url)?.href,
     screenshots: [],
-    links,
-  });
+    links: {
+      appStore: storeLinks.find((link) => detectSource(link) === "appStore" && /id\d+/.test(link)),
+      googlePlay: storeLinks.find(
+        (link) => detectSource(link) === "googlePlay" && /[?&]id=/.test(link),
+      ),
+    },
+  };
 }
+
+/** The template's product, used until the user has named their app. */
+const templateProduct = decodeYaml("templates/product.yaml", PRODUCT_TEMPLATE, Product).pipe(
+  Effect.orDie,
+);
+
+const imageExtension = (contentType: string) => {
+  if (contentType.includes("png")) return "png";
+
+  if (contentType.includes("webp")) return "webp";
+
+  return "jpg";
+};
+
+/** Save one image under `stem` with the extension its content type calls for. */
+const download = Effect.fn("productImport.download")(function* (url: string, stem: string) {
+  const ws = yield* Workspace;
+  const response = yield* get(url);
+  const bytes = yield* Effect.mapError(response.arrayBuffer, fetchFailed(url));
+  const file = `${stem}.${imageExtension(response.headers["content-type"] ?? "")}`;
+  yield* ws.writeBytes(file, new Uint8Array(bytes));
+
+  return file;
+});
+
+interface Asset {
+  readonly url: string;
+  readonly name: string;
+}
+
+const assetsOf = (listing: Listing): ReadonlyArray<Asset> => [
+  ...(listing.icon === undefined ? [] : [{ url: listing.icon, name: `${listing.source}-icon` }]),
+  ...listing.screenshots.slice(0, MAX_SCREENSHOTS).map((url, index) => ({
+    url,
+    name: `${listing.source}-${String(index + 1).padStart(2, "0")}`,
+  })),
+];
 
 /**
- * Fill product/product.yaml from a store or landing page URL and download store
- * screenshots into product/store/. A landing page's store links are followed too.
- * Hand-edited product fields are kept; only template or empty fields are filled.
+ * Fill product/product.yaml from a store or landing page URL and download store screenshots into
+ * product/store/. A landing page's store links are followed too. Hand-edited product fields are
+ * kept; only template or empty fields are filled.
  */
-export async function importProduct(
-  ws: Workspace,
-  url: string,
-  opts: { fetch?: Fetch; templatePath?: string } = {},
-): Promise<ImportResult> {
-  const fetchFn = opts.fetch ?? fetch;
-  const warnings: string[] = [];
-  const first = await fetchListing(url, fetchFn);
-  const listings = [first];
-  for (const [source, link] of Object.entries(first.links)) {
-    try {
-      listings.push(await fetchListing(link, fetchFn));
-    } catch (err) {
-      warnings.push(`Could not read ${source} listing ${link}: ${message(err)}`);
-    }
-  }
+export const importProduct = Effect.fn("productImport.importProduct")(function* (url: string) {
+  const ws = yield* Workspace;
+  const first = yield* fetchListing(url);
+
+  const followed = yield* Effect.forEach(
+    STORE_SOURCES.flatMap((source) => {
+      const link = first.links[source];
+
+      return link === undefined ? [] : [{ source, link }];
+    }),
+    ({ source, link }) =>
+      fetchListing(link).pipe(
+        Effect.mapError((error) => `Could not read ${source} listing ${link}: ${error.message}`),
+        Effect.result,
+      ),
+    { concurrency: "unbounded" },
+  );
+
+  const listings: Listings = [
+    first,
+    ...followed.flatMap((result) => Option.toArray(Result.getSuccess(result))),
+  ];
+
+  const readWarnings = followed.flatMap((result) => Option.toArray(Result.getFailure(result)));
 
   const productDir = ws.config.paths.product;
-  const existing = (await getProduct(ws)).doc;
-  const base =
-    existing && existing.name !== TEMPLATE_NAME
-      ? existing
-      : await templateProduct(opts.templatePath);
-  const product = mergeListings(
-    base,
-    listings,
-    existing !== undefined && existing.name !== TEMPLATE_NAME,
+  const existing = (yield* getProduct()).doc;
+  const edited = existing !== undefined && existing.name !== TEMPLATE_NAME ? existing : undefined;
+  const product = mergeListings(edited ?? (yield* templateProduct), listings, edited !== undefined);
+  const productFile = `${productDir}/${PRODUCT_FILE}`;
+  yield* ws.writeYaml(productFile, Product, product);
+
+  const listingFile = `${productDir}/${STORE_DIR}/listing.md`;
+  yield* ws.writeText(listingFile, renderListing(listings, yield* nowIso));
+
+  const downloads = yield* Effect.forEach(
+    listings.flatMap(assetsOf),
+    (asset) =>
+      download(asset.url, `${productDir}/${STORE_DIR}/${asset.name}`).pipe(
+        Effect.mapError((error) => `Could not download ${asset.url}: ${error.message}`),
+        Effect.result,
+      ),
+    { concurrency: 4 },
   );
-  await ws.writeYaml(`${productDir}/${PRODUCT_FILE}`, product);
 
-  const files = [`${productDir}/${PRODUCT_FILE}`];
-  const listingDoc = `${productDir}/${STORE_DIR}/listing.md`;
-  await ws.writeText(listingDoc, renderListing(listings));
-  files.push(listingDoc);
-  for (const listing of listings) {
-    const assets = [
-      ...(listing.icon ? [{ url: listing.icon, name: `${listing.source}-icon` }] : []),
-      ...listing.screenshots.slice(0, MAX_SCREENSHOTS).map((s, i) => ({
-        url: s,
-        name: `${listing.source}-${String(i + 1).padStart(2, "0")}`,
-      })),
-    ];
-    for (const asset of assets) {
-      try {
-        files.push(
-          await download(ws, fetchFn, asset.url, `${productDir}/${STORE_DIR}/${asset.name}`),
-        );
-      } catch (err) {
-        warnings.push(`Could not download ${asset.url}: ${message(err)}`);
-      }
-    }
-  }
-  return { product, listings, files, warnings };
-}
+  const result: ImportResult = {
+    product,
+    listings,
+    files: [
+      productFile,
+      listingFile,
+      ...downloads.flatMap((saved) => Option.toArray(Result.getSuccess(saved))),
+    ],
+    warnings: [
+      ...readWarnings,
+      ...downloads.flatMap((saved) => Option.toArray(Result.getFailure(saved))),
+    ],
+  };
 
-export function mergeListings(base: Product, listings: Listing[], keepEdits: boolean): Product {
-  const store = (s: ListingSource) => listings.find((l) => l.source === s);
-  const apps = [store("appStore"), store("googlePlay")].filter((l): l is Listing => Boolean(l));
-  const primary = apps[0] ?? listings[0]!;
+  return result;
+});
+
+const filled = (value: string | undefined): value is string =>
+  value !== undefined && value.trim() !== "";
+
+const firstFilled = (...values: ReadonlyArray<string | undefined>) => values.find(filled);
+
+export function mergeListings(base: Product, listings: Listings, keepEdits: boolean): Product {
+  const bySource = (source: ListingSource) => listings.find((listing) => listing.source === source);
+  const primary = bySource("appStore") ?? bySource("googlePlay") ?? listings[0];
   const name = shortName(primary.name);
-  const fill = (current: string, next: string | undefined) =>
-    keepEdits && current.trim() ? current : (next ?? current);
 
-  const stores = { ...base.stores };
-  for (const l of listings) stores[l.source] ||= l.url;
-  for (const l of listings)
-    for (const [s, link] of Object.entries(l.links)) stores[s as ListingSource] ||= link;
+  const fill = (current: string, next: string | undefined) =>
+    keepEdits && current.trim() !== "" ? current : (next ?? current);
+
+  const linkTo = (source: StoreSource) =>
+    firstFilled(
+      base.stores[source],
+      bySource(source)?.url,
+      ...listings.map((listing) => listing.links[source]),
+    ) ?? base.stores[source];
+
+  const stores = {
+    appStore: linkTo("appStore"),
+    googlePlay: linkTo("googlePlay"),
+    web: firstFilled(base.stores.web, bySource("web")?.url) ?? base.stores.web,
+  };
 
   const storeNames = [
-    stores.appStore ? "the App Store" : "",
-    stores.googlePlay ? "Google Play" : "",
-  ]
-    .filter(Boolean)
-    .join(" or ");
-  const cta = storeNames ? `Search "${name}" on ${storeNames}.` : `Find ${name} at ${stores.web}.`;
-  const summary = store("web")?.summary || store("googlePlay")?.summary || primary.summary;
-  const themeColor = listings.find((l) => l.themeColor)?.themeColor;
+    ...(filled(stores.appStore) ? ["the App Store"] : []),
+    ...(filled(stores.googlePlay) ? ["Google Play"] : []),
+  ].join(" or ");
 
-  return Product.parse({
+  const cta =
+    storeNames === ""
+      ? `Find ${name} at ${stores.web ?? primary.url}.`
+      : `Search "${name}" on ${storeNames}.`;
+
+  const summary =
+    firstFilled(bySource("web")?.summary, bySource("googlePlay")?.summary) ?? primary.summary;
+
+  const themeColor = firstFilled(...listings.map((listing) => listing.themeColor));
+
+  return {
     ...base,
     name: keepEdits ? base.name : name,
     oneLiner: fill(base.oneLiner, summary),
     stores,
-    cta: { ...base.cta, default: keepEdits && base.cta.default.trim() ? base.cta.default : cta },
+    cta: {
+      ...base.cta,
+      default: keepEdits && base.cta.default.trim() !== "" ? base.cta.default : cta,
+    },
     brand: {
       ...base.brand,
       colors:
-        themeColor && !keepEdits ? { ...base.brand.colors, accent: themeColor } : base.brand.colors,
+        themeColor !== undefined && !keepEdits
+          ? { ...base.brand.colors, accent: themeColor }
+          : base.brand.colors,
     },
-  });
+  };
 }
 
-function renderListing(listings: Listing[]): string {
-  const sections = listings.map((l) =>
+function renderListing(listings: Listings, importedAt: string): string {
+  const sections = listings.map((listing) =>
     [
-      `## ${l.name} (${l.source})`,
+      `## ${listing.name} (${listing.source})`,
       "",
-      `- URL: ${l.url}`,
-      l.developer ? `- Developer: ${l.developer}` : "",
-      l.category ? `- Category: ${l.category}` : "",
+      `- URL: ${listing.url}`,
+      ...(listing.developer === undefined ? [] : [`- Developer: ${listing.developer}`]),
+      ...(listing.category === undefined ? [] : [`- Category: ${listing.category}`]),
       "",
-      l.description,
-    ]
-      .filter((line, i, all) => line !== "" || all[i - 1] !== "")
-      .join("\n"),
+      listing.description,
+    ].join("\n"),
   );
-  return `# Store listing snapshot\n\nImported ${new Date().toISOString()}. Store screenshots are the developer's marketing images, not reviewed app captures. Use them to learn positioning and visual style; put reviewed in-app captures in captures/.\n\n${sections.join("\n\n")}\n`;
+
+  return `# Store listing snapshot\n\nImported ${importedAt}. Store screenshots are the developer's marketing images, not reviewed app captures. Use them to learn positioning and visual style; put reviewed in-app captures in captures/.\n\n${sections.join("\n\n")}\n`;
 }
 
-async function templateProduct(path?: string): Promise<Product> {
-  const file = path ?? new URL("../../templates/product.yaml", import.meta.url).pathname;
-  return Product.parse(parse(await readFile(file, "utf8")) ?? {});
-}
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json));
 
-async function download(ws: Workspace, fetchFn: Fetch, url: string, stem: string): Promise<string> {
-  const res = await get(fetchFn, url);
-  const type = res.headers.get("content-type") ?? "";
-  const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
-  const rel = `${stem}.${ext}`;
-  await ws.mkdir(rel.slice(0, rel.lastIndexOf("/")));
-  await Bun.write(ws.abs(rel), await res.arrayBuffer());
-  return rel;
-}
+const decodeJsonArray = Schema.decodeUnknownOption(Schema.Array(Schema.Json));
 
-async function get(fetchFn: Fetch, url: string): Promise<Response> {
-  const res = await fetchFn(url, { headers: { "user-agent": UA, "accept-language": "en" } });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
-  return res;
+const decodePlayApp = Schema.decodeUnknownOption(PlayApp);
+
+/** The page's SoftwareApplication JSON-LD. Malformed blocks are skipped; other metadata still applies. */
+function playApp(html: string): Option.Option<PlayApp> {
+  for (const match of html.matchAll(
+    /<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g,
+  )) {
+    const value = decodeJson(match[1] ?? "");
+
+    if (Option.isNone(value)) continue;
+    const candidates = Option.getOrElse(decodeJsonArray(value.value), () => [value.value]);
+
+    for (const candidate of candidates) {
+      const app = decodePlayApp(candidate);
+
+      if (Option.isSome(app)) return app;
+    }
+  }
+
+  return Option.none();
 }
 
 function meta(html: string, key: string): string | undefined {
-  for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
-    const tag = m[0];
-    if (attr(tag, "property") === key || attr(tag, "name") === key) {
-      const content = attr(tag, "content");
-      if (content) return content.trim();
-    }
+  for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = match[0];
+
+    if (attr(tag, "property") !== key && attr(tag, "name") !== key) continue;
+    const content = attr(tag, "content");
+
+    if (filled(content)) return content.trim();
   }
+
   return undefined;
 }
 
 function attr(tag: string, name: string): string | undefined {
   const value = new RegExp(`\\s${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(tag);
   const raw = value?.[1] ?? value?.[2];
-  return raw === undefined ? undefined : decodeEntities(raw);
-}
 
-function jsonLd(html: string): Record<string, unknown>[] {
-  const out: Record<string, unknown>[] = [];
-  for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
-    try {
-      const value: unknown = JSON.parse(m[1]!);
-      for (const v of Array.isArray(value) ? value : [value])
-        if (v && typeof v === "object") out.push(v as Record<string, unknown>);
-    } catch {
-      // Ignore malformed blocks; other metadata still applies.
-    }
-  }
-  return out;
+  return raw === undefined ? undefined : decodeEntities(raw);
 }
 
 function htmlText(html: string): string {
   return decodeEntities(html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "")).trim();
 }
 
+const NAMED_ENTITIES = new Map([
+  ["amp", "&"],
+  ["lt", "<"],
+  ["gt", ">"],
+  ["quot", '"'],
+  ["apos", "'"],
+  ["nbsp", " "],
+]);
+
 function decodeEntities(text: string): string {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-  };
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
-    if (code.startsWith("#x") || code.startsWith("#X"))
-      return String.fromCodePoint(parseInt(code.slice(2), 16));
+    if (/^#x/i.test(code)) return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
+
     if (code.startsWith("#")) return String.fromCodePoint(Number(code.slice(1)));
-    return named[code.toLowerCase()] ?? whole;
+
+    return NAMED_ENTITIES.get(code.toLowerCase()) ?? whole;
   });
 }
 
 function firstSentence(text: string): string {
-  const line = text.split("\n").find((l) => l.trim()) ?? "";
-  const sentence = /^.*?[.!?](?=\s|$)/.exec(line.trim())?.[0] ?? line.trim();
+  const line = (text.split("\n").find((candidate) => candidate.trim() !== "") ?? "").trim();
+  const sentence = /^.*?[.!?](?=\s|$)/.exec(line)?.[0] ?? line;
+
   return sentence.length > 160 ? `${sentence.slice(0, 157).trimEnd()}…` : sentence;
 }
 
 /** "Duolingo: Language Lessons" → "Duolingo"; store titles often append a tagline. */
 export function shortName(name: string): string {
-  return name.split(/\s[-–—|]\s|:\s/)[0]!.trim() || name;
+  const short = (name.split(/\s[-–—|]\s|:\s/)[0] ?? "").trim();
+
+  return short === "" ? name : short;
 }
 
-function compact(listing: { [K in keyof Listing]?: Listing[K] | undefined }): Listing {
-  const out = { ...listing } as Record<string, unknown>;
-  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
-  return out as unknown as Listing;
-}
-
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
+/** Whether `value` is a usable listing source name. */
+export const isStoreSource = (value: string): value is StoreSource =>
+  Predicate.isNotUndefined(STORE_SOURCES.find((source) => source === value));

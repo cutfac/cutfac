@@ -1,61 +1,101 @@
+import { Effect } from "effect";
+
+import { InvalidRequest, NotFound } from "./errors.ts";
+import { type MediaFile, toMediaFiles } from "./media.ts";
 import { FormatDoc, Product } from "./schema.ts";
-import { type Workspace, slugify } from "./workspace.ts";
-import { toMediaFiles, type MediaFile } from "./media.ts";
+import { Workspace, type WorkspaceService, slugify } from "./workspace.ts";
 
 export const FORMAT_FILE = "format.yaml";
+
 export const PRODUCT_FILE = "product.yaml";
 
+const README = "README.md";
+
 export interface Format {
-  id: string;
-  dir: string;
-  doc: FormatDoc;
-  readme?: string;
+  readonly id: string;
+  readonly dir: string;
+  readonly doc: FormatDoc;
+  readonly readme?: string | undefined;
 }
 
-const formatDir = (ws: Workspace, id: string) => `${ws.config.paths.formats}/${id}`;
+const formatDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.formats}/${id}`;
 
-export async function listFormats(ws: Workspace): Promise<Format[]> {
-  const entries = await ws.list(ws.config.paths.formats);
-  const ids = entries
-    .filter((e) => e.dir && ws.exists(`${formatDir(ws, e.name)}/${FORMAT_FILE}`))
-    .map((e) => e.name);
-  return Promise.all(ids.map((id) => getFormat(ws, id)));
-}
+/** A text file's contents, or `undefined` when it is not there. */
+export const readOptionalText = Effect.fn("library.readOptionalText")(function* (rel: string) {
+  const ws = yield* Workspace;
 
-export async function getFormat(ws: Workspace, id: string): Promise<Format> {
+  if (!(yield* ws.exists(rel))) return undefined;
+
+  return yield* ws.readText(rel);
+});
+
+/** A format id is one folder name under `formats/`. */
+export const isSimpleId = (id: string) =>
+  id !== "" && id !== "." && id !== ".." && !id.includes("/") && !id.includes("\\");
+
+export const getFormat = Effect.fn("library.getFormat")(function* (id: string) {
+  const ws = yield* Workspace;
   const dir = formatDir(ws, id);
-  const doc = await ws.readYaml(`${dir}/${FORMAT_FILE}`, FormatDoc);
-  const format: Format = { id, dir, doc };
-  if (ws.exists(`${dir}/README.md`)) format.readme = await ws.readText(`${dir}/README.md`);
+
+  if (!isSimpleId(id) || !(yield* ws.exists(`${dir}/${FORMAT_FILE}`))) {
+    return yield* new NotFound({ message: `Format not found: ${id}` });
+  }
+
+  const doc = yield* ws.readYaml(`${dir}/${FORMAT_FILE}`, FormatDoc);
+  const readme = yield* readOptionalText(`${dir}/${README}`);
+  const format: Format = { id, dir, doc, readme };
+
   return format;
+});
+
+export const listFormats = Effect.fn("library.listFormats")(function* () {
+  const ws = yield* Workspace;
+  const entries = yield* ws.list(ws.config.paths.formats);
+
+  const ids = yield* Effect.filter(
+    entries.flatMap((entry) => (entry.dir ? [entry.name] : [])),
+    (id) => ws.exists(`${formatDir(ws, id)}/${FORMAT_FILE}`),
+    { concurrency: 8 },
+  );
+
+  return yield* Effect.forEach(ids, getFormat, { concurrency: 8 });
+});
+
+export interface FormatInput extends FormatDoc {
+  readonly id?: string | undefined;
 }
 
-export async function saveFormat(
-  ws: Workspace,
-  input: { id?: string | undefined } & FormatDoc,
-): Promise<Format> {
-  const { id: requested, ...rest } = input;
-  const id = requested ?? slugify(rest.title);
-  await ws.writeYaml(`${formatDir(ws, id)}/${FORMAT_FILE}`, FormatDoc.parse(rest));
-  return getFormat(ws, id);
-}
+export const saveFormat = Effect.fn("library.saveFormat")(function* (input: FormatInput) {
+  const ws = yield* Workspace;
+  const { id: requested, ...doc } = input;
+  const id = requested ?? slugify(doc.title);
+
+  if (!isSimpleId(id)) return yield* new InvalidRequest({ message: `Not a format id: ${id}` });
+  yield* ws.writeYaml(`${formatDir(ws, id)}/${FORMAT_FILE}`, FormatDoc, doc);
+
+  return yield* getFormat(id);
+});
 
 export interface ProductInfo {
-  doc?: Product;
-  captures: MediaFile[];
+  readonly doc?: Product | undefined;
+  readonly captures: ReadonlyArray<MediaFile>;
   /** Store icon and screenshots imported from App Store / Google Play (product/store/). */
-  store: MediaFile[];
-  notes?: string;
+  readonly store: ReadonlyArray<MediaFile>;
+  readonly notes?: string | undefined;
 }
 
-export async function getProduct(ws: Workspace): Promise<ProductInfo> {
+export const getProduct = Effect.fn("library.getProduct")(function* () {
+  const ws = yield* Workspace;
   const dir = ws.config.paths.product;
+  const docFile = `${dir}/${PRODUCT_FILE}`;
+  const doc = (yield* ws.exists(docFile)) ? yield* ws.readYaml(docFile, Product) : undefined;
+
   const info: ProductInfo = {
-    captures: toMediaFiles(await ws.list(`${dir}/captures`)),
-    store: toMediaFiles(await ws.list(`${dir}/store`)),
+    doc,
+    captures: toMediaFiles(yield* ws.list(`${dir}/captures`)),
+    store: toMediaFiles(yield* ws.list(`${dir}/store`)),
+    notes: yield* readOptionalText(`${dir}/${README}`),
   };
-  if (ws.exists(`${dir}/${PRODUCT_FILE}`))
-    info.doc = await ws.readYaml(`${dir}/${PRODUCT_FILE}`, Product);
-  if (ws.exists(`${dir}/README.md`)) info.notes = await ws.readText(`${dir}/README.md`);
+
   return info;
-}
+});

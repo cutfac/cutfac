@@ -1,102 +1,167 @@
-import { slugify, type Workspace } from "./workspace.ts";
+import { Effect, Option, Schema } from "effect";
+
+import { WorkspaceError } from "./errors.ts";
+import { isInstalled, run, which } from "./process.ts";
+import type { AgentName } from "./schema.ts";
+import { Workspace, slugify } from "./workspace.ts";
+
+/** How to start this CLI: `bun src/cli.ts` from source, or the compiled binary on its own. */
+export interface CliEntry {
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+}
 
 export interface McpLaunch {
-  command: string;
-  args: string[];
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
 }
 
 export interface AgentConnection {
-  agent: "claude" | "codex";
-  ok: boolean;
-  detail: string;
-}
-
-const SERVER_NAME = "content-factory";
-
-/** How an agent should start this workspace's MCP server. */
-export function mcpLaunch(cliPath: string, ws: Workspace): McpLaunch {
-  return { command: "bun", args: [cliPath, "mcp", "--workspace", ws.root] };
-}
-
-/**
- * Claude Code reads project-scoped servers from .mcp.json at the workspace root,
- * so connecting never touches global config. Other servers in the file are kept.
- */
-export async function connectClaude(ws: Workspace, launch: McpLaunch): Promise<AgentConnection> {
-  const file = ".mcp.json";
-  const current = ws.exists(file)
-    ? (JSON.parse(await ws.readText(file)) as { mcpServers?: Record<string, unknown> })
-    : {};
-  const next = { ...current, mcpServers: { ...current.mcpServers, [SERVER_NAME]: launch } };
-  await ws.writeText(file, `${JSON.stringify(next, null, 2)}\n`);
-  return {
-    agent: "claude",
-    ok: true,
-    detail: `${file} → open Claude Code in ${ws.root} and approve the "${SERVER_NAME}" server`,
-  };
-}
-
-/**
- * Codex only reads MCP servers from its user config, so register through its own CLI
- * under a per-workspace name instead of editing ~/.codex/config.toml by hand.
- */
-export async function connectCodex(
-  ws: Workspace,
-  launch: McpLaunch,
-  run: (cmd: string[]) => Promise<{ code: number; output: string }> = runCommand,
-): Promise<AgentConnection> {
-  const codex = Bun.which("codex");
-  if (!codex) return { agent: "codex", ok: false, detail: "codex CLI not found on PATH" };
-  const name = codexServerName(ws);
-  const existing = await run([codex, "mcp", "get", name]);
-  if (existing.code === 0) await run([codex, "mcp", "remove", name]);
-  const added = await run([codex, "mcp", "add", name, "--", launch.command, ...launch.args]);
-  if (added.code !== 0) return { agent: "codex", ok: false, detail: added.output.trim() };
-  return { agent: "codex", ok: true, detail: `registered "${name}" in ~/.codex/config.toml` };
-}
-
-export function codexServerName(ws: Workspace): string {
-  return `${SERVER_NAME}-${slugify(ws.config.name) || "workspace"}`;
-}
-
-async function runCommand(cmd: string[]): Promise<{ code: number; output: string }> {
-  const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { code, output: stdout + stderr };
+  readonly agent: AgentName;
+  readonly ok: boolean;
+  readonly detail: string;
 }
 
 export interface AgentStatus {
-  agent: "claude" | "codex";
-  installed: boolean;
-  connected: boolean;
+  readonly agent: AgentName;
+  readonly installed: boolean;
+  readonly connected: boolean;
 }
 
-/** Whether each supported agent CLI is installed and already pointed at this workspace. */
-export async function agentStatus(
-  ws: Workspace,
-  run: (cmd: string[]) => Promise<{ code: number; output: string }> = runCommand,
-): Promise<AgentStatus[]> {
-  let claudeConnected = false;
-  if (ws.exists(".mcp.json")) {
-    try {
-      const config = JSON.parse(await ws.readText(".mcp.json")) as {
-        mcpServers?: Record<string, unknown>;
-      };
-      claudeConnected = Boolean(config.mcpServers?.[SERVER_NAME]);
-    } catch {
-      claudeConnected = false;
-    }
+export const SERVER_NAME = "content-factory";
+
+const MCP_FILE = ".mcp.json";
+
+/** How an agent should start this workspace's MCP server. */
+export const mcpLaunch = (cli: CliEntry, root: string): McpLaunch => ({
+  command: cli.command,
+  args: [...cli.args, "mcp", "--workspace", root],
+});
+
+const McpFile = Schema.fromJsonString(Schema.JsonObject, { space: 2 });
+
+const decodeMcpFile = Schema.decodeUnknownEffect(McpFile);
+
+const encodeMcpFile = Schema.encodeEffect(McpFile);
+
+const decodeServers = Schema.decodeUnknownOption(Schema.JsonObject);
+
+const EMPTY: Schema.JsonObject = {};
+
+/** `.mcp.json` as it is, or an empty object when the workspace has none. */
+const readMcpFile = Effect.fn("agents.readMcpFile")(function* () {
+  const ws = yield* Workspace;
+
+  if (!(yield* ws.exists(MCP_FILE))) return EMPTY;
+  const text = yield* ws.readText(MCP_FILE);
+
+  return yield* decodeMcpFile(text).pipe(
+    Effect.mapError(
+      (error) =>
+        new WorkspaceError({ message: `${MCP_FILE} is not a JSON object: ${error.message}` }),
+    ),
+  );
+});
+
+const serversOf = (file: Schema.JsonObject) =>
+  Option.getOrElse(decodeServers(file["mcpServers"]), () => EMPTY);
+
+/**
+ * Claude Code reads project-scoped servers from .mcp.json at the workspace root, so connecting
+ * never touches global config. Other servers and keys in the file are kept.
+ */
+export const connectClaude = Effect.fn("agents.connectClaude")(function* (launch: McpLaunch) {
+  const ws = yield* Workspace;
+  const current = yield* readMcpFile();
+
+  const next = {
+    ...current,
+    mcpServers: {
+      ...serversOf(current),
+      [SERVER_NAME]: { command: launch.command, args: launch.args },
+    },
+  };
+
+  const text = yield* encodeMcpFile(next).pipe(
+    Effect.mapError(
+      (error) => new WorkspaceError({ message: `Could not encode ${MCP_FILE}: ${error.message}` }),
+    ),
+  );
+
+  yield* ws.writeText(MCP_FILE, `${text}\n`);
+
+  const connection: AgentConnection = {
+    agent: "claude",
+    ok: true,
+    detail: `${MCP_FILE} → open Claude Code in ${ws.root} and approve the "${SERVER_NAME}" server`,
+  };
+
+  return connection;
+});
+
+/** Codex keeps MCP servers in one user config, so each workspace registers under its own name. */
+export const codexServerName = (workspaceName: string) =>
+  `${SERVER_NAME}-${slugify(workspaceName) || "workspace"}`;
+
+/**
+ * Codex only reads MCP servers from its user config, so register through its own CLI instead of
+ * editing ~/.codex/config.toml by hand. Re-registering replaces a stale launch command.
+ */
+export const connectCodex = Effect.fn("agents.connectCodex")(function* (launch: McpLaunch) {
+  const ws = yield* Workspace;
+  const codex = yield* which("codex");
+
+  if (Option.isNone(codex)) {
+    const missing: AgentConnection = {
+      agent: "codex",
+      ok: false,
+      detail: "codex CLI not found on PATH",
+    };
+
+    return missing;
   }
-  const codex = Bun.which("codex");
-  const codexConnected = codex
-    ? (await run([codex, "mcp", "get", codexServerName(ws)])).code === 0
-    : false;
-  return [
-    { agent: "claude", installed: Boolean(Bun.which("claude")), connected: claudeConnected },
-    { agent: "codex", installed: Boolean(codex), connected: codexConnected },
+
+  const name = codexServerName(ws.config.name);
+  const existing = yield* run(codex.value, ["mcp", "get", name]);
+
+  if (existing.code === 0) yield* run(codex.value, ["mcp", "remove", name]);
+  const added = yield* run(codex.value, ["mcp", "add", name, "--", launch.command, ...launch.args]);
+
+  const connection: AgentConnection =
+    added.code === 0
+      ? { agent: "codex", ok: true, detail: `registered "${name}" in ~/.codex/config.toml` }
+      : { agent: "codex", ok: false, detail: `${added.stdout}${added.stderr}`.trim() };
+
+  return connection;
+});
+
+export const connectAgent = (agent: AgentName, launch: McpLaunch) =>
+  agent === "claude" ? connectClaude(launch) : connectCodex(launch);
+
+/** Whether each supported agent CLI is installed and already pointed at this workspace. */
+export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
+  const ws = yield* Workspace;
+
+  const claudeConnected = yield* readMcpFile().pipe(
+    Effect.map((file) => serversOf(file)[SERVER_NAME] !== undefined),
+    Effect.orElseSucceed(() => false),
+  );
+
+  const codex = yield* which("codex");
+
+  const codexConnected = yield* Option.match(codex, {
+    onNone: () => Effect.succeed(false),
+    onSome: (bin) =>
+      run(bin, ["mcp", "get", codexServerName(ws.config.name)]).pipe(
+        Effect.map((result) => result.code === 0),
+        Effect.orElseSucceed(() => false),
+      ),
+  });
+
+  const status: ReadonlyArray<AgentStatus> = [
+    { agent: "claude", installed: yield* isInstalled("claude"), connected: claudeConnected },
+    { agent: "codex", installed: Option.isSome(codex), connected: codexConnected },
   ];
-}
+
+  return status;
+});

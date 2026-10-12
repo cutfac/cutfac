@@ -1,196 +1,345 @@
 #!/usr/bin/env bun
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
-import { stringify } from "yaml";
-import { runStdio } from "./mcp/server.ts";
-import { addReference } from "./core/references.ts";
-import { connectClaude, connectCodex, mcpLaunch } from "./core/agents.ts";
+// Each command handler is an entry point: the workspace layer depends on the parsed --workspace.
+// @effect-diagnostics strictEffectProvide:off
+import { BunRuntime, BunServices } from "@effect/platform-bun";
+import { Cause, Console, DateTime, Effect, FileSystem, Layer, Option, Path } from "effect";
+import { Argument, CliError, Command, Flag } from "effect/cli";
+import { FetchHttpClient } from "effect/http";
+
+import { type CliEntry, codexServerName, connectAgent, mcpLaunch } from "./core/agents.ts";
 import { importProduct } from "./core/productImport.ts";
-import { createApp } from "./server/app.ts";
-import { CONFIG_FILE, Workspace } from "./core/workspace.ts";
+import { addReference, referenceSourceOf } from "./core/references.ts";
+import { PRODUCT_TEMPLATE, SKILL_MARKDOWN } from "./core/templates.ts";
+import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
+import { MCP_VERSION, mcpLayer } from "./mcp/server.ts";
+import { serverLayer } from "./server/app.ts";
 
-const PACKAGE_ROOT = resolve(import.meta.dir, "..");
-const USAGE = `content-factory — local short-form content factory
+const DEFAULT_PORT = 4317;
 
-Usage:
-  factory init [dir] [--from <url>] [--name <name>] [--items <path>] [--no-connect]
-                                                        Create a workspace, fill the product from an App Store,
-                                                        Google Play, or landing page URL, and connect your agents
-  factory serve [--port 4317] [--workspace <dir>]        Web UI + API (needs \`bun run build\` once)
-  factory mcp [--workspace <dir>]                        MCP server over stdio for Claude Code / Codex
-  factory ref add <file|url> [--title <t>]              Add a reference video and preprocess it
-  factory product import <url> [--workspace <dir>]      Fill product.yaml and store screenshots from a URL
-  factory agent-setup [--connect] [--workspace <dir>]   Connect Claude Code and Codex (or print the commands)
-`;
+const DEFAULT_HOST = "127.0.0.1";
 
-const BOOLEAN_FLAGS = ["--dev", "--no-connect", "--connect"];
+const SKILL_TARGETS = [
+  ".agents/skills/content-factory/SKILL.md",
+  ".claude/skills/content-factory/SKILL.md",
+];
 
-function flag(args: string[], name: string): string | undefined {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 ? args[i + 1] : undefined;
-}
+/**
+ * `bun build --compile` serves this module from Bun's virtual filesystem, so the binary starts
+ * itself; from source, agents start `bun src/cli.ts`.
+ */
+const COMPILED = import.meta.path.startsWith("/$bunfs/") || import.meta.path.includes("~BUN");
 
-function positional(args: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (a.startsWith("--")) {
-      if (!BOOLEAN_FLAGS.includes(a)) i++;
-      continue;
-    }
-    out.push(a);
+const CLI: CliEntry = COMPILED
+  ? { command: process.execPath, args: [] }
+  : { command: "bun", args: [import.meta.path] };
+
+const cliLine = [CLI.command, ...CLI.args].join(" ");
+
+const tomlString = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+
+const workspaceFlag = Flag.String("workspace").pipe(
+  Flag.withDescription("Workspace folder, or any folder inside it"),
+  Flag.withDefault("."),
+);
+
+/** The web build next to the sources, when there is one. The packaged app passes --web-dir. */
+const defaultWebDir = Effect.fn("cli.defaultWebDir")(function* () {
+  if (COMPILED) return Option.none<string>();
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const dir = path.join(import.meta.dir, "..", "dist", "web");
+
+  const built = yield* fs
+    .exists(path.join(dir, "index.html"))
+    .pipe(Effect.orElseSucceed(() => false));
+
+  return built ? Option.some(dir) : Option.none<string>();
+});
+
+const runImport = Effect.fn("cli.runImport")(function* (url: string) {
+  const ws = yield* Workspace;
+  yield* Console.log(`Reading ${url} …`);
+  const result = yield* importProduct(url);
+
+  for (const listing of result.listings)
+    yield* Console.log(`  ${listing.source.padEnd(10)} ${listing.name}`);
+  yield* Console.log(`  product    ${result.product.name} — ${result.product.oneLiner}`);
+  yield* Console.log(`  wrote      ${result.files.length} files under ${ws.config.paths.product}/`);
+
+  for (const warning of result.warnings) yield* Console.error(`  warning    ${warning}`);
+  yield* Console.log("  Review product.yaml: audience and voice still need your words.");
+});
+
+const connectAgents = Effect.fn("cli.connectAgents")(function* () {
+  const ws = yield* Workspace;
+  const launch = mcpLaunch(CLI, ws.root);
+  yield* Console.log("\nConnecting agents:");
+
+  for (const agent of ["claude", "codex"] as const) {
+    const connection = yield* connectAgent(agent, launch);
+    yield* Console.log(`  ${connection.ok ? "✓" : "–"} ${agent.padEnd(7)} ${connection.detail}`);
   }
-  return out;
-}
+});
 
-async function main(argv: string[]): Promise<void> {
-  const [command, ...args] = argv;
-  const wsDir = flag(args, "workspace") ?? process.cwd();
-  switch (command) {
-    case "init":
-      return init(resolve(positional(args)[0] ?? "."), args);
-    case "serve": {
-      const ws = await Workspace.open(wsDir);
-      const port = Number(flag(args, "port") ?? 4317);
-      const webDir = join(PACKAGE_ROOT, "dist/web");
-      const hasWeb = existsSync(join(webDir, "index.html"));
-      Bun.serve({
-        port,
-        fetch: createApp(ws, {
-          cliPath: join(PACKAGE_ROOT, "src/cli.ts"),
-          ...(hasWeb ? { webDir } : {}),
-        }).fetch,
-        idleTimeout: 0,
-      });
-      console.log(`Content Factory · ${ws.config.name}`);
-      console.log(`  workspace  ${ws.root}`);
-      console.log(
-        `  web        http://localhost:${port}${hasWeb ? "" : "  (API only — run `bun run build` or `bun run dev:web`)"}`,
-      );
-      return;
-    }
-    case "mcp":
-      return runStdio(await Workspace.open(wsDir));
-    case "ref": {
-      const [sub, source] = positional(args);
-      if (sub !== "add" || !source) throw new Error("Usage: factory ref add <file|url>");
-      const ws = await Workspace.open(wsDir);
-      const title = flag(args, "title");
-      const src = /^https?:\/\//.test(source)
-        ? { kind: "url" as const, url: source }
-        : { kind: "file" as const, path: resolve(source) };
-      const ref = await addReference(ws, src, title ? { title } : {});
-      console.log(`Added reference ${ref.id} → ${ws.abs(ref.dir)}`);
-      return;
-    }
-    case "product": {
-      const [sub, url] = positional(args);
-      if (sub !== "import" || !url) throw new Error("Usage: factory product import <url>");
-      return runImport(await Workspace.open(wsDir), url);
-    }
-    case "agent-setup": {
-      const ws = await Workspace.open(wsDir);
-      if (args.includes("--connect")) return connectAgents(ws);
-      return printAgentSetup(ws);
-    }
-    default:
-      console.log(USAGE);
-  }
-}
+const printAgentSetup = Effect.fn("cli.printAgentSetup")(function* () {
+  const ws = yield* Workspace;
+  const launch = mcpLaunch(CLI, ws.root);
+  const args = launch.args.map(tomlString).join(", ");
 
-async function init(dir: string, args: string[]): Promise<void> {
-  await mkdir(dir, { recursive: true });
-  const configPath = join(dir, CONFIG_FILE);
-  if (existsSync(configPath)) {
-    console.log(`${CONFIG_FILE} already exists in ${dir}`);
-  } else {
-    const items = flag(args, "items");
-    await writeFile(
-      configPath,
-      stringify({
-        name: flag(args, "name") ?? basename(dir),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        platforms: ["tiktok", "instagram", "youtube"],
-        ...(items ? { paths: { items } } : {}),
-      }),
-    );
-    console.log(`Created ${configPath}`);
-  }
-  const ws = await Workspace.open(dir);
-  const productFile = `${ws.config.paths.product}/product.yaml`;
-  if (!ws.exists(productFile)) {
-    await ws.writeText(
-      productFile,
-      await readFile(join(PACKAGE_ROOT, "templates/product.yaml"), "utf8"),
-    );
-    await ws.mkdir(`${ws.config.paths.product}/captures`);
-    console.log(`Created ${productFile} — fill this in first; every agent run reads it.`);
-  }
-  for (const p of [ws.config.paths.references, ws.config.paths.formats, ws.config.paths.items])
-    await ws.mkdir(p);
-  await installSkill(ws);
-  // Onboarding order: agents first (everything else is done through them), then the product.
-  if (args.includes("--no-connect")) printAgentSetup(ws);
-  else await connectAgents(ws);
-  const from = flag(args, "from");
-  if (from) await runImport(ws, from);
-  if (!args.includes("--no-connect"))
-    console.log(
-      `\nOpen the board:  bun ${join(PACKAGE_ROOT, "src/cli.ts")} serve --workspace ${ws.root}`,
-    );
-}
-
-async function runImport(ws: Workspace, url: string): Promise<void> {
-  console.log(`Reading ${url} …`);
-  const result = await importProduct(ws, url);
-  for (const l of result.listings) console.log(`  ${l.source.padEnd(10)} ${l.name}`);
-  console.log(`  product    ${result.product.name} — ${result.product.oneLiner}`);
-  console.log(`  wrote      ${result.files.length} files under ${ws.config.paths.product}/`);
-  for (const w of result.warnings) console.warn(`  warning    ${w}`);
-  console.log("  Review product.yaml: audience and voice still need your words.");
-}
-
-async function connectAgents(ws: Workspace): Promise<void> {
-  const launch = mcpLaunch(join(PACKAGE_ROOT, "src/cli.ts"), ws);
-  console.log("\nConnecting agents:");
-  for (const connect of [connectClaude, connectCodex]) {
-    const r = await connect(ws, launch);
-    console.log(`  ${r.ok ? "✓" : "–"} ${r.agent.padEnd(7)} ${r.detail}`);
-  }
-}
-
-/** Copy the agent skill into the workspace for both Claude Code and Codex-style agents. */
-async function installSkill(ws: Workspace): Promise<void> {
-  const skill = await readFile(join(PACKAGE_ROOT, "skills/content-factory/SKILL.md"), "utf8");
-  for (const target of [
-    ".agents/skills/content-factory/SKILL.md",
-    ".claude/skills/content-factory/SKILL.md",
-  ]) {
-    if (ws.exists(target)) continue;
-    await ws.writeText(target, skill);
-    console.log(`Installed skill → ${target}`);
-  }
-}
-
-function printAgentSetup(ws: Workspace): void {
-  const cli = join(PACKAGE_ROOT, "src/cli.ts");
-  console.log(`
+  yield* Console.log(`
 Connect your agent (run inside ${ws.root}):
 
   Claude Code:
-    claude mcp add content-factory -- bun ${cli} mcp --workspace ${ws.root}
+    claude mcp add --scope project content-factory -- ${[launch.command, ...launch.args].join(" ")}
 
   Codex (~/.codex/config.toml):
-    [mcp_servers.content-factory]
-    command = "bun"
-    args = ["${cli}", "mcp", "--workspace", "${ws.root}"]
+    [mcp_servers.${codexServerName(ws.config.name)}]
+    command = ${tomlString(launch.command)}
+    args = [${args}]
 
-Then open the board:  bun ${cli} serve --workspace ${ws.root}
+Then open the board:  ${cliLine} serve --workspace ${ws.root}
 `);
-}
-
-main(process.argv.slice(2)).catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
 });
+
+/** The agent skill, for Claude Code and for Codex-style agents. Existing copies are kept. */
+const installSkill = Effect.fn("cli.installSkill")(function* () {
+  const ws = yield* Workspace;
+
+  for (const target of SKILL_TARGETS) {
+    if (yield* ws.exists(target)) continue;
+    yield* ws.writeText(target, SKILL_MARKDOWN);
+    yield* Console.log(`Installed skill → ${target}`);
+  }
+});
+
+/** Everything a workspace needs besides factory.yaml: the product template, folders, and skill. */
+const scaffold = Effect.fn("cli.scaffold")(function* () {
+  const ws = yield* Workspace;
+  const { paths } = ws.config;
+  const productFile = `${paths.product}/product.yaml`;
+
+  if (!(yield* ws.exists(productFile))) {
+    yield* ws.writeText(productFile, PRODUCT_TEMPLATE);
+    yield* ws.mkdir(`${paths.product}/captures`);
+    yield* Console.log(`Created ${productFile} — fill this in first; every agent run reads it.`);
+  }
+
+  yield* Effect.forEach([paths.references, paths.formats, paths.items], ws.mkdir, {
+    discard: true,
+  });
+  yield* installSkill();
+});
+
+const init = Command.make(
+  "init",
+  {
+    dir: Argument.String("dir").pipe(
+      Argument.withDescription("Folder to make into a workspace"),
+      Argument.withDefault("."),
+    ),
+    from: Flag.String("from").pipe(
+      Flag.withDescription("App Store, Google Play, or landing page URL to fill the product from"),
+      Flag.optional,
+    ),
+    name: Flag.String("name").pipe(
+      Flag.withDescription("Workspace name (default: the folder name)"),
+      Flag.optional,
+    ),
+    items: Flag.String("items").pipe(
+      Flag.withDescription("Where content items live, relative to the workspace"),
+      Flag.optional,
+    ),
+    connect: Flag.Boolean("connect").pipe(
+      Flag.withDescription("Connect Claude Code and Codex; --no-connect prints the setup instead"),
+      Flag.withDefault(true),
+    ),
+  },
+  Effect.fn("cli.init")(function* ({ dir, from, name, items, connect }) {
+    const path = yield* Path.Path;
+    const root = path.resolve(dir);
+
+    const created = yield* initWorkspace(root, {
+      name: Option.getOrElse(name, () => path.basename(root)),
+      timezone: DateTime.zoneToString(DateTime.zoneMakeLocal()),
+      paths: Option.match(items, { onNone: () => ({}), onSome: (folder) => ({ items: folder }) }),
+    });
+
+    yield* Console.log(
+      created
+        ? `Created ${path.join(root, CONFIG_FILE)}`
+        : `${CONFIG_FILE} already exists in ${root}`,
+    );
+
+    yield* Effect.gen(function* () {
+      yield* scaffold();
+      // Agents come first: everything after this is done through them, the product included.
+      yield* connect ? connectAgents() : printAgentSetup();
+
+      if (Option.isSome(from)) yield* runImport(from.value);
+
+      if (connect) yield* Console.log(`\nOpen the board:  ${cliLine} serve --workspace ${root}`);
+    }).pipe(Effect.provide(Workspace.layer(root)));
+  }),
+).pipe(
+  Command.withDescription(
+    "Create a workspace, connect your agents, and optionally import the product",
+  ),
+  Command.withExamples([
+    {
+      command: "factory init my-app --from https://apps.apple.com/app/id123",
+      description: "Start from a store listing",
+    },
+  ]),
+);
+
+const serve = Command.make(
+  "serve",
+  {
+    workspace: workspaceFlag,
+    port: Flag.Int("port").pipe(
+      Flag.withDescription("Port to listen on"),
+      Flag.withDefault(DEFAULT_PORT),
+    ),
+    host: Flag.String("host").pipe(
+      Flag.withDescription("Interface to listen on"),
+      Flag.withDefault(DEFAULT_HOST),
+    ),
+    webDir: Flag.String("web-dir").pipe(
+      Flag.withDescription("Built web board to serve (default: dist/web)"),
+      Flag.optional,
+    ),
+  },
+  Effect.fn("cli.serve")(function* ({ workspace, port, host, webDir }) {
+    const path = yield* Path.Path;
+
+    const dir = Option.isSome(webDir)
+      ? Option.some(path.resolve(webDir.value))
+      : yield* defaultWebDir();
+
+    const server = serverLayer({
+      port,
+      hostname: host,
+      cli: CLI,
+      webDir: Option.getOrUndefined(dir),
+    });
+
+    return yield* Effect.gen(function* () {
+      const ws = yield* Workspace;
+      yield* Layer.build(server);
+
+      const note = Option.isSome(dir)
+        ? ""
+        : "  (API only — run `bun run build` or `bun run dev:web`)";
+
+      yield* Console.log(`Content Factory · ${ws.config.name}`);
+      yield* Console.log(`  workspace  ${ws.root}`);
+      yield* Console.log(
+        `  web        http://${host === "0.0.0.0" ? "localhost" : host}:${port}${note}`,
+      );
+
+      return yield* Effect.never;
+    }).pipe(Effect.scoped, Effect.provide(Workspace.layer(workspace)));
+  }),
+).pipe(Command.withDescription("Serve the web board and local API"));
+
+const mcp = Command.make("mcp", { workspace: workspaceFlag }, ({ workspace }) =>
+  // stdout carries the protocol, so nothing here may print to it.
+  Layer.launch(mcpLayer.pipe(Layer.provide(Workspace.layer(workspace)))),
+).pipe(Command.withDescription("Run the MCP server over stdio for Claude Code and Codex"));
+
+const refAdd = Command.make(
+  "add",
+  {
+    workspace: workspaceFlag,
+    source: Argument.String("source").pipe(
+      Argument.withDescription("Video file, or a URL yt-dlp can download"),
+    ),
+    title: Flag.String("title").pipe(
+      Flag.withDescription("What to call the reference"),
+      Flag.optional,
+    ),
+  },
+  Effect.fn("cli.refAdd")(function* ({ workspace, source, title }) {
+    const path = yield* Path.Path;
+    const parsed = referenceSourceOf(source);
+
+    const resolved =
+      parsed.kind === "file" ? { ...parsed, path: path.resolve(parsed.path) } : parsed;
+
+    yield* Effect.gen(function* () {
+      const ws = yield* Workspace;
+
+      const reference = yield* addReference(
+        resolved,
+        Option.isSome(title) ? { title: title.value } : {},
+      );
+
+      yield* Console.log(`Added reference ${reference.id} → ${yield* ws.abs(reference.dir)}`);
+    }).pipe(Effect.provide(Workspace.layer(workspace)));
+  }),
+).pipe(Command.withDescription("Add a reference video and preprocess it"));
+
+const ref = Command.make("ref").pipe(
+  Command.withDescription("Manage reference videos"),
+  Command.withSubcommands([refAdd]),
+);
+
+const productImport = Command.make(
+  "import",
+  {
+    workspace: workspaceFlag,
+    url: Argument.String("url").pipe(
+      Argument.withDescription("App Store, Google Play, or landing page URL"),
+    ),
+  },
+  ({ workspace, url }) => runImport(url).pipe(Effect.provide(Workspace.layer(workspace))),
+).pipe(Command.withDescription("Fill product.yaml and store screenshots from a URL"));
+
+const product = Command.make("product").pipe(
+  Command.withDescription("Manage the product every agent run reads"),
+  Command.withSubcommands([productImport]),
+);
+
+const agentSetup = Command.make(
+  "agent-setup",
+  {
+    workspace: workspaceFlag,
+    connect: Flag.Boolean("connect").pipe(
+      Flag.withDescription("Connect Claude Code and Codex instead of printing the commands"),
+      Flag.withDefault(false),
+    ),
+  },
+  ({ workspace, connect }) =>
+    (connect ? connectAgents() : printAgentSetup()).pipe(
+      Effect.provide(Workspace.layer(workspace)),
+    ),
+).pipe(
+  Command.withDescription("Connect Claude Code and Codex, or print the commands to do it yourself"),
+);
+
+const factory = Command.make("factory").pipe(
+  Command.withDescription("Content Factory — a local short-form content factory"),
+  Command.withSubcommands([init, serve, mcp, ref, product, agentSetup]),
+);
+
+/**
+ * Command.run already renders parse errors and help. Everything else is a core error with a
+ * message meant for people, or a defect worth the full cause.
+ */
+const report = (cause: Cause.Cause<unknown>) => {
+  if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+  const error = Cause.findErrorOption(cause);
+
+  if (Option.isNone(error)) return Console.error(Cause.pretty(cause));
+
+  if (CliError.isCliError(error.value)) return Effect.void;
+  const { message } = error.value instanceof Error ? error.value : { message: String(error.value) };
+
+  return Console.error(message);
+};
+
+Command.run(factory, { version: MCP_VERSION }).pipe(
+  Effect.tapCause(report),
+  Effect.provide([FetchHttpClient.layer, BunServices.layer]),
+  BunRuntime.runMain({ disableErrorReporting: true }),
+);

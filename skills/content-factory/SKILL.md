@@ -68,6 +68,14 @@ into folders.
 `verify_item` again → `resolve_feedback` with a one-line description of what changed. Do not mark
 an item `approved`; only the user approves.
 
+Edit requests from the board's chat point at a part of one media file: a range (`timecode` to
+`end`, in seconds), a box on a frame (`region`, fractions of the frame), or both. Their `context`
+holds the files to look at, relative to the item folder: `clip.mp4` (the range), `frame.png` (the
+frame, with the box drawn in red), and `before.*` (the media as it was). Open the frame before you
+change anything. Write the result over the same media file name and never touch `before.*`; the
+user compares the two and keeps or rolls back the edit. Change only the selected part unless the
+request says otherwise, and end with a plain summary for someone who does not use video editors.
+
 ## Scheduling and metrics
 
 - Never schedule, publish, or delete posts unless the user explicitly asks. When they do, use their

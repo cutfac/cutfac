@@ -1,7 +1,28 @@
-import { describe, expect, test } from "bun:test";
-import { aspectFromName, checkVideo, parseProbe, toMediaFiles } from "../src/core/media.ts";
-import { frameTimes, parseShowinfoTimes } from "../src/core/references.ts";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { join } from "node:path";
+
+import { Effect, Schema } from "effect";
+
+import { InvalidRequest, NotFound } from "../src/core/errors.ts";
+import { createItem, importMedia } from "../src/core/items.ts";
+import {
+  aspectFromName,
+  aspectOf,
+  checkVideo,
+  parseProbe,
+  toMediaFiles,
+} from "../src/core/media.ts";
+import {
+  addReference,
+  frameTimes,
+  getReference,
+  listReferences,
+  parseShowinfoTimes,
+  referenceSourceOf,
+} from "../src/core/references.ts";
 import { FormatDoc } from "../src/core/schema.ts";
+import { verifyItem } from "../src/core/verify.ts";
+import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("media names", () => {
   test("reads the aspect prefix", () => {
@@ -18,10 +39,19 @@ describe("media names", () => {
       { name: "frames", dir: true, size: 0, mtime: 1 },
       { name: "cover.PNG", dir: false, size: 1, mtime: 1 },
     ]);
+
     expect(files.map((f) => [f.name, f.kind, f.aspect])).toEqual([
       ["[9x16] video.mp4", "video", "9x16"],
       ["cover.PNG", "image", undefined],
     ]);
+  });
+
+  test("matches a frame size to a listed aspect within 2%", () => {
+    expect(aspectOf(1080, 1920)).toBe("9x16");
+    expect(aspectOf(1080, 1350)).toBe("4x5");
+    expect(aspectOf(1000, 1000)).toBe("1x1");
+    expect(aspectOf(1000, 1500)).toBeUndefined();
+    expect(aspectOf(0, 1920)).toBeUndefined();
   });
 });
 
@@ -57,6 +87,7 @@ describe("probe checks", () => {
 
   test("passes a clean 9:16 master", () => {
     const checks = checkVideo(parseProbe(probeJson), { aspect: "9x16" });
+
     expect(checks.every((c) => c.ok)).toBe(true);
   });
 
@@ -73,24 +104,30 @@ describe("probe checks", () => {
       ],
       format: { duration: "70" },
     });
-    const format = FormatDoc.parse({
+
+    const format = Schema.decodeSync(FormatDoc)({
       title: "t",
       summary: "s",
       fps: 30,
       duration: { min: 10, max: 45 },
     });
-    const failed = checkVideo(silent, { aspect: "9x16", format })
-      .filter((c) => !c.ok)
-      .map((c) => c.name);
+
+    const failed = checkVideo(silent, { aspect: "9x16", format }).flatMap((c) =>
+      c.ok ? [] : [c.name],
+    );
+
     expect(failed).toEqual(["resolution", "audio", "fps", "duration"]);
+
+    const [video] = probeJson.streams;
 
     const drift = parseProbe({
       ...probeJson,
       streams: [
-        probeJson.streams[0]!,
+        ...(video === undefined ? [] : [video]),
         { codec_type: "audio", codec_name: "aac", start_time: "0.2" },
       ],
     });
+
     expect(checkVideo(drift, {}).find((c) => c.name === "stream start")?.ok).toBe(false);
   });
 });
@@ -99,11 +136,136 @@ describe("reference preprocessing", () => {
   test("parses showinfo cut times", () => {
     const stderr =
       "[Parsed_showinfo_1 @ 0x1] n:0 pts:1 pts_time:1.234 duration\n[Parsed_showinfo_1] n:1 pts_time:5.5 ";
+
     expect(parseShowinfoTimes(stderr)).toEqual([1.23, 5.5]);
   });
 
   test("samples the hook densely", () => {
     expect(frameTimes(6.2)).toEqual([0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6]);
     expect(frameTimes(1.2)).toEqual([0, 0.5, 1]);
+    // ffmpeg has no frame to seek to at the very end.
+    expect(frameTimes(2)).toEqual([0, 0.5, 1, 1.5]);
   });
+
+  test("reads http(s) arguments as URLs and anything else as a file", () => {
+    expect(referenceSourceOf("https://www.tiktok.com/@a/video/1")).toEqual({
+      kind: "url",
+      url: "https://www.tiktok.com/@a/video/1",
+    });
+    expect(referenceSourceOf("./clips/hook.mp4")).toEqual({
+      kind: "file",
+      path: "./clips/hook.mp4",
+    });
+    expect(referenceSourceOf("ftp://host/x.mp4").kind).toBe("file");
+  });
+});
+
+const hasFfmpeg = Bun.which("ffmpeg") !== null && Bun.which("ffprobe") !== null;
+
+/** A 2s 180×320 test pattern with a tone, so it probes as a 9:16 video with audio. */
+function makeVideo(path: string): void {
+  const generated = Bun.spawnSync(
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=180x320:rate=30:duration=2",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=2",
+      "-pix_fmt",
+      "yuv420p",
+      "-shortest",
+      path,
+    ],
+    { stderr: "pipe" },
+  );
+
+  if (generated.exitCode !== 0) throw new Error(generated.stderr.toString());
+}
+
+describe("media in a workspace", () => {
+  let t: TestWorkspace;
+  let source: string;
+
+  beforeEach(async () => {
+    t = await makeWorkspace();
+    source = join(t.root, "upload.mp4");
+  });
+
+  afterEach(() => t.remove());
+
+  test("refuses to import a file that is not media", async () => {
+    await Bun.write(join(t.root, "notes.txt"), "hi");
+
+    const error = await t.fail(
+      Effect.flatMap(createItem({ title: "Clip" }), (item) =>
+        importMedia(item.id, join(t.root, "notes.txt"), "notes.txt"),
+      ),
+    );
+
+    expect(error).toBeInstanceOf(InvalidRequest);
+  });
+
+  test("an unknown reference is not found", async () => {
+    expect(await t.fail(getReference("nope"))).toBeInstanceOf(NotFound);
+    expect(await t.fail(getReference("../escape"))).toBeInstanceOf(NotFound);
+    expect(await t.run(listReferences())).toEqual([]);
+  });
+
+  test.skipIf(!hasFfmpeg)(
+    "imports uploads with a probed aspect tag and unique names, then verifies them",
+    async () => {
+      makeVideo(source);
+
+      const { first, second, reports } = await t.run(
+        Effect.gen(function* () {
+          const item = yield* createItem({ title: "Clip" });
+          const a = yield* importMedia(item.id, source, "[1x1] My Clip.mp4");
+          const b = yield* importMedia(item.id, source, "My Clip.mp4");
+
+          return { first: a, second: b, reports: yield* verifyItem(item.id) };
+        }),
+      );
+
+      expect(first.name).toBe("[9x16] My Clip.mp4");
+      expect(second.name).toBe("[9x16] My Clip-2.mp4");
+      expect(reports.map((report) => report.file)).toEqual([
+        "[9x16] My Clip-2.mp4",
+        "[9x16] My Clip.mp4",
+      ]);
+      expect(reports[0]?.checks.find((check) => check.name === "audio")?.ok).toBe(true);
+      // 180×320 is far below upload resolution.
+      expect(reports[0]?.checks.find((check) => check.name === "resolution")?.ok).toBe(false);
+    },
+    20_000,
+  );
+
+  test.skipIf(!hasFfmpeg)(
+    "adds a reference from a file and preprocesses it",
+    async () => {
+      makeVideo(source);
+
+      const { reference, listed } = await t.run(
+        Effect.gen(function* () {
+          const added = yield* addReference(referenceSourceOf(source), { tags: ["hook"] });
+
+          return { reference: added, listed: yield* listReferences() };
+        }),
+      );
+
+      expect(reference.id).toMatch(/^\d{4}-\d{2}-\d{2}-upload$/);
+      expect(reference.doc.video).toBe("source.mp4");
+      expect(reference.doc.tags).toEqual(["hook"]);
+      expect(reference.doc.probe?.hasAudio).toBe(true);
+      expect(reference.doc.preprocessed).toBe(true);
+      expect(reference.preprocess?.frames.map((frame) => frame.t)).toEqual([0, 0.5, 1, 1.5]);
+      expect(listed.map((entry) => entry.id)).toEqual([reference.id]);
+    },
+    30_000,
+  );
 });

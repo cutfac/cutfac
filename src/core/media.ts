@@ -1,178 +1,238 @@
-import type { Aspect, FormatDoc } from "./schema.ts";
-import { ASPECTS } from "./schema.ts";
+import { Effect, Match, Schema } from "effect";
+
+import { CommandFailed } from "./errors.ts";
+import { runChecked } from "./process.ts";
+import { ASPECTS, type Aspect, type FormatDoc } from "./schema.ts";
+import type { Entry } from "./workspace.ts";
 
 const VIDEO_EXT = new Set(["mp4", "mov", "webm", "m4v"]);
+
 const IMAGE_EXT = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
 export type MediaKind = "video" | "image";
 
 export interface MediaFile {
-  name: string;
-  kind: MediaKind;
-  aspect?: Aspect;
-  size: number;
-  mtime: number;
+  readonly name: string;
+  readonly kind: MediaKind;
+  readonly aspect?: Aspect | undefined;
+  readonly size: number;
+  readonly mtime: number;
+}
+
+export function extension(name: string): string {
+  const dot = name.lastIndexOf(".");
+
+  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 export function mediaKind(name: string): MediaKind | undefined {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const ext = extension(name);
+
   if (VIDEO_EXT.has(ext)) return "video";
+
   if (IMAGE_EXT.has(ext)) return "image";
+
   return undefined;
 }
 
 /** `[9x16] cover.jpg` → `9x16`. */
 export function aspectFromName(name: string): Aspect | undefined {
-  const match = /^\[(\d+x\d+)\]/.exec(name);
-  const value = match?.[1];
-  return ASPECTS.find((a) => a === value);
+  const value = /^\[(\d+x\d+)\]/.exec(name)?.[1];
+
+  return ASPECTS.find((aspect) => aspect === value);
 }
 
-export function toMediaFiles(
-  entries: { name: string; dir: boolean; size: number; mtime: number }[],
-): MediaFile[] {
-  const out: MediaFile[] = [];
-  for (const e of entries) {
-    if (e.dir) continue;
-    const kind = mediaKind(e.name);
-    if (!kind) continue;
-    const aspect = aspectFromName(e.name);
-    out.push({ name: e.name, kind, size: e.size, mtime: e.mtime, ...(aspect ? { aspect } : {}) });
-  }
-  return out;
+export function toMediaFiles(entries: ReadonlyArray<Entry>): MediaFile[] {
+  return entries.flatMap((entry): MediaFile[] => {
+    const kind = entry.dir ? undefined : mediaKind(entry.name);
+
+    if (kind === undefined) return [];
+    const aspect = aspectFromName(entry.name);
+
+    return [{ name: entry.name, kind, aspect, size: entry.size, mtime: entry.mtime }];
+  });
 }
 
-export interface Probe {
-  duration: number;
-  width: number;
-  height: number;
-  fps: number;
-  hasAudio: boolean;
-  videoCodec?: string;
-  audioCodec?: string;
-  videoStart?: number;
-  audioStart?: number;
+export interface MediaProbe {
+  readonly duration: number;
+  readonly width: number;
+  readonly height: number;
+  readonly fps: number;
+  readonly hasAudio: boolean;
+  readonly videoCodec?: string | undefined;
+  readonly audioCodec?: string | undefined;
+  readonly videoStart?: number | undefined;
+  readonly audioStart?: number | undefined;
 }
 
-export async function probe(absPath: string): Promise<Probe> {
-  const proc = Bun.spawn(
-    ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", absPath],
-    { stdout: "pipe", stderr: "pipe" },
-  );
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0) throw new Error(`ffprobe failed: ${err.trim()}`);
-  return parseProbe(JSON.parse(out));
-}
+const FfprobeStream = Schema.Struct({
+  codec_type: Schema.optionalKey(Schema.String),
+  codec_name: Schema.optionalKey(Schema.String),
+  width: Schema.optionalKey(Schema.Finite),
+  height: Schema.optionalKey(Schema.Finite),
+  avg_frame_rate: Schema.optionalKey(Schema.String),
+  r_frame_rate: Schema.optionalKey(Schema.String),
+  start_time: Schema.optionalKey(Schema.String),
+});
 
-interface FfprobeJson {
-  streams?: {
-    codec_type?: string;
-    codec_name?: string;
-    width?: number;
-    height?: number;
-    avg_frame_rate?: string;
-    r_frame_rate?: string;
-    start_time?: string;
-  }[];
-  format?: { duration?: string };
-}
+/** The parts of `ffprobe -print_format json -show_streams -show_format` the checks read. */
+export const FfprobeOutput = Schema.Struct({
+  streams: Schema.optionalKey(Schema.Array(FfprobeStream)),
+  format: Schema.optionalKey(Schema.Struct({ duration: Schema.optionalKey(Schema.String) })),
+});
 
-export function parseProbe(json: FfprobeJson): Probe {
-  const streams = json.streams ?? [];
-  const video = streams.find((s) => s.codec_type === "video");
-  const audio = streams.find((s) => s.codec_type === "audio");
-  const result: Probe = {
-    duration: Number(json.format?.duration ?? 0),
-    width: video?.width ?? 0,
-    height: video?.height ?? 0,
-    fps: parseRate(video?.avg_frame_rate ?? video?.r_frame_rate),
-    hasAudio: Boolean(audio),
-  };
-  if (video?.codec_name) result.videoCodec = video.codec_name;
-  if (audio?.codec_name) result.audioCodec = audio.codec_name;
-  if (video?.start_time !== undefined) result.videoStart = Number(video.start_time);
-  if (audio?.start_time !== undefined) result.audioStart = Number(audio.start_time);
-  return result;
-}
+export type FfprobeOutput = typeof FfprobeOutput.Type;
 
+const decodeFfprobe = Schema.decodeUnknownEffect(Schema.fromJsonString(FfprobeOutput));
+
+/** `30000/1001` → `29.97`. */
 function parseRate(rate: string | undefined): number {
-  if (!rate) return 0;
-  const [n, d] = rate.split("/").map(Number);
-  if (!n || !d) return 0;
+  const [n = 0, d = 0] = (rate ?? "").split("/").map(Number);
+
+  if (!Number.isFinite(n) || !Number.isFinite(d) || n === 0 || d === 0) return 0;
+
   return Math.round((n / d) * 100) / 100;
 }
 
-export interface Check {
-  name: string;
-  ok: boolean;
-  detail: string;
+const finiteOr = (text: string | undefined, fallback: number) => {
+  const value = Number(text);
+
+  return text === undefined || !Number.isFinite(value) ? fallback : value;
+};
+
+export function parseProbe(json: FfprobeOutput): MediaProbe {
+  const streams = json.streams ?? [];
+  const video = streams.find((s) => s.codec_type === "video");
+  const audio = streams.find((s) => s.codec_type === "audio");
+
+  return {
+    duration: finiteOr(json.format?.duration, 0),
+    width: video?.width ?? 0,
+    height: video?.height ?? 0,
+    fps: parseRate(video?.avg_frame_rate ?? video?.r_frame_rate),
+    hasAudio: audio !== undefined,
+    videoCodec: video?.codec_name,
+    audioCodec: audio?.codec_name,
+    videoStart: video?.start_time === undefined ? undefined : finiteOr(video.start_time, 0),
+    audioStart: audio?.start_time === undefined ? undefined : finiteOr(audio.start_time, 0),
+  };
 }
 
-const ASPECT_RATIO: Record<Aspect, number> = {
+/** Read duration, size, frame rate, and streams of a media file with ffprobe. */
+export const probe = Effect.fn("media.probe")(function* (absPath: string) {
+  const out = yield* runChecked("ffprobe", [
+    "-v",
+    "error",
+    "-print_format",
+    "json",
+    "-show_streams",
+    "-show_format",
+    absPath,
+  ]);
+
+  const json = yield* decodeFfprobe(out).pipe(
+    Effect.mapError(
+      (error) =>
+        new CommandFailed({ message: `ffprobe printed unexpected JSON: ${error.message}` }),
+    ),
+  );
+
+  return parseProbe(json);
+});
+
+export interface Check {
+  readonly name: string;
+  readonly ok: boolean;
+  readonly detail: string;
+}
+
+export const ASPECT_RATIO = {
   "9x16": 9 / 16,
   "4x5": 4 / 5,
   "3x4": 3 / 4,
   "1x1": 1,
   "16x9": 16 / 9,
-};
+} satisfies Record<Aspect, number>;
+
+/** The listed aspect a `width`×`height` frame matches within 2%, if any. */
+export function aspectOf(width: number, height: number): Aspect | undefined {
+  if (width <= 0 || height <= 0) return undefined;
+  const ratio = width / height;
+
+  return ASPECTS.find((aspect) => Math.abs(ratio / ASPECT_RATIO[aspect] - 1) < 0.02);
+}
+
+export interface CheckOptions {
+  readonly aspect?: Aspect | undefined;
+  readonly format?: FormatDoc | undefined;
+}
+
+const isUploadCodec = Match.type<string | undefined>().pipe(
+  Match.when("h264", () => true),
+  Match.when("hevc", () => true),
+  Match.orElse(() => false),
+);
 
 /** Deterministic upload checks for one short-form video, optionally against a format recipe. */
-export function checkVideo(p: Probe, opts: { aspect?: Aspect; format?: FormatDoc }): Check[] {
-  const checks: Check[] = [];
-  checks.push({
-    name: "codec",
-    ok: p.videoCodec === "h264" || p.videoCodec === "hevc",
-    detail: `video ${p.videoCodec ?? "none"}, audio ${p.audioCodec ?? "none"}`,
-  });
-  if (opts.aspect) {
-    const actual = p.width / p.height;
+export function checkVideo(p: MediaProbe, options: CheckOptions): Check[] {
+  const checks: Check[] = [
+    {
+      name: "codec",
+      ok: isUploadCodec(p.videoCodec),
+      detail: `video ${p.videoCodec ?? "none"}, audio ${p.audioCodec ?? "none"}`,
+    },
+  ];
+
+  const { aspect, format } = options;
+
+  if (aspect !== undefined) {
     checks.push({
       name: "aspect",
-      ok: Math.abs(actual - ASPECT_RATIO[opts.aspect]) < 0.01,
-      detail: `${p.width}x${p.height} for [${opts.aspect}]`,
+      ok: p.height > 0 && Math.abs(p.width / p.height - ASPECT_RATIO[aspect]) < 0.01,
+      detail: `${p.width}x${p.height} for [${aspect}]`,
     });
   }
-  if (opts.aspect === "9x16") {
+
+  if (aspect === "9x16") {
     checks.push({
       name: "resolution",
       ok: p.height >= 1920,
       detail: `${p.width}x${p.height}, want ≥1080x1920`,
     });
   }
-  const requireAudio = opts.format?.requireAudio ?? true;
-  if (requireAudio) {
+
+  if (format?.requireAudio ?? true) {
     checks.push({
       name: "audio",
       ok: p.hasAudio,
       detail: p.hasAudio ? "audio track present" : "no audio track",
     });
   }
+
   if (p.hasAudio && p.videoStart !== undefined && p.audioStart !== undefined) {
-    const drift = Math.abs(p.videoStart - p.audioStart);
     checks.push({
       name: "stream start",
-      ok: drift < 0.05,
+      ok: Math.abs(p.videoStart - p.audioStart) < 0.05,
       detail: `video ${p.videoStart}s, audio ${p.audioStart}s`,
     });
   }
-  if (opts.format?.fps) {
+
+  if (format?.fps !== undefined) {
     checks.push({
       name: "fps",
-      ok: Math.abs(p.fps - opts.format.fps) < 0.5,
-      detail: `${p.fps} fps, want ${opts.format.fps}`,
+      ok: Math.abs(p.fps - format.fps) < 0.5,
+      detail: `${p.fps} fps, want ${format.fps}`,
     });
   }
-  const d = opts.format?.duration;
-  if (d) {
+
+  if (format?.duration !== undefined) {
+    const { min, max } = format.duration;
     checks.push({
       name: "duration",
-      ok: p.duration >= d.min && p.duration <= d.max,
-      detail: `${p.duration.toFixed(2)}s, want ${d.min}–${d.max}s`,
+      ok: p.duration >= min && p.duration <= max,
+      detail: `${p.duration.toFixed(2)}s, want ${min}–${max}s`,
     });
   }
+
   return checks;
 }

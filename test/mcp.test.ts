@@ -1,50 +1,184 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createMcpServer } from "../src/mcp/server.ts";
-import { Workspace } from "../src/core/workspace.ts";
 
-let root: string;
-let client: Client;
+import { Schema } from "effect";
+
+import { makeWorkspace, type TestWorkspace } from "./support.ts";
+
+const CLI = join(import.meta.dir, "../src/cli.ts");
+
+const RpcResponse = Schema.Struct({
+  id: Schema.optional(Schema.Finite),
+  result: Schema.optional(Schema.Json),
+  error: Schema.optional(Schema.Struct({ message: Schema.String })),
+});
+
+type RpcResponse = typeof RpcResponse.Type;
+
+const decodeLine = Schema.decodeUnknownSync(Schema.fromJsonString(RpcResponse));
+
+interface RpcMessage {
+  readonly id?: number;
+  readonly method: string;
+  readonly params?: Schema.JsonObject;
+}
+
+const ToolList = Schema.Struct({ tools: Schema.Array(Schema.Struct({ name: Schema.String })) });
+
+const ToolResult = Schema.Struct({
+  isError: Schema.optional(Schema.Boolean),
+  structuredContent: Schema.optional(Schema.Json),
+  content: Schema.Array(
+    Schema.Struct({ type: Schema.String, text: Schema.optional(Schema.String) }),
+  ),
+});
+
+const Created = Schema.Struct({ id: Schema.String });
+
+const Scheduled = Schema.Struct({ status: Schema.String });
+
+const Overview = Schema.Struct({ items: Schema.Record(Schema.String, Schema.Finite) });
+
+/** A newline-delimited JSON-RPC client for `factory mcp`, the way Claude Code talks to it. */
+function startServer(root: string) {
+  const child = Bun.spawn(["bun", CLI, "mcp", "--workspace", root], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const pending = new Map<number, (response: RpcResponse) => void>();
+  let nextId = 1;
+
+  void (async () => {
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    for await (const chunk of child.stdout) {
+      buffer += decoder.decode(chunk, { stream: true });
+      let newline = buffer.indexOf("\n");
+
+      while (newline !== -1) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf("\n");
+
+        if (line === "") continue;
+        const message = decodeLine(line);
+
+        if (message.id !== undefined) pending.get(message.id)?.(message);
+      }
+    }
+  })();
+
+  const send = (message: RpcMessage) => {
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
+    child.stdin.flush();
+  };
+
+  const request = async <A>(
+    method: string,
+    params: Schema.JsonObject,
+    schema: Schema.Decoder<A>,
+  ): Promise<A> => {
+    const id = nextId++;
+
+    const answered = new Promise<RpcResponse>((resolve) => {
+      pending.set(id, resolve);
+    });
+
+    send({ id, method, params });
+    const response = await answered;
+
+    if (response.error !== undefined) throw new Error(response.error.message);
+
+    return Schema.decodeSync(schema)(response.result);
+  };
+
+  /** Call a tool and decode its structured result, failing on an error result. */
+  const call = async <A>(
+    name: string,
+    args: Schema.JsonObject,
+    schema: Schema.Decoder<A>,
+  ): Promise<A> => {
+    const result = await request("tools/call", { name, arguments: args }, ToolResult);
+    const text = result.content[0]?.text ?? "null";
+
+    if (result.isError === true) throw new Error(text);
+
+    return Schema.decodeUnknownSync(schema)(result.structuredContent ?? JSON.parse(text));
+  };
+
+  return { child, send, request, call };
+}
+
+let t: TestWorkspace;
+
+let server: ReturnType<typeof startServer>;
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "factory-mcp-"));
-  await writeFile(join(root, "factory.yaml"), "name: mcp\n");
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createMcpServer(await Workspace.open(root)).connect(serverSide);
-  client = new Client({ name: "test", version: "0" });
-  await client.connect(clientSide);
-});
-afterAll(() => rm(root, { recursive: true, force: true }));
+  t = await makeWorkspace("mcp");
+  server = startServer(t.root);
 
-const text = (res: unknown) =>
-  JSON.parse((res as { content: { text: string }[] }).content[0]!.text);
+  await server.request(
+    "initialize",
+    {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "test", version: "0" },
+    },
+    Schema.Struct({ protocolVersion: Schema.String }),
+  );
+
+  server.send({ method: "notifications/initialized" });
+});
+
+afterAll(async () => {
+  server.child.kill();
+  await server.child.exited;
+  await t.remove();
+});
+
+test("lists the workspace tools", async () => {
+  const { tools } = await server.request("tools/list", {}, ToolList);
+  const names = tools.map((tool) => tool.name);
+
+  expect(names).toContain("create_item");
+  expect(names).toContain("set_schedule");
+  expect(names).toContain("workspace_overview");
+}, 20_000);
 
 test("agents can create an item and record a schedule", async () => {
-  const { tools } = await client.listTools();
-  expect(tools.map((t) => t.name)).toContain("set_schedule");
-  const created = text(
-    await client.callTool({
-      name: "create_item",
-      arguments: { title: "First post", format: "demo" },
-    }),
+  const created = await server.call(
+    "create_item",
+    { title: "First post", format: "demo" },
+    Created,
   );
+
   expect(created.id).toBe("demo/first-post");
-  const scheduled = text(
-    await client.callTool({
-      name: "set_schedule",
-      arguments: {
-        id: created.id,
-        platform: "tiktok",
-        at: "2026-10-13T19:00:00+09:00",
-        status: "scheduled",
-      },
-    }),
+
+  const scheduled = await server.call(
+    "set_schedule",
+    {
+      id: created.id,
+      platform: "tiktok",
+      at: "2026-10-13T19:00:00+09:00",
+      status: "scheduled",
+    },
+    Scheduled,
   );
+
   expect(scheduled.status).toBe("scheduled");
-  const overview = text(await client.callTool({ name: "workspace_overview", arguments: {} }));
+
+  const overview = await server.call("workspace_overview", {}, Overview);
+
   expect(overview.items).toEqual({ scheduled: 1 });
-});
+}, 20_000);
+
+test("a tool error comes back as an error result, not a crash", async () => {
+  await expect(server.call("get_item", { id: "missing/item" }, Created)).rejects.toThrow(
+    "missing/item",
+  );
+
+  expect(await server.call("workspace_overview", {}, Overview)).toBeDefined();
+}, 20_000);

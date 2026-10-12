@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
+import { Effect } from "effect";
+
+import { InvalidRequest, NotFound, WorkspaceError } from "../src/core/errors.ts";
 import {
   addFeedback,
   createItem,
@@ -14,6 +17,7 @@ import {
   upsertSchedule,
 } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
+import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("legacyStatus", () => {
   test("maps free-form status lines", () => {
@@ -28,100 +32,153 @@ describe("legacyStatus", () => {
 });
 
 describe("items in a workspace", () => {
-  let root: string;
-  let ws: Workspace;
+  let t: TestWorkspace;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "factory-"));
-    await writeFile(join(root, "factory.yaml"), "name: test\n");
-    ws = await Workspace.open(root);
+    t = await makeWorkspace();
   });
-  afterEach(() => rm(root, { recursive: true, force: true }));
+
+  afterEach(() => t.remove());
 
   test("creates, updates, and dedupes ids", async () => {
-    const a = await createItem(ws, { title: "Fried Liver Trap", format: "trap" });
-    const b = await createItem(ws, { title: "Fried Liver Trap", format: "trap" });
+    const [a, b, updated, merged] = await t.run(
+      Effect.gen(function* () {
+        const first = yield* createItem({ title: "Fried Liver Trap", format: "trap" });
+        const second = yield* createItem({ title: "Fried Liver Trap", format: "trap" });
+
+        const reviewed = yield* updateItem(first.id, {
+          status: "review",
+          platforms: { tiktok: { caption: "one" } },
+        });
+
+        const tagged = yield* updateItem(first.id, {
+          platforms: { tiktok: { hashtags: ["#chess"] } },
+        });
+
+        return [first, second, reviewed, tagged] as const;
+      }),
+    );
+
     expect([a.id, b.id]).toEqual(["trap/fried-liver-trap", "trap/fried-liver-trap-2"]);
-    const updated = await updateItem(ws, a.id, {
-      status: "review",
-      platforms: { tiktok: { caption: "one" } },
-    });
     expect(updated.doc.status).toBe("review");
-    const merged = await updateItem(ws, a.id, { platforms: { tiktok: { hashtags: ["#chess"] } } });
     expect(merged.doc.platforms.tiktok).toEqual({ caption: "one", hashtags: ["#chess"] });
   });
 
+  test("rejects a blank title and an id that climbs out of the items folder", async () => {
+    expect(await t.fail(createItem({ title: "   " }))).toBeInstanceOf(InvalidRequest);
+    expect(await t.fail(createItem({ title: "x", id: "../escape" }))).toBeInstanceOf(
+      InvalidRequest,
+    );
+    expect(await t.fail(getItem("missing/item"))).toBeInstanceOf(NotFound);
+  });
+
   test("feedback reopens approved items and resolves", async () => {
-    const item = await createItem(ws, { title: "Hook test" });
-    await updateItem(ws, item.id, { status: "approved" });
-    const withFeedback = await addFeedback(ws, item.id, {
-      body: "Hook is too slow",
-      media: "[9x16] video.mp4",
-      timecode: 1.2,
-    });
-    expect(withFeedback.doc.status).toBe("review");
-    const [open] = await openFeedback(ws);
-    expect(open?.feedback.timecode).toBe(1.2);
-    await resolveFeedback(ws, item.id, open!.feedback.id, "Cut the intro");
-    expect(await openFeedback(ws)).toEqual([]);
+    const { reopened, open, after } = await t.run(
+      Effect.gen(function* () {
+        const item = yield* createItem({ title: "Hook test" });
+        yield* updateItem(item.id, { status: "approved" });
+
+        const added = yield* addFeedback(item.id, {
+          body: "Hook is too slow",
+          media: "[9x16] video.mp4",
+          timecode: 1.2,
+        });
+
+        const listed = yield* openFeedback();
+        yield* resolveFeedback(item.id, added.feedback.id, "Cut the intro");
+
+        return { reopened: added.item, open: listed, after: yield* openFeedback() };
+      }),
+    );
+
+    expect(reopened.doc.status).toBe("review");
+    expect(open.map((entry) => entry.feedback.timecode)).toEqual([1.2]);
+    expect(after).toEqual([]);
+  });
+
+  test("feedback needs a message and a known entry to resolve", async () => {
+    const id = await t.run(Effect.map(createItem({ title: "Quiet" }), (item) => item.id));
+
+    expect(await t.fail(addFeedback(id, { body: "  " }))).toBeInstanceOf(InvalidRequest);
+    expect(await t.fail(resolveFeedback(id, "nope", "done"))).toBeInstanceOf(NotFound);
   });
 
   test("schedule entries drive status", async () => {
-    const item = await createItem(ws, { title: "Post" });
-    await upsertSchedule(ws, item.id, {
-      platform: "tiktok",
-      at: "2026-10-12T19:00:00+09:00",
-      status: "scheduled",
-    });
-    expect((await getItem(ws, item.id)).doc.status).toBe("scheduled");
-    const done = await upsertSchedule(ws, item.id, {
-      platform: "tiktok",
-      at: "2026-10-12T19:00:00+09:00",
-      status: "published",
-    });
+    const at = "2026-10-12T19:00:00+09:00";
+
+    const { scheduled, done } = await t.run(
+      Effect.gen(function* () {
+        const item = yield* createItem({ title: "Post" });
+        yield* upsertSchedule(item.id, { platform: "tiktok", at, status: "scheduled" });
+        const pending = yield* getItem(item.id);
+
+        const published = yield* upsertSchedule(item.id, {
+          platform: "tiktok",
+          at,
+          status: "published",
+        });
+
+        return { scheduled: pending, done: published };
+      }),
+    );
+
+    expect(scheduled.doc.status).toBe("scheduled");
     expect(done.doc.status).toBe("published");
     expect(done.doc.schedule).toHaveLength(1);
   });
 
   test("discovers legacy folders and upgrades them on write", async () => {
-    const dir = join(root, "items/lessons/caro-kann");
+    const dir = join(t.root, "items/lessons/caro-kann");
     await mkdir(join(dir, "frames"), { recursive: true });
     await writeFile(join(dir, "POSTING.md"), "# Caro-Kann Posting\n");
     await writeFile(join(dir, "STATUS.md"), "- status: ready-to-post\n");
     await writeFile(join(dir, "[1x1] 01-hook.jpg"), "");
-    expect(await listItemIds(ws)).toEqual(["lessons/caro-kann"]);
-    const legacy = await getItem(ws, "lessons/caro-kann");
+
+    const { ids, legacy, upgraded } = await t.run(
+      Effect.gen(function* () {
+        const found = yield* listItemIds();
+        const before = yield* getItem("lessons/caro-kann");
+        const added = yield* addFeedback(before.id, { body: "Bigger board" });
+
+        return { ids: found, legacy: before, upgraded: added.item };
+      }),
+    );
+
+    expect(ids).toEqual(["lessons/caro-kann"]);
     expect([legacy.legacy, legacy.doc.title, legacy.doc.status]).toEqual([
       true,
       "Caro-Kann",
       "approved",
     ]);
-    const upgraded = await addFeedback(ws, legacy.id, { body: "Bigger board" });
+    expect(legacy.media.map((m) => [m.name, m.aspect])).toEqual([["[1x1] 01-hook.jpg", "1x1"]]);
     expect(upgraded.legacy).toBe(false);
     expect(upgraded.doc.title).toBe("Caro-Kann");
   });
 
-  test("refuses paths that escape the workspace", () => {
-    expect(() => ws.abs("../outside")).toThrow();
-  });
-});
+  test("refuses paths that escape the workspace", async () => {
+    const escape = Workspace.use((ws) => ws.abs("../outside"));
 
-describe("legacy series folders", () => {
-  test("a marked folder with child items is a group", async () => {
-    const root = await mkdtemp(join(tmpdir(), "factory-"));
-    try {
-      await writeFile(join(root, "factory.yaml"), "name: test\n");
-      const ws = await Workspace.open(root);
-      await mkdir(join(root, "items/guides/indexes/by-style"), { recursive: true });
-      await writeFile(join(root, "items/guides/indexes/STATUS.md"), "# Indexes status\n");
-      await writeFile(
-        join(root, "items/guides/indexes/by-style/STATUS.md"),
-        "# By style — status\n- status: published\n",
-      );
-      expect(await listItemIds(ws)).toEqual(["guides/indexes/by-style"]);
-      expect((await getItem(ws, "guides/indexes/by-style")).doc.title).toBe("By style");
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    expect(await t.fail(escape)).toBeInstanceOf(WorkspaceError);
+  });
+
+  test("a marked folder with child items is a series, not an item", async () => {
+    await mkdir(join(t.root, "items/guides/indexes/by-style"), { recursive: true });
+    await writeFile(join(t.root, "items/guides/indexes/STATUS.md"), "# Indexes status\n");
+    await writeFile(
+      join(t.root, "items/guides/indexes/by-style/STATUS.md"),
+      "# By style — status\n- status: published\n",
+    );
+
+    const { ids, title } = await t.run(
+      Effect.gen(function* () {
+        const found = yield* listItemIds();
+        const item = yield* getItem("guides/indexes/by-style");
+
+        return { ids: found, title: item.doc.title };
+      }),
+    );
+
+    expect(ids).toEqual(["guides/indexes/by-style"]);
+    expect(title).toBe("By style");
   });
 });

@@ -1,30 +1,42 @@
+import { Effect } from "effect";
+
 import { getItem } from "./items.ts";
-import { getFormat } from "./library.ts";
+import { FORMAT_FILE, getFormat, isSimpleId } from "./library.ts";
 import { type Check, checkVideo, probe } from "./media.ts";
-import type { FormatDoc } from "./schema.ts";
-import type { Workspace } from "./workspace.ts";
+import { Workspace } from "./workspace.ts";
 
 export interface MediaReport {
-  file: string;
-  checks: Check[];
-  ok: boolean;
+  readonly file: string;
+  readonly checks: ReadonlyArray<Check>;
+  readonly ok: boolean;
 }
 
+/** The item's format recipe, when it names one that exists. */
+const itemFormat = Effect.fnUntraced(function* (formatId: string | undefined) {
+  const ws = yield* Workspace;
+
+  if (formatId === undefined || !isSimpleId(formatId)) return undefined;
+  const exists = yield* ws.exists(`${ws.config.paths.formats}/${formatId}/${FORMAT_FILE}`);
+
+  return exists ? (yield* getFormat(formatId)).doc : undefined;
+});
+
 /** ffprobe every video in an item and check it against upload rules and the item's format. */
-export async function verifyItem(ws: Workspace, id: string): Promise<MediaReport[]> {
-  const item = await getItem(ws, id);
-  let format: FormatDoc | undefined;
-  if (item.doc.format && ws.exists(`${ws.config.paths.formats}/${item.doc.format}`)) {
-    format = (await getFormat(ws, item.doc.format)).doc;
-  }
-  const reports: MediaReport[] = [];
-  for (const m of item.media.filter((m) => m.kind === "video")) {
-    const p = await probe(ws.abs(`${item.dir}/${m.name}`));
-    const checks = checkVideo(p, {
-      ...(m.aspect ? { aspect: m.aspect } : {}),
-      ...(format ? { format } : {}),
-    });
-    reports.push({ file: m.name, checks, ok: checks.every((c) => c.ok) });
-  }
-  return reports;
-}
+export const verifyItem = Effect.fn("verify.verifyItem")(function* (id: string) {
+  const ws = yield* Workspace;
+  const item = yield* getItem(id);
+  const format = yield* itemFormat(item.doc.format);
+  const videos = item.media.filter((media) => media.kind === "video");
+
+  return yield* Effect.forEach(
+    videos,
+    Effect.fnUntraced(function* (media) {
+      const probed = yield* probe(yield* ws.abs(`${item.dir}/${media.name}`));
+      const checks = checkVideo(probed, { aspect: media.aspect, format });
+      const report: MediaReport = { file: media.name, checks, ok: checks.every((c) => c.ok) };
+
+      return report;
+    }),
+    { concurrency: 2 },
+  );
+});
