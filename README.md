@@ -157,8 +157,13 @@ timecodes, and the original file. When it is done, compare before and after, the
 restore the previous version. Without a connected agent, the request waits in the chat and "Copy
 prompt" hands it to any agent you run yourself.
 
+Every change to an item can be undone: edits, rollbacks, and changes to its title, status, hook,
+caption, or notes, which you can edit in place in the Details tab. The History tab lists the changes
+to jump back to and every saved version of each file to preview or restore.
+
 Shortcuts: `Space` play or pause, `I`/`O` set the start or end, `L` loop the selection, `←`/`→` step
-a tenth of a second (`Shift` for a second), `Esc` clear.
+a tenth of a second (`Shift` for a second), `Esc` clear, `⌘Z`/`⇧⌘Z` undo or redo a change to the
+item (`Ctrl+Z`/`Ctrl+Y` elsewhere), and `?` shows them all.
 
 ## Desktop app
 
@@ -188,6 +193,7 @@ product/store/          imported store icon, screenshots, and listing.md
 references/<id>/        source video, frames/, contact.jpg, audio.wav, preprocess.json, analysis.md
 formats/<id>/           format.yaml, optional template/ and README.md
 items/<id>/             item.yaml, [9x16] video.mp4, [9x16] cover.jpg, …
+items/<id>/history/     history.yaml: the undo stack and every saved version of the media
 ```
 
 ## Development
