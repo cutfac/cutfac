@@ -74,7 +74,7 @@ agent staying on the user's machine and connecting through remote MCP.
 
 ## Licensing notes
 
-- Planned: core under AGPL-3.0 (declared in `package.json`), skills and templates under MIT. The
-  LICENSE files are added once this is confirmed.
+- The core is under AGPL-3.0 (`LICENSE`, declared in `package.json`). Planned: skills and
+  templates under MIT, with their own LICENSE files once this is confirmed.
 - Remotion needs a company license for some commercial uses and hosted rendering. Keep it an
   optional starter template, not a core dependency.
