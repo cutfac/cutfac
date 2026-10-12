@@ -3,3 +3,7 @@ dist/
 release/
 .env
 .DS_Store
+
+# Internal notes and local agent settings
+docs/pricing.md
+.claude/
