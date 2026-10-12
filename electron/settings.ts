@@ -8,6 +8,7 @@ import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 
 interface Settings {
   workspace: string;
+  port: number;
   locale: Locale;
 }
 
@@ -18,6 +19,10 @@ function settingsFile(): string {
 const decodeFile = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
 const decodeWorkspace = Schema.decodeUnknownOption(Schema.NonEmptyString);
+
+const decodePort = Schema.decodeUnknownOption(
+  Schema.Finite.check(Schema.isInt(), Schema.isBetween({ minimum: 1025, maximum: 65535 })),
+);
 
 const decodeLocale = Schema.decodeUnknownOption(Schema.Literals(LOCALES));
 
@@ -54,6 +59,16 @@ export async function loadWorkspace(): Promise<string | undefined> {
 }
 
 export const saveWorkspace = (workspace: string) => writeSettings({ workspace });
+
+/**
+ * The port the board last ran on. The board keeps its preferences in storage keyed by its origin,
+ * so reusing the port keeps them across launches.
+ */
+export async function loadPort(): Promise<number | undefined> {
+  return Option.getOrUndefined(decodePort((await readSettings()).port));
+}
+
+export const savePort = (port: number) => writeSettings({ port });
 
 /** The board's last language, so menus and dialogs shown before it loads already match. */
 export async function loadLocale(): Promise<Locale | undefined> {

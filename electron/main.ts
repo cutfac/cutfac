@@ -19,8 +19,10 @@ import { OPEN_WORKSPACE_CHANNEL, REVEAL_PATH_CHANNEL, SET_LOCALE_CHANNEL } from 
 import { MESSAGES } from "./messages.ts";
 import {
   loadLocale,
+  loadPort,
   loadWorkspace,
   saveLocale,
+  savePort,
   saveWorkspace,
 } from "./settings.ts";
 import { probePort, startSidecar, type Sidecar } from "./sidecar.ts";
@@ -246,7 +248,7 @@ async function activate(workspace: string): Promise<boolean> {
     sidecar = undefined;
 
     // A fixed dev port held by a stale server fails here instead of passing the health check.
-    const port = await probePort(devUrl ? devPort : 0);
+    const port = devUrl ? await probePort(devPort) : await freePort();
     const started = await startSidecar({ workspace, port, onCrash: handleCrash });
 
     if (quitting) {
@@ -258,6 +260,8 @@ async function activate(workspace: string): Promise<boolean> {
     sidecar = started;
     workspaceRoot = workspace;
     await saveWorkspace(workspace);
+
+    if (!devUrl) await savePort(port);
 
     await show(devUrl ?? started.url, path.basename(workspace));
 
@@ -275,6 +279,20 @@ async function activate(workspace: string): Promise<boolean> {
   }
 }
 
+/** The last port if it is still free, so the board's origin and its saved preferences stay put. */
+async function freePort(): Promise<number> {
+  const last = await loadPort();
+
+  if (last !== undefined) {
+    try {
+      return await probePort(last);
+    } catch {
+      // Something else took it since; the board starts with default preferences.
+    }
+  }
+
+  return probePort(0);
+}
 
 async function show(url: string, title: string): Promise<void> {
   appOrigin = new URL(url).origin;
