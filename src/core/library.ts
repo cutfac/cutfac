@@ -43,12 +43,17 @@ export async function saveFormat(
 export interface ProductInfo {
   doc?: Product;
   captures: MediaFile[];
+  /** Store icon and screenshots imported from App Store / Google Play (product/store/). */
+  store: MediaFile[];
   notes?: string;
 }
 
 export async function getProduct(ws: Workspace): Promise<ProductInfo> {
   const dir = ws.config.paths.product;
-  const info: ProductInfo = { captures: toMediaFiles(await ws.list(`${dir}/captures`)) };
+  const info: ProductInfo = {
+    captures: toMediaFiles(await ws.list(`${dir}/captures`)),
+    store: toMediaFiles(await ws.list(`${dir}/store`)),
+  };
   if (ws.exists(`${dir}/${PRODUCT_FILE}`))
     info.doc = await ws.readYaml(`${dir}/${PRODUCT_FILE}`, Product);
   if (ws.exists(`${dir}/README.md`)) info.notes = await ws.readText(`${dir}/README.md`);

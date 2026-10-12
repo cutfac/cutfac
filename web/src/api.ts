@@ -165,9 +165,15 @@ export interface WorkspaceInfo {
       rules: string[];
     };
     captures: Media[];
+    store: Media[];
   };
   formats: Format[];
   openFeedback: number;
+}
+export interface AgentStatus {
+  agent: "claude" | "codex";
+  installed: boolean;
+  connected: boolean;
 }
 export interface OpenFeedback {
   item: string;
@@ -189,6 +195,11 @@ export const api = {
     request<ItemDetail>(`/api/item/feedback/resolve${q(id)}`, jsonInit("POST", { feedbackId })),
   verify: (id: string) =>
     request<{ file: string; ok: boolean; checks: Check[] }[]>(`/api/item/verify${q(id)}`),
+  agents: () => request<AgentStatus[]>("/api/agents"),
+  connectAgent: (agent: AgentStatus["agent"]) =>
+    request<{ ok: boolean; detail: string }>("/api/agents/connect", jsonInit("POST", { agent })),
+  importProduct: (url: string) =>
+    request<{ warnings: string[] }>("/api/product/import", jsonInit("POST", { url })),
   feedback: () => request<OpenFeedback[]>("/api/feedback"),
   references: () => request<Reference[]>("/api/references"),
   addReferenceUrl: (url: string) =>

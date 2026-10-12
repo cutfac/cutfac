@@ -5,6 +5,8 @@ import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
 import { runStdio } from "./mcp/server.ts";
 import { addReference } from "./core/references.ts";
+import { connectClaude, connectCodex, mcpLaunch } from "./core/agents.ts";
+import { importProduct } from "./core/productImport.ts";
 import { createApp } from "./server/app.ts";
 import { CONFIG_FILE, Workspace } from "./core/workspace.ts";
 
@@ -12,12 +14,17 @@ const PACKAGE_ROOT = resolve(import.meta.dir, "..");
 const USAGE = `content-factory — local short-form content factory
 
 Usage:
-  factory init [dir] [--name <name>] [--items <path>]   Create factory.yaml, product/, and agent setup
+  factory init [dir] [--from <url>] [--name <name>] [--items <path>] [--no-connect]
+                                                        Create a workspace, fill the product from an App Store,
+                                                        Google Play, or landing page URL, and connect your agents
   factory serve [--port 4317] [--workspace <dir>]        Web UI + API (needs \`bun run build\` once)
   factory mcp [--workspace <dir>]                        MCP server over stdio for Claude Code / Codex
   factory ref add <file|url> [--title <t>]              Add a reference video and preprocess it
-  factory agent-setup [--workspace <dir>]               Print MCP setup commands for Claude Code and Codex
+  factory product import <url> [--workspace <dir>]      Fill product.yaml and store screenshots from a URL
+  factory agent-setup [--connect] [--workspace <dir>]   Connect Claude Code and Codex (or print the commands)
 `;
+
+const BOOLEAN_FLAGS = ["--dev", "--no-connect", "--connect"];
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
@@ -29,7 +36,7 @@ function positional(args: string[]): string[] {
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a.startsWith("--")) {
-      if (!["--dev"].includes(a)) i++;
+      if (!BOOLEAN_FLAGS.includes(a)) i++;
       continue;
     }
     out.push(a);
@@ -48,7 +55,14 @@ async function main(argv: string[]): Promise<void> {
       const port = Number(flag(args, "port") ?? 4317);
       const webDir = join(PACKAGE_ROOT, "dist/web");
       const hasWeb = existsSync(join(webDir, "index.html"));
-      Bun.serve({ port, fetch: createApp(ws, hasWeb ? { webDir } : {}).fetch, idleTimeout: 0 });
+      Bun.serve({
+        port,
+        fetch: createApp(ws, {
+          cliPath: join(PACKAGE_ROOT, "src/cli.ts"),
+          ...(hasWeb ? { webDir } : {}),
+        }).fetch,
+        idleTimeout: 0,
+      });
       console.log(`Content Factory · ${ws.config.name}`);
       console.log(`  workspace  ${ws.root}`);
       console.log(
@@ -70,8 +84,16 @@ async function main(argv: string[]): Promise<void> {
       console.log(`Added reference ${ref.id} → ${ws.abs(ref.dir)}`);
       return;
     }
-    case "agent-setup":
-      return printAgentSetup(await Workspace.open(wsDir));
+    case "product": {
+      const [sub, url] = positional(args);
+      if (sub !== "import" || !url) throw new Error("Usage: factory product import <url>");
+      return runImport(await Workspace.open(wsDir), url);
+    }
+    case "agent-setup": {
+      const ws = await Workspace.open(wsDir);
+      if (args.includes("--connect")) return connectAgents(ws);
+      return printAgentSetup(ws);
+    }
     default:
       console.log(USAGE);
   }
@@ -108,7 +130,34 @@ async function init(dir: string, args: string[]): Promise<void> {
   for (const p of [ws.config.paths.references, ws.config.paths.formats, ws.config.paths.items])
     await ws.mkdir(p);
   await installSkill(ws);
-  printAgentSetup(ws);
+  // Onboarding order: agents first (everything else is done through them), then the product.
+  if (args.includes("--no-connect")) printAgentSetup(ws);
+  else await connectAgents(ws);
+  const from = flag(args, "from");
+  if (from) await runImport(ws, from);
+  if (!args.includes("--no-connect"))
+    console.log(
+      `\nOpen the board:  bun ${join(PACKAGE_ROOT, "src/cli.ts")} serve --workspace ${ws.root}`,
+    );
+}
+
+async function runImport(ws: Workspace, url: string): Promise<void> {
+  console.log(`Reading ${url} …`);
+  const result = await importProduct(ws, url);
+  for (const l of result.listings) console.log(`  ${l.source.padEnd(10)} ${l.name}`);
+  console.log(`  product    ${result.product.name} — ${result.product.oneLiner}`);
+  console.log(`  wrote      ${result.files.length} files under ${ws.config.paths.product}/`);
+  for (const w of result.warnings) console.warn(`  warning    ${w}`);
+  console.log("  Review product.yaml: audience and voice still need your words.");
+}
+
+async function connectAgents(ws: Workspace): Promise<void> {
+  const launch = mcpLaunch(join(PACKAGE_ROOT, "src/cli.ts"), ws);
+  console.log("\nConnecting agents:");
+  for (const connect of [connectClaude, connectCodex]) {
+    const r = await connect(ws, launch);
+    console.log(`  ${r.ok ? "✓" : "–"} ${r.agent.padEnd(7)} ${r.detail}`);
+  }
 }
 
 /** Copy the agent skill into the workspace for both Claude Code and Codex-style agents. */

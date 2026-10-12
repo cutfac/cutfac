@@ -491,6 +491,42 @@ summary {
   border: 1px solid var(--line);
 }
 
+/* Setup */
+.steps {
+  padding-left: 20px;
+  display: grid;
+  gap: 24px;
+}
+.steps > li {
+  opacity: 0.55;
+}
+.steps > li.current,
+.steps > li.done {
+  opacity: 1;
+}
+.steps > li.done > h2::after {
+  content: " ✓";
+  color: var(--accent);
+}
+.agents {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.agents li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.agents li strong {
+  min-width: 110px;
+}
+.agents small {
+  flex-basis: 100%;
+}
+
 @media (max-width: 760px) {
   main {
     padding: 16px;

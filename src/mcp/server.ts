@@ -27,6 +27,7 @@ import {
   PlatformCopy,
   ScheduleEntry,
 } from "../core/schema.ts";
+import { importProduct } from "../core/productImport.ts";
 import { verifyItem } from "../core/verify.ts";
 import type { Workspace } from "../core/workspace.ts";
 
@@ -84,6 +85,26 @@ export function createMcpServer(ws: Workspace): McpServer {
     async () => {
       const product = await getProduct(ws);
       return json({ ...product, capturesDir: ws.abs(`${ws.config.paths.product}/captures`) });
+    },
+  );
+
+  tool(
+    "import_product",
+    {
+      description:
+        "Fill product.yaml from an App Store, Google Play, or landing page URL (store links on a landing page are followed) " +
+        "and download store screenshots into product/store/. Hand-edited fields are kept. Afterwards, read product/store/listing.md " +
+        "and refine oneLiner and audience with the user.",
+      inputSchema: { url: z.string().url() },
+    },
+    async ({ url }) => {
+      const result = await importProduct(ws, url);
+      return json({
+        product: result.product,
+        files: result.files,
+        warnings: result.warnings,
+        sources: result.listings.map((l) => ({ source: l.source, url: l.url, name: l.name })),
+      });
     },
   );
 

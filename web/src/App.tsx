@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { api } from "./api.ts";
 import { href, useHashRoute, useLive } from "./hooks.ts";
 import { Board } from "./views/Board.tsx";
@@ -5,17 +6,24 @@ import { Calendar } from "./views/Calendar.tsx";
 import { ItemView } from "./views/ItemView.tsx";
 import { ProductView } from "./views/ProductView.tsx";
 import { References } from "./views/References.tsx";
+import { Setup } from "./views/Setup.tsx";
 
 const NAV = [
   ["board", "Board"],
   ["references", "References"],
   ["calendar", "Calendar"],
   ["product", "Product"],
+  ["setup", "Setup"],
 ] as const;
 
 export function App() {
   const [view, id] = useHashRoute();
   const { data: ws, error } = useLive(api.workspace);
+  const needsSetup = ws !== undefined && (!ws.product.doc || ws.product.doc.name === "My App");
+  // Send a fresh workspace to onboarding once; stay there while it fills in.
+  useEffect(() => {
+    if (needsSetup && !location.hash) location.hash = href("setup");
+  }, [needsSetup]);
 
   return (
     <div className="shell">
@@ -49,5 +57,6 @@ function renderView(view: string, id: string | undefined) {
   if (view === "references") return <References selected={id} />;
   if (view === "calendar") return <Calendar />;
   if (view === "product") return <ProductView />;
+  if (view === "setup") return <Setup />;
   return <Board />;
 }

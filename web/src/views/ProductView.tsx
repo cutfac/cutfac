@@ -1,5 +1,6 @@
 import { api, fileUrl } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
+import { ImportForm } from "./Setup.tsx";
 
 export function ProductView() {
   const { data: ws, error } = useLive(api.workspace);
@@ -37,6 +38,28 @@ export function ProductView() {
           No product file yet. Fill in <code>product/product.yaml</code> — every agent run reads it.
         </p>
       )}
+      <h2>Import from a link</h2>
+      <p className="muted">
+        Fills empty fields and refreshes store screenshots. Your edits to product.yaml are kept.
+      </p>
+      <ImportForm />
+      {ws.product.store.length ? (
+        <>
+          <h2>Store listing</h2>
+          <div className="captures">
+            {ws.product.store
+              .filter((m) => m.kind === "image")
+              .map((m) => (
+                <img
+                  key={m.name}
+                  src={fileUrl(`${ws.config.paths.product}/store/${m.name}`)}
+                  alt={m.name}
+                  loading="lazy"
+                />
+              ))}
+          </div>
+        </>
+      ) : null}
       <h2>App captures</h2>
       {ws.product.captures.length ? (
         <div className="captures">

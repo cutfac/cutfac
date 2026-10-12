@@ -22,12 +22,16 @@ Bun 1.3+, ffmpeg/ffprobe. Optional: `yt-dlp` (URL references), `whisper` (transc
 
 ```sh
 bun install && bun run build
-bun src/cli.ts init ~/my-app-content --name "My App"   # creates factory.yaml, product/, skill
-claude mcp add content-factory -- bun $PWD/src/cli.ts mcp --workspace ~/my-app-content
+bun src/cli.ts init ~/my-app-content --from https://yourapp.com
 bun src/cli.ts serve --workspace ~/my-app-content       # http://localhost:4317
 ```
 
-`factory agent-setup` prints the Codex `config.toml` snippet. To adopt an existing folder of posts,
+`init` connects your agents first, then fills the product. Claude Code gets a project-scoped
+`.mcp.json` in the workspace, and Codex is registered through `codex mcp add` as
+`content-factory-<workspace>`. `--from` accepts an App Store, Google Play, or landing page URL; store
+links on a landing page are followed, and store screenshots land in `product/store/`. Without
+`--from`, the web UI opens on a Setup page with the same two steps. Use `--no-connect` to only print
+the agent commands, and `factory product import <url>` to refresh the product later. To adopt an existing folder of posts,
 add a `factory.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
 `STATUS.md` appear on the board, and an `item.yaml` is written on their first edit.
 
@@ -37,6 +41,7 @@ add a `factory.yaml` with `paths.items` pointing at it. Folders containing `POST
 factory.yaml            name, timezone, platforms, paths
 product/product.yaml    positioning, audience, stores, CTA, brand, rules
 product/captures/       reviewed app screenshots and recordings
+product/store/          imported store icon, screenshots, and listing.md
 references/<id>/        source video, frames/, contact.jpg, audio.wav, preprocess.json, analysis.md
 formats/<id>/           format.yaml, optional template/ and README.md
 items/<id>/             item.yaml, [9x16] video.mp4, [9x16] cover.jpg, …

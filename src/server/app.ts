@@ -17,6 +17,8 @@ import {
   listReferences,
   preprocessReference,
 } from "../core/references.ts";
+import { agentStatus, connectClaude, connectCodex, mcpLaunch } from "../core/agents.ts";
+import { importProduct } from "../core/productImport.ts";
 import { ItemStatus } from "../core/schema.ts";
 import { verifyItem } from "../core/verify.ts";
 import type { Workspace } from "../core/workspace.ts";
@@ -49,7 +51,7 @@ const MIME: Record<string, string> = {
   ".vtt": "text/vtt",
 };
 
-export function createApp(ws: Workspace, opts: { webDir?: string } = {}): Hono {
+export function createApp(ws: Workspace, opts: { webDir?: string; cliPath?: string } = {}): Hono {
   const app = new Hono();
   const changes = createChangeFeed(ws.root);
 
@@ -69,6 +71,22 @@ export function createApp(ws: Workspace, opts: { webDir?: string } = {}): Hono {
       formats,
       openFeedback: feedback.length,
     });
+  });
+
+  app.get("/api/agents", async (c) => c.json(await agentStatus(ws)));
+  app.post("/api/agents/connect", async (c) => {
+    const { agent } = await c.req.json<{ agent: "claude" | "codex" }>();
+    if (!opts.cliPath)
+      throw new Error("Server started without a CLI path; run `factory agent-setup --connect`.");
+    const launch = mcpLaunch(opts.cliPath, ws);
+    return c.json(
+      agent === "codex" ? await connectCodex(ws, launch) : await connectClaude(ws, launch),
+    );
+  });
+
+  app.post("/api/product/import", async (c) => {
+    const body = await c.req.json<{ url: string }>();
+    return c.json(await importProduct(ws, required(body.url)));
   });
 
   app.get("/api/items", async (c) => {

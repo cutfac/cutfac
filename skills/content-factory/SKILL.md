@@ -17,6 +17,10 @@ into folders.
    captures. Never invent app features or UI; only show captures from `product/captures/` or what
    the user provides.
 3. If there is open feedback, ask whether to handle it first (`list_open_feedback`).
+4. If the product is missing or still says "My App", ask for an App Store, Google Play, or website
+   link and call `import_product`. Then read `product/store/listing.md` and agree on `audience` and
+   `voice` with the user. Store screenshots in `product/store/` are marketing images, not reviewed
+   captures.
 
 ## Model
 
