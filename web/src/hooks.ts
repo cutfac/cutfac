@@ -1,45 +1,142 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
+
 import { onWorkspaceChange } from "./api.ts";
 
-/** Load data and reload whenever the workspace changes on disk (agent writes show up live). */
-export function useLive<T>(load: () => Promise<T>, deps: unknown[] = []) {
-  const [data, setData] = useState<T>();
-  const [error, setError] = useState<string>();
-  const reload = useCallback(() => {
-    load()
-      .then((value) => {
-        setData(value);
-        setError(undefined);
-      })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, deps);
-  useEffect(() => {
-    reload();
-    return onWorkspaceChange(reload);
-  }, [reload]);
-  return { data, error, reload, setData };
+interface Loaded<T> {
+  key: string;
+  /** Which reload produced this, so a reload refetches even for the same key. */
+  version: number;
+  data?: T;
+  error?: string;
 }
 
-export function useHashRoute(): [string, string | undefined] {
-  const read = () => {
-    const [view = "board", ...rest] = location.hash.replace(/^#\/?/, "").split("/");
-    const id = rest.length ? decodeURIComponent(rest.join("/")) : undefined;
-    return [view || "board", id] as [string, string | undefined];
-  };
-  const [route, setRoute] = useState(read);
+export interface Live<T> {
+  data: T | undefined;
+  error: string | undefined;
+  reload: () => void;
+  /** Show a server response right away instead of waiting for the change event. */
+  setData: (data: T) => void;
+}
+
+const messageOf = (cause: Error | string) => (cause instanceof Error ? cause.message : cause);
+
+/**
+ * Load data for `key` and reload whenever the workspace changes on disk, so agent writes show
+ * up without a refresh. A new key drops the previous key's data instead of showing it stale.
+ */
+export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
+  const [version, setVersion] = useState(0);
+  const [loaded, setLoaded] = useState<Loaded<T>>({ key, version });
+  const fetchData = useEffectEvent(load);
+
+  useEffect(() => onWorkspaceChange(() => setVersion((v) => v + 1)), []);
+
   useEffect(() => {
-    const onHash = () => setRoute(read());
+    let current = true;
+    fetchData().then(
+      (data) => {
+        if (current) setLoaded({ key, version, data });
+      },
+      (cause: Error) => {
+        if (!current) return;
+
+        // A failed reload keeps what this key last showed; another key's data never carries over.
+        setLoaded((prev) => {
+          const next: Loaded<T> = { key, version, error: messageOf(cause) };
+
+          if (prev.key === key && prev.data !== undefined) next.data = prev.data;
+
+          return next;
+        });
+      },
+    );
+
+    return () => {
+      current = false;
+    };
+  }, [key, version]);
+
+  const fresh = loaded.key === key;
+
+  return {
+    data: fresh ? loaded.data : undefined,
+    error: fresh ? loaded.error : undefined,
+    reload: () => setVersion((v) => v + 1),
+    setData: (data) => setLoaded({ key, version, data }),
+  };
+}
+
+type Route = readonly [view: string, id: string | undefined];
+
+function readRoute(): Route {
+  const [view = "", ...rest] = location.hash.replace(/^#\/?/, "").split("/");
+  const id = rest.length > 0 ? decodeURIComponent(rest.join("/")) : undefined;
+
+  return [view === "" ? "board" : view, id];
+}
+
+export function useHashRoute(): Route {
+  const [route, setRoute] = useState(readRoute);
+  useEffect(() => {
+    const onHash = () => setRoute(readRoute());
     addEventListener("hashchange", onHash);
+
     return () => removeEventListener("hashchange", onHash);
   }, []);
+
   return route;
 }
 
 export const href = (view: string, id?: string) =>
-  `#/${view}${id ? `/${encodeURIComponent(id)}` : ""}`;
+  id === undefined ? `#/${view}` : `#/${view}/${encodeURIComponent(id)}`;
 
-export function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(1).padStart(4, "0");
-  return `${m}:${s}`;
+const SIDEBAR_OPEN_KEY = "factory.sidebar.open";
+
+function readSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_OPEN_KEY) !== "false";
+  } catch {
+    // Storage can be blocked (private windows, cleared site data); start expanded.
+    return true;
+  }
+}
+
+function writeSidebarOpen(open: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_OPEN_KEY, String(open));
+  } catch {
+    // The choice just won't survive a reload.
+  }
+}
+
+type SidebarOpen = readonly [open: boolean, setOpen: (open: boolean) => void];
+
+/**
+ * Whether the sidebar is open. It follows the user's saved choice, except while editing a video:
+ * the editor needs the width, so it opens collapsed there and the saved choice stays untouched.
+ * Expanding it inside the editor is honoured until the user leaves the editor.
+ */
+export function useSidebarOpen(editing: boolean): SidebarOpen {
+  const [saved, setSaved] = useState(readSidebarOpen);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [wasEditing, setWasEditing] = useState(editing);
+
+  // Every visit to the editor starts collapsed again.
+  if (editing !== wasEditing) {
+    setWasEditing(editing);
+    setEditorOpen(false);
+  }
+
+  function setOpen(open: boolean) {
+    if (editing) {
+      setEditorOpen(open);
+
+      return;
+    }
+
+    setSaved(open);
+    writeSidebarOpen(open);
+  }
+
+  return [editing ? editorOpen : saved, setOpen];
 }

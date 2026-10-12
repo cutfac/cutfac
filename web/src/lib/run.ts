@@ -1,0 +1,80 @@
+import type { AgentName, AgentRun, RunMessage } from "../api.ts";
+
+export type RunStep =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "tool"; readonly name: string; readonly detail?: string };
+
+/** The agent's latest run on an item, as the chat shows it while it streams. */
+export interface LiveRun {
+  readonly feedbackId: string | undefined;
+  readonly agent: AgentName | undefined;
+  readonly status: AgentRun["status"];
+  readonly steps: ReadonlyArray<RunStep>;
+  readonly reply?: string;
+  readonly error?: string;
+}
+
+export const NO_RUN: LiveRun = {
+  feedbackId: undefined,
+  agent: undefined,
+  status: "done",
+  steps: [],
+};
+
+const append = (run: LiveRun, step: RunStep): LiveRun => ({ ...run, steps: [...run.steps, step] });
+
+/**
+ * Fold one stream message into the run. The stream replays a run from its start whenever it
+ * (re)connects, so `run` and `start` begin from scratch instead of appending to what is shown.
+ */
+export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
+  switch (message.type) {
+    case "run":
+      return { ...NO_RUN, feedbackId: message.feedbackId, status: "running" };
+
+    case "start":
+      return { ...NO_RUN, feedbackId: message.feedbackId, agent: message.agent, status: "running" };
+
+    case "text":
+      return append(run, { kind: "text", text: message.text });
+
+    case "tool":
+      return append(
+        run,
+        message.detail === undefined
+          ? { kind: "tool", name: message.name }
+          : { kind: "tool", name: message.name, detail: message.detail },
+      );
+
+    case "done":
+      return { ...run, status: "done", reply: message.reply };
+
+    case "stopped":
+      return { ...run, status: "stopped" };
+
+    case "error":
+      return { ...run, status: "failed", error: message.error };
+  }
+}
+
+/** A finished run as the chat lays it out: the steps, then the reply under them. */
+export interface ClosedRun {
+  readonly steps: ReadonlyArray<RunStep>;
+  readonly reply: string | undefined;
+}
+
+/**
+ * Split the reply out of the steps. The last text step usually is the reply; it is dropped from
+ * the steps rather than the reply hidden, so the reply still shows when the steps are folded away.
+ */
+export function closingReply(steps: ReadonlyArray<RunStep>, reply: string | undefined): ClosedRun {
+  const text = reply?.trim();
+
+  if (text === undefined || text === "") return { steps, reply: undefined };
+
+  const index = steps.findLastIndex((step) => step.kind === "text");
+  const last = steps[index];
+  const repeated = last?.kind === "text" && last.text.trim() === text;
+
+  return { steps: repeated ? steps.toSpliced(index, 1) : steps, reply: text };
+}

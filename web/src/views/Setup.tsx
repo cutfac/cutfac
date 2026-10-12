@@ -1,139 +1,335 @@
-import { useState } from "react";
-import { api, type AgentStatus } from "../api.ts";
+import { cva } from "class-variance-authority";
+import { CheckCircle2Icon, CheckIcon, FolderOpenIcon, TriangleAlertIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
+
+import { ErrorAlert, Page } from "@/components/page";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+
+import { api, type AgentChoice, type AgentStatus } from "../api.ts";
+import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 
-const AGENT_LABEL: Record<AgentStatus["agent"], string> = {
+const AGENT_LABEL: Record<AgentChoice, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  queue: "Copy-paste queue",
 };
+
+const markerVariants = cva(
+  "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+  {
+    variants: {
+      state: {
+        done: "bg-primary text-primary-foreground",
+        current: "border-2 border-primary text-foreground",
+        todo: "border text-muted-foreground",
+      },
+    },
+    defaultVariants: { state: "todo" },
+  },
+);
+
+type StepState = "done" | "current" | "todo";
+
+function Step({
+  n,
+  state,
+  title,
+  description,
+  children,
+}: {
+  n: number;
+  state: StepState;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <span className="flex items-center gap-3">
+            <span className={markerVariants({ state })} aria-hidden="true">
+              {state === "done" ? <CheckIcon className="size-3.5" /> : n}
+            </span>
+            {title}
+            {state === "done" ? <span className="sr-only">(done)</span> : null}
+          </span>
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-4">{children}</div>
+      </CardContent>
+    </Card>
+  );
+}
 
 /** First-run onboarding: connect an agent, then point the factory at the app. */
 export function Setup() {
-  const { data: agents, reload } = useLive(api.agents);
-  const { data: ws } = useLive(api.workspace);
+  const { data: agents, error: agentsError, reload } = useLive("agents", api.agents);
+  const { data: ws } = useLive("workspace", api.workspace);
   const connected = agents?.some((a) => a.connected) ?? false;
-  const hasProduct = Boolean(ws?.product.doc && ws.product.doc.name !== "My App");
+  const product = ws?.product.doc;
+  const hasProduct = Boolean(product && product.name !== "My App");
 
   return (
-    <section className="narrow setup">
-      <div className="toolbar">
-        <h1>Set up</h1>
-      </div>
-      <ol className="steps">
-        <li className={connected ? "done" : "current"}>
-          <h2>Connect your agent</h2>
-          <p className="muted">
-            Your agent does the production and editing. The factory gives it tools, files, and your
-            feedback.
-          </p>
-          {agents ? (
-            <ul className="agents">
-              {agents.map((a) => (
-                <AgentRow key={a.agent} status={a} onChange={reload} />
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">Checking installed agents…</p>
-          )}
-        </li>
-        <li className={hasProduct ? "done" : connected ? "current" : ""}>
-          <h2>Tell it about your app</h2>
-          <p className="muted">
-            Paste an App Store, Google Play, or website link. Store links on your site are followed.
-          </p>
-          <ImportForm />
-          {hasProduct ? (
-            <p>
-              <strong>{ws?.product.doc?.name}</strong> — {ws?.product.doc?.oneLiner}{" "}
-              <a href={href("product")}>Review</a>
-            </p>
-          ) : null}
-        </li>
-      </ol>
+    <Page
+      width="narrow"
+      title="Set up"
+      description="Two quick steps, then your agent can start making videos for your app."
+    >
+      <Step
+        n={1}
+        state={connected ? "done" : "current"}
+        title="Connect your agent"
+        description="Your agent does the production and editing. The factory gives it tools, files, and your feedback."
+      >
+        {agentsError ? (
+          <ErrorAlert title="Could not check for installed agents" message={agentsError} />
+        ) : agents === undefined ? (
+          <div className="flex flex-col gap-2" aria-busy="true">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : (
+          <ItemGroup>
+            {agents.map((a) => (
+              <AgentRow key={a.agent} status={a} onChange={reload} />
+            ))}
+          </ItemGroup>
+        )}
+      </Step>
+
+      <Step
+        n={2}
+        state={hasProduct ? "done" : connected ? "current" : "todo"}
+        title="Tell it about your app"
+        description="Paste an App Store, Google Play, or website link. Store links on your site are followed."
+      >
+        <ImportForm />
+        {hasProduct && product ? (
+          <Item variant="muted">
+            <ItemContent>
+              <ItemTitle>{product.name}</ItemTitle>
+              {product.oneLiner ? <ItemDescription>{product.oneLiner}</ItemDescription> : null}
+            </ItemContent>
+            <ItemActions>
+              <a
+                href={href("product")}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Review
+              </a>
+            </ItemActions>
+          </Item>
+        ) : null}
+      </Step>
+
       {connected && hasProduct ? (
-        <p>
-          You're set. Ask your agent to find a reference and make the first video, then review it on
-          the <a href={href("board")}>board</a>.
-        </p>
+        <Alert>
+          <CheckCircle2Icon />
+          <AlertTitle>You're set</AlertTitle>
+          <AlertDescription>
+            Ask your agent to find a reference and make the first video, then review it on the{" "}
+            <a href={href("board")} className="underline underline-offset-4">
+              board
+            </a>
+            .
+          </AlertDescription>
+        </Alert>
       ) : null}
-    </section>
+
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Your workspace</CardTitle>
+          <CardDescription>
+            Everything the factory makes is a plain file in this folder. You can back it up or put
+            it in git.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ws === undefined ? (
+            <Skeleton className="h-24 w-full" />
+          ) : (
+            <div className="flex flex-col gap-4">
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Name</dt>
+                <dd>{ws.name}</dd>
+                <dt className="text-muted-foreground">Folder</dt>
+                <dd className="font-mono text-xs break-all">{ws.root}</dd>
+                <dt className="text-muted-foreground">Timezone</dt>
+                <dd>{ws.config.timezone}</dd>
+                <dt className="text-muted-foreground">Platforms</dt>
+                <dd className="flex flex-wrap gap-1">
+                  {ws.config.platforms.map((p) => (
+                    <Badge key={p} variant="secondary">
+                      {p}
+                    </Badge>
+                  ))}
+                </dd>
+                <dt className="text-muted-foreground">Default agent</dt>
+                <dd>{AGENT_LABEL[ws.config.agent.default]}</dd>
+              </dl>
+              {desktop ? (
+                <div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      desktop
+                        ?.revealPath(ws.root)
+                        .catch((cause: Error) => toast.error(cause.message))
+                    }
+                  >
+                    <FolderOpenIcon data-icon="inline-start" />
+                    Show folder
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </Page>
   );
 }
 
 function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [detail, setDetail] = useState<string>();
+  const [outcome, setOutcome] = useState<{ ok: boolean; detail: string }>();
   const label = AGENT_LABEL[status.agent];
+
+  const connect = () => {
+    setBusy(true);
+    setOutcome(undefined);
+    api
+      .connectAgent(status.agent)
+      .then((result) => {
+        setOutcome(result);
+
+        if (result.ok) toast.success(`${label} is connected`);
+        else toast.error(`Could not connect ${label}`);
+        onChange();
+      })
+      .catch((cause: Error) => {
+        setOutcome({ ok: false, detail: cause.message });
+        toast.error(`Could not connect ${label}`);
+      })
+      .finally(() => setBusy(false));
+  };
+
   return (
-    <li>
-      <strong>{label}</strong>
-      {status.connected ? (
-        <span className="ok">✓ Connected</span>
-      ) : status.installed ? (
-        <button
-          className="primary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              const result = await api.connectAgent(status.agent);
-              setDetail(result.detail);
-              onChange();
-            } catch (err) {
-              setDetail(err instanceof Error ? err.message : String(err));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {busy ? "Connecting…" : "Connect"}
-        </button>
-      ) : (
-        <span className="muted">Not installed</span>
-      )}
-      {detail ? <small className="muted">{detail}</small> : null}
-    </li>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>{label}</ItemTitle>
+        <ItemDescription>
+          {status.connected
+            ? "Ready. It can use the factory's tools."
+            : status.installed
+              ? "Found on this computer. Connect it so it can use the factory's tools."
+              : "Not installed on this computer."}
+        </ItemDescription>
+        {outcome ? (
+          <p className={`text-xs ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}>
+            {outcome.detail}
+          </p>
+        ) : null}
+      </ItemContent>
+      <ItemActions>
+        {status.connected ? (
+          <Badge variant="secondary">
+            <CheckIcon />
+            Connected
+          </Badge>
+        ) : status.installed ? (
+          <Button disabled={busy} onClick={connect}>
+            {busy ? <Spinner data-icon="inline-start" /> : null}
+            {busy ? "Connecting…" : "Connect"}
+          </Button>
+        ) : (
+          <Badge variant="outline">Not installed</Badge>
+        )}
+      </ItemActions>
+    </Item>
   );
 }
 
 export function ImportForm() {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notes, setNotes] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string>();
+
+  const submit = () => {
+    const link = url.trim();
+
+    if (!link) return;
+    setBusy(true);
+    setError(undefined);
+    setWarnings([]);
+    api
+      .importProduct(link)
+      .then((result) => {
+        setWarnings(result.warnings);
+        setUrl("");
+        toast.success("Imported your app's details");
+      })
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() => setBusy(false));
+  };
+
   return (
     <form
-      onSubmit={async (e) => {
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
         e.preventDefault();
-        if (!url.trim()) return;
-        setBusy(true);
-        setError(undefined);
-        try {
-          setNotes((await api.importProduct(url.trim())).warnings);
-          setUrl("");
-        } catch (err) {
-          setError(err instanceof Error ? err.message : String(err));
-        } finally {
-          setBusy(false);
-        }
+        submit();
       }}
     >
-      <div className="row">
-        <input
+      <div className="flex gap-2">
+        <Input
+          type="url"
           value={url}
+          disabled={busy}
+          aria-label="App link"
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://apps.apple.com/… or https://yourapp.com"
         />
-        <button type="submit" className="primary" disabled={busy || !url.trim()}>
+        <Button type="submit" disabled={busy || !url.trim()}>
+          {busy ? <Spinner data-icon="inline-start" /> : null}
           {busy ? "Reading…" : "Import"}
-        </button>
+        </Button>
       </div>
-      {error ? <p className="error">{error}</p> : null}
-      {notes.map((n) => (
-        <p key={n} className="muted">
-          {n}
-        </p>
-      ))}
+      {error ? <ErrorAlert title="Could not import that link" message={error} /> : null}
+      {warnings.length > 0 ? (
+        <Alert>
+          <TriangleAlertIcon />
+          <AlertTitle>Imported, with notes</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </form>
   );
 }

@@ -1,255 +1,600 @@
-import { useRef, useState } from "react";
+import {
+  ArrowLeftIcon,
+  CircleCheckIcon,
+  CircleXIcon,
+  ClapperboardIcon,
+  FileTextIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactNode,
+} from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
+
+import { ErrorAlert, ListSkeleton } from "@/components/page";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn, safeHttpUrl } from "@/lib/utils";
+
 import {
   api,
   fileUrl,
+  onAgentRun,
   STATUSES,
-  type Check,
+  type AgentChoice,
+  type Feedback,
   type ItemDetail,
   type Media,
+  type MediaReport,
   type Status,
 } from "../api.ts";
-import { formatTime, href, useLive } from "../hooks.ts";
+import { agentLabel, Chat } from "../components/editor/chat.tsx";
+import { aspectRatio, Stage } from "../components/editor/stage.tsx";
+import { Timeline } from "../components/editor/timeline.tsx";
+import { Transport } from "../components/editor/transport.tsx";
+import { href, useLive } from "../hooks.ts";
+import { Player } from "../lib/player.ts";
+import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
+import {
+  anchorOf,
+  isEmptyTarget,
+  NO_TARGET,
+  roundTime,
+  targetOf,
+  withEnd,
+  withRange,
+  withRegion,
+  withStart,
+  type Target,
+} from "../lib/target.ts";
 
-export function ItemView({ id }: { id: string }) {
-  const { data: item, error, setData } = useLive(() => api.item(id), [id]);
-  const [mediaName, setMediaName] = useState<string>();
-  const videoRef = useRef<HTMLVideoElement>(null);
+const showError = (cause: Error) => {
+  toast.error(cause.message);
+};
 
-  if (error) return <p className="error">{error}</p>;
-  if (!item) return <p className="muted">Loading…</p>;
+/** Where typing goes to the element, so the editor's single-key shortcuts stay out of the way. */
+const TEXT_ENTRY =
+  "input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog'], [role='listbox'], [role='menu']";
 
-  const media =
-    item.media.find((m) => m.name === mediaName) ??
-    item.media.find((m) => m.kind === "video") ??
-    item.media[0];
+/** Controls that Space and the arrow keys already operate. */
+const CONTROL = "button, a[href], [role='button'], [role='tab'], [role='option'], [role='slider']";
 
+const within = (target: EventTarget | null, selector: string) =>
+  target instanceof Element && target.closest(selector) !== null;
+
+/** The media to show: the chosen one, else the first video, else whatever there is. */
+function shownMedia(item: ItemDetail, name: string | undefined): Media | undefined {
   return (
-    <section className="item">
-      <div className="toolbar">
-        <a href={href("board")} className="muted">
-          ← Board
-        </a>
-        <h1>{item.doc.title}</h1>
-        <div className="spacer" />
-        <StatusSelect item={item} onChange={setData} />
-      </div>
-      <div className="item-grid">
-        <div className="preview">
-          {media ? (
-            <MediaPreview dir={item.dir} media={media} videoRef={videoRef} />
-          ) : (
-            <p className="muted">No media yet.</p>
-          )}
-          {item.media.length > 1 ? (
-            <div className="strip">
-              {item.media.map((m) => (
-                <button
-                  key={m.name}
-                  className={m.name === media?.name ? "active" : ""}
-                  onClick={() => setMediaName(m.name)}
-                >
-                  {m.kind === "image" ? (
-                    <img src={fileUrl(`${item.dir}/${m.name}`)} alt="" loading="lazy" />
-                  ) : (
-                    <span>▶</span>
-                  )}
-                  <small>{m.name}</small>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div className="side">
-          <FeedbackPanel item={item} media={media} videoRef={videoRef} onChange={setData} />
-          <Verify id={item.id} />
-          <Details item={item} />
-        </div>
-      </div>
-    </section>
+    item.media.find((media) => media.name === name) ??
+    item.media.find((media) => media.kind === "video") ??
+    item.media[0]
   );
 }
 
-function MediaPreview({
-  dir,
-  media,
-  videoRef,
-}: {
-  dir: string;
-  media: Media;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-}) {
-  const src = fileUrl(`${dir}/${media.name}`);
-  if (media.kind === "video")
-    return <video key={src} ref={videoRef} src={src} controls playsInline />;
-  return <img src={src} alt={media.name} />;
+const mediaUrl = (item: ItemDetail, media: Media) =>
+  fileUrl(`${item.dir}/${media.name}`, media.mtime);
+
+interface ItemViewProps {
+  id: string;
+  defaultAgent: AgentChoice | undefined;
 }
 
-function StatusSelect({
-  item,
-  onChange,
-}: {
-  item: ItemDetail;
-  onChange: (item: ItemDetail) => void;
-}) {
-  return (
-    <select
-      value={item.doc.status}
-      onChange={async (e) =>
-        onChange(await api.updateItem(item.id, { status: e.target.value as Status }))
-      }
-    >
-      {STATUSES.map((s) => (
-        <option key={s}>{s}</option>
-      ))}
-    </select>
+/**
+ * One piece of content, open for editing. Select a part of the video on the timeline or a box
+ * on the frame, say what should change, and an agent makes the edit; the chat keeps each
+ * request with its result to keep or undo.
+ */
+export function ItemView({ id, defaultAgent }: ItemViewProps) {
+  const { data: item, error, setData } = useLive(`item:${id}`, () => api.item(id));
+  const [player] = useState(() => new Player());
+  const [mediaName, setMediaName] = useState<string | undefined>(undefined);
+  const [target, setTarget] = useState<Target>(NO_TARGET);
+  const [ghost, setGhost] = useState<Target | undefined>(undefined);
+  const [loop, setLoop] = useState(true);
+  const [run, setRun] = useState<LiveRun>(NO_RUN);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const media = item === undefined ? undefined : shownMedia(item, mediaName);
+  const video = media?.kind === "video";
+
+  useEffect(
+    () => onAgentRun(id, (message) => setRun((current) => reduceRun(current, message))),
+    [id],
   );
-}
 
-function FeedbackPanel({
-  item,
-  media,
-  videoRef,
-  onChange,
-}: {
-  item: ItemDetail;
-  media: Media | undefined;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  onChange: (item: ItemDetail) => void;
-}) {
-  const [body, setBody] = useState("");
-  const [atTime, setAtTime] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const open = item.doc.feedback.filter((f) => f.status === "open");
-  const resolved = item.doc.feedback.filter((f) => f.status === "resolved");
-  const isVideo = media?.kind === "video";
+  // The player wraps playback inside the selection while the loop is on.
+  useEffect(() => {
+    const { start, end } = target;
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!body.trim()) return;
-    const input: { body: string; media?: string; timecode?: number } = { body };
-    if (media) input.media = media.name;
-    if (isVideo && atTime && videoRef.current)
-      input.timecode = Math.round(videoRef.current.currentTime * 10) / 10;
-    onChange(await api.addFeedback(item.id, input));
-    setBody("");
+    player.setLoop(loop && start !== undefined && end !== undefined ? { start, end } : undefined);
+  }, [player, loop, target]);
+
+  const clear = () => {
+    setTarget(NO_TARGET);
+    setGhost(undefined);
+  };
+
+  const focusComposer = () => inputRef.current?.focus({ preventScroll: true });
+
+  /** Show `name` and put the playhead at `at`, waiting for the file to load if it is another. */
+  function goTo(name: string | undefined, at: number | undefined) {
+    const next = item?.media.find((entry) => entry.name === name);
+    const switching = next !== undefined && next.name !== media?.name;
+
+    if (switching) setMediaName(next.name);
+
+    if (at === undefined || (next ?? media)?.kind !== "video") return;
+
+    if (switching) player.seekOnLoad(at);
+    else player.seek(at);
   }
 
-  async function copyPrompt() {
-    const prompt = `Use the content-factory tools to handle the open review feedback on item "${item.id}" (${item.doc.title}). Fix each comment, run verify_item, and resolve each feedback entry with what changed.`;
-    await navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  function pick(name: string) {
+    if (name === media?.name) return;
+
+    player.pause();
+    setMediaName(name);
+    clear();
   }
+
+  const onKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || within(event.target, TEXT_ENTRY)) return;
+
+    const onControl = within(event.target, CONTROL);
+    const now = () => roundTime(player.getState().time);
+
+    switch (event.code) {
+      case "Space":
+        if (!video || onControl) return;
+
+        player.toggle();
+        break;
+
+      case "KeyI":
+        if (!video) return;
+
+        setTarget((current) => withStart(current, now()));
+        setGhost(undefined);
+        break;
+
+      case "KeyO":
+        if (!video) return;
+
+        setTarget((current) => withEnd(current, now()));
+        setGhost(undefined);
+        break;
+
+      case "KeyL":
+        if (!video) return;
+
+        setLoop((current) => !current);
+        break;
+
+      case "ArrowLeft":
+      case "ArrowRight":
+        if (!video || onControl) return;
+
+        player.step((event.code === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 1 : 0.1));
+        break;
+
+      case "Escape":
+        if (isEmptyTarget(target) && ghost === undefined) return;
+
+        clear();
+        break;
+
+      default:
+        return;
+    }
+
+    event.preventDefault();
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey(event);
+
+    addEventListener("keydown", listener);
+
+    return () => removeEventListener("keydown", listener);
+  }, []);
+
+  if (error !== undefined && item === undefined) {
+    return (
+      <div className="flex-1 p-6">
+        <ErrorAlert title="Cannot open this item" message={error} />
+      </div>
+    );
+  }
+
+  if (item === undefined) {
+    return (
+      <div className="flex-1 p-6">
+        <ListSkeleton rows={4} />
+      </div>
+    );
+  }
+
+  const running = item.running || run.status === "running";
 
   return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>Feedback</h2>
-        {open.length ? (
-          <button onClick={copyPrompt} title="Paste into Claude Code or Codex">
-            {copied ? "Copied" : "Copy agent prompt"}
-          </button>
-        ) : null}
-      </div>
-      <form onSubmit={submit} className="feedback-form">
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="What should change?"
-          rows={3}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit(e);
-          }}
-        />
-        <div className="row">
-          {isVideo ? (
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={atTime}
-                onChange={(e) => setAtTime(e.target.checked)}
-              />{" "}
-              At current time
-            </label>
-          ) : null}
-          <div className="spacer" />
-          <button type="submit" className="primary" disabled={!body.trim()}>
-            Add
-          </button>
-        </div>
-      </form>
-      {open.map((f) => (
-        <div key={f.id} className="feedback">
-          <p>
-            {typeof f.timecode === "number" ? (
-              <button
-                className="time"
-                onClick={() => {
-                  if (videoRef.current) videoRef.current.currentTime = f.timecode!;
-                }}
-              >
-                {formatTime(f.timecode)}
-              </button>
-            ) : null}
-            {f.body}
-          </p>
-          <small className="muted">
-            {f.media ?? "item"} · {new Date(f.at).toLocaleString()}
-            <button
-              className="link"
-              onClick={async () => onChange(await api.resolveFeedback(item.id, f.id))}
-            >
-              Resolve
-            </button>
-          </small>
-        </div>
-      ))}
-      {resolved.length ? (
-        <details>
-          <summary className="muted">{resolved.length} resolved</summary>
-          {resolved.map((f) => (
-            <div key={f.id} className="feedback resolved">
-              <p>{f.body}</p>
-              {f.resolution ? <small>→ {f.resolution}</small> : null}
+    <div className="flex min-h-0 min-w-0 flex-1">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
+        <Toolbar item={item} running={running} agent={run.agent} onItem={setData} />
+        {media === undefined ? (
+          <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
+        ) : (
+          <>
+            <Stage
+              player={player}
+              src={mediaUrl(item, media)}
+              kind={media.kind}
+              ratio={aspectRatio(media.aspect)}
+              region={target.region}
+              ghost={ghost?.region}
+              onRegion={(region) => {
+                setTarget((current) => withRegion(current, region));
+                setGhost(undefined);
+              }}
+              onMarked={focusComposer}
+            />
+            {video ? (
+              <>
+                <Timeline
+                  player={player}
+                  src={mediaUrl(item, media)}
+                  target={target}
+                  ghost={ghost}
+                  onRange={(from, to) => {
+                    setTarget((current) => withRange(current, from, to));
+                    setGhost(undefined);
+                  }}
+                  onMarked={focusComposer}
+                />
+                <Transport
+                  player={player}
+                  target={target}
+                  loop={loop}
+                  onLoop={setLoop}
+                  onIn={() =>
+                    setTarget((current) => withStart(current, roundTime(player.getState().time)))
+                  }
+                  onOut={() =>
+                    setTarget((current) => withEnd(current, roundTime(player.getState().time)))
+                  }
+                  onClear={clear}
+                />
+              </>
+            ) : (
+              <p className="text-center text-xs text-muted-foreground">
+                Drag on the image to mark the area an edit is about.
+              </p>
+            )}
+            <MediaStrip
+              item={item}
+              shown={media}
+              onPick={pick}
+              onItem={setData}
+              onUploaded={setMediaName}
+            />
+          </>
+        )}
+      </section>
+      <aside className="flex min-h-0 w-105 shrink-0 flex-col border-l">
+        <Tabs defaultValue="chat" className="min-h-0 flex-1">
+          <div className="border-b p-2">
+            <TabsList className="w-full">
+              <TabsTrigger value="chat">Chat</TabsTrigger>
+              <TabsTrigger value="checks">Checks</TabsTrigger>
+              <TabsTrigger value="details">Details</TabsTrigger>
+            </TabsList>
+          </div>
+          {/* Kept mounted so a half-typed request survives a look at the other tabs. */}
+          <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
+            <Chat
+              item={item}
+              media={media}
+              run={run}
+              target={target}
+              defaultAgent={defaultAgent}
+              inputRef={inputRef}
+              onItem={setData}
+              onClearTarget={clear}
+              onShow={(feedback: Feedback) => {
+                const shown = targetOf(feedback);
+
+                goTo(feedback.media, anchorOf(shown));
+                setGhost(shown);
+              }}
+              onRetarget={(feedback: Feedback) => {
+                const again = targetOf(feedback);
+
+                goTo(feedback.media, anchorOf(again));
+                setTarget(again);
+                setGhost(undefined);
+              }}
+              onCompare={() => player.pause()}
+            />
+          </TabsContent>
+          <TabsContent value="checks" className="min-h-0 overflow-y-auto">
+            <div className="p-4">
+              <Checks id={item.id} />
             </div>
-          ))}
-        </details>
-      ) : null}
+          </TabsContent>
+          <TabsContent value="details" className="min-h-0 overflow-y-auto">
+            <div className="p-4">
+              <Details item={item} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </aside>
     </div>
   );
 }
 
-function Verify({ id }: { id: string }) {
-  const [reports, setReports] = useState<{ file: string; ok: boolean; checks: Check[] }[]>();
-  const [running, setRunning] = useState(false);
+function Toolbar({
+  item,
+  running,
+  agent,
+  onItem,
+}: {
+  item: ItemDetail;
+  running: boolean;
+  agent: LiveRun["agent"];
+  onItem: (item: ItemDetail) => void;
+}) {
+  const statuses = STATUSES.map((status) => ({ value: status, label: sentenceCase(status) }));
+
   return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>Upload checks</h2>
+    <div className="flex min-w-0 items-center gap-2">
+      <a href={href("board")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <ArrowLeftIcon data-icon="inline-start" />
+        Board
+      </a>
+      <h1 className="min-w-0 truncate text-base font-semibold">{item.doc.title}</h1>
+      {running ? (
+        <Badge variant="secondary">
+          <Spinner data-icon="inline-start" />
+          {agentLabel(agent)} is editing
+        </Badge>
+      ) : null}
+      <Select
+        items={statuses}
+        value={item.doc.status}
+        onValueChange={(status: Status | null) => {
+          if (status !== null) api.updateItem(item.id, { status }).then(onItem, showError);
+        }}
+      >
+        <SelectTrigger size="sm" className="ml-auto" aria-label="Status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          {statuses.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+const sentenceCase = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+/** Upload the first file in a drop or a file picker; the server names it with its aspect. */
+function useUpload(
+  item: ItemDetail,
+  onItem: (item: ItemDetail) => void,
+  onUploaded: (name: string) => void,
+) {
+  const [uploading, setUploading] = useState(false);
+
+  function upload(file: File | undefined) {
+    if (file === undefined || uploading) return;
+
+    setUploading(true);
+
+    api
+      .uploadMedia(item.id, file)
+      .then((next) => {
+        onItem(next);
+
+        const added = next.media.find(
+          (media) => !item.media.some((old) => old.name === media.name),
+        );
+
+        if (added !== undefined) onUploaded(added.name);
+      }, showError)
+      .finally(() => setUploading(false));
+  }
+
+  return {
+    uploading,
+    fromInput: (event: ChangeEvent<HTMLInputElement>) => {
+      upload(event.target.files?.[0]);
+      event.target.value = "";
+    },
+    fromDrop: (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      upload(event.dataTransfer.files[0]);
+    },
+  };
+}
+
+const allowDrop = (event: DragEvent<HTMLElement>) => event.preventDefault();
+
+function NoMedia({
+  item,
+  onItem,
+  onUploaded,
+}: {
+  item: ItemDetail;
+  onItem: (item: ItemDetail) => void;
+  onUploaded: (name: string) => void;
+}) {
+  const { uploading, fromInput, fromDrop } = useUpload(item, onItem, onUploaded);
+
+  return (
+    <div
+      className="flex flex-1 rounded-3xl border border-dashed"
+      onDragOver={allowDrop}
+      onDrop={fromDrop}
+    >
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ClapperboardIcon />
+          </EmptyMedia>
+          <EmptyTitle>No video yet</EmptyTitle>
+          <EmptyDescription>
+            Drop a video or an image here to start from, or ask in the chat and an agent will make a
+            first cut.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <label className={buttonVariants({ variant: "outline" })}>
+            {uploading ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <PlusIcon data-icon="inline-start" />
+            )}
+            Add a video or image
+            <input type="file" accept="video/*,image/*" className="sr-only" onChange={fromInput} />
+          </label>
+        </EmptyContent>
+      </Empty>
+    </div>
+  );
+}
+
+/** Every file of the item; pick one to edit, or add another. */
+function MediaStrip({
+  item,
+  shown,
+  onPick,
+  onItem,
+  onUploaded,
+}: {
+  item: ItemDetail;
+  shown: Media;
+  onPick: (name: string) => void;
+  onItem: (item: ItemDetail) => void;
+  onUploaded: (name: string) => void;
+}) {
+  const { uploading, fromInput, fromDrop } = useUpload(item, onItem, onUploaded);
+
+  return (
+    <div
+      className="flex shrink-0 gap-2 overflow-x-auto pb-1"
+      onDragOver={allowDrop}
+      onDrop={fromDrop}
+    >
+      {item.media.map((media) => (
         <button
-          disabled={running}
-          onClick={async () => {
-            setRunning(true);
-            try {
-              setReports(await api.verify(id));
-            } finally {
-              setRunning(false);
-            }
-          }}
+          key={media.name}
+          type="button"
+          aria-pressed={media.name === shown.name}
+          title={media.name}
+          className="group/media flex w-20 shrink-0 flex-col gap-1 rounded-lg p-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onPick(media.name)}
         >
-          {running ? "Checking…" : "Run"}
+          <Thumbnail src={mediaUrl(item, media)} media={media} />
+          <span className="truncate text-xs text-muted-foreground group-aria-pressed/media:font-medium group-aria-pressed/media:text-foreground">
+            {media.name}
+          </span>
         </button>
+      ))}
+      <label
+        className="flex w-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-1 text-xs text-muted-foreground hover:bg-muted"
+        title="Add a video or image"
+      >
+        {uploading ? <Spinner /> : <PlusIcon className="size-4" />}
+        Add
+        <input type="file" accept="video/*,image/*" className="sr-only" onChange={fromInput} />
+      </label>
+    </div>
+  );
+}
+
+function Thumbnail({ src, media }: { src: string; media: Media }) {
+  const frame =
+    "aspect-square w-full rounded-md bg-muted object-cover ring-1 ring-foreground/10 group-aria-pressed/media:ring-2 group-aria-pressed/media:ring-selection";
+
+  if (media.kind === "image") return <img src={src} alt="" loading="lazy" className={frame} />;
+
+  // `#t` shows a frame a little in, past a black first frame.
+  return <video src={`${src}#t=0.5`} muted preload="metadata" className={frame} />;
+}
+
+/** Whether each video will upload: length, shape, size and encoding, from the workspace's rules. */
+function Checks({ id }: { id: string }) {
+  const [reports, setReports] = useState<ReadonlyArray<MediaReport> | undefined>(undefined);
+  const [checking, setChecking] = useState(false);
+
+  function check() {
+    setChecking(true);
+    api
+      .verify(id)
+      .then(setReports, showError)
+      .finally(() => setChecking(false));
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-muted-foreground">Check the videos against what the platforms accept.</p>
+        <Button variant="outline" size="sm" disabled={checking} onClick={check}>
+          {checking ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <ShieldCheckIcon data-icon="inline-start" />
+          )}
+          {reports === undefined ? "Run checks" : "Run again"}
+        </Button>
       </div>
-      {reports?.length === 0 ? <p className="muted">No videos to check.</p> : null}
-      {reports?.map((r) => (
-        <div key={r.file}>
-          <strong className={r.ok ? "ok" : "bad"}>
-            {r.ok ? "✓" : "✗"} {r.file}
-          </strong>
-          <ul className="checks">
-            {r.checks.map((c) => (
-              <li key={c.name} className={c.ok ? "ok" : "bad"}>
-                {c.name}: {c.detail}
+      {reports?.length === 0 ? <p className="text-muted-foreground">No videos to check.</p> : null}
+      {reports?.map((report) => (
+        <div key={report.file} className="flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 font-medium">
+            {report.ok ? (
+              <CircleCheckIcon className="size-4 text-primary" />
+            ) : (
+              <CircleXIcon className="size-4 text-destructive" />
+            )}
+            {report.file}
+          </p>
+          <ul className="flex flex-col gap-1 pl-5.5">
+            {report.checks.map((item) => (
+              <li
+                key={item.name}
+                className={cn("text-xs", item.ok ? "text-muted-foreground" : "text-destructive")}
+              >
+                <span className="font-medium">{item.name}</span>: {item.detail}
               </li>
             ))}
           </ul>
@@ -259,112 +604,131 @@ function Verify({ id }: { id: string }) {
   );
 }
 
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="whitespace-pre-wrap">{children}</dd>
+    </div>
+  );
+}
+
+const count = (value: number | undefined) => value?.toLocaleString() ?? "–";
+
+/** The item's plan and record: hook, captions per platform, schedule, numbers, and notes. */
 function Details({ item }: { item: ItemDetail }) {
   const { doc } = item;
   const platforms = Object.entries(doc.platforms);
+  const docs = Object.entries(item.docs);
+
   return (
-    <div className="panel">
-      <h2>Details</h2>
-      <dl>
-        {doc.format ? (
-          <>
-            <dt>Format</dt>
-            <dd>{doc.format}</dd>
-          </>
-        ) : null}
-        {doc.reference ? (
-          <>
-            <dt>Reference</dt>
-            <dd>
-              <a href={href("references", doc.reference)}>{doc.reference}</a>
-            </dd>
-          </>
-        ) : null}
-        {doc.hook ? (
-          <>
-            <dt>Hook</dt>
-            <dd>{doc.hook}</dd>
-          </>
-        ) : null}
-        {doc.caption ? (
-          <>
-            <dt>Caption</dt>
-            <dd className="pre">{doc.caption}</dd>
-          </>
-        ) : null}
+    <div className="flex flex-col gap-6">
+      <dl className="flex flex-col gap-3">
+        {doc.format === undefined ? null : <Field label="Format">{doc.format}</Field>}
+        {doc.reference === undefined ? null : (
+          <Field label="Reference">
+            <a href={href("references", doc.reference)} className="underline underline-offset-4">
+              {doc.reference}
+            </a>
+          </Field>
+        )}
+        {doc.hook === undefined ? null : <Field label="Hook">{doc.hook}</Field>}
+        {doc.caption === undefined ? null : <Field label="Caption">{doc.caption}</Field>}
+        {doc.notes === undefined ? null : <Field label="Notes">{doc.notes}</Field>}
       </dl>
-      {platforms.map(([p, copy]) => (
-        <details key={p}>
-          <summary>{p}</summary>
-          {copy.title ? (
-            <p>
-              <strong>{copy.title}</strong>
-            </p>
-          ) : null}
-          {copy.caption ? <p className="pre">{copy.caption}</p> : null}
-          {copy.hashtags?.length ? <p className="muted">{copy.hashtags.join(" ")}</p> : null}
-          {copy.firstComment ? (
-            <p className="pre muted">First comment: {copy.firstComment}</p>
-          ) : null}
-        </details>
-      ))}
-      {doc.schedule.length ? (
-        <>
-          <h3>Schedule</h3>
-          <ul className="plain">
-            {doc.schedule.map((s) => (
-              <li key={s.platform}>
-                {s.platform} · {new Date(s.at).toLocaleString()} · {s.status}
-                {s.url ? (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <a href={s.url} target="_blank" rel="noreferrer">
-                      open
-                    </a>
-                  </>
-                ) : null}
-              </li>
-            ))}
+      {platforms.map(([platform, copy]) =>
+        copy === undefined ? null : (
+          <section key={platform} className="flex flex-col gap-1.5">
+            <h2 className="font-medium capitalize">{platform}</h2>
+            {copy.title === undefined ? null : <p className="font-medium">{copy.title}</p>}
+            {copy.caption === undefined ? null : (
+              <p className="whitespace-pre-wrap">{copy.caption}</p>
+            )}
+            {copy.hashtags === undefined || copy.hashtags.length === 0 ? null : (
+              <p className="text-muted-foreground">{copy.hashtags.join(" ")}</p>
+            )}
+            {copy.firstComment === undefined ? null : (
+              <p className="whitespace-pre-wrap text-muted-foreground">
+                First comment: {copy.firstComment}
+              </p>
+            )}
+          </section>
+        ),
+      )}
+      {doc.schedule.length === 0 ? null : (
+        <section className="flex flex-col gap-1.5">
+          <h2 className="font-medium">Schedule</h2>
+          <ul className="flex flex-col gap-1">
+            {doc.schedule.map((slot) => {
+              const link = slot.url === undefined ? undefined : safeHttpUrl(slot.url);
+
+              return (
+                <li key={slot.platform} className="text-muted-foreground">
+                  <span className="text-foreground capitalize">{slot.platform}</span> ·{" "}
+                  {new Date(slot.at).toLocaleString()} · {slot.status}
+                  {link === undefined ? null : (
+                    <>
+                      {" · "}
+                      <a
+                        href={link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        Open
+                      </a>
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
-        </>
-      ) : null}
-      {doc.metrics.length ? (
-        <>
-          <h3>Metrics</h3>
-          <table className="metrics">
-            <thead>
-              <tr>
-                <th>Platform</th>
-                <th>Date</th>
-                <th>Views</th>
-                <th>Likes</th>
-                <th>Shares</th>
-                <th>Saves</th>
-              </tr>
-            </thead>
-            <tbody>
-              {doc.metrics.map((m) => (
-                <tr key={`${m.platform}-${m.at}`}>
-                  <td>{m.platform}</td>
-                  <td>{new Date(m.at).toLocaleDateString()}</td>
-                  <td>{m.views ?? "–"}</td>
-                  <td>{m.likes ?? "–"}</td>
-                  <td>{m.shares ?? "–"}</td>
-                  <td>{m.saves ?? "–"}</td>
+        </section>
+      )}
+      {doc.metrics.length === 0 ? null : (
+        <section className="flex flex-col gap-1.5">
+          <h2 className="font-medium">Metrics</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs tabular-nums">
+              <thead className="text-left text-muted-foreground">
+                <tr>
+                  <th className="py-1 font-medium">Platform</th>
+                  <th className="py-1 font-medium">Date</th>
+                  <th className="py-1 text-right font-medium">Views</th>
+                  <th className="py-1 text-right font-medium">Likes</th>
+                  <th className="py-1 text-right font-medium">Shares</th>
+                  <th className="py-1 text-right font-medium">Saves</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      ) : null}
-      {doc.notes ? <p className="pre muted">{doc.notes}</p> : null}
-      {Object.entries(item.docs).map(([name, text]) => (
-        <details key={name}>
-          <summary>{name}</summary>
-          <pre className="doc">{text}</pre>
-        </details>
-      ))}
+              </thead>
+              <tbody>
+                {doc.metrics.map((row) => (
+                  <tr key={`${row.platform}-${row.at}`} className="border-t">
+                    <td className="py-1 capitalize">{row.platform}</td>
+                    <td className="py-1">{new Date(row.at).toLocaleDateString()}</td>
+                    <td className="py-1 text-right">{count(row.views)}</td>
+                    <td className="py-1 text-right">{count(row.likes)}</td>
+                    <td className="py-1 text-right">{count(row.shares)}</td>
+                    <td className="py-1 text-right">{count(row.saves)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+      {docs.map(([name, text]) =>
+        text === undefined ? null : (
+          <details key={name} className="group/doc">
+            <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
+              <FileTextIcon className="size-4 text-muted-foreground" />
+              {name}
+            </summary>
+            <div className="typeset typeset-chat mt-2">
+              <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
+            </div>
+          </details>
+        ),
+      )}
     </div>
   );
 }
