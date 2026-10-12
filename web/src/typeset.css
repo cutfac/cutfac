@@ -103,13 +103,13 @@
       font-weight: 500;
       text-decoration-line: underline;
       text-decoration-color: color-mix(in oklab, currentColor 30%, transparent);
+      cursor: pointer;
     }
-    &:where(a:hover) {
+    &:where(a:hover, a:focus-visible) {
       text-decoration-color: currentColor;
     }
     &:where(a:focus-visible) {
-      outline: 2px solid var(--color-ring, currentColor);
-      outline-offset: 2px;
+      background-color: var(--color-muted);
       border-radius: 0.125em;
     }
     &:where(:is(h1, h2, h3, h4, h5, h6) :is(a)) {

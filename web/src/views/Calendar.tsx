@@ -27,13 +27,15 @@ function weekdays(locale: Locale): string[] {
 }
 
 const eventVariants = cva(
-  "block min-w-0 rounded-lg px-1.5 py-1 text-xs leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  "block min-w-0 rounded-lg px-1.5 py-1 text-xs leading-tight outline-none select-none",
   {
     variants: {
       state: {
-        planned: "bg-secondary text-secondary-foreground hover:bg-accent",
-        published: "bg-primary text-primary-foreground hover:bg-primary/80",
-        cancelled: "bg-muted text-muted-foreground line-through hover:bg-accent",
+        planned: "bg-secondary text-secondary-foreground hover:bg-accent focus-visible:bg-accent",
+        published:
+          "bg-primary text-primary-foreground hover:bg-primary/80 focus-visible:bg-primary/80",
+        cancelled:
+          "bg-muted text-muted-foreground line-through hover:bg-accent focus-visible:bg-accent",
       },
     },
     defaultVariants: { state: "planned" },

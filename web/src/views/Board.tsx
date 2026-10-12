@@ -205,7 +205,7 @@ function ItemCard({
     .toSorted((a, b) => a.at.localeCompare(b.at))[0];
 
   return (
-    <div className="relative rounded-3xl transition-shadow hover:*:shadow-md has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
+    <div className="relative rounded-3xl transition-shadow select-none hover:*:shadow-md has-focus-visible:*:shadow-md">
       <Card size="sm">
         <CardContent>
           <div className="flex gap-3">

@@ -181,7 +181,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
                 </div>
               ) : (
                 <label
-                  className={`flex cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/30 ${dragging ? "border-ring bg-muted/50" : ""}`}
+                  className={`flex flex-col items-center gap-1 rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground transition-colors select-none hover:bg-muted/50 has-focus-visible:bg-muted/50 ${dragging ? "border-ring bg-muted/50" : ""}`}
                 >
                   <UploadIcon className="size-5" />
                   <span>{t.newItem.drop}</span>

@@ -518,7 +518,7 @@ function MediaStrip({
           type="button"
           aria-pressed={media.name === shown.name}
           title={media.name}
-          className="group/media flex w-20 shrink-0 flex-col gap-1 rounded-lg p-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="group/media flex w-20 shrink-0 flex-col gap-1 rounded-lg p-1 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted"
           onClick={() => onPick(media.name)}
         >
           <Thumbnail src={mediaUrl(item, media)} media={media} />
@@ -528,7 +528,7 @@ function MediaStrip({
         </button>
       ))}
       <label
-        className="flex w-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-1 text-xs text-muted-foreground hover:bg-muted"
+        className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-1 text-xs text-muted-foreground select-none hover:bg-muted has-focus-visible:bg-muted"
         title={t.item.addMedia}
       >
         {uploading ? <Spinner /> : <PlusIcon className="size-4" />}
@@ -720,7 +720,7 @@ function Details({ item }: { item: ItemDetail }) {
       {docs.map(([name, text]) =>
         text === undefined ? null : (
           <details key={name} className="group/doc">
-            <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
+            <summary className="-mx-1 flex items-center gap-1.5 rounded-md px-1 font-medium outline-none select-none focus-visible:bg-muted">
               <FileTextIcon className="size-4 text-muted-foreground" />
               {name}
             </summary>

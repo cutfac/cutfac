@@ -149,11 +149,25 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+  /* The board runs as a desktop app, so it skips the web's habits: focus halos (focused controls
+     tint like hovered ones instead), the hand cursor on links, dragging images and links around,
+     and the page bouncing past its edges. */
+  :focus-visible {
+    outline: none;
+  }
+  a {
+    cursor: default;
+  }
+  a,
+  img {
+    -webkit-user-drag: none;
   }
   html {
     @apply font-sans antialiased;
     color-scheme: light;
+    overscroll-behavior: none;
   }
   html.dark {
     color-scheme: dark;

@@ -135,7 +135,7 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
           </InputGroupAddon>
         </InputGroup>
       </form>
-      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/30">
+      <label className="flex items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/50 has-focus-visible:bg-muted/50">
         <UploadIcon className="size-4" />
         <span>{t.references.drop}</span>
         <input
@@ -230,7 +230,7 @@ function ReferenceRow({ reference: r, active }: { reference: Reference; active: 
   const t = useMessages();
 
   return (
-    <div className="relative rounded-2xl has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
+    <div className="relative rounded-2xl select-none has-focus-visible:*:bg-muted">
       <Item variant={active ? "muted" : "default"} size="sm">
         <ItemMedia variant={sheet ? "image" : "icon"}>
           {sheet ? <img src={fileUrl(`${r.dir}/${sheet}`)} alt="" loading="lazy" /> : <FilmIcon />}
