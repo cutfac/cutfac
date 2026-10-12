@@ -1,6 +1,7 @@
 import { DateTime, Effect, Option } from "effect";
 
 import { InvalidRequest } from "./errors.ts";
+import { type MediaCapture, recordMedia } from "./history.ts";
 import {
   type Item,
   addFeedback,
@@ -9,6 +10,7 @@ import {
   mutateItem,
   resolveFeedback,
   updateFeedback,
+  withDecision,
 } from "./items.ts";
 import { extension, type MediaKind } from "./media.ts";
 import { runChecked } from "./process.ts";
@@ -58,6 +60,9 @@ export const requestEdit = Effect.fn("edits.requestEdit")(function* (
   const added = yield* addFeedback(id, input);
 
   if (media === undefined) {
+    // Save the item's files as they are now, so the agent's changes to them can be undone.
+    const captures = added.item.media.map((m) => ({ media: m.name, start: true }));
+    yield* recordMedia(added.item, captures, { cause: "outside" });
     const result: EditRequested = { item: added.item, feedback: added.feedback, warnings: [] };
 
     return result;
@@ -69,6 +74,9 @@ export const requestEdit = Effect.fn("edits.requestEdit")(function* (
     media.name,
     media.kind,
   );
+
+  const snapshot = [{ media: media.name, file: context.before, start: true }];
+  yield* recordMedia(added.item, snapshot, { cause: "outside" });
 
   const item = yield* mutateItem(id, (doc) =>
     updateFeedback(doc, id, added.feedback.id, (entry) => ({ ...entry, context })),
@@ -180,40 +188,57 @@ export const requestedAtMillis = (f: Feedback) =>
 /**
  * Save the media as it is now as the "after" side, if it changed since the request.
  * Agents edit the media file in place, so a later request would otherwise lose this result.
+ * Files the request changed are also saved into the item's history, so they can be undone.
  */
 export const snapshotAfter = Effect.fn("edits.snapshotAfter")(function* (
   id: string,
   feedbackId: string,
 ) {
-  const ws = yield* Workspace;
   const item = yield* getItem(id);
   const f = yield* findFeedback(item, feedbackId);
-  const mediaName = f.media;
 
-  const pending =
-    mediaName !== undefined &&
-    f.context?.before !== undefined &&
-    f.context.after === undefined &&
-    f.decision === undefined;
+  if (f.decision !== undefined) return item;
+  const after = yield* saveAfter(item, f);
 
-  if (!pending) return item;
+  const captures = item.media.map(({ name }): MediaCapture => {
+    if (name !== f.media) return { media: name, start: f.media === undefined };
 
-  const source = `${item.dir}/${mediaName}`;
+    return after === undefined
+      ? { media: name }
+      : { media: name, file: after, base: f.context?.before };
+  });
 
-  if (!(yield* ws.exists(source))) return item;
-  const { mtime } = yield* ws.stat(source);
+  yield* recordMedia(item, captures, { cause: "edit", feedbackId });
 
-  if (mtime <= requestedAtMillis(f)) return item;
-
-  const after = `${editDir(item, f.id)}/after.${extension(mediaName)}`;
-  yield* ws.copy(source, after);
+  if (after === undefined) return item;
 
   return yield* mutateItem(id, (doc) =>
     updateFeedback(doc, id, feedbackId, (entry) => ({
       ...entry,
-      context: { ...entry.context, after: itemRel(item, after) },
+      context: { ...entry.context, after },
     })),
   );
+});
+
+/** Copy the request's media to its "after" file once it changed. Returns the item-relative copy. */
+const saveAfter = Effect.fnUntraced(function* (item: Item, f: Feedback) {
+  const ws = yield* Workspace;
+  const mediaName = f.media;
+
+  if (mediaName === undefined || f.context?.before === undefined || f.context.after !== undefined) {
+    return undefined;
+  }
+
+  const source = `${item.dir}/${mediaName}`;
+
+  if (!(yield* ws.exists(source))) return undefined;
+  const { mtime } = yield* ws.stat(source);
+
+  if (mtime <= requestedAtMillis(f)) return undefined;
+  const after = `${editDir(item, f.id)}/after.${extension(mediaName)}`;
+  yield* ws.copy(source, after);
+
+  return itemRel(item, after);
 });
 
 /** Resolve a request and keep the result for comparison. Used by agents (MCP) and the runner. */
@@ -227,9 +252,6 @@ export const resolveEdit = Effect.fn("edits.resolveEdit")(function* (
   return yield* resolveFeedback(id, feedbackId, resolution);
 });
 
-const closed = (entry: Feedback, resolvedAt: string, resolution: string): Feedback =>
-  entry.status === "open" ? { ...entry, status: "resolved", resolution, resolvedAt } : entry;
-
 /** The user keeps the result. */
 export const approveEdit = Effect.fn("edits.approveEdit")(function* (
   id: string,
@@ -239,10 +261,7 @@ export const approveEdit = Effect.fn("edits.approveEdit")(function* (
   const now = yield* nowIso;
 
   return yield* mutateItem(id, (doc) =>
-    updateFeedback(doc, id, feedbackId, (entry) => ({
-      ...closed(entry, now, "Approved"),
-      decision: "approved",
-    })),
+    updateFeedback(doc, id, feedbackId, (entry) => withDecision(entry, "approved", now)),
   );
 });
 
@@ -262,13 +281,11 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   }
 
   yield* ws.copy(`${item.dir}/${before}`, `${item.dir}/${f.media}`);
+  yield* recordMedia(item, [{ media: f.media, file: before }], { cause: "restore", feedbackId });
   const now = yield* nowIso;
 
   return yield* mutateItem(id, (doc) =>
-    updateFeedback(doc, id, feedbackId, (entry) => ({
-      ...closed(entry, now, "Rolled back to before"),
-      decision: "restored",
-    })),
+    updateFeedback(doc, id, feedbackId, (entry) => withDecision(entry, "restored", now)),
   );
 });
 

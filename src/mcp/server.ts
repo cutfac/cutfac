@@ -1,4 +1,4 @@
-import { Effect, type FileSystem, Layer, Logger, type Path, Schema } from "effect";
+import { type Crypto, Effect, type FileSystem, Layer, Logger, type Path, Schema } from "effect";
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
 import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
@@ -420,6 +420,7 @@ export const FactoryToolkit = Toolkit.make(
 /** What the core needs to run a tool; captured once when the server starts. */
 type ToolServices =
   | Workspace
+  | Crypto.Crypto
   | FileSystem.FileSystem
   | Path.Path
   | HttpClient.HttpClient

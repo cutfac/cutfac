@@ -21,7 +21,7 @@ export const ITEM_FILE = "item.yaml";
 /** Folders that already hold one of these are items even without item.yaml (pre-factory layouts). */
 const LEGACY_MARKERS = ["POSTING.md", "STATUS.md"];
 
-const SKIP_DIRS = new Set(["node_modules", "review", "frames", "raw", "edits"]);
+const SKIP_DIRS = new Set(["node_modules", "review", "frames", "raw", "edits", "history"]);
 
 const MAX_DEPTH = 4;
 
@@ -277,6 +277,21 @@ export const updateFeedback = (
         feedback: doc.feedback.map((entry) => (entry.id === feedbackId ? change(entry) : entry)),
       })
     : Effect.fail(new NotFound({ message: `Feedback ${feedbackId} not found on ${itemId}` }));
+
+export type Decision = NonNullable<Feedback["decision"]>;
+
+const VERDICTS: Record<Decision, string> = {
+  approved: "Approved",
+  restored: "Rolled back to before",
+};
+
+/** Record the user's verdict on an edit result, closing the request if it was still open. */
+export const withDecision = (entry: Feedback, decision: Decision, at: string): Feedback => ({
+  ...(entry.status === "open"
+    ? { ...entry, status: "resolved", resolution: VERDICTS[decision], resolvedAt: at }
+    : entry),
+  decision,
+});
 
 export function findFeedback(item: Item, feedbackId: string): Effect.Effect<Feedback, NotFound> {
   const entry = item.doc.feedback.find((candidate) => candidate.id === feedbackId);
