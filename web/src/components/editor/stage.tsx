@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import { useState, type PointerEvent, type ReactNode } from "react";
 
 import type { Region } from "../../api.ts";
+import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import { clampUnit, percent, roundTime } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
@@ -187,6 +188,7 @@ function RegionBox({
   onRemove: () => void;
 }) {
   const near = usePlayer(player, (state) => Math.abs(state.time - region.at) <= BOX_NEAR);
+  const t = useMessages();
 
   return (
     <AreaMark box={region} look="set" near={near}>
@@ -194,14 +196,14 @@ function RegionBox({
         <button
           type="button"
           className="rounded-md px-1.5 py-0.5 tabular-nums hover:bg-foreground/10"
-          title="Go to the frame this box is on"
+          title={t.target.goToBox}
           onClick={() => player.seek(region.at)}
         >
-          Box · {formatTime(region.at)}
+          {t.target.box(formatTime(region.at))}
         </button>
         <button
           type="button"
-          aria-label="Remove the box"
+          aria-label={t.target.removeBox}
           className="rounded-md p-1 hover:bg-foreground/10"
           onClick={onRemove}
         >

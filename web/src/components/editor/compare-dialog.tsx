@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { fileUrl, type Feedback, type ItemDetail, type MediaKind } from "../../api.ts";
+import { useMessages } from "../../i18n/index.ts";
 import { describeTarget, targetOf } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 
@@ -63,6 +64,7 @@ export function CompareDialog({
 }: CompareDialogProps) {
   const before = useRef<HTMLVideoElement>(null);
   const after = useRef<HTMLVideoElement>(null);
+  const t = useMessages();
   const sides = sidesOf(item, feedback);
   const target = targetOf(feedback);
   const from = target.start ?? 0;
@@ -79,7 +81,7 @@ export function CompareDialog({
     }
   }
 
-  const where = describeTarget(target);
+  const where = describeTarget(target, t.target.boxAt);
 
   return (
     <Dialog
@@ -87,10 +89,12 @@ export function CompareDialog({
         if (open) onOpen();
       }}
     >
-      <DialogTrigger render={<Button variant="outline" size="xs" />}>Compare</DialogTrigger>
+      <DialogTrigger render={<Button variant="outline" size="xs" />}>
+        {t.compare.open}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Before and after</DialogTitle>
+          <DialogTitle>{t.compare.title}</DialogTitle>
           <DialogDescription>
             {feedback.body}
             {where === "" ? "" : ` · ${where}`}
@@ -99,8 +103,8 @@ export function CompareDialog({
         <div className="grid grid-cols-2 gap-3">
           {(["before", "after"] as const).map((side) => (
             <figure key={side} className="flex min-w-0 flex-col gap-1.5">
-              <figcaption className="text-xs font-medium text-muted-foreground capitalize">
-                {side}
+              <figcaption className="text-xs font-medium text-muted-foreground">
+                {t.compare[side]}
               </figcaption>
               {sides.kind === "video" ? (
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
@@ -117,7 +121,7 @@ export function CompareDialog({
               ) : (
                 <img
                   src={sides[side]}
-                  alt={`${feedback.media ?? "Media"}, ${side}`}
+                  alt={t.compare.image(feedback.media, t.compare[side])}
                   className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
                 />
               )}
@@ -128,22 +132,22 @@ export function CompareDialog({
           {sides.kind === "video" ? (
             <Button variant="outline" className="sm:mr-auto" onClick={playBoth}>
               <PlayIcon data-icon="inline-start" />
-              Play both from {formatTime(from)}
+              {t.compare.playBoth(formatTime(from))}
             </Button>
           ) : null}
           {feedback.decision === undefined ? (
             <>
               <DialogClose render={<Button variant="outline" />} onClick={onRestore}>
                 <Undo2Icon data-icon="inline-start" />
-                Restore before
+                {t.compare.restore}
               </DialogClose>
               <DialogClose render={<Button />} onClick={onApprove}>
                 <CheckIcon data-icon="inline-start" />
-                Keep the edit
+                {t.compare.keep}
               </DialogClose>
             </>
           ) : (
-            <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+            <DialogClose render={<Button variant="outline" />}>{t.common.close}</DialogClose>
           )}
         </DialogFooter>
       </DialogContent>

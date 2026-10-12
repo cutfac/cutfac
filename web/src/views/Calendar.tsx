@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { api } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
+import { useLocale, useMessages, type Locale } from "../i18n/index.ts";
 
 interface Entry {
   id: string;
@@ -17,7 +18,13 @@ interface Entry {
   status: string;
 }
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** Short weekday names in the grid's Monday-first order. */
+function weekdays(locale: Locale): string[] {
+  const format = new Intl.DateTimeFormat(locale, { weekday: "short" });
+
+  // 1 January 2024 was a Monday.
+  return Array.from({ length: 7 }, (_, n) => format.format(new Date(2024, 0, 1 + n)));
+}
 
 const eventVariants = cva(
   "block min-w-0 rounded-lg px-1.5 py-1 text-xs leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -36,14 +43,16 @@ const eventVariants = cva(
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 export function Calendar() {
+  const t = useMessages();
+  const locale = useLocale();
   const { data: items, error } = useLive("items", api.items);
   const [offset, setOffset] = useState(0);
   const [now] = useState(() => new Date());
 
   if (error) {
     return (
-      <Page title="Calendar">
-        <ErrorAlert title="Could not load the calendar" message={error} />
+      <Page title={t.calendar.title}>
+        <ErrorAlert title={t.calendar.loadError} message={error} />
       </Page>
     );
   }
@@ -74,29 +83,25 @@ export function Calendar() {
   return (
     <Page
       width="wide"
-      title={month.toLocaleDateString(undefined, { year: "numeric", month: "long" })}
-      description={
-        items && entries.length === 0
-          ? "Nothing scheduled yet. When your agent schedules a post, it shows up here."
-          : undefined
-      }
+      title={month.toLocaleDateString(locale, { year: "numeric", month: "long" })}
+      description={items && entries.length === 0 ? t.calendar.empty : undefined}
       actions={
         <>
           <Button
             variant="outline"
             size="icon"
-            aria-label="Previous month"
+            aria-label={t.calendar.previous}
             onClick={() => setOffset(offset - 1)}
           >
             <ChevronLeftIcon />
           </Button>
           <Button variant="outline" disabled={offset === 0} onClick={() => setOffset(0)}>
-            Today
+            {t.calendar.today}
           </Button>
           <Button
             variant="outline"
             size="icon"
-            aria-label="Next month"
+            aria-label={t.calendar.next}
             onClick={() => setOffset(offset + 1)}
           >
             <ChevronRightIcon />
@@ -108,7 +113,7 @@ export function Calendar() {
         <Skeleton className="h-130 w-full" />
       ) : (
         <div className="grid grid-cols-7 overflow-hidden rounded-3xl border">
-          {WEEKDAYS.map((d) => (
+          {weekdays(locale).map((d) => (
             <div
               key={d}
               className="border-b bg-muted/40 px-2 py-2 text-xs font-medium text-muted-foreground"
@@ -139,18 +144,18 @@ export function Calendar() {
                   <a
                     key={`${e.id}-${e.platform}-${e.at.getTime()}`}
                     href={href("item", e.id)}
-                    title={`${e.platform} · ${e.title} (${e.status})`}
+                    title={`${e.platform} · ${e.title} (${t.scheduleStatus(e.status)})`}
                     className={eventVariants({
                       state:
                         e.status === "published" || e.status === "cancelled" ? e.status : "planned",
                     })}
                   >
                     <span className="block truncate font-medium">
-                      {e.at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} ·{" "}
+                      {e.at.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" })} ·{" "}
                       {e.platform}
                     </span>
                     <span className="block truncate">{e.title}</span>
-                    <span className="sr-only">, {e.status}</span>
+                    <span className="sr-only">, {t.scheduleStatus(e.status)}</span>
                   </a>
                 ))}
               </div>

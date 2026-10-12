@@ -59,6 +59,7 @@ import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
 import { href, useLive } from "../hooks.ts";
+import { type Locale, useLocale, useMessages } from "../i18n/index.ts";
 import { Player } from "../lib/player.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import {
@@ -121,6 +122,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
+  const t = useMessages();
 
   useEffect(
     () => onAgentRun(id, (message) => setRun((current) => reduceRun(current, message))),
@@ -226,7 +228,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   if (error !== undefined && item === undefined) {
     return (
       <div className="flex-1 p-6">
-        <ErrorAlert title="Cannot open this item" message={error} />
+        <ErrorAlert title={t.item.openError} message={error} />
       </div>
     );
   }
@@ -290,9 +292,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 />
               </>
             ) : (
-              <p className="text-center text-xs text-muted-foreground">
-                Drag on the image to mark the area an edit is about.
-              </p>
+              <p className="text-center text-xs text-muted-foreground">{t.item.imageHint}</p>
             )}
             <MediaStrip
               item={item}
@@ -308,9 +308,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
         <Tabs defaultValue="chat" className="min-h-0 flex-1">
           <div className="border-b p-2">
             <TabsList className="w-full">
-              <TabsTrigger value="chat">Chat</TabsTrigger>
-              <TabsTrigger value="checks">Checks</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
+              <TabsTrigger value="checks">{t.item.checks}</TabsTrigger>
+              <TabsTrigger value="details">{t.item.details}</TabsTrigger>
             </TabsList>
           </div>
           {/* Kept mounted so a half-typed request survives a look at the other tabs. */}
@@ -367,19 +367,20 @@ function Toolbar({
   agent: LiveRun["agent"];
   onItem: (item: ItemDetail) => void;
 }) {
-  const statuses = STATUSES.map((status) => ({ value: status, label: sentenceCase(status) }));
+  const t = useMessages();
+  const statuses = STATUSES.map((status) => ({ value: status, label: t.status[status] }));
 
   return (
     <div className="flex min-w-0 items-center gap-2">
       <a href={href("board")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
         <ArrowLeftIcon data-icon="inline-start" />
-        Board
+        {t.nav.board}
       </a>
       <h1 className="min-w-0 truncate text-base font-semibold">{item.doc.title}</h1>
       {running ? (
         <Badge variant="secondary">
           <Spinner data-icon="inline-start" />
-          {agentLabel(agent)} is editing
+          {t.item.editing(agentLabel(agent) ?? t.chat.agent)}
         </Badge>
       ) : null}
       <Select
@@ -389,7 +390,7 @@ function Toolbar({
           if (status !== null) api.updateItem(item.id, { status }).then(onItem, showError);
         }}
       >
-        <SelectTrigger size="sm" className="ml-auto" aria-label="Status">
+        <SelectTrigger size="sm" className="ml-auto" aria-label={t.item.status}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -403,8 +404,6 @@ function Toolbar({
     </div>
   );
 }
-
-const sentenceCase = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** Upload the first file in a drop or a file picker; the server names it with its aspect. */
 function useUpload(
@@ -458,6 +457,7 @@ function NoMedia({
   onUploaded: (name: string) => void;
 }) {
   const { uploading, fromInput, fromDrop } = useUpload(item, onItem, onUploaded);
+  const t = useMessages();
 
   return (
     <div
@@ -470,11 +470,8 @@ function NoMedia({
           <EmptyMedia variant="icon">
             <ClapperboardIcon />
           </EmptyMedia>
-          <EmptyTitle>No video yet</EmptyTitle>
-          <EmptyDescription>
-            Drop a video or an image here to start from, or ask in the chat and an agent will make a
-            first cut.
-          </EmptyDescription>
+          <EmptyTitle>{t.item.noMediaTitle}</EmptyTitle>
+          <EmptyDescription>{t.item.noMediaBody}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           <label className={buttonVariants({ variant: "outline" })}>
@@ -483,7 +480,7 @@ function NoMedia({
             ) : (
               <PlusIcon data-icon="inline-start" />
             )}
-            Add a video or image
+            {t.item.addMedia}
             <input type="file" accept="video/*,image/*" className="sr-only" onChange={fromInput} />
           </label>
         </EmptyContent>
@@ -507,6 +504,7 @@ function MediaStrip({
   onUploaded: (name: string) => void;
 }) {
   const { uploading, fromInput, fromDrop } = useUpload(item, onItem, onUploaded);
+  const t = useMessages();
 
   return (
     <div
@@ -531,10 +529,10 @@ function MediaStrip({
       ))}
       <label
         className="flex w-20 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-1 text-xs text-muted-foreground hover:bg-muted"
-        title="Add a video or image"
+        title={t.item.addMedia}
       >
         {uploading ? <Spinner /> : <PlusIcon className="size-4" />}
-        Add
+        {t.item.add}
         <input type="file" accept="video/*,image/*" className="sr-only" onChange={fromInput} />
       </label>
     </div>
@@ -555,6 +553,7 @@ function Thumbnail({ src, media }: { src: string; media: Media }) {
 function Checks({ id }: { id: string }) {
   const [reports, setReports] = useState<ReadonlyArray<MediaReport> | undefined>(undefined);
   const [checking, setChecking] = useState(false);
+  const t = useMessages();
 
   function check() {
     setChecking(true);
@@ -567,17 +566,17 @@ function Checks({ id }: { id: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground">Check the videos against what the platforms accept.</p>
+        <p className="text-muted-foreground">{t.item.checksBody}</p>
         <Button variant="outline" size="sm" disabled={checking} onClick={check}>
           {checking ? (
             <Spinner data-icon="inline-start" />
           ) : (
             <ShieldCheckIcon data-icon="inline-start" />
           )}
-          {reports === undefined ? "Run checks" : "Run again"}
+          {reports === undefined ? t.item.runChecks : t.item.runAgain}
         </Button>
       </div>
-      {reports?.length === 0 ? <p className="text-muted-foreground">No videos to check.</p> : null}
+      {reports?.length === 0 ? <p className="text-muted-foreground">{t.item.noVideos}</p> : null}
       {reports?.map((report) => (
         <div key={report.file} className="flex flex-col gap-2">
           <p className="flex items-center gap-1.5 font-medium">
@@ -613,28 +612,30 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const count = (value: number | undefined) => value?.toLocaleString() ?? "–";
+const count = (value: number | undefined, locale: Locale) => value?.toLocaleString(locale) ?? "–";
 
 /** The item's plan and record: hook, captions per platform, schedule, numbers, and notes. */
 function Details({ item }: { item: ItemDetail }) {
   const { doc } = item;
   const platforms = Object.entries(doc.platforms);
   const docs = Object.entries(item.docs);
+  const t = useMessages();
+  const locale = useLocale();
 
   return (
     <div className="flex flex-col gap-6">
       <dl className="flex flex-col gap-3">
-        {doc.format === undefined ? null : <Field label="Format">{doc.format}</Field>}
+        {doc.format === undefined ? null : <Field label={t.item.format}>{doc.format}</Field>}
         {doc.reference === undefined ? null : (
-          <Field label="Reference">
+          <Field label={t.item.reference}>
             <a href={href("references", doc.reference)} className="underline underline-offset-4">
               {doc.reference}
             </a>
           </Field>
         )}
-        {doc.hook === undefined ? null : <Field label="Hook">{doc.hook}</Field>}
-        {doc.caption === undefined ? null : <Field label="Caption">{doc.caption}</Field>}
-        {doc.notes === undefined ? null : <Field label="Notes">{doc.notes}</Field>}
+        {doc.hook === undefined ? null : <Field label={t.item.hook}>{doc.hook}</Field>}
+        {doc.caption === undefined ? null : <Field label={t.item.caption}>{doc.caption}</Field>}
+        {doc.notes === undefined ? null : <Field label={t.item.notes}>{doc.notes}</Field>}
       </dl>
       {platforms.map(([platform, copy]) =>
         copy === undefined ? null : (
@@ -649,7 +650,7 @@ function Details({ item }: { item: ItemDetail }) {
             )}
             {copy.firstComment === undefined ? null : (
               <p className="whitespace-pre-wrap text-muted-foreground">
-                First comment: {copy.firstComment}
+                {t.item.firstComment(copy.firstComment)}
               </p>
             )}
           </section>
@@ -657,7 +658,7 @@ function Details({ item }: { item: ItemDetail }) {
       )}
       {doc.schedule.length === 0 ? null : (
         <section className="flex flex-col gap-1.5">
-          <h2 className="font-medium">Schedule</h2>
+          <h2 className="font-medium">{t.item.schedule}</h2>
           <ul className="flex flex-col gap-1">
             {doc.schedule.map((slot) => {
               const link = slot.url === undefined ? undefined : safeHttpUrl(slot.url);
@@ -665,7 +666,7 @@ function Details({ item }: { item: ItemDetail }) {
               return (
                 <li key={slot.platform} className="text-muted-foreground">
                   <span className="text-foreground capitalize">{slot.platform}</span> ·{" "}
-                  {new Date(slot.at).toLocaleString()} · {slot.status}
+                  {new Date(slot.at).toLocaleString(locale)} · {t.scheduleStatus(slot.status)}
                   {link === undefined ? null : (
                     <>
                       {" · "}
@@ -675,7 +676,7 @@ function Details({ item }: { item: ItemDetail }) {
                         rel="noreferrer"
                         className="underline underline-offset-4"
                       >
-                        Open
+                        {t.item.open}
                       </a>
                     </>
                   )}
@@ -687,28 +688,28 @@ function Details({ item }: { item: ItemDetail }) {
       )}
       {doc.metrics.length === 0 ? null : (
         <section className="flex flex-col gap-1.5">
-          <h2 className="font-medium">Metrics</h2>
+          <h2 className="font-medium">{t.item.metrics}</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-xs tabular-nums">
               <thead className="text-left text-muted-foreground">
                 <tr>
-                  <th className="py-1 font-medium">Platform</th>
-                  <th className="py-1 font-medium">Date</th>
-                  <th className="py-1 text-right font-medium">Views</th>
-                  <th className="py-1 text-right font-medium">Likes</th>
-                  <th className="py-1 text-right font-medium">Shares</th>
-                  <th className="py-1 text-right font-medium">Saves</th>
+                  <th className="py-1 font-medium">{t.item.platform}</th>
+                  <th className="py-1 font-medium">{t.item.date}</th>
+                  <th className="py-1 text-right font-medium">{t.item.views}</th>
+                  <th className="py-1 text-right font-medium">{t.item.likes}</th>
+                  <th className="py-1 text-right font-medium">{t.item.shares}</th>
+                  <th className="py-1 text-right font-medium">{t.item.saves}</th>
                 </tr>
               </thead>
               <tbody>
                 {doc.metrics.map((row) => (
                   <tr key={`${row.platform}-${row.at}`} className="border-t">
                     <td className="py-1 capitalize">{row.platform}</td>
-                    <td className="py-1">{new Date(row.at).toLocaleDateString()}</td>
-                    <td className="py-1 text-right">{count(row.views)}</td>
-                    <td className="py-1 text-right">{count(row.likes)}</td>
-                    <td className="py-1 text-right">{count(row.shares)}</td>
-                    <td className="py-1 text-right">{count(row.saves)}</td>
+                    <td className="py-1">{new Date(row.at).toLocaleDateString(locale)}</td>
+                    <td className="py-1 text-right">{count(row.views, locale)}</td>
+                    <td className="py-1 text-right">{count(row.likes, locale)}</td>
+                    <td className="py-1 text-right">{count(row.shares, locale)}</td>
+                    <td className="py-1 text-right">{count(row.saves, locale)}</td>
                   </tr>
                 ))}
               </tbody>

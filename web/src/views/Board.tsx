@@ -25,8 +25,10 @@ import { Toggle } from "@/components/ui/toggle";
 
 import { api, fileUrl, STATUSES, type ItemSummary } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
+import { useLocale, useMessages } from "../i18n/index.ts";
 
 export function Board() {
+  const t = useMessages();
   const { data: items, error } = useLive("items", api.items);
   const { data: formats } = useLive("formats", api.formats);
   const [showArchived, setShowArchived] = useState(false);
@@ -35,7 +37,7 @@ export function Board() {
   if (error) {
     return (
       <div className="px-6 pt-6">
-        <ErrorAlert title="Could not load the board" message={error} />
+        <ErrorAlert title={t.board.loadError} message={error} />
       </div>
     );
   }
@@ -44,7 +46,7 @@ export function Board() {
   const usedFormats = [...new Set(items?.flatMap((i) => (i.format ? [i.format] : [])))];
 
   const formatItems = [
-    { value: null, label: "All formats" },
+    { value: null, label: t.board.allFormats },
     ...usedFormats.map((id) => ({ value: id, label: formatTitle(id) })),
   ];
 
@@ -55,18 +57,16 @@ export function Board() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">Board</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t.board.title}</h1>
           {items ? (
-            <span className="text-sm text-muted-foreground">
-              {items.length} {items.length === 1 ? "item" : "items"}
-            </span>
+            <span className="text-sm text-muted-foreground">{t.board.count(items.length)}</span>
           ) : null}
         </div>
         {items?.length ? (
           <div className="flex items-center gap-2">
             {usedFormats.length > 0 ? (
               <Select items={formatItems} value={format} onValueChange={setFormat}>
-                <SelectTrigger aria-label="Filter by format" className="w-44">
+                <SelectTrigger aria-label={t.board.filterByFormat} className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
@@ -80,7 +80,7 @@ export function Board() {
             ) : null}
             <Toggle variant="outline" pressed={showArchived} onPressedChange={setShowArchived}>
               <ArchiveIcon data-icon="inline-start" />
-              Archived
+              {t.board.archived}
             </Toggle>
             <NewItemDialog formats={formats} />
           </div>
@@ -95,10 +95,8 @@ export function Board() {
               <EmptyMedia variant="icon">
                 <ClapperboardIcon />
               </EmptyMedia>
-              <EmptyTitle>Create your first video — the agent will make it</EmptyTitle>
-              <EmptyDescription>
-                Give it a title and pick a format. You review the result here and ask for changes.
-              </EmptyDescription>
+              <EmptyTitle>{t.board.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.board.emptyBody}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <NewItemDialog formats={formats} />
@@ -115,17 +113,17 @@ export function Board() {
             return (
               <section
                 key={status}
-                aria-label={status}
+                aria-label={t.status[status]}
                 className="flex w-72 shrink-0 flex-col gap-3 rounded-3xl bg-muted/40 p-3"
               >
-                <h2 className="flex items-center justify-between px-1 text-sm font-medium capitalize">
-                  {status}
+                <h2 className="flex items-center justify-between px-1 text-sm font-medium">
+                  {t.status[status]}
                   <Badge variant="secondary">{cards.length}</Badge>
                 </h2>
                 <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
                   {cards.length === 0 ? (
                     <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                      Nothing here
+                      {t.board.emptyColumn}
                     </p>
                   ) : null}
                   {cards.map((item) => (
@@ -199,6 +197,9 @@ function ItemCard({
   item: ItemSummary;
   formatTitle: (id: string) => string;
 }) {
+  const t = useMessages();
+  const locale = useLocale();
+
   const next = item.schedule
     .filter((s) => s.status !== "cancelled")
     .toSorted((a, b) => a.at.localeCompare(b.at))[0];
@@ -225,15 +226,12 @@ function ItemCard({
                 {item.openFeedback > 0 ? (
                   <Badge variant="destructive">
                     <MessageSquareIcon data-icon="inline-start" />
-                    {item.openFeedback} open
+                    {t.board.openFeedback(item.openFeedback)}
                   </Badge>
                 ) : null}
                 {item.legacy ? (
-                  <Badge
-                    variant="outline"
-                    title="Folder without item.yaml; status derived from STATUS.md"
-                  >
-                    legacy
+                  <Badge variant="outline" title={t.board.legacyHint}>
+                    {t.board.legacy}
                   </Badge>
                 ) : null}
               </div>
@@ -241,7 +239,7 @@ function ItemCard({
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <CalendarIcon className="size-3 shrink-0" />
                   <span className="truncate">
-                    {new Date(next.at).toLocaleDateString(undefined, {
+                    {new Date(next.at).toLocaleDateString(locale, {
                       month: "short",
                       day: "numeric",
                     })}{" "}

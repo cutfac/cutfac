@@ -6,6 +6,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
@@ -38,13 +39,14 @@ interface TransportProps {
 export function Transport({ player, target, loop, onLoop, onIn, onOut, onClear }: TransportProps) {
   const paused = usePlayer(player, (state) => state.paused);
   const empty = isEmptyTarget(target);
+  const t = useMessages();
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Hint label={paused ? "Play" : "Pause"} keys="Space">
+      <Hint label={paused ? t.transport.play : t.transport.pause} keys="Space">
         <Button
           size="icon"
-          aria-label={paused ? "Play" : "Pause"}
+          aria-label={paused ? t.transport.play : t.transport.pause}
           onMouseDown={keepFocus}
           onClick={() => player.toggle()}
         >
@@ -53,21 +55,21 @@ export function Transport({ player, target, loop, onLoop, onIn, onOut, onClear }
       </Hint>
       <Clock player={player} />
       <div className="mx-1 h-5 w-px bg-border" />
-      <Hint label="Start the selection at the playhead" keys="I">
+      <Hint label={t.transport.inHint} keys="I">
         <Button variant="outline" size="sm" onMouseDown={keepFocus} onClick={onIn}>
-          In
+          {t.transport.in}
         </Button>
       </Hint>
-      <Hint label="End the selection at the playhead" keys="O">
+      <Hint label={t.transport.outHint} keys="O">
         <Button variant="outline" size="sm" onMouseDown={keepFocus} onClick={onOut}>
-          Out
+          {t.transport.out}
         </Button>
       </Hint>
-      <Hint label="Play the selection over and over" keys="L">
+      <Hint label={t.transport.loopHint} keys="L">
         <Toggle
           size="sm"
           variant="outline"
-          aria-label="Loop the selection"
+          aria-label={t.transport.loop}
           pressed={loop}
           disabled={!hasRange(target) || target.end === undefined}
           onMouseDown={keepFocus}
@@ -77,16 +79,14 @@ export function Transport({ player, target, loop, onLoop, onIn, onOut, onClear }
         </Toggle>
       </Hint>
       {empty ? (
-        <p className="ml-auto text-xs text-muted-foreground">
-          Drag on the timeline to select a part · drag on the video to mark an area
-        </p>
+        <p className="ml-auto text-xs text-muted-foreground">{t.transport.hint}</p>
       ) : (
         <div className="ml-auto flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
-          {describeTarget(target)}
-          <Hint label="Clear the selection" keys="Esc">
+          {describeTarget(target, t.target.boxAt)}
+          <Hint label={t.transport.clear} keys="Esc">
             <button
               type="button"
-              aria-label="Clear the selection"
+              aria-label={t.transport.clear}
               className="rounded-md p-1 hover:bg-foreground/10"
               onMouseDown={keepFocus}
               onClick={onClear}

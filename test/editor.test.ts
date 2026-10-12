@@ -15,6 +15,8 @@ import {
 
 const BOX = { x: 0.1, y: 0.2, w: 0.3, h: 0.4, at: 4 };
 
+const boxAt = (time: string) => `box at ${time}`;
+
 describe("edit target", () => {
   test("a range is ordered and rounded to a tenth of a second", () => {
     expect(withRange(NO_TARGET, 5.04, 3.16)).toEqual({ start: 3.2, end: 5 });
@@ -44,10 +46,12 @@ describe("edit target", () => {
   });
 
   test("describes what a request points at", () => {
-    expect(describeTarget({ start: 3.2, end: 5 })).toBe("0:03.2–0:05.0");
-    expect(describeTarget({ start: 63 })).toBe("1:03.0");
-    expect(describeTarget({ start: 1, end: 2, region: BOX })).toBe("0:01.0–0:02.0 · box at 0:04.0");
-    expect(describeTarget(NO_TARGET)).toBe("");
+    expect(describeTarget({ start: 3.2, end: 5 }, boxAt)).toBe("0:03.2–0:05.0");
+    expect(describeTarget({ start: 63 }, boxAt)).toBe("1:03.0");
+    expect(describeTarget({ start: 1, end: 2, region: BOX }, boxAt)).toBe(
+      "0:01.0–0:02.0 · box at 0:04.0",
+    );
+    expect(describeTarget(NO_TARGET, boxAt)).toBe("");
   });
 
   test("reads the target back from a saved request", () => {

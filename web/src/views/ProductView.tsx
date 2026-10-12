@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { api, fileUrl } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
+import { useMessages } from "../i18n/index.ts";
 import { ImportForm } from "./Setup.tsx";
 
 function Section({
@@ -47,19 +48,20 @@ function MediaStrip({ children }: { children: ReactNode }) {
 const MEDIA_CLASS = "h-64 w-auto shrink-0 rounded-2xl border bg-muted object-contain";
 
 export function ProductView() {
+  const t = useMessages();
   const { data: ws, error } = useLive("workspace", api.workspace);
 
   if (error) {
     return (
-      <Page title="Product" width="narrow">
-        <ErrorAlert title="Could not load the product" message={error} />
+      <Page title={t.product.title} width="narrow">
+        <ErrorAlert title={t.product.loadError} message={error} />
       </Page>
     );
   }
 
   if (ws === undefined) {
     return (
-      <Page title="Product" width="narrow">
+      <Page title={t.product.title} width="narrow">
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-72 w-full" />
@@ -72,19 +74,19 @@ export function ProductView() {
   const storeImages = ws.product.store.filter((m) => m.kind === "image");
 
   return (
-    <Page width="narrow" title={product?.name ?? "Product"} description={product?.oneLiner}>
+    <Page width="narrow" title={product?.name ?? t.product.title} description={product?.oneLiner}>
       {product ? (
-        <Section title="About">
+        <Section title={t.product.about}>
           <div className="flex flex-col gap-4 text-sm">
             <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
-              <dt className="text-muted-foreground">Audience</dt>
+              <dt className="text-muted-foreground">{t.product.audience}</dt>
               <dd>{product.audience}</dd>
-              <dt className="text-muted-foreground">Default CTA</dt>
+              <dt className="text-muted-foreground">{t.product.cta}</dt>
               <dd>{product.cta.default}</dd>
             </dl>
             {product.rules.length > 0 ? (
               <div className="flex flex-col gap-2">
-                <h2 className="font-medium">Rules</h2>
+                <h2 className="font-medium">{t.product.rules}</h2>
                 <ul className="list-disc pl-5 text-muted-foreground">
                   {product.rules.map((r) => (
                     <li key={r}>{r}</li>
@@ -97,23 +99,19 @@ export function ProductView() {
       ) : (
         <Alert>
           <InfoIcon />
-          <AlertTitle>No product details yet</AlertTitle>
+          <AlertTitle>{t.product.missingTitle}</AlertTitle>
           <AlertDescription>
-            Import them from a link below, or fill in <code>product/product.yaml</code>. Every agent
-            run reads it.
+            {t.product.missingBody(<code>product/product.yaml</code>)}
           </AlertDescription>
         </Alert>
       )}
 
-      <Section
-        title="Import from a link"
-        description="Fills empty fields and refreshes store screenshots. Your edits to product.yaml are kept."
-      >
+      <Section title={t.product.importTitle} description={t.product.importBody}>
         <ImportForm />
       </Section>
 
       {storeImages.length > 0 ? (
-        <Section title="Store listing">
+        <Section title={t.product.store}>
           <MediaStrip>
             {storeImages.map((m) => (
               <img
@@ -128,7 +126,7 @@ export function ProductView() {
         </Section>
       ) : null}
 
-      <Section title="App captures">
+      <Section title={t.product.captures}>
         {ws.product.captures.length > 0 ? (
           <MediaStrip>
             {ws.product.captures.map((m) =>
@@ -153,13 +151,12 @@ export function ProductView() {
           </MediaStrip>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Add reviewed screenshots or screen recordings to <code>product/captures/</code>. Agents
-            use them in the videos.
+            {t.product.capturesEmpty(<code>product/captures/</code>)}
           </p>
         )}
       </Section>
 
-      <Section title="Formats" description="The reusable recipes your agent makes videos from.">
+      <Section title={t.product.formats} description={t.product.formatsBody}>
         {ws.formats.length > 0 ? (
           <ItemGroup>
             {ws.formats.map((f) => (
@@ -188,11 +185,11 @@ export function ProductView() {
           </ItemGroup>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No formats yet.{" "}
-            <a href={href("references")} className="underline underline-offset-4">
-              Analyze a reference
-            </a>{" "}
-            and ask your agent to save one.
+            {t.product.formatsEmpty((text) => (
+              <a href={href("references")} className="underline underline-offset-4">
+                {text}
+              </a>
+            ))}
           </p>
         )}
       </Section>

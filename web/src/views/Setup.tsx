@@ -20,15 +20,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
-import { api, type AgentChoice, type AgentStatus } from "../api.ts";
+import { api, type AgentStatus } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
-
-const AGENT_LABEL: Record<AgentChoice, string> = {
-  claude: "Claude Code",
-  codex: "Codex",
-  queue: "Copy-paste queue",
-};
+import { useMessages } from "../i18n/index.ts";
 
 const markerVariants = cva(
   "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
@@ -59,6 +54,8 @@ function Step({
   description: string;
   children: ReactNode;
 }) {
+  const t = useMessages();
+
   return (
     <Card>
       <CardHeader>
@@ -68,7 +65,7 @@ function Step({
               {state === "done" ? <CheckIcon className="size-3.5" /> : n}
             </span>
             {title}
-            {state === "done" ? <span className="sr-only">(done)</span> : null}
+            {state === "done" ? <span className="sr-only">{t.setup.done}</span> : null}
           </span>
         </CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -82,6 +79,7 @@ function Step({
 
 /** First-run onboarding: connect an agent, then point the factory at the app. */
 export function Setup() {
+  const t = useMessages();
   const { data: agents, error: agentsError, reload } = useLive("agents", api.agents);
   const { data: ws } = useLive("workspace", api.workspace);
   const connected = agents?.some((a) => a.connected) ?? false;
@@ -89,19 +87,15 @@ export function Setup() {
   const hasProduct = Boolean(product && product.name !== "My App");
 
   return (
-    <Page
-      width="narrow"
-      title="Set up"
-      description="Two quick steps, then your agent can start making videos for your app."
-    >
+    <Page width="narrow" title={t.setup.title} description={t.setup.description}>
       <Step
         n={1}
         state={connected ? "done" : "current"}
-        title="Connect your agent"
-        description="Your agent does the production and editing. The factory gives it tools, files, and your feedback."
+        title={t.setup.connectTitle}
+        description={t.setup.connectBody}
       >
         {agentsError ? (
-          <ErrorAlert title="Could not check for installed agents" message={agentsError} />
+          <ErrorAlert title={t.setup.agentsError} message={agentsError} />
         ) : agents === undefined ? (
           <div className="flex flex-col gap-2" aria-busy="true">
             <Skeleton className="h-16 w-full" />
@@ -119,8 +113,8 @@ export function Setup() {
       <Step
         n={2}
         state={hasProduct ? "done" : connected ? "current" : "todo"}
-        title="Tell it about your app"
-        description="Paste an App Store, Google Play, or website link. Store links on your site are followed."
+        title={t.setup.productTitle}
+        description={t.setup.productBody}
       >
         <ImportForm />
         {hasProduct && product ? (
@@ -134,7 +128,7 @@ export function Setup() {
                 href={href("product")}
                 className={buttonVariants({ variant: "outline", size: "sm" })}
               >
-                Review
+                {t.setup.review}
               </a>
             </ItemActions>
           </Item>
@@ -144,24 +138,21 @@ export function Setup() {
       {connected && hasProduct ? (
         <Alert>
           <CheckCircle2Icon />
-          <AlertTitle>You're set</AlertTitle>
+          <AlertTitle>{t.setup.readyTitle}</AlertTitle>
           <AlertDescription>
-            Ask your agent to find a reference and make the first video, then review it on the{" "}
-            <a href={href("board")} className="underline underline-offset-4">
-              board
-            </a>
-            .
+            {t.setup.readyBody((text) => (
+              <a href={href("board")} className="underline underline-offset-4">
+                {text}
+              </a>
+            ))}
           </AlertDescription>
         </Alert>
       ) : null}
 
       <Card size="sm">
         <CardHeader>
-          <CardTitle>Your workspace</CardTitle>
-          <CardDescription>
-            Everything the factory makes is a plain file in this folder. You can back it up or put
-            it in git.
-          </CardDescription>
+          <CardTitle>{t.setup.workspaceTitle}</CardTitle>
+          <CardDescription>{t.setup.workspaceBody}</CardDescription>
         </CardHeader>
         <CardContent>
           {ws === undefined ? (
@@ -169,13 +160,13 @@ export function Setup() {
           ) : (
             <div className="flex flex-col gap-4">
               <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Name</dt>
+                <dt className="text-muted-foreground">{t.setup.name}</dt>
                 <dd>{ws.name}</dd>
-                <dt className="text-muted-foreground">Folder</dt>
+                <dt className="text-muted-foreground">{t.setup.folder}</dt>
                 <dd className="font-mono text-xs break-all">{ws.root}</dd>
-                <dt className="text-muted-foreground">Timezone</dt>
+                <dt className="text-muted-foreground">{t.setup.timezone}</dt>
                 <dd>{ws.config.timezone}</dd>
-                <dt className="text-muted-foreground">Platforms</dt>
+                <dt className="text-muted-foreground">{t.setup.platforms}</dt>
                 <dd className="flex flex-wrap gap-1">
                   {ws.config.platforms.map((p) => (
                     <Badge key={p} variant="secondary">
@@ -183,8 +174,8 @@ export function Setup() {
                     </Badge>
                   ))}
                 </dd>
-                <dt className="text-muted-foreground">Default agent</dt>
-                <dd>{AGENT_LABEL[ws.config.agent.default]}</dd>
+                <dt className="text-muted-foreground">{t.setup.defaultAgent}</dt>
+                <dd>{t.setup.agents[ws.config.agent.default]}</dd>
               </dl>
               {desktop ? (
                 <div>
@@ -198,7 +189,7 @@ export function Setup() {
                     }
                   >
                     <FolderOpenIcon data-icon="inline-start" />
-                    Show folder
+                    {t.setup.showFolder}
                   </Button>
                 </div>
               ) : null}
@@ -213,7 +204,8 @@ export function Setup() {
 function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ ok: boolean; detail: string }>();
-  const label = AGENT_LABEL[status.agent];
+  const t = useMessages();
+  const label = t.setup.agents[status.agent];
 
   const connect = () => {
     setBusy(true);
@@ -223,13 +215,13 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
       .then((result) => {
         setOutcome(result);
 
-        if (result.ok) toast.success(`${label} is connected`);
-        else toast.error(`Could not connect ${label}`);
+        if (result.ok) toast.success(t.setup.connected(label));
+        else toast.error(t.setup.connectFailed(label));
         onChange();
       })
       .catch((cause: Error) => {
         setOutcome({ ok: false, detail: cause.message });
-        toast.error(`Could not connect ${label}`);
+        toast.error(t.setup.connectFailed(label));
       })
       .finally(() => setBusy(false));
   };
@@ -240,10 +232,10 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
         <ItemTitle>{label}</ItemTitle>
         <ItemDescription>
           {status.connected
-            ? "Ready. It can use the factory's tools."
+            ? t.setup.agentReady
             : status.installed
-              ? "Found on this computer. Connect it so it can use the factory's tools."
-              : "Not installed on this computer."}
+              ? t.setup.agentFound
+              : t.setup.agentMissing}
         </ItemDescription>
         {outcome ? (
           <p className={`text-xs ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}>
@@ -255,15 +247,15 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
         {status.connected ? (
           <Badge variant="secondary">
             <CheckIcon />
-            Connected
+            {t.setup.connectedBadge}
           </Badge>
         ) : status.installed ? (
           <Button disabled={busy} onClick={connect}>
             {busy ? <Spinner data-icon="inline-start" /> : null}
-            {busy ? "Connecting…" : "Connect"}
+            {busy ? t.setup.connecting : t.setup.connect}
           </Button>
         ) : (
-          <Badge variant="outline">Not installed</Badge>
+          <Badge variant="outline">{t.setup.notInstalled}</Badge>
         )}
       </ItemActions>
     </Item>
@@ -271,6 +263,7 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
 }
 
 export function ImportForm() {
+  const t = useMessages();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -288,7 +281,7 @@ export function ImportForm() {
       .then((result) => {
         setWarnings(result.warnings);
         setUrl("");
-        toast.success("Imported your app's details");
+        toast.success(t.importForm.imported);
       })
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setBusy(false));
@@ -307,20 +300,20 @@ export function ImportForm() {
           type="url"
           value={url}
           disabled={busy}
-          aria-label="App link"
+          aria-label={t.importForm.link}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://apps.apple.com/… or https://yourapp.com"
+          placeholder={t.importForm.placeholder}
         />
         <Button type="submit" disabled={busy || !url.trim()}>
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          {busy ? "Reading…" : "Import"}
+          {busy ? t.importForm.reading : t.importForm.submit}
         </Button>
       </div>
-      {error ? <ErrorAlert title="Could not import that link" message={error} /> : null}
+      {error ? <ErrorAlert title={t.importForm.error} message={error} /> : null}
       {warnings.length > 0 ? (
         <Alert>
           <TriangleAlertIcon />
-          <AlertTitle>Imported, with notes</AlertTitle>
+          <AlertTitle>{t.importForm.warnings}</AlertTitle>
           <AlertDescription>
             <ul className="list-disc pl-4">
               {warnings.map((w) => (

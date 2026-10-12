@@ -26,54 +26,22 @@ import {
   type ItemDetail,
   type Media,
 } from "../../api.ts";
+import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 
-const AGENT_LABELS: Record<AgentChoice, string> = {
-  claude: "Claude",
-  codex: "Codex",
-  queue: "Copy prompt",
-};
+/** What the request points at, which picks the starting points and the placeholder. */
+function scopeOf(target: Target, media: Media | undefined) {
+  if (media === undefined) return "new";
 
-/** Starting points for the common edits, so the first request is one click and a tweak away. */
-const RANGE_IDEAS = [
-  "Cut this part",
-  "Speed this part up",
-  "Add a caption here",
-  "Make this brighter",
-];
+  if (target.region !== undefined) return "box";
 
-const BOX_IDEAS = ["Zoom in on the box", "Blur this area", "Point an arrow here"];
+  if (hasRange(target)) return "range";
 
-const WHOLE_IDEAS = [
-  "Tighten the pacing",
-  "Add captions for the speech",
-  "Make the first second grab attention",
-];
-
-const NEW_IDEAS = [
-  "Make a 15-second vertical video from the product captures",
-  "Make a short teaser from the reference",
-];
-
-function ideasFor(target: Target, media: Media | undefined): ReadonlyArray<string> {
-  if (media === undefined) return NEW_IDEAS;
-
-  if (target.region !== undefined) return BOX_IDEAS;
-
-  if (hasRange(target)) return RANGE_IDEAS;
-
-  return WHOLE_IDEAS;
+  return "whole";
 }
 
-function placeholderFor(target: Target, media: Media | undefined): string {
-  if (media === undefined) return "Describe the video you want…";
-
-  if (target.region !== undefined) return "What should change in the box?";
-
-  if (hasRange(target)) return "What should change in this part?";
-
-  return "What should change? Select a part first to be precise.";
-}
+const agentLabel = (agent: AgentChoice, t: Messages) =>
+  ({ claude: "Claude", codex: "Codex", queue: t.composer.queue })[agent];
 
 /** The agent to send to: the workspace default if it is installed, else one that is. */
 export function preferredAgent(
@@ -90,20 +58,20 @@ export function preferredAgent(
   return statuses.find((status) => status.installed)?.agent ?? "queue";
 }
 
-const PROMPT_COPIED = "Prompt copied. Paste it into Claude Code or Codex in this workspace.";
-
 /** Copy an agent prompt; if the browser refuses, offer a button to try again from a click. */
 export function copyPrompt(prompt: string) {
+  const t = messages();
+
   navigator.clipboard.writeText(prompt).then(
-    () => toast.success(PROMPT_COPIED),
+    () => toast.success(t.composer.promptCopied),
     () =>
-      toast("The prompt is ready to copy", {
+      toast(t.composer.promptReady, {
         action: {
-          label: "Copy",
+          label: t.common.copy,
           onClick: () => {
             navigator.clipboard.writeText(prompt).then(
-              () => toast.success(PROMPT_COPIED),
-              (cause: Error) => toast.error(`Could not copy: ${cause.message}`),
+              () => toast.success(t.composer.promptCopied),
+              (cause: Error) => toast.error(t.common.couldNotCopy(cause.message)),
             );
           },
         },
@@ -162,6 +130,8 @@ export function Composer({
   const agent = chosen ?? preferredAgent(defaultAgent, statuses);
   const empty = isEmptyTarget(target);
   const text = body.trim();
+  const t = useMessages();
+  const scope = scopeOf(target, media);
 
   async function send() {
     if (text === "" || sending) return;
@@ -198,7 +168,7 @@ export function Composer({
 
   const agentItems = (["claude", "codex", "queue"] as const).map((value) => ({
     value,
-    label: AGENT_LABELS[value],
+    label: agentLabel(value, t),
     disabled:
       value !== "queue" &&
       statuses !== undefined &&
@@ -208,7 +178,7 @@ export function Composer({
   return (
     <div className="flex flex-col gap-2 border-t p-3">
       <div className="flex flex-wrap gap-1.5">
-        {ideasFor(target, media).map((idea) => (
+        {t.composer.ideas[scope].map((idea) => (
           <Button
             key={idea}
             variant="outline"
@@ -227,14 +197,14 @@ export function Composer({
           {empty ? (
             <InputGroupText>
               <CrosshairIcon />
-              {media === undefined ? "New media" : "Whole video"}
+              {media === undefined ? t.chat.newMedia : t.composer.wholeVideo}
             </InputGroupText>
           ) : (
             <span className="flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
-              {describeTarget(target)}
+              {describeTarget(target, t.target.boxAt)}
               <InputGroupButton
                 size="icon-xs"
-                aria-label="Clear the selection"
+                aria-label={t.composer.clear}
                 onClick={onClearTarget}
               >
                 <XIcon />
@@ -246,8 +216,8 @@ export function Composer({
           ref={inputRef}
           value={body}
           rows={2}
-          placeholder={placeholderFor(target, media)}
-          aria-label="Edit request"
+          placeholder={t.composer.placeholder[scope]}
+          aria-label={t.composer.request}
           onChange={(event) => setBody(event.target.value)}
           onKeyDown={onKeyDown}
         />
@@ -259,7 +229,7 @@ export function Composer({
               if (value !== null) setChosen(value);
             }}
           >
-            <SelectTrigger size="sm" aria-label="Agent to send to">
+            <SelectTrigger size="sm" aria-label={t.composer.agent}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
@@ -275,7 +245,7 @@ export function Composer({
               variant="secondary"
               size="icon-sm"
               className="ml-auto"
-              aria-label="Stop the agent"
+              aria-label={t.composer.stop}
               onClick={onStop}
             >
               <SquareIcon />
@@ -285,7 +255,7 @@ export function Composer({
               variant="default"
               size="icon-sm"
               className="ml-auto"
-              aria-label="Send (Enter)"
+              aria-label={t.composer.send}
               disabled={text === "" || sending}
               onClick={() => void send()}
             >

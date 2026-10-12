@@ -28,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { api, type Format, type NewItem } from "../api.ts";
 import { href } from "../hooks.ts";
+import { useMessages } from "../i18n/index.ts";
 
 const isMedia = (file: File) => file.type.startsWith("video/") || file.type.startsWith("image/");
 
@@ -41,6 +42,7 @@ interface NewItemDialogProps {
 
 /** Create an item from a title, an optional format, and optionally a clip to start from. */
 export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
+  const t = useMessages();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [format, setFormat] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
     if (!candidate) return;
 
     if (isMedia(candidate)) setFile(candidate);
-    else toast.error("Choose a video or an image file.");
+    else toast.error(t.newItem.notMedia);
   }
 
   function onDrop(event: DragEvent) {
@@ -79,9 +81,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
       // The item exists either way, so a failed upload shouldn't strand the user here.
       await api
         .uploadMedia(item.id, file)
-        .catch((cause: Error) =>
-          toast.error(`Item created, but the upload failed: ${cause.message}`),
-        );
+        .catch((cause: Error) => toast.error(t.newItem.uploadFailed(cause.message)));
     }
 
     location.hash = href("item", item.id);
@@ -100,7 +100,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
   }
 
   const formatItems = [
-    { value: null, label: "No format" },
+    { value: null, label: t.newItem.noFormat },
     ...(formats ?? []).map((f) => ({ value: f.id, label: f.doc.title })),
   ];
 
@@ -113,7 +113,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
           trigger ?? (
             <Button size="lg">
               <PlusIcon data-icon="inline-start" />
-              New item
+              {t.newItem.open}
             </Button>
           )
         }
@@ -127,30 +127,27 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
         onDrop={onDrop}
       >
         <DialogHeader>
-          <DialogTitle>New item</DialogTitle>
-          <DialogDescription>
-            Name the video and the agent takes it from there. Add a clip if you already have
-            footage.
-          </DialogDescription>
+          <DialogTitle>{t.newItem.title}</DialogTitle>
+          <DialogDescription>{t.newItem.description}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-6">
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="new-item-title">Title</FieldLabel>
+              <FieldLabel htmlFor="new-item-title">{t.newItem.titleLabel}</FieldLabel>
               <Input
                 id="new-item-title"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="What is the video about?"
+                placeholder={t.newItem.titlePlaceholder}
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="new-item-format">Format</FieldLabel>
+              <FieldLabel htmlFor="new-item-format">{t.newItem.format}</FieldLabel>
               {formats ? (
                 <Select items={formatItems} value={format} onValueChange={setFormat}>
                   <SelectTrigger id="new-item-format" className="w-full">
-                    <SelectValue placeholder="Optional" />
+                    <SelectValue placeholder={t.newItem.optional} />
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     {formatItems.map((f) => (
@@ -163,12 +160,10 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
               ) : (
                 <Skeleton className="h-8 w-full" />
               )}
-              <FieldDescription>
-                A format gives the agent a proven structure to follow.
-              </FieldDescription>
+              <FieldDescription>{t.newItem.formatHint}</FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="new-item-file">Video or image</FieldLabel>
+              <FieldLabel htmlFor="new-item-file">{t.newItem.file}</FieldLabel>
               {file ? (
                 <div className="flex items-center gap-3 rounded-2xl border bg-muted/50 p-3 text-sm">
                   <FileIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -178,7 +173,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Remove file"
+                    aria-label={t.newItem.removeFile}
                     onClick={() => setFile(undefined)}
                   >
                     <XIcon />
@@ -189,7 +184,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
                   className={`flex cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/30 ${dragging ? "border-ring bg-muted/50" : ""}`}
                 >
                   <UploadIcon className="size-5" />
-                  <span>Drop a file here, or click to browse</span>
+                  <span>{t.newItem.drop}</span>
                   <input
                     id="new-item-file"
                     type="file"
@@ -204,12 +199,14 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
               )}
             </Field>
           </FieldGroup>
-          {error ? <ErrorAlert title="Could not create the item" message={error} /> : null}
+          {error ? <ErrorAlert title={t.newItem.createError} message={error} /> : null}
           <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              {t.common.cancel}
+            </DialogClose>
             <Button type="submit" disabled={!title.trim() || busy}>
               {busy ? <Spinner data-icon="inline-start" /> : null}
-              {busy ? (file ? "Uploading…" : "Creating…") : "Create item"}
+              {busy ? (file ? t.newItem.uploading : t.newItem.creating) : t.newItem.create}
             </Button>
           </DialogFooter>
         </form>

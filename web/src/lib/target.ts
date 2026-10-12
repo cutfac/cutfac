@@ -26,8 +26,8 @@ export const isEmptyTarget = (target: Target) =>
 
 export const hasRange = (target: Target) => target.start !== undefined;
 
-/** `0:03.2–0:05.0 · box at 0:04.0` */
-export function describeTarget(target: Target): string {
+/** `0:03.2–0:05.0 · box at 0:04.0`, with `boxAt` wording the box part in the board's language. */
+export function describeTarget(target: Target, boxAt: (time: string) => string): string {
   const parts: string[] = [];
 
   if (target.start !== undefined) {
@@ -38,7 +38,7 @@ export function describeTarget(target: Target): string {
     );
   }
 
-  if (target.region !== undefined) parts.push(`box at ${formatTime(target.region.at)}`);
+  if (target.region !== undefined) parts.push(boxAt(formatTime(target.region.at)));
 
   return parts.join(" · ");
 }

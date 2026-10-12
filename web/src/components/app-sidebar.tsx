@@ -5,6 +5,7 @@ import {
   ClapperboardIcon,
   FactoryIcon,
   FolderOpenIcon,
+  LanguagesIcon,
   LibraryIcon,
   MessageSquareIcon,
   PackageIcon,
@@ -20,6 +21,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -41,47 +44,26 @@ import {
 import { api, type ItemSummary, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
+import {
+  isLocale,
+  LOCALE_NAMES,
+  LOCALES,
+  setLocale,
+  useLocale,
+  useMessages,
+} from "../i18n/index.ts";
 import { feedbackUrl } from "../lib/feedback.ts";
 
-/** Every piece of sidebar copy lives here, so translating the app means editing one place. */
-export const NAV_LABELS = {
-  appName: "Content Factory",
-  openWorkspace: "Open workspace…",
-  newVideo: "New video",
-  board: "Board",
-  references: "References",
-  calendar: "Calendar",
-  product: "Product",
-  setup: "Setup",
-  sendFeedback: "Send feedback",
-  videos: "Videos",
-  allVideos: "All videos",
-  toggle: "Toggle sidebar",
-  openFeedback: (count: number) => `${count} open feedback`,
-  videoTitle: (item: ItemSummary) =>
-    item.openFeedback > 0
-      ? `${item.title} (${item.status}, ${item.openFeedback} open feedback)`
-      : `${item.title} (${item.status})`,
-} as const;
-
-/** Undefined unless the build names a feedback form, so forks don't send feedback to ours. */
-const FEEDBACK_URL = feedbackUrl(import.meta.env.VITE_FEEDBACK_FORM_ID, {
-  version: import.meta.env.APP_VERSION,
-  locale: navigator.language,
-  platform: desktop?.platform ?? "web",
-});
-
 interface MainNavItem {
-  view: string;
-  label: string;
+  view: "board" | "references" | "calendar" | "product";
   icon: LucideIcon;
 }
 
 const MAIN_NAV: ReadonlyArray<MainNavItem> = [
-  { view: "board", label: NAV_LABELS.board, icon: ClapperboardIcon },
-  { view: "references", label: NAV_LABELS.references, icon: LibraryIcon },
-  { view: "calendar", label: NAV_LABELS.calendar, icon: CalendarDaysIcon },
-  { view: "product", label: NAV_LABELS.product, icon: PackageIcon },
+  { view: "board", icon: ClapperboardIcon },
+  { view: "references", icon: LibraryIcon },
+  { view: "calendar", icon: CalendarDaysIcon },
+  { view: "product", icon: PackageIcon },
 ];
 
 /** How many videos the sidebar lists before pointing at the board. */
@@ -148,6 +130,7 @@ interface LinkRowProps {
 
 /** One sidebar row that navigates; the narrow-screen sheet closes behind it. */
 function LinkRow({ to, active, tooltip, title, badge, children }: LinkRowProps) {
+  const t = useMessages();
   const { setOpenMobile } = useSidebar();
 
   return (
@@ -168,14 +151,15 @@ function LinkRow({ to, active, tooltip, title, badge, children }: LinkRowProps) 
         {children}
       </SidebarMenuButton>
       {badge ? (
-        <SidebarMenuBadge aria-label={NAV_LABELS.openFeedback(badge)}>{badge}</SidebarMenuBadge>
+        <SidebarMenuBadge aria-label={t.nav.openFeedback(badge)}>{badge}</SidebarMenuBadge>
       ) : null}
     </SidebarMenuItem>
   );
 }
 
 function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
-  const name = ws?.name ?? NAV_LABELS.appName;
+  const t = useMessages();
+  const name = ws?.name ?? t.nav.appName;
 
   const content = (
     <>
@@ -186,7 +170,7 @@ function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
         <span title={ws?.root} className="truncate font-semibold">
           {name}
         </span>
-        <span className="truncate text-xs text-muted-foreground">{NAV_LABELS.appName}</span>
+        <span className="truncate text-xs text-muted-foreground">{t.nav.appName}</span>
       </div>
     </>
   );
@@ -215,10 +199,43 @@ function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
       <DropdownMenuContent side="bottom" align="start" className="min-w-56">
         <DropdownMenuItem onClick={openWorkspace}>
           <FolderOpenIcon />
-          {NAV_LABELS.openWorkspace}
+          {t.nav.openWorkspace}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function LanguageMenu() {
+  const t = useMessages();
+  const locale = useLocale();
+
+  return (
+    <SidebarMenuItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<SidebarMenuButton tooltip={t.language.label} />}>
+          <LanguagesIcon />
+          <span>
+            <span className="sr-only">{t.language.label}: </span>
+            {LOCALE_NAMES[locale]}
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="min-w-40">
+          <DropdownMenuRadioGroup
+            value={locale}
+            onValueChange={(value) => {
+              if (isLocale(value)) setLocale(value);
+            }}
+          >
+            {LOCALES.map((option) => (
+              <DropdownMenuRadioItem key={option} value={option} lang={option}>
+                {LOCALE_NAMES[option]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
   );
 }
 
@@ -230,6 +247,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ ws, view, id }: AppSidebarProps) {
+  const t = useMessages();
+  const locale = useLocale();
   const { data: items } = useLive("items", api.items);
   const videos = sidebarVideos(items ?? []);
   const editing = view === "item" && id ? id : undefined;
@@ -237,6 +256,13 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
   // An open video that is not listed leaves Board lit, as the board is where it lives.
   const boardActive =
     view === "board" || (editing !== undefined && !videos.some((v) => v.id === editing));
+
+  // Undefined unless the build names a feedback form, so forks don't send feedback to ours.
+  const feedbackLink = feedbackUrl(import.meta.env.VITE_FEEDBACK_FORM_ID, {
+    version: import.meta.env.APP_VERSION,
+    locale,
+    platform: desktop?.platform ?? "web",
+  });
 
   return (
     <Sidebar collapsible="icon">
@@ -249,9 +275,9 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
             <NewItemDialog
               formats={ws?.formats}
               trigger={
-                <SidebarMenuButton tooltip={NAV_LABELS.newVideo}>
+                <SidebarMenuButton tooltip={t.nav.newVideo}>
                   <PlusIcon />
-                  <span>{NAV_LABELS.newVideo}</span>
+                  <span>{t.nav.newVideo}</span>
                 </SidebarMenuButton>
               }
             />
@@ -261,17 +287,17 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu aria-label="Main">
-              {MAIN_NAV.map(({ view: target, label, icon: Icon }) => (
+            <SidebarMenu aria-label={t.nav.main}>
+              {MAIN_NAV.map(({ view: target, icon: Icon }) => (
                 <LinkRow
                   key={target}
                   to={href(target)}
                   active={target === "board" ? boardActive : view === target}
-                  tooltip={label}
+                  tooltip={t.nav[target]}
                   badge={target === "board" ? ws?.openFeedback : undefined}
                 >
                   <Icon />
-                  <span>{label}</span>
+                  <span>{t.nav[target]}</span>
                 </LinkRow>
               ))}
             </SidebarMenu>
@@ -279,7 +305,7 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
         </SidebarGroup>
         {videos.length > 0 ? (
           <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-            <SidebarGroupLabel>{NAV_LABELS.videos}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t.nav.videos}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {videos.map((video) => (
@@ -287,16 +313,20 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
                     key={video.id}
                     to={href("item", video.id)}
                     active={video.id === editing}
-                    title={NAV_LABELS.videoTitle(video)}
+                    title={t.nav.videoTitle(
+                      video.title,
+                      t.status[video.status],
+                      video.openFeedback,
+                    )}
                   >
                     <StatusDot status={video.status} />
-                    <span className="sr-only">{video.status}</span>
+                    <span className="sr-only">{t.status[video.status]}</span>
                     <span>{video.title}</span>
                   </LinkRow>
                 ))}
                 <LinkRow to={href("board")} active={false}>
                   <ArrowRightIcon />
-                  <span>{NAV_LABELS.allVideos}</span>
+                  <span>{t.nav.allVideos}</span>
                 </LinkRow>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -305,28 +335,29 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <LinkRow to={href("setup")} active={view === "setup"} tooltip={NAV_LABELS.setup}>
+          <LinkRow to={href("setup")} active={view === "setup"} tooltip={t.nav.setup}>
             <PlugZapIcon />
-            <span>{NAV_LABELS.setup}</span>
+            <span>{t.nav.setup}</span>
           </LinkRow>
-          {FEEDBACK_URL === undefined ? null : (
+          <LanguageMenu />
+          {feedbackLink === undefined ? null : (
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip={NAV_LABELS.sendFeedback}
+                tooltip={t.nav.sendFeedback}
                 // The desktop app hands new-window links to the default browser.
                 render={
                   // oxlint-disable-next-line jsx-a11y/control-has-associated-label -- the label is the button's children
-                  <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer" />
+                  <a href={feedbackLink} target="_blank" rel="noopener noreferrer" />
                 }
               >
                 <MessageSquareIcon />
-                <span>{NAV_LABELS.sendFeedback}</span>
+                <span>{t.nav.sendFeedback}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
         </SidebarMenu>
         <SidebarTrigger
-          title={NAV_LABELS.toggle}
+          title={t.nav.toggle}
           className="self-end group-data-[collapsible=icon]:self-center"
         />
       </SidebarFooter>

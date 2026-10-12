@@ -43,6 +43,7 @@ import {
   type Media,
 } from "../../api.ts";
 import { href } from "../../hooks.ts";
+import { useLocale, useMessages } from "../../i18n/index.ts";
 import { closingReply, type LiveRun, type RunStep } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
 import { CompareDialog } from "./compare-dialog.tsx";
@@ -53,8 +54,9 @@ const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
   { agent: "codex", label: "Codex" },
 ];
 
+/** The agent's product name, or undefined when a run has not said which agent it is. */
 export const agentLabel = (agent: AgentName | undefined) =>
-  AGENTS.find((entry) => entry.agent === agent)?.label ?? "Agent";
+  AGENTS.find((entry) => entry.agent === agent)?.label;
 
 /** Past this many steps, a finished run folds them away behind its reply. */
 const FOLD_STEPS = 4;
@@ -97,6 +99,7 @@ export function Chat({
   onCompare,
 }: ChatProps) {
   const [statuses, setStatuses] = useState<ReadonlyArray<AgentStatus> | undefined>(undefined);
+  const t = useMessages();
 
   // Which agents are installed changes only when the user installs one; once per visit is enough.
   useEffect(() => {
@@ -141,7 +144,7 @@ export function Chat({
         .restoreEdit(item.id, feedback.id)
         .then((next) => {
           onItem(next);
-          toast.success(`Rolled ${feedback.media ?? "the media"} back to before`);
+          toast.success(t.chat.rolledBack(feedback.media));
         })
         .catch(showError);
     },
@@ -195,18 +198,16 @@ export function Chat({
 }
 
 function Welcome({ hasMedia }: { hasMedia: boolean }) {
+  const t = useMessages();
+
   return (
     <Empty className="my-auto">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CrosshairIcon />
         </EmptyMedia>
-        <EmptyTitle>{hasMedia ? "Point at it, then say it" : "Ask for a first cut"}</EmptyTitle>
-        <EmptyDescription>
-          {hasMedia
-            ? "Drag across the timeline to select a part, or drag a box on the video. Then type what should change there and press Enter. An agent makes the edit and you compare before and after."
-            : "Describe the video you want below and an agent will make it, or add a video or an image to start from."}
-        </EmptyDescription>
+        <EmptyTitle>{hasMedia ? t.chat.editTitle : t.chat.newTitle}</EmptyTitle>
+        <EmptyDescription>{hasMedia ? t.chat.editBody : t.chat.newBody}</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
@@ -271,6 +272,8 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
   const result = hasResult(item, feedback, state.running);
   const open = feedback.status === "open" && feedback.decision === undefined;
   const { steps, reply } = closingReply(state.steps, state.reply);
+  const t = useMessages();
+  const locale = useLocale();
 
   return (
     <div className="flex flex-col gap-4">
@@ -280,11 +283,11 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
             <Button
               variant="outline"
               size="xs"
-              title="Show this part on the video"
+              title={t.chat.showTarget}
               onClick={() => actions.show(feedback)}
             >
               <CrosshairIcon data-icon="inline-start" />
-              <span className="tabular-nums">{describeTarget(target)}</span>
+              <span className="tabular-nums">{describeTarget(target, t.target.boxAt)}</span>
             </Button>
           )}
           <Bubble variant="secondary" align="end">
@@ -293,14 +296,17 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
             </BubbleContent>
           </Bubble>
           <MessageFooter>
-            {feedback.media ?? "New media"} ·{" "}
-            {new Date(feedback.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            {feedback.media ?? t.chat.newMedia} ·{" "}
+            {new Date(feedback.at).toLocaleTimeString(locale, {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
           </MessageFooter>
         </MessageContent>
       </Message>
       <Message>
         <MessageContent>
-          <MessageHeader>{agentLabel(state.agent)}</MessageHeader>
+          <MessageHeader>{agentLabel(state.agent) ?? t.chat.agent}</MessageHeader>
           {steps.length > 0 ? (
             <Steps steps={steps} folded={!state.running && steps.length > FOLD_STEPS} />
           ) : null}
@@ -308,27 +314,25 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
           {state.running ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner />
-              Working on it…
+              {t.chat.working}
               <Button variant="ghost" size="xs" onClick={actions.stop}>
                 <CircleStopIcon data-icon="inline-start" />
-                Stop
+                {t.chat.stop}
               </Button>
             </div>
           ) : null}
           {state.status === "failed" ? (
             <Bubble variant="destructive">
               <BubbleContent>
-                <p className="whitespace-pre-wrap">{state.error ?? "The agent failed."}</p>
+                <p className="whitespace-pre-wrap">{state.error ?? t.chat.failed}</p>
               </BubbleContent>
             </Bubble>
           ) : null}
           {state.status === "stopped" ? (
-            <p className="text-sm text-muted-foreground">Stopped before it finished.</p>
+            <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
           ) : null}
           {state.status === undefined && open ? (
-            <p className="text-sm text-muted-foreground">
-              Not sent to an agent yet. Run it here, or copy the prompt into Claude Code or Codex.
-            </p>
+            <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
           ) : null}
           {open && !state.running && state.status !== "done" ? (
             <RunActions
@@ -349,12 +353,13 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
 /** What the agent did on the way, folded once it is done if there were many steps. */
 function Steps({ steps, folded }: { steps: ReadonlyArray<RunStep>; folded: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const t = useMessages();
 
   if (folded && !expanded) {
     return (
       <Button variant="ghost" size="xs" className="self-start" onClick={() => setExpanded(true)}>
         <WrenchIcon data-icon="inline-start" />
-        Show {steps.length} steps
+        {t.chat.showSteps(steps.length)}
       </Button>
     );
   }
@@ -404,6 +409,7 @@ function RunActions({
     statuses === undefined || statuses.some((status) => status.agent === agent && status.installed);
 
   const none = statuses !== undefined && !AGENTS.some(({ agent }) => installed(agent));
+  const t = useMessages();
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -415,16 +421,16 @@ function RunActions({
           disabled={!installed(agent)}
           onClick={() => actions.run(feedback, agent)}
         >
-          {retry ? `Try again with ${label}` : `Run with ${label}`}
+          {retry ? t.chat.retryWith(label) : t.chat.runWith(label)}
         </Button>
       ))}
       <Button variant="ghost" size="xs" onClick={() => actions.copy(feedback)}>
         <ClipboardCopyIcon data-icon="inline-start" />
-        Copy prompt
+        {t.chat.copyPrompt}
       </Button>
       {none ? (
         <a href={href("setup")} className="text-xs text-muted-foreground underline">
-          Connect an agent
+          {t.chat.connectAgent}
         </a>
       ) : null}
     </div>
@@ -441,10 +447,12 @@ function Result({
   feedback: Feedback;
   actions: RequestActions;
 }) {
+  const t = useMessages();
+
   return (
     <div className="flex flex-col gap-2 rounded-xl border p-3">
       <p className="text-sm">
-        <span className="font-medium">{feedback.media}</span> was edited. Does it look right?
+        {t.chat.edited(<span className="font-medium">{feedback.media}</span>)}
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         <CompareDialog
@@ -456,15 +464,15 @@ function Result({
         />
         <Button size="xs" onClick={() => actions.approve(feedback)}>
           <CheckIcon data-icon="inline-start" />
-          Keep
+          {t.chat.keep}
         </Button>
         <Button variant="outline" size="xs" onClick={() => actions.restore(feedback)}>
           <Undo2Icon data-icon="inline-start" />
-          Restore before
+          {t.chat.restore}
         </Button>
         <Button variant="ghost" size="xs" onClick={() => actions.retarget(feedback)}>
           <MessageSquareReplyIcon data-icon="inline-start" />
-          Ask again
+          {t.chat.askAgain}
         </Button>
       </div>
     </div>
@@ -473,11 +481,13 @@ function Result({
 
 /** How the request ended: kept, rolled back, or resolved by an agent with a note. */
 function Outcome({ feedback, replied }: { feedback: Feedback; replied: boolean }) {
+  const t = useMessages();
+
   if (feedback.decision === "approved") {
     return (
       <Badge variant="secondary" className="self-start">
         <CheckIcon data-icon="inline-start" />
-        Kept
+        {t.chat.kept}
       </Badge>
     );
   }
@@ -486,7 +496,7 @@ function Outcome({ feedback, replied }: { feedback: Feedback; replied: boolean }
     return (
       <Badge variant="outline" className="self-start">
         <Undo2Icon data-icon="inline-start" />
-        Rolled back
+        {t.chat.rolledBackBadge}
       </Badge>
     );
   }

@@ -6,6 +6,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 
 import { api } from "./api.ts";
 import { href, useHashRoute, useLive, useSidebarOpen } from "./hooks.ts";
+import { useMessages } from "./i18n/index.ts";
 import { Board } from "./views/Board.tsx";
 import { Calendar } from "./views/Calendar.tsx";
 import { ItemView } from "./views/ItemView.tsx";
@@ -14,6 +15,7 @@ import { References } from "./views/References.tsx";
 import { Setup } from "./views/Setup.tsx";
 
 export function App() {
+  const t = useMessages();
   const [view, id] = useHashRoute();
   const { data: ws, error } = useLive("workspace", api.workspace);
   const needsSetup = ws !== undefined && (!ws.product.doc || ws.product.doc.name === "My App");
@@ -35,7 +37,7 @@ export function App() {
         </div>
         {error ? (
           <div className="shrink-0 px-6 pt-4">
-            <ErrorAlert title="Cannot reach the factory server" message={error} />
+            <ErrorAlert title={t.app.unreachable} message={error} />
           </div>
         ) : null}
         {editing !== undefined ? (

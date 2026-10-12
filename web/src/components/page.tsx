@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { useMessages } from "../i18n/index.ts";
+
 const pageVariants = cva("mx-auto flex w-full flex-col gap-6 px-6 py-6", {
   variants: {
     width: { narrow: "max-w-2xl", default: "max-w-5xl", wide: "max-w-7xl" },
@@ -36,10 +38,12 @@ export function Page({ title, description, actions, width, children }: PageProps
 }
 
 export function ErrorAlert({ title, message }: { title?: string; message: string }) {
+  const t = useMessages();
+
   return (
     <Alert variant="destructive">
       <CircleAlertIcon />
-      <AlertTitle>{title ?? "Something went wrong"}</AlertTitle>
+      <AlertTitle>{title ?? t.common.somethingWrong}</AlertTitle>
       <AlertDescription>{message}</AlertDescription>
     </Alert>
   );

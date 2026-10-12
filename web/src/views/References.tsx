@@ -43,6 +43,7 @@ import { safeHttpUrl } from "@/lib/utils";
 
 import { api, fileUrl, type Reference } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
+import { useMessages } from "../i18n/index.ts";
 import { formatTime } from "../lib/time.ts";
 
 const isVideo = (file: File) => file.type.startsWith("video/");
@@ -53,6 +54,7 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
   const [dragging, setDragging] = useState(false);
+  const t = useMessages();
 
   function add(run: () => Promise<Reference>, label: string, done?: () => void) {
     setBusy(label);
@@ -60,7 +62,7 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
     run()
       .then((reference) => {
         done?.();
-        toast.success(`Added "${reference.doc.title}"`);
+        toast.success(t.references.added(reference.doc.title));
         onAdded(reference);
       })
       .catch((cause: Error) => setError(cause.message))
@@ -70,8 +72,8 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
   function addFile(file: File | undefined) {
     if (!file) return;
 
-    if (isVideo(file)) add(() => api.addReferenceFile(file), `Processing ${file.name}…`);
-    else toast.error("Choose a video file.");
+    if (isVideo(file)) add(() => api.addReferenceFile(file), t.references.processing(file.name));
+    else toast.error(t.references.notVideo);
   }
 
   function onSubmit(event: SubmitEvent) {
@@ -81,7 +83,7 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
     if (link)
       add(
         () => api.addReferenceUrl(link),
-        "Downloading and processing…",
+        t.references.downloading,
         () => setUrl(""),
       );
   }
@@ -117,9 +119,9 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
             type="url"
             value={url}
             disabled={busy !== undefined}
-            aria-label="Reference link"
+            aria-label={t.references.link}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste a TikTok, Reels, or Shorts link"
+            placeholder={t.references.linkPlaceholder}
           />
           <InputGroupAddon align="inline-end">
             <InputGroupButton
@@ -128,14 +130,14 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
               size="sm"
               disabled={busy !== undefined || !url.trim()}
             >
-              Add
+              {t.references.add}
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
       </form>
       <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/30">
         <UploadIcon className="size-4" />
-        <span>Or drop a video file here, or click to browse</span>
+        <span>{t.references.drop}</span>
         <input
           type="file"
           accept="video/*"
@@ -153,7 +155,7 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
           {busy}
         </output>
       ) : null}
-      {error ? <ErrorAlert title="Could not add that reference" message={error} /> : null}
+      {error ? <ErrorAlert title={t.references.addError} message={error} /> : null}
     </div>
   );
 }
@@ -161,6 +163,7 @@ function AddReference({ onAdded }: { onAdded: (reference: Reference) => void }) 
 export function References({ selected }: { selected: string | undefined }) {
   const { data: refs, error, reload } = useLive("references", api.references);
   const current = refs?.find((r) => r.id === selected);
+  const t = useMessages();
 
   function onAdded(reference: Reference) {
     location.hash = href("references", reference.id);
@@ -170,16 +173,12 @@ export function References({ selected }: { selected: string | undefined }) {
   return (
     <Page
       width="wide"
-      title="References"
-      description={
-        refs
-          ? `${refs.length} saved. Your agent studies these to learn what works.`
-          : "Short videos you like. Your agent studies these to learn what works."
-      }
+      title={t.references.title}
+      description={t.references.description(refs?.length)}
     >
       <AddReference onAdded={onAdded} />
       {error ? (
-        <ErrorAlert title="Could not load references" message={error} />
+        <ErrorAlert title={t.references.loadError} message={error} />
       ) : refs === undefined ? (
         <ListSkeleton rows={4} />
       ) : refs.length === 0 ? (
@@ -189,11 +188,8 @@ export function References({ selected }: { selected: string | undefined }) {
               <EmptyMedia variant="icon">
                 <LibraryIcon />
               </EmptyMedia>
-              <EmptyTitle>No references yet</EmptyTitle>
-              <EmptyDescription>
-                Add a video you wish you had made. Your agent will take it apart and work out why it
-                holds attention.
-              </EmptyDescription>
+              <EmptyTitle>{t.references.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.references.emptyBody}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         </div>
@@ -213,11 +209,11 @@ export function References({ selected }: { selected: string | undefined }) {
                   <EmptyMedia variant="icon">
                     <FilmIcon />
                   </EmptyMedia>
-                  <EmptyTitle>{selected ? "Reference not found" : "Pick a reference"}</EmptyTitle>
+                  <EmptyTitle>
+                    {selected ? t.references.missingTitle : t.references.pickTitle}
+                  </EmptyTitle>
                   <EmptyDescription>
-                    {selected
-                      ? "It may have been removed. Choose another one from the list."
-                      : "Choose one from the list to watch it and read the analysis."}
+                    {selected ? t.references.missingBody : t.references.pickBody}
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -231,6 +227,7 @@ export function References({ selected }: { selected: string | undefined }) {
 
 function ReferenceRow({ reference: r, active }: { reference: Reference; active: boolean }) {
   const sheet = r.preprocess?.contactSheet;
+  const t = useMessages();
 
   return (
     <div className="relative rounded-2xl has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
@@ -250,7 +247,7 @@ function ReferenceRow({ reference: r, active }: { reference: Reference; active: 
           </ItemTitle>
           <ItemDescription>
             {r.doc.probe ? `${formatTime(r.doc.probe.duration)} · ` : ""}
-            {r.analysis ? "Analyzed" : "Not analyzed yet"}
+            {r.analysis ? t.references.analyzed : t.references.notAnalyzed}
           </ItemDescription>
         </ItemContent>
       </Item>
@@ -263,12 +260,13 @@ function ReferenceDetail({ reference: r }: { reference: Reference }) {
   const source = r.doc.source ? safeHttpUrl(r.doc.source) : undefined;
   const probe = r.doc.probe;
   const sheet = r.preprocess?.contactSheet;
+  const t = useMessages();
 
   function copyPrompt() {
     navigator.clipboard
       .writeText(prompt)
-      .then(() => toast.success("Prompt copied. Paste it to your agent."))
-      .catch((cause: Error) => toast.error(`Could not copy: ${cause.message}`));
+      .then(() => toast.success(t.references.promptCopied))
+      .catch((cause: Error) => toast.error(t.common.couldNotCopy(cause.message)));
   }
 
   return (
@@ -296,7 +294,7 @@ function ReferenceDetail({ reference: r }: { reference: Reference }) {
         <CardAction>
           <Button variant="outline" size="sm" onClick={copyPrompt}>
             <CopyIcon data-icon="inline-start" />
-            {r.analysis ? "Copy re-analysis prompt" : "Copy analysis prompt"}
+            {r.analysis ? t.references.copyReanalysis : t.references.copyAnalysis}
           </Button>
         </CardAction>
       </CardHeader>
@@ -317,7 +315,7 @@ function ReferenceDetail({ reference: r }: { reference: Reference }) {
               {sheet ? (
                 <img
                   src={fileUrl(`${r.dir}/${sheet}`)}
-                  alt="Contact sheet of frames from the video"
+                  alt={t.references.contactSheet}
                   className="max-h-96 max-w-full rounded-2xl border"
                 />
               ) : null}
@@ -330,13 +328,15 @@ function ReferenceDetail({ reference: r }: { reference: Reference }) {
                 <Badge variant="secondary">
                   {probe.width}×{probe.height}
                 </Badge>
-                <Badge variant="secondary">{probe.hasAudio ? "With audio" : "No audio"}</Badge>
+                <Badge variant="secondary">
+                  {probe.hasAudio ? t.references.withAudio : t.references.noAudio}
+                </Badge>
               </>
             ) : null}
             {r.preprocess ? (
               <>
-                <Badge variant="secondary">{r.preprocess.cuts.length} cuts</Badge>
-                <Badge variant="secondary">{r.preprocess.frames.length} frames</Badge>
+                <Badge variant="secondary">{t.references.cuts(r.preprocess.cuts.length)}</Badge>
+                <Badge variant="secondary">{t.references.frames(r.preprocess.frames.length)}</Badge>
               </>
             ) : null}
             {r.doc.tags.map((tag) => (
@@ -360,11 +360,8 @@ function ReferenceDetail({ reference: r }: { reference: Reference }) {
           ) : (
             <Alert>
               <InfoIcon />
-              <AlertTitle>Not analyzed yet</AlertTitle>
-              <AlertDescription>
-                Copy the analysis prompt and give it to your agent. It will watch the video and
-                write up how it works.
-              </AlertDescription>
+              <AlertTitle>{t.references.notAnalyzed}</AlertTitle>
+              <AlertDescription>{t.references.notAnalyzedBody}</AlertDescription>
             </Alert>
           )}
         </div>

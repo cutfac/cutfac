@@ -1,6 +1,7 @@
 import { useEffect, useState, type PointerEvent } from "react";
 
 import type { Region } from "../../api.ts";
+import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import { clampUnit, percent, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
@@ -246,10 +247,12 @@ function Span({ start, width, ghost }: { start: string; width: string; ghost: bo
 }
 
 function BoxMarker({ at, region }: { at: string; region: Region }) {
+  const t = useMessages();
+
   return (
     <div
       style={{ "--at": at }}
-      title={`Box at ${formatTime(region.at)}`}
+      title={t.target.boxMarker(formatTime(region.at))}
       className="pointer-events-none absolute top-1 left-(--at) size-2.5 -translate-x-1/2 rotate-45 rounded-xs bg-selection ring-2 ring-background"
     />
   );
