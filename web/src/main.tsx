@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { App } from "./App.tsx";
+import { installEditCommands } from "./lib/edit-commands.ts";
 
 import "./styles.css";
 
@@ -16,6 +17,8 @@ const syncTheme = () => document.documentElement.classList.toggle("dark", prefer
 syncTheme();
 
 prefersDark.addEventListener("change", syncTheme);
+
+installEditCommands();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

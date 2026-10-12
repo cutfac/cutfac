@@ -14,8 +14,14 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 
+import type { EditCommand } from "../web/src/desktop.ts";
 import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
-import { OPEN_WORKSPACE_CHANNEL, REVEAL_PATH_CHANNEL, SET_LOCALE_CHANNEL } from "./ipc.ts";
+import {
+  EDIT_COMMAND_CHANNEL,
+  OPEN_WORKSPACE_CHANNEL,
+  REVEAL_PATH_CHANNEL,
+  SET_LOCALE_CHANNEL,
+} from "./ipc.ts";
 import { MESSAGES } from "./messages.ts";
 import {
   loadLocale,
@@ -131,6 +137,10 @@ async function boot(): Promise<void> {
   app.quit();
 }
 
+function sendEditCommand(command: EditCommand): void {
+  window?.webContents.send(EDIT_COMMAND_CHANNEL, command);
+}
+
 /** The standard menus, spelled out so every label can follow the board's language. */
 function menuTemplate(): MenuItemConstructorOptions[] {
   const isMac = process.platform === "darwin";
@@ -167,8 +177,13 @@ function menuTemplate(): MenuItemConstructorOptions[] {
     {
       label: t.edit,
       submenu: [
-        { role: "undo", label: t.undo },
-        { role: "redo", label: t.redo },
+        // The board decides: undo the typing in a text field, or the last change to the item.
+        { label: t.undo, accelerator: "CmdOrCtrl+Z", click: () => sendEditCommand("undo") },
+        {
+          label: t.redo,
+          accelerator: isMac ? "Shift+CmdOrCtrl+Z" : "CmdOrCtrl+Y",
+          click: () => sendEditCommand("redo"),
+        },
         separator,
         { role: "cut", label: t.cut },
         { role: "copy", label: t.copy },
