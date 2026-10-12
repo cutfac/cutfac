@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { desktop } from "../desktop.ts";
 import { en, type Messages } from "./en.tsx";
 import { ko } from "./ko.tsx";
 import { resolveLocale, type Locale } from "./locale.ts";
@@ -33,9 +34,10 @@ let current = resolveLocale(readStored(), navigator.languages);
 
 const listeners = new Set<() => void>();
 
-/** Screen readers and spell checking follow the language on screen. */
+/** Screen readers, spell checking and the desktop menu follow the language on screen. */
 function apply(locale: Locale) {
   document.documentElement.lang = locale;
+  desktop?.setLocale(locale);
 }
 
 apply(current);

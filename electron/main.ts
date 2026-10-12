@@ -9,12 +9,20 @@ import {
   ipcMain,
   Menu,
   shell,
+  type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from "electron";
 
-import { OPEN_WORKSPACE_CHANNEL, REVEAL_PATH_CHANNEL } from "./ipc.ts";
-import { loadWorkspace, saveWorkspace } from "./settings.ts";
+import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
+import { OPEN_WORKSPACE_CHANNEL, REVEAL_PATH_CHANNEL, SET_LOCALE_CHANNEL } from "./ipc.ts";
+import { MESSAGES } from "./messages.ts";
+import {
+  loadLocale,
+  loadWorkspace,
+  saveLocale,
+  saveWorkspace,
+} from "./settings.ts";
 import { probePort, startSidecar, type Sidecar } from "./sidecar.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to.
@@ -35,6 +43,8 @@ let appOrigin = "";
 let switching = false;
 
 let quitting = false;
+
+let locale: Locale = "en";
 
 // Keeps the same userData folder whether packaged or not, so the saved workspace is shared.
 app.setName("Content Factory");
@@ -79,6 +89,13 @@ if (!app.requestSingleInstanceLock()) {
 
     return revealInWorkspace(target);
   });
+  ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
+    if (!isFromApp(event) || !isLocale(next) || next === locale) return;
+
+    locale = next;
+    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
+    void saveLocale(next);
+  });
 
   void app.whenReady().then(boot);
 }
@@ -87,13 +104,18 @@ function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-function assertFromApp(event: IpcMainInvokeEvent): void {
+function isFromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   const sender = event.senderFrame?.url;
 
-  if (!sender || new URL(sender).origin !== appOrigin) throw new Error("Untrusted IPC sender");
+  return sender !== undefined && new URL(sender).origin === appOrigin;
+}
+
+function assertFromApp(event: IpcMainInvokeEvent): void {
+  if (!isFromApp(event)) throw new Error("Untrusted IPC sender");
 }
 
 async function boot(): Promise<void> {
+  locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
 
   let workspace = (await loadWorkspace()) ?? (await pickWorkspace());
@@ -107,28 +129,78 @@ async function boot(): Promise<void> {
   app.quit();
 }
 
+/** The standard menus, spelled out so every label can follow the board's language. */
 function menuTemplate(): MenuItemConstructorOptions[] {
   const isMac = process.platform === "darwin";
+  const t = MESSAGES[locale];
+  const separator = { type: "separator" } as const;
   const template: MenuItemConstructorOptions[] = [];
 
-  if (isMac) template.push({ role: "appMenu" });
+  if (isMac) {
+    template.push({
+      role: "appMenu",
+      submenu: [
+        { role: "about", label: t.about },
+        separator,
+        { role: "services", label: t.services },
+        separator,
+        { role: "hide", label: t.hide },
+        { role: "hideOthers", label: t.hideOthers },
+        { role: "unhide", label: t.showAll },
+        separator,
+        { role: "quit", label: t.quit },
+      ],
+    });
+  }
 
   template.push(
     {
-      label: "File",
+      label: t.file,
       submenu: [
-        {
-          label: "Open Workspace…",
-          accelerator: "CmdOrCtrl+O",
-          click: () => void chooseWorkspace(),
-        },
-        { type: "separator" },
-        { role: isMac ? "close" : "quit" },
+        { label: t.openWorkspace, accelerator: "CmdOrCtrl+O", click: () => void chooseWorkspace() },
+        separator,
+        isMac ? { role: "close", label: t.closeWindow } : { role: "quit", label: t.quit },
       ],
     },
-    { role: "editMenu" },
-    { role: "viewMenu" },
-    { role: "windowMenu" },
+    {
+      label: t.edit,
+      submenu: [
+        { role: "undo", label: t.undo },
+        { role: "redo", label: t.redo },
+        separator,
+        { role: "cut", label: t.cut },
+        { role: "copy", label: t.copy },
+        { role: "paste", label: t.paste },
+        ...(isMac ? [{ role: "pasteAndMatchStyle", label: t.pasteAndMatchStyle } as const] : []),
+        { role: "delete", label: t.delete },
+        { role: "selectAll", label: t.selectAll },
+      ],
+    },
+    {
+      label: t.view,
+      submenu: [
+        { role: "reload", label: t.reload },
+        { role: "forceReload", label: t.forceReload },
+        { role: "toggleDevTools", label: t.toggleDevTools },
+        separator,
+        { role: "resetZoom", label: t.actualSize },
+        { role: "zoomIn", label: t.zoomIn },
+        { role: "zoomOut", label: t.zoomOut },
+        separator,
+        { role: "togglefullscreen", label: t.fullScreen },
+      ],
+    },
+    {
+      role: "windowMenu",
+      label: t.window,
+      submenu: [
+        { role: "minimize", label: t.minimize },
+        { role: "zoom", label: t.zoom },
+        ...(isMac
+          ? [separator, { role: "front", label: t.front } as const]
+          : [{ role: "close", label: t.closeWindow } as const]),
+      ],
+    },
   );
 
   return template;
@@ -137,7 +209,7 @@ function menuTemplate(): MenuItemConstructorOptions[] {
 async function pickWorkspace(): Promise<string | undefined> {
   const options = {
     properties: ["openDirectory", "createDirectory"],
-    message: "Choose or create a folder for your content workspace",
+    message: MESSAGES[locale].chooseWorkspace,
     defaultPath: workspaceRoot ? path.dirname(workspaceRoot) : app.getPath("documents"),
   } satisfies Electron.OpenDialogOptions;
 
@@ -186,13 +258,14 @@ async function activate(workspace: string): Promise<boolean> {
     sidecar = started;
     workspaceRoot = workspace;
     await saveWorkspace(workspace);
+
     await show(devUrl ?? started.url, path.basename(workspace));
 
     return true;
   } catch (error) {
     await dialog.showMessageBox({
       type: "error",
-      message: "Content Factory could not start",
+      message: MESSAGES[locale].couldNotStart,
       detail: describeError(error),
     });
 
@@ -201,6 +274,7 @@ async function activate(workspace: string): Promise<boolean> {
     switching = false;
   }
 }
+
 
 async function show(url: string, title: string): Promise<void> {
   appOrigin = new URL(url).origin;
@@ -266,7 +340,7 @@ function openExternally(url: string): void {
 function handleCrash(message: string): void {
   sidecar = undefined;
   void dialog
-    .showMessageBox({ type: "error", message: "The local server stopped", detail: message })
+    .showMessageBox({ type: "error", message: MESSAGES[locale].serverStopped, detail: message })
     .then(() => app.quit());
 }
 
