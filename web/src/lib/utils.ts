@@ -10,3 +10,5 @@ export function safeHttpUrl(url: string): string | undefined {
     return undefined;
   }
 }
+
+export const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;

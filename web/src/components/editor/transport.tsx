@@ -1,29 +1,13 @@
 import { PauseIcon, PlayIcon, RepeatIcon, XIcon } from "lucide-react";
-import type { MouseEvent, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Toggle } from "@/components/ui/toggle";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
-
-/** Keep focus where it was, so Space and I/O keep driving the player after a click. */
-const keepFocus = (event: MouseEvent) => event.preventDefault();
-
-function Hint({ label, keys, children }: { label: string; keys: string; children: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>{children}</TooltipTrigger>
-      <TooltipContent>
-        {label} <Kbd>{keys}</Kbd>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
+import { Hint, keepFocus } from "./hint.tsx";
 
 interface TransportProps {
   player: Player;

@@ -25,14 +25,13 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { megabytes } from "@/lib/utils";
 
 import { api, type Format, type NewItem } from "../api.ts";
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 
 const isMedia = (file: File) => file.type.startsWith("video/") || file.type.startsWith("image/");
-
-const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
 
 interface NewItemDialogProps {
   formats: Format[] | undefined;
