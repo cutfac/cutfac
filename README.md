@@ -90,3 +90,7 @@ bun test && bun run typecheck && bun run lint
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap.
+
+## License
+
+Content Factory is licensed under the [GNU Affero General Public License v3.0](LICENSE).
