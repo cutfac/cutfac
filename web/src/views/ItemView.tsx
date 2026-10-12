@@ -3,6 +3,7 @@ import {
   CircleCheckIcon,
   CircleXIcon,
   ClapperboardIcon,
+  KeyboardIcon,
   PlusIcon,
   Redo2Icon,
   ShieldCheckIcon,
@@ -56,6 +57,7 @@ import { agentLabel, Chat } from "../components/editor/chat.tsx";
 import { Details } from "../components/editor/details.tsx";
 import { Hint, keepFocus } from "../components/editor/hint.tsx";
 import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
+import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
@@ -122,6 +124,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const [ghost, setGhost] = useState<Target | undefined>(undefined);
   const [loop, setLoop] = useState(true);
   const [run, setRun] = useState<LiveRun>(NO_RUN);
+  const [shortcuts, setShortcuts] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
@@ -185,6 +188,14 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
 
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     if (event.metaKey || event.ctrlKey || event.altKey || within(event.target, TEXT_ENTRY)) return;
+
+    // `?` is Shift and a different key on each layout, so it goes by the character.
+    if (event.key === "?") {
+      event.preventDefault();
+      setShortcuts(true);
+
+      return;
+    }
 
     const onControl = within(event.target, CONTROL);
     const now = () => roundTime(player.getState().time);
@@ -263,7 +274,14 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
-        <Toolbar item={item} running={running} agent={run.agent} onItem={setData} onEdit={edit} />
+        <Toolbar
+          item={item}
+          running={running}
+          agent={run.agent}
+          onItem={setData}
+          onEdit={edit}
+          onShortcuts={() => setShortcuts(true)}
+        />
         {media === undefined ? (
           <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
         ) : (
@@ -381,6 +399,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           </TabsContent>
         </Tabs>
       </aside>
+      <ShortcutsDialog open={shortcuts} onOpenChange={setShortcuts} />
     </div>
   );
 }
@@ -391,12 +410,14 @@ function Toolbar({
   agent,
   onItem,
   onEdit,
+  onShortcuts,
 }: {
   item: ItemDetail;
   running: boolean;
   agent: LiveRun["agent"];
   onItem: (item: ItemDetail) => void;
   onEdit: (command: EditCommand) => void;
+  onShortcuts: () => void;
 }) {
   const t = useMessages();
   const statuses = STATUSES.map((status) => ({ value: status, label: t.status[status] }));
@@ -437,6 +458,17 @@ function Toolbar({
             onClick={() => onEdit("redo")}
           >
             <Redo2Icon />
+          </Button>
+        </Hint>
+        <Hint label={t.shortcuts.open} keys="?">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t.shortcuts.open}
+            onMouseDown={keepFocus}
+            onClick={onShortcuts}
+          >
+            <KeyboardIcon />
           </Button>
         </Hint>
       </div>
