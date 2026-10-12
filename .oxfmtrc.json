@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "sortImports": true,
+  "sortTailwindcss": {
+    "stylesheet": "./web/src/styles.css",
+    "functions": ["cn", "cva"]
+  },
+  "ignorePatterns": ["dist/**", "release/**", "tools/oxlint/anti-slop/**"]
+}
