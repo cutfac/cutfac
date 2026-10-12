@@ -18,9 +18,27 @@
 | --- | --- |
 | `src/core/` | Schemas, `Workspace` (every filesystem access, root-escape guarded), items, references, formats, verification |
 | `src/mcp/` | MCP tools over the core. Transport-agnostic, stdio today |
-| `src/server/` | Hono API, `/files/*` with byte ranges, SSE change feed from `fs.watch` |
-| `web/` | React SPA (board, item review, references, calendar, product) |
+| `src/server/` | HTTP API on Effect, `/files/*` with byte ranges, SSE change feed from `fs.watch` and agent run streams |
+| `web/` | React SPA (board, item editor, references, calendar, product) |
+| `electron/` | Desktop shell: starts the server as a sidecar and opens the SPA in a window |
 | `skills/` | Agent skill installed into each workspace by `factory init` |
+
+## Editing by chat
+
+Users do not edit video themselves. The item editor only says where and what; agents do the editing
+with ffmpeg and the skill.
+
+1. **Target.** The user selects a range on the timeline and, optionally, a box on the frame. Both
+   are stored on the feedback entry in `item.yaml` (`timecode`, `end`, `region`).
+2. **Context.** Before the agent starts, the core saves `before.*` (a copy of the media), `clip.mp4`
+   (the range, re-encoded frame-accurately), and `frame.png` (the frame with the box drawn) under
+   the item's `edits/<feedback id>/`. The prompt names these files, the timecodes, and the original.
+3. **Run.** `src/core/agentRun.ts` runs `claude -p` or `codex exec` headless in the workspace, one
+   session per item, and streams its steps over SSE (`/api/item/run`). A missing or busy agent
+   leaves the request queued; the chat offers "Copy prompt" so any agent can pick it up.
+4. **Result.** When the run ends, the media as it is now is kept as `after`. The user compares
+   before and after, then approves (the edit stays) or restores (`before` is copied back), or asks
+   again with the same target.
 
 ## Where the UI runs
 
@@ -31,8 +49,9 @@ need the machine. Only the origin that serves the SPA differs:
 - **Later: hosted UI + local daemon.** The same SPA served from a public origin talks to the local
   daemon (`?api=http://localhost:4317`). This needs CORS for that origin, a pairing token, and
   validation of Chrome's local network access prompt and Safari's localhost policy.
-- **Later: desktop shell.** Tauri or Electrobun wrapping the same server and SPA, if non-developer
-  users need it.
+- **Desktop shell.** `electron/` wraps the same server and SPA. The server runs as a sidecar
+  (`factory serve --host 127.0.0.1 --web-dir <bundled web>`), compiled with `bun build --compile`
+  for the packaged app, and the window loads it.
 
 A pure in-browser version (File System Access API, ffmpeg.wasm) is out of scope: agents cannot
 reach a browser tab, which breaks bring-your-own-agent.

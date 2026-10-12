@@ -35,6 +35,32 @@ the agent commands, and `factory product import <url>` to refresh the product la
 add a `factory.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
 `STATUS.md` appear on the board, and an `item.yaml` is written on their first edit.
 
+`serve` takes `--port` (default 4317), `--host` (default `127.0.0.1`), and `--web-dir` to serve a
+web build other than `dist/web`.
+
+## Editing a video
+
+Open an item on the board. Drag across the timeline to select a part (or press `I` and `O` at the
+playhead), drag on the video to mark an area, then type what should change and press Enter. The
+server runs `claude -p` or `codex exec` in the workspace, one session per item, and streams its
+steps into the chat. The agent gets a clip of the range, the frame with the box drawn on it, the
+timecodes, and the original file. When it is done, compare before and after, then keep the edit or
+restore the previous version. Without a connected agent, the request waits in the chat and "Copy
+prompt" hands it to any agent you run yourself.
+
+Shortcuts: `Space` play or pause, `I`/`O` set the start or end, `L` loop the selection, `←`/`→` step
+a tenth of a second (`Shift` for a second), `Esc` clear.
+
+## Desktop app
+
+```sh
+bun run desktop        # build the web UI and Electron shell, then open it
+bun run dist:desktop   # self-contained macOS app in release/, with the server compiled as a sidecar
+```
+
+The app runs the same server as `factory serve` as a sidecar on `127.0.0.1` and opens the board in
+its window.
+
 ## Workspace layout
 
 ```
