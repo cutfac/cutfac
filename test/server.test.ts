@@ -114,6 +114,38 @@ describe("routes", () => {
     expect(await read.json()).toMatchObject({ id: "first-cut", doc: { title: "First cut" } });
   });
 
+  test("undoes and redoes item changes", async () => {
+    await sendJson("POST", "/api/items", { title: "Cut" });
+
+    const patched = await sendJson("PATCH", "/api/item?id=cut", { title: "Final cut" });
+
+    expect(await patched.json()).toMatchObject({
+      doc: { title: "Final cut" },
+      history: { cursor: 1, entries: [{ kind: "details", after: { title: "Final cut" } }] },
+    });
+
+    const undone = await sendJson("POST", "/api/item/history/undo?id=cut", {});
+
+    expect(await undone.json()).toMatchObject({ doc: { title: "Cut" }, history: { cursor: 0 } });
+
+    const again = await sendJson("POST", "/api/item/history/undo?id=cut", {});
+
+    expect(again.status).toBe(400);
+    expect(await again.json()).toEqual({ error: "Nothing to undo" });
+
+    const redone = await sendJson("POST", "/api/item/history/redo?id=cut", {});
+
+    expect(await redone.json()).toMatchObject({ doc: { title: "Final cut" } });
+
+    const start = await sendJson("POST", "/api/item/history/goto?id=cut", {});
+
+    expect(await start.json()).toMatchObject({ doc: { title: "Cut" } });
+
+    const missing = await sendJson("POST", "/api/item/history/version?id=cut", { versionId: "x" });
+
+    expect(missing.status).toBe(404);
+  });
+
   test("maps failures to statuses with a message", async () => {
     const missing = await send("/api/item?id=missing");
 

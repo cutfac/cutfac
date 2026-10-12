@@ -39,6 +39,11 @@ with ffmpeg and the skill.
 4. **Result.** When the run ends, the media as it is now is kept as `after`. The user compares
    before and after, then approves (the edit stays) or restores (`before` is copied back), or asks
    again with the same target.
+5. **History.** Each item keeps `history/history.yaml`: an undo stack of media and field changes,
+   the saved versions of each media file (the `before` and `after` copies, or copies under
+   `history/`), and the version each file should hold. A file that no longer matches it was changed
+   outside a request and becomes an entry of its own before the next undo. Undo and redo copy a
+   saved version back and update the request's verdict; they wait until no agent is on the item.
 
 ## Where the UI runs
 

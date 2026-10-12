@@ -12,13 +12,13 @@ import {
   NotFound,
   WorkspaceError,
 } from "../core/errors.ts";
+import { updateDetails } from "../core/history.ts";
 import {
   createItem,
   getItem,
   listItems,
   openFeedback,
   recordMetrics,
-  updateItem,
   upsertSchedule,
 } from "../core/items.ts";
 import { getFormat, getProduct, listFormats, saveFormat } from "../core/library.ts";
@@ -539,7 +539,7 @@ const handlers = FactoryToolkit.toLayer(
 
       update_item: ({ id, ...patch }) =>
         run(
-          Effect.map(updateItem(id, patch), (item) => ({
+          Effect.map(updateDetails(id, patch), (item) => ({
             id: item.id,
             status: item.doc.status,
             updated: item.doc.updated,

@@ -1,5 +1,5 @@
 import { BunHttpServer } from "@effect/platform-bun";
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Semaphore, Stream } from "effect";
 import { Sse } from "effect/encoding";
 import {
   FetchHttpClient,
@@ -21,6 +21,7 @@ import {
   restoreBefore,
 } from "../core/edits.ts";
 import { CommandFailed, Conflict, InvalidRequest } from "../core/errors.ts";
+import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
 import {
   type Item,
   addFeedback,
@@ -30,7 +31,6 @@ import {
   importMedia,
   listItems,
   openFeedback,
-  updateItem,
 } from "../core/items.ts";
 import { getFormat, getProduct, listFormats } from "../core/library.ts";
 import { extension } from "../core/media.ts";
@@ -160,6 +160,10 @@ const RunBody = Schema.Struct({
 
 const ConnectBody = Schema.Struct({ agent: AgentName });
 
+const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString) });
+
+const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
+
 const UrlBody = Schema.Struct({
   url: Schema.NonEmptyString,
   title: Schema.optional(Schema.String),
@@ -189,7 +193,10 @@ const isMultipart = (request: HttpServerRequest.HttpServerRequest) =>
 // ---------------------------------------------------------------------------------------------
 // Items
 
-/** What the board shows for one item: the item, its markdown docs, and whether an agent is on it. */
+/**
+ * What the board shows for one item: the item, its markdown docs, its undo history, and whether an
+ * agent is on it.
+ */
 const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
   const ws = yield* Workspace;
   const runs = yield* RunRegistry;
@@ -201,7 +208,12 @@ const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
     { concurrency: 4 },
   );
 
-  return { ...item, docs: Object.fromEntries(docs), running: yield* runs.isRunning(item.id) };
+  return {
+    ...item,
+    docs: Object.fromEntries(docs),
+    history: yield* readHistory(item),
+    running: yield* runs.isRunning(item.id),
+  };
 });
 
 const itemSummary = (item: Item) => ({
@@ -513,15 +525,6 @@ const apiRoutes = (options: ServerOptions) =>
       withItemId((id) => Effect.flatMap(getItem(id), itemDetail)),
     ),
     json(
-      "PATCH",
-      "/api/item",
-      withItemId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(ItemPatch), (patch) =>
-          Effect.flatMap(updateItem(id, patch), itemDetail),
-        ),
-      ),
-    ),
-    json(
       "POST",
       "/api/item/media",
       withItemId((id) =>
@@ -638,6 +641,64 @@ const boardRoutes = (webDir: string) =>
   );
 
 /**
+ * Changes that go through the item's undo history. They run one at a time, and undo waits until
+ * no agent is working on the item, since the agent may be editing the same files.
+ */
+const historyRoutes = HttpRouter.addAll(
+  Effect.map(Semaphore.make(1), (lock) => {
+    const recorded = <E, R>(change: (id: string) => Effect.Effect<Item, E, R>) =>
+      withItemId((id) => lock.withPermits(1)(Effect.flatMap(change(id), itemDetail)));
+
+    const travel = <E, R>(change: (id: string) => Effect.Effect<Item, E, R>) =>
+      recorded((id) =>
+        Effect.gen(function* () {
+          const runs = yield* RunRegistry;
+
+          if (yield* runs.isRunning(id)) {
+            return yield* new Conflict({
+              message: "An agent is working on this item; wait for it or stop it first",
+            });
+          }
+
+          return yield* change(id);
+        }),
+      );
+
+    return [
+      json(
+        "PATCH",
+        "/api/item",
+        recorded((id) =>
+          Effect.flatMap(HttpServerRequest.schemaBodyJson(ItemPatch), (patch) =>
+            updateDetails(id, patch),
+          ),
+        ),
+      ),
+      json("POST", "/api/item/history/undo", travel(undo)),
+      json("POST", "/api/item/history/redo", travel(redo)),
+      json(
+        "POST",
+        "/api/item/history/goto",
+        travel((id) =>
+          Effect.flatMap(HttpServerRequest.schemaBodyJson(GoToBody), (body) =>
+            goTo(id, body.entryId),
+          ),
+        ),
+      ),
+      json(
+        "POST",
+        "/api/item/history/version",
+        travel((id) =>
+          Effect.flatMap(HttpServerRequest.schemaBodyJson(VersionBody), (body) =>
+            restoreVersion(id, body.versionId),
+          ),
+        ),
+      ),
+    ];
+  }),
+);
+
+/**
  * Routes that need nothing are added on their own: in a route list they would widen the list's
  * error and requirement types to `any`.
  */
@@ -649,8 +710,8 @@ const staticRoutes = Layer.mergeAll(
 /** Every route of the board's API, the workspace files, and the board itself. */
 export const routes = (options: ServerOptions) =>
   options.webDir === undefined
-    ? Layer.merge(staticRoutes, apiRoutes(options))
-    : Layer.mergeAll(staticRoutes, apiRoutes(options), boardRoutes(options.webDir));
+    ? Layer.mergeAll(staticRoutes, apiRoutes(options), historyRoutes)
+    : Layer.mergeAll(staticRoutes, apiRoutes(options), historyRoutes, boardRoutes(options.webDir));
 
 /** The board and its API on a local port. Needs the workspace; brings everything else. */
 export const serverLayer = (options: ListenOptions) =>
