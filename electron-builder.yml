@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=node_modules/app-builder-lib/scheme.json
+appId: dev.contentfactory.app
+productName: Content Factory
+copyright: Copyright © Content Factory contributors
+directories:
+  output: release
+
+# The app bundle ships only the bundled Electron main and preload. Everything else is self-contained:
+# the server is a compiled binary and the board is a static build, both added as extraResources.
+# So no node_modules goes into the asar.
+files:
+  - dist/electron/**
+  - package.json
+  - "!node_modules"
+npmRebuild: false
+
+extraResources:
+  - from: dist/sidecar/factory
+    to: bin/factory
+  - from: dist/web
+    to: web
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - dir
+    - dmg
+  # Unsigned build for local use.
+  identity: null
