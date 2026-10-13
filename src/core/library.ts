@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { type MediaFile, toMediaFiles } from "./media.ts";
 import { FormatDoc, Product } from "./schema.ts";
-import { Workspace, type WorkspaceService, slugify } from "./workspace.ts";
+import { Workspace, type WorkspaceService, foldersWith, slugify } from "./workspace.ts";
 
 export const FORMAT_FILE = "format.yaml";
 
@@ -18,7 +18,7 @@ export interface Format {
   readonly readme?: string | undefined;
 }
 
-export const formatDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.formats}/${id}`;
+const formatDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.formats}/${id}`;
 
 /** A text file's contents, or `undefined` when it is not there. */
 export const readOptionalText = Effect.fn("library.readOptionalText")(function* (rel: string) {
@@ -50,13 +50,7 @@ export const getFormat = Effect.fn("library.getFormat")(function* (id: string) {
 
 export const listFormats = Effect.fn("library.listFormats")(function* () {
   const ws = yield* Workspace;
-  const entries = yield* ws.list(ws.config.paths.formats);
-
-  const ids = yield* Effect.filter(
-    entries.flatMap((entry) => (entry.dir ? [entry.name] : [])),
-    (id) => ws.exists(`${formatDir(ws, id)}/${FORMAT_FILE}`),
-    { concurrency: 8 },
-  );
+  const ids = yield* foldersWith(ws.config.paths.formats, FORMAT_FILE);
 
   // One unreadable format.yaml shouldn't hide the rest; check_format says what is wrong with it.
   const formats = yield* Effect.forEach(

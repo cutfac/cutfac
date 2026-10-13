@@ -5,7 +5,7 @@ import { isSimpleId, readOptionalText } from "./library.ts";
 import { extension, mediaKind, probe } from "./media.ts";
 import { run, tail, which } from "./process.ts";
 import { PreprocessResult, ReferenceDoc } from "./schema.ts";
-import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.ts";
+import { Workspace, type WorkspaceService, foldersWith, nowIso, slugify } from "./workspace.ts";
 
 export const REFERENCE_FILE = "reference.yaml";
 
@@ -73,13 +73,7 @@ export const getReference = Effect.fn("references.getReference")(function* (id: 
 
 export const listReferences = Effect.fn("references.listReferences")(function* () {
   const ws = yield* Workspace;
-  const entries = yield* ws.list(ws.config.paths.references);
-
-  const ids = yield* Effect.filter(
-    entries.flatMap((entry) => (entry.dir ? [entry.name] : [])),
-    (id) => ws.exists(`${refDir(ws, id)}/${REFERENCE_FILE}`),
-    { concurrency: 8 },
-  );
+  const ids = yield* foldersWith(ws.config.paths.references, REFERENCE_FILE);
 
   return yield* Effect.forEach(ids, getReference, { concurrency: 8 });
 });

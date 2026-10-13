@@ -339,6 +339,25 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   });
 });
 
+/** Names of the folders directly under `rel` that hold `file`, sorted by name. */
+export const foldersWith = Effect.fn("Workspace.foldersWith")(function* (
+  rel: string,
+  file: string,
+) {
+  const ws = yield* Workspace;
+  const entries = yield* ws.list(rel);
+
+  // Effect.filter keeps matches in the order their checks finish; this keeps the listing's order.
+  const found = yield* Effect.forEach(
+    entries.filter((entry) => entry.dir),
+    (entry) =>
+      Effect.map(ws.exists(`${rel}/${entry.name}/${file}`), (has) => (has ? [entry.name] : [])),
+    { concurrency: 8 },
+  );
+
+  return found.flat();
+});
+
 /** A file-system-safe, readable id fragment: `"Hello, World!"` → `hello-world`. */
 export function slugify(text: string): string {
   const slug = text

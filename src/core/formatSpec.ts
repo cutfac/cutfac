@@ -1,10 +1,10 @@
 import { Effect } from "effect";
 
 import { InvalidRequest } from "./errors.ts";
-import { FORMAT_FILE, type Format, formatDir, getFormat, isSimpleId } from "./library.ts";
+import { FORMAT_FILE, type Format, getFormat, isSimpleId } from "./library.ts";
 import { isInstalled } from "./process.ts";
 import type { FormatDoc, InputField } from "./schema.ts";
-import { Workspace } from "./workspace.ts";
+import { Workspace, foldersWith } from "./workspace.ts";
 
 /** Where Claude Code and Codex look for a workspace's Agent Skills. */
 export const SKILL_FOLDERS = [".agents/skills", ".claude/skills"] as const;
@@ -210,13 +210,7 @@ export const formatStatus = (id: string) =>
 /** Every folder under formats/ with a format.yaml, broken ones included. */
 export const formatStatuses = Effect.fn("formatSpec.formatStatuses")(function* () {
   const ws = yield* Workspace;
-  const entries = yield* ws.list(ws.config.paths.formats);
-
-  const ids = yield* Effect.filter(
-    entries.flatMap((entry) => (entry.dir && isSimpleId(entry.name) ? [entry.name] : [])),
-    (id) => ws.exists(`${formatDir(ws, id)}/${FORMAT_FILE}`),
-    { concurrency: 8 },
-  );
+  const ids = (yield* foldersWith(ws.config.paths.formats, FORMAT_FILE)).filter(isSimpleId);
 
   return yield* Effect.forEach(ids, formatStatus, { concurrency: 8 });
 });

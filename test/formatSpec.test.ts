@@ -165,6 +165,15 @@ describe("formats in a workspace", () => {
     expect((await t.run(listFormats())).map((f) => f.id)).toEqual(["good"]);
   });
 
+  test("lists formats in name order, however long each check takes", async () => {
+    const ids = Array.from({ length: 24 }, (_, n) => `f${String(n).padStart(2, "0")}`);
+    await Promise.all(ids.map((id) => put(`formats/${id}/format.yaml`, `title: ${id}\n`)));
+    await put("formats/empty/notes.md");
+
+    expect((await t.run(formatStatuses())).map((s) => s.id)).toEqual(ids);
+    expect((await t.run(listFormats())).map((f) => f.id)).toEqual(ids);
+  });
+
   test("a new item keeps its format's inputs", async () => {
     await t.run(saveFormat({ ...decode({ title: "Art", inputs: [STYLE] }), id: "art" }));
 
