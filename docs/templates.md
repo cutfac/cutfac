@@ -190,24 +190,31 @@ The board holds the line on consent, not the agent:
 
 1. **Reading.** The first run can only read the link, the web and the workspace. Claude Code gets
    read tools only, and Codex runs in its read-only sandbox; neither can call the MCP tools that
-   write. The agent ends with what the template makes, every skill, package and program it needs
-   (where it comes from, what it is for, its license, and the command that installs it), and the
-   files it will write.
+   write. Claude Code also cannot read files outside the workspace, credentials such as `~/.ssh`, or
+   the workspace's `.env` files. Codex's read-only sandbox stops writes, not reads, so its shell can
+   read any file your user can. The agent ends with what the template makes, every skill, package
+   and program it needs (where it comes from, what it is for, its license, and the command that
+   installs it), and the files it will write.
 2. **Allow.** Nothing is installed until you press Allow. You can ask about it first; the agent
    still cannot write.
 3. **Installing.** After Allow the agent fetches skills as they are published into
    `.agents/skills/<name>/`, writes the template, and checks it. Claude Code may run only commands
-   that fetch and move files (`git clone`, `curl`, `cp`, `mv`, `mkdir`, `unzip`, `tar`); Codex runs
-   in its workspace-write sandbox with network access. Programs and system packages stay yours to
-   install: the agent gives you the exact commands and lists them in the template's `requires`.
+   that fetch and move files (`git clone`, `curl`, `cp`, `mv`, `mkdir`, `unzip`, `tar`), and they
+   run in its sandbox: they write only in the workspace, never its `.claude` settings, skills or
+   hooks, and reach only the link's host and code hosts such as GitHub, without credentials such as
+   API keys in their environment. A refused download comes back to you as a command to run yourself.
+   Codex runs in its workspace-write sandbox with network access, which keeps its writes in the
+   workspace but lets its shell reach any host and run what it fetched. Programs and system packages
+   stay yours to install: the agent gives you the exact commands and lists them in the template's
+   `requires`.
 4. **Done.** The board copies each new skill to `.claude/skills/` too, so both agents find it, and
    the chat lists the templates and skills the import added.
 
 A link that carries a login or a token (`user:pass@`, `?token=`, an API key) is turned away before
 any agent sees it, and `save_format` refuses to keep one in a template's `source` or `skills`: share
 the public link instead. Only the workspace's own MCP server is loaded for an import, so your other
-servers cannot act for it. Each import is saved in `.factory/imports/<id>.yaml`. A run cut off by a restart shows as
-stopped, and "Try again" picks it up.
+servers cannot act for it. Each import is saved in `.factory/imports/<id>.yaml`. A run cut off by a
+restart shows as stopped, and "Try again" picks it up.
 
 The steps the agent follows are in the workspace's `content-factory` skill under "Import a template
 from a link". In short:

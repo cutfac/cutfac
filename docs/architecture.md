@@ -82,10 +82,14 @@ import is a conversation stored in `.factory/imports/<id>.yaml`; each turn resum
 session, or replays the conversation when the session is gone. Consent is enforced by what the CLI
 may run, not by asking the agent. Until the user presses Allow, Claude Code gets read tools only and
 Codex its read-only sandbox, and the workspace's MCP write tools are off. After Allow, Claude Code
-may also edit the workspace and run commands that fetch and move files, and Codex gets its
-workspace-write sandbox with network access. Either way only the workspace's MCP server is loaded.
-When a run after Allow ends, `settleInstalls` copies each new skill to the skill folder it is
-missing from (`mirrorSkills`) and records the skills and formats the import added since Allow.
+may also edit the workspace and run commands that fetch and move files, inside its sandbox and
+without credentials in their environment, and Codex gets its workspace-write sandbox with network
+access. In both phases Claude Code is kept from reading outside the workspace, credentials and
+`.env` files (`claudeImportSettings`). Codex has no such limit: its sandboxes restrict writes and,
+after Allow, nothing stops its shell from running what it fetched. Either way only the workspace's
+MCP server is loaded. When a run after Allow ends, `settleInstalls` copies each new skill to the
+skill folder it is missing from (`mirrorSkills`) and records the skills and formats the import added
+since Allow.
 
 ## Where the UI runs
 
