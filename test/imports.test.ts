@@ -1,20 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 // The end-to-end tests run the import registry against the test workspace.
 // @effect-diagnostics strictEffectProvide:off
-import {
-  ConfigProvider,
-  Context,
-  Effect,
-  Layer,
-  ManagedRuntime,
-  Option,
-  Result,
-  Stream,
-} from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Result, Stream } from "effect";
 import { Tool } from "effect/ai";
 
 import { MCP_READ_TOOLS, MCP_WRITE_TOOLS, type McpLaunch } from "../src/core/agents.ts";
@@ -40,10 +30,15 @@ import {
   settleInstalls,
   turnMessage,
 } from "../src/core/imports.ts";
-import { which } from "../src/core/process.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
 import { FactoryToolkit } from "../src/mcp/server.ts";
-import { type TestServices, makeWorkspace, type TestWorkspace } from "./support.ts";
+import {
+  type FakeAgents,
+  type TestServices,
+  makeFakeAgents,
+  makeWorkspace,
+  type TestWorkspace,
+} from "./support.ts";
 
 const SERVER: McpLaunch = { command: "factory", args: ["mcp", "--workspace", "/w"] };
 
@@ -419,43 +414,24 @@ test("a locale that is not one names no language", () => {
 // --- Running a turn through a fake agent CLI ----------------------------------------------------
 
 describe("running a turn", () => {
-  let fakes: string;
+  let fakes: FakeAgents;
   let runtime: ManagedRuntime.ManagedRuntime<ImportRuns | TestServices, never>;
 
   beforeEach(async () => {
-    fakes = await mkdtemp(join(tmpdir(), "factory-fake-agent-"));
-    await mkdir(join(fakes, "bin"));
-    await mkdir(join(fakes, "calls"));
-
-    // Only the fakes are on PATH, so a real agent CLI on this machine is never found or run.
-    const onlyFakes = ConfigProvider.layer(
-      ConfigProvider.fromEnv({ env: { PATH: join(fakes, "bin") } }),
-    );
-
-    const found = Effect.forEach(["claude", "codex"], which).pipe(Effect.provide(onlyFakes));
-
-    if ((await Effect.runPromise(found)).some(Option.isSome)) {
-      throw new Error("A real agent CLI is still on PATH; the tests must only run fakes");
-    }
+    fakes = await makeFakeAgents();
 
     runtime = ManagedRuntime.make(
-      ImportRuns.layer.pipe(Layer.provideMerge(t.layer), Layer.provideMerge(onlyFakes)),
+      ImportRuns.layer.pipe(Layer.provideMerge(t.layer), Layer.provideMerge(fakes.layer)),
     );
   });
 
   afterEach(async () => {
     // Stops any agent still running before the workspace is removed.
     await runtime.dispose();
-    await rm(fakes, { recursive: true, force: true });
+    await fakes.remove();
   });
 
-  const fakeBin = async (name: string, script: string) => {
-    const path = join(fakes, "bin", name);
-    await writeFile(path, `#!/bin/sh\nPATH=/bin:/usr/bin\n${script}`);
-    await chmod(path, 0o755);
-
-    return path;
-  };
+  const fakeBin = (name: string, script: string) => fakes.bin(name, script);
 
   /**
    * A `claude` that records its arguments, its prompt, and whether it was told to keep credentials
@@ -465,7 +441,7 @@ describe("running a turn", () => {
   const fakeClaude = () =>
     fakeBin(
       "claude",
-      `calls="${join(fakes, "calls")}"
+      `calls="${fakes.calls}"
 call="$calls/$(ls "$calls" | grep -c 'args$')"
 printf '%s\\n' "$@" > "$call.args"
 printf '%s' "$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB" > "$call.scrub"
@@ -481,11 +457,11 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
 
   /** Each call the fake agent took, oldest first. */
   const calls = async () => {
-    const names = (await readdir(join(fakes, "calls"))).filter((name) => name.endsWith(".args"));
+    const names = (await readdir(fakes.calls)).filter((name) => name.endsWith(".args"));
 
     return Promise.all(
       names.toSorted().map(async (name) => {
-        const base = join(fakes, "calls", name.slice(0, -".args".length));
+        const base = join(fakes.calls, name.slice(0, -".args".length));
 
         return {
           args: (await readFile(`${base}.args`, "utf8")).trimEnd().split("\n"),
