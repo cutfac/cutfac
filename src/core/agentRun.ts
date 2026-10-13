@@ -131,26 +131,45 @@ export function codexCommand(
 export const codexConfig = (entries: ReadonlyArray<string>) =>
   entries.flatMap((entry) => ["-c", entry]);
 
+/** The agent's headless command line for `prompt`, with `flags` deciding what it may do. */
+export const agentCommand = (
+  agent: AgentName,
+  bin: string,
+  prompt: string,
+  flags: ReadonlyArray<string>,
+  session: SessionArgs,
+): AgentInvocation =>
+  agent === "claude"
+    ? claudeCommand(bin, prompt, flags, session)
+    : codexCommand(bin, prompt, flags, session.sessionId);
+
+/** Where the agent's CLI is, or a failure that says it is not installed. */
+export const agentBin = (agent: AgentName) =>
+  Effect.flatMap(
+    which(agent),
+    Option.match({
+      onNone: () => Effect.fail(new CommandFailed({ message: `${agent} CLI not found on PATH` })),
+      onSome: Effect.succeed,
+    }),
+  );
+
 /** The headless command line for one edit request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
   const { bin, prompt, mcpConfig, image } = options;
 
-  if (agent === "claude") {
-    const flags = [
-      "--allowedTools",
-      options.allowedTools.join(","),
-      ...(mcpConfig === undefined ? [] : ["--mcp-config", mcpConfig]),
-    ];
+  const flags =
+    agent === "claude"
+      ? [
+          "--allowedTools",
+          options.allowedTools.join(","),
+          ...(mcpConfig === undefined ? [] : ["--mcp-config", mcpConfig]),
+        ]
+      : [
+          ...codexConfig(['sandbox_mode="workspace-write"', 'approval_policy="never"']),
+          ...(image === undefined ? [] : ["--image", image]),
+        ];
 
-    return claudeCommand(bin, prompt, flags, options);
-  }
-
-  const flags = [
-    ...codexConfig(['sandbox_mode="workspace-write"', 'approval_policy="never"']),
-    ...(image === undefined ? [] : ["--image", image]),
-  ];
-
-  return codexCommand(bin, prompt, flags, options.sessionId);
+  return agentCommand(agent, bin, prompt, flags, options);
 }
 
 const MAX_DETAIL = 160;
@@ -500,12 +519,7 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, startedAt: string) {
   const ws = yield* Workspace;
   const { itemId, feedbackId, agent } = input;
-  const bin = yield* which(agent);
-
-  if (Option.isNone(bin)) {
-    return yield* new CommandFailed({ message: `${agent} CLI not found on PATH` });
-  }
-
+  const bin = yield* agentBin(agent);
   const item = yield* getItem(itemId);
   const f = yield* findFeedback(item, feedbackId);
   const prompt = yield* buildEditPrompt(item, f);
@@ -525,7 +539,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
       Effect.succeed(
         agentInvocation(agent, {
           ...session,
-          bin: bin.value,
+          bin,
           prompt,
           allowedTools: toolsFor(ws.config.agent.claudeAllowedTools, formatTools),
           mcpConfig,
@@ -726,6 +740,10 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   return registry;
 });
 
+/** A layer for `service` that runs `spec`, one run per key. */
+export const runsLayer = <Self, I, R>(service: Context.Key<Self, Runs<I>>, spec: RunSpec<I, R>) =>
+  Layer.effect(service, makeRunRegistry(spec));
+
 /** Edit requests: one run per item, about one request on it. */
 export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> => ({
   key: (input) => input.itemId,
@@ -737,5 +755,5 @@ export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> =
 export class RunRegistry extends Context.Service<RunRegistry, Runs<RunInput>>()(
   "content-factory/RunRegistry",
 ) {
-  static readonly layer = Layer.effect(RunRegistry, makeRunRegistry(editRuns(runEdit)));
+  static readonly layer = runsLayer(RunRegistry, editRuns(runEdit));
 }
