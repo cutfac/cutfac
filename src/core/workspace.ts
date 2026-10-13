@@ -57,6 +57,8 @@ export class Workspace extends Context.Service<
     ) => Effect.Effect<void, WorkspaceError>;
     readonly mkdir: (rel: string) => Effect.Effect<void, WorkspaceError>;
     readonly copy: (fromRel: string, toRel: string) => Effect.Effect<void, WorkspaceError>;
+    /** Copy a folder and everything in it, keeping files already at the destination. */
+    readonly copyTree: (fromRel: string, toRel: string) => Effect.Effect<void, WorkspaceError>;
     /** Copy a file from outside the workspace (an upload, a download, a CLI argument) into it. */
     readonly importFile: (source: string, toRel: string) => Effect.Effect<void, WorkspaceError>;
     readonly stat: (rel: string) => Effect.Effect<FileStat, WorkspaceError>;
@@ -251,6 +253,15 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     yield* fs.copyFile(from, to).pipe(Effect.mapError(fail(`copy ${fromRel} to`, toRel)));
   });
 
+  const copyTree = Effect.fn("Workspace.copyTree")(function* (fromRel: string, toRel: string) {
+    const from = yield* abs(fromRel);
+    const to = yield* abs(toRel);
+    yield* ensureParent(to, toRel);
+    yield* fs
+      .copy(from, to, { overwrite: false })
+      .pipe(Effect.mapError(fail(`copy ${fromRel} to`, toRel)));
+  });
+
   const importFile = Effect.fn("Workspace.importFile")(function* (source: string, toRel: string) {
     const to = yield* abs(toRel);
     yield* ensureParent(to, toRel);
@@ -331,6 +342,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     writeYaml,
     mkdir,
     copy,
+    copyTree,
     importFile,
     stat,
     list,

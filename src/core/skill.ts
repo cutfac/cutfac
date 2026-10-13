@@ -3,7 +3,7 @@ import { Hex } from "effect/encoding";
 
 import { readOptionalText } from "./library.ts";
 import { SKILL_MARKDOWN } from "./templates.ts";
-import { Workspace } from "./workspace.ts";
+import { Workspace, foldersWith } from "./workspace.ts";
 
 /** Where Claude Code and Codex look for a workspace's Agent Skills. */
 export const SKILL_FOLDERS = [".agents/skills", ".claude/skills"] as const;
@@ -96,6 +96,55 @@ export const syncSkill = Effect.fn("skill.syncSkill")(function* (
   });
 
   return copies;
+});
+
+const SKILL_FILE = "SKILL.md";
+
+/** The names of the skills in each skill folder, in `SKILL_FOLDERS` order. */
+const skillsByFolder = Effect.forEach(SKILL_FOLDERS, (folder) => foldersWith(folder, SKILL_FILE));
+
+/** Every skill installed in the workspace, in either folder, sorted by name. */
+export const installedSkills = Effect.fn("skill.installedSkills")(function* () {
+  const folders = yield* skillsByFolder;
+
+  return [...new Set(folders.flat())].toSorted((a, b) => a.localeCompare(b));
+});
+
+/**
+ * Copy each skill that is not in `known` to every skill folder missing it, from the first folder
+ * that has it, so Claude Code and Codex both find a skill an agent installed where it could
+ * write. A copy that fails is logged and skipped. Returns the names copied.
+ */
+export const mirrorSkills = Effect.fn("skill.mirrorSkills")(function* (
+  known: ReadonlyArray<string>,
+) {
+  const ws = yield* Workspace;
+  const byFolder = yield* skillsByFolder;
+  const folders = SKILL_FOLDERS.map((folder, index) => ({ folder, names: byFolder[index] ?? [] }));
+  const skip = new Set(known);
+
+  const copies = [...new Set(byFolder.flat())]
+    .filter((name) => !skip.has(name))
+    .flatMap((name) => {
+      const source = folders.find((entry) => entry.names.includes(name));
+
+      if (source === undefined) return [];
+
+      return folders.flatMap((entry) =>
+        entry.names.includes(name)
+          ? []
+          : [{ name, from: `${source.folder}/${name}`, to: `${entry.folder}/${name}` }],
+      );
+    });
+
+  const copied = yield* Effect.forEach(copies, ({ name, from, to }) =>
+    ws.copyTree(from, to).pipe(
+      Effect.as([name]),
+      Effect.catch((error) => Effect.as(Effect.logWarning(error.message), [])),
+    ),
+  );
+
+  return copied.flat();
 });
 
 /** What the agent should do about copies that are not current. Agent-facing, so in English. */
