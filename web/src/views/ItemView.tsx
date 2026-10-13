@@ -1,12 +1,9 @@
 import {
   ArrowLeftIcon,
-  CircleCheckIcon,
-  CircleXIcon,
   ClapperboardIcon,
   KeyboardIcon,
   PlusIcon,
   Redo2Icon,
-  ShieldCheckIcon,
   Undo2Icon,
 } from "lucide-react";
 import {
@@ -39,7 +36,6 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 
 import {
   api,
@@ -50,10 +46,10 @@ import {
   type Feedback,
   type ItemDetail,
   type Media,
-  type MediaReport,
   type Status,
 } from "../api.ts";
 import { agentLabel, Chat } from "../components/editor/chat.tsx";
+import { Checks } from "../components/editor/checks.tsx";
 import { Details } from "../components/editor/details.tsx";
 import { Hint, keepFocus } from "../components/editor/hint.tsx";
 import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
@@ -378,7 +374,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           </TabsContent>
           <TabsContent value="checks" className="min-h-0 overflow-y-auto">
             <div className="p-4">
-              <Checks id={item.id} />
+              <Checks item={item} />
             </div>
           </TabsContent>
           <TabsContent value="history" className="min-h-0 overflow-y-auto">
@@ -636,58 +632,4 @@ function Thumbnail({ src, media }: { src: string; media: Media }) {
 
   // `#t` shows a frame a little in, past a black first frame.
   return <video src={`${src}#t=0.5`} muted preload="metadata" className={frame} />;
-}
-
-/** Whether each video will upload: length, shape, size and encoding, from the workspace's rules. */
-function Checks({ id }: { id: string }) {
-  const [reports, setReports] = useState<ReadonlyArray<MediaReport> | undefined>(undefined);
-  const [checking, setChecking] = useState(false);
-  const t = useMessages();
-
-  function check() {
-    setChecking(true);
-    api
-      .verify(id)
-      .then(setReports, showError)
-      .finally(() => setChecking(false));
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground">{t.item.checksBody}</p>
-        <Button variant="outline" size="sm" disabled={checking} onClick={check}>
-          {checking ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <ShieldCheckIcon data-icon="inline-start" />
-          )}
-          {reports === undefined ? t.item.runChecks : t.item.runAgain}
-        </Button>
-      </div>
-      {reports?.length === 0 ? <p className="text-muted-foreground">{t.item.noVideos}</p> : null}
-      {reports?.map((report) => (
-        <div key={report.file} className="flex flex-col gap-2">
-          <p className="flex items-center gap-1.5 font-medium">
-            {report.ok ? (
-              <CircleCheckIcon className="size-4 text-primary" />
-            ) : (
-              <CircleXIcon className="size-4 text-destructive" />
-            )}
-            {report.file}
-          </p>
-          <ul className="flex flex-col gap-1 pl-5.5">
-            {report.checks.map((item) => (
-              <li
-                key={item.name}
-                className={cn("text-xs", item.ok ? "text-muted-foreground" : "text-destructive")}
-              >
-                <span className="font-medium">{item.name}</span>: {item.detail}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
 }

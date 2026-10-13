@@ -302,7 +302,31 @@ export interface ItemDetail {
   docs: Partial<Record<string, string>>;
   doc: ItemDoc;
   history: HistoryDoc;
+  /** The agent's last frame review of each video. */
+  reviews: MediaReview[];
   updatedAt: number;
+}
+
+/** A frame, or a strip of frames, at `t` seconds; `file` is relative to the review's `dir`. */
+export interface ReviewShot {
+  t: number;
+  file: string;
+}
+
+/** The frames an agent last rendered to judge one of the item's videos. */
+export interface MediaReview {
+  /** Workspace-relative folder holding the files below. */
+  dir: string;
+  /** The video's name in the item. */
+  file: string;
+  at: string;
+  /** Every frame on one image, in time order. */
+  sheet?: string;
+  frames: ReviewShot[];
+  /** Frames across each transition, where half-finished motion shows. */
+  strips: ReviewShot[];
+  /** What could not be made, and what was left out. */
+  notes: string[];
 }
 
 export interface ItemPatch {
