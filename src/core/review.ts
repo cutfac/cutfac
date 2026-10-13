@@ -1,9 +1,10 @@
 import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
-import { getItem } from "./items.ts";
+import { type Item, getItem } from "./items.ts";
 import { ffmpeg, probe, sceneCuts } from "./media.ts";
-import { Workspace } from "./workspace.ts";
+import { ReviewDoc, type ReviewShot } from "./schema.ts";
+import { Workspace, foldersWith, nowIso } from "./workspace.ts";
 
 /** Item subfolder with one review folder per video, named after the video. */
 const REVIEW_DIR = "review";
@@ -19,6 +20,8 @@ export const MAX_STRIPS = 8;
 
 export const SHEET_FILE = "sheet.jpg";
 
+const REVIEW_FILE = "review.yaml";
+
 /** A strip covers this many seconds on each side of its transition, at STRIP_FPS: six frames. */
 const STRIP_REACH = 0.25;
 
@@ -33,22 +36,9 @@ export interface ReviewOptions {
   readonly transitions?: ReadonlyArray<number> | undefined;
 }
 
-export interface ReviewShot {
-  readonly t: number;
-  /** Relative to the review folder. */
-  readonly file: string;
-}
-
-export interface MediaReview {
-  /** Workspace-relative folder; the files below are relative to it. */
+export interface MediaReview extends ReviewDoc {
+  /** Workspace-relative folder; the doc's files are relative to it. */
   readonly dir: string;
-  /** Every frame on one image, left to right and top to bottom in time order. */
-  readonly sheet?: string | undefined;
-  readonly frames: ReadonlyArray<ReviewShot>;
-  /** Frames across each transition, where half-finished motion shows. */
-  readonly strips: ReadonlyArray<ReviewShot>;
-  /** What could not be made, and what was left out. */
-  readonly notes: ReadonlyArray<string>;
 }
 
 /** Down to the hundredth, so the last sampled time never lands past the last frame. */
@@ -122,7 +112,8 @@ export function sheetArgs(abs: string, frames: ReadonlyArray<ReviewShot>, portra
 /**
  * Render what a viewer would see, for the agent to judge before it hands the video off: frames
  * from the first to the last, a contact sheet of them, and a strip of frames across each cut.
- * Writes `review/<video name>/` in the item, replacing the last review of that video.
+ * Writes `review/<video name>/` in the item, with a `review.yaml` the board reads, replacing the
+ * last review of that video.
  */
 export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
   id: string,
@@ -235,7 +226,40 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
   const [sheet] =
     made.length === 0 ? [] : yield* attempt("sheet", sheetArgs(abs, made, portrait), SHEET_FILE);
 
-  return { dir, sheet, frames: made, strips: strips.flat(), notes } satisfies MediaReview;
+  const doc: ReviewDoc = {
+    file,
+    at: yield* nowIso,
+    sheet,
+    frames: made,
+    strips: strips.flat(),
+    notes,
+  };
+
+  yield* ws.writeYaml(`${dir}/${REVIEW_FILE}`, ReviewDoc, doc);
+
+  return { dir, ...doc } satisfies MediaReview;
+});
+
+/** The last review of each of the item's videos that is still there; unreadable ones are skipped. */
+export const listReviews = Effect.fn("review.listReviews")(function* (item: Item) {
+  const ws = yield* Workspace;
+  const root = `${item.dir}/${REVIEW_DIR}`;
+  const folders = yield* foldersWith(root, REVIEW_FILE);
+
+  const reviews = yield* Effect.forEach(
+    folders,
+    (name) => {
+      const dir = `${root}/${name}`;
+
+      return ws.readYaml(`${dir}/${REVIEW_FILE}`, ReviewDoc).pipe(
+        Effect.map((doc): MediaReview[] => [{ dir, ...doc }]),
+        Effect.orElseSucceed((): MediaReview[] => []),
+      );
+    },
+    { concurrency: 4 },
+  );
+
+  return reviews.flat().filter((review) => item.media.some((m) => m.name === review.file));
 });
 
 /** The cuts ffmpeg finds, up to MAX_STRIPS; anything left out or failed is noted. */

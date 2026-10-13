@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
-import { createItem, importMedia } from "../src/core/items.ts";
-import { reviewMedia, sampleTimes, sheetArgs } from "../src/core/review.ts";
+import { createItem, getItem, importMedia } from "../src/core/items.ts";
+import { listReviews, reviewMedia, sampleTimes, sheetArgs } from "../src/core/review.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("review layout", () => {
@@ -113,6 +113,34 @@ describe("reviewing an item's video", () => {
       ]);
       expect(await readdir(join(abs, "strips"))).toEqual([]);
       expect(await Bun.file(join(abs, "sheet.jpg")).exists()).toBe(true);
+    },
+    30_000,
+  );
+
+  test.skipIf(!hasFfmpeg)(
+    "lists the last review of each video still in the item, for the board",
+    async () => {
+      const { review, item } = await t.run(
+        Effect.gen(function* () {
+          const { id, file } = yield* addVideo();
+
+          return { review: yield* reviewMedia(id, file), item: yield* getItem(id) };
+        }),
+      );
+
+      const reviews = join(t.root, item.dir, "review");
+      await Bun.write(
+        join(reviews, "gone/review.yaml"),
+        "file: gone.mp4\nat: x\nframes: []\nstrips: []\nnotes: []\n",
+      );
+      await Bun.write(join(reviews, "broken/review.yaml"), "frames: nope\n");
+
+      const listed = await t.run(listReviews(item));
+
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toEqual(review);
+      expect(review.file).toBe("[9x16] cut.mp4");
+      expect(Number.isNaN(Date.parse(review.at))).toBe(false);
     },
     30_000,
   );

@@ -417,6 +417,26 @@ export const PreprocessResult = Schema.Struct({
 
 export type PreprocessResult = typeof PreprocessResult.Type;
 
+/** A frame or a strip of frames at `t` seconds; `file` is relative to the review folder. */
+export const ReviewShot = Schema.Struct({ t: Schema.Finite, file: Schema.String });
+
+export type ReviewShot = typeof ReviewShot.Type;
+
+/** items/<id>/review/<video name>/review.yaml: the frames last rendered to judge one video. */
+export const ReviewDoc = Schema.Struct({
+  file: Schema.String.annotate(describe("the reviewed video's name in the item")),
+  at: Schema.String,
+  /** Every frame on one image, left to right and top to bottom in time order. */
+  sheet: Schema.optional(Schema.String),
+  frames: Schema.Array(ReviewShot),
+  /** Frames across each transition, where half-finished motion shows. */
+  strips: Schema.Array(ReviewShot),
+  /** What could not be made, and what was left out. */
+  notes: Schema.Array(Schema.String),
+});
+
+export type ReviewDoc = typeof ReviewDoc.Type;
+
 /** An Agent Skill the format's items are made with, looked up in the workspace's skill folders. */
 export const FormatSkill = Schema.Struct({
   name: Schema.String.annotate(describe("the skill's folder name, as in .claude/skills/<name>")),

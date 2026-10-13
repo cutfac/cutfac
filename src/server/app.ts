@@ -43,6 +43,7 @@ import {
   listReferences,
   preprocessReference,
 } from "../core/references.ts";
+import { listReviews } from "../core/review.ts";
 import { AgentChoice, AgentName, FeedbackInput, ItemPatch } from "../core/schema.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
@@ -196,8 +197,8 @@ const isMultipart = (request: HttpServerRequest.HttpServerRequest) =>
 // Items
 
 /**
- * What the board shows for one item: the item, its markdown docs, its undo history, and whether an
- * agent is on it.
+ * What the board shows for one item: the item, its markdown docs, its undo history, the agent's
+ * last frame review of each video, and whether an agent is on it.
  */
 const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
   const ws = yield* Workspace;
@@ -214,6 +215,7 @@ const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
     ...item,
     docs: Object.fromEntries(docs),
     history: yield* readHistory(item),
+    reviews: yield* listReviews(item),
     running: yield* runs.isRunning(item.id),
   };
 });
