@@ -151,6 +151,30 @@ describe("formats in a workspace", () => {
     expect(after.skills).toEqual({ "art-motion": ".claude/skills/art-motion/SKILL.md" });
   });
 
+  test("a link that carries a password or token is not saved", async () => {
+    const source = await t.fail(
+      saveFormat({
+        ...decode({ title: "Art", source: { url: "https://user:pass@example.com/art" } }),
+        id: "art",
+      }),
+    );
+
+    expect(source.message).toContain("source.url carries a password or token");
+
+    const skill = await t.fail(
+      saveFormat({
+        ...decode({
+          title: "Art",
+          skills: [{ name: "art-motion", source: "https://example.com/skill.zip?token=abc" }],
+        }),
+        id: "art",
+      }),
+    );
+
+    expect(skill.message).toContain("skill art-motion carries a password or token");
+    expect(await t.run(formatStatuses())).toEqual([]);
+  });
+
   test("a format.yaml that does not decode is reported, and the list skips it", async () => {
     await t.run(saveFormat({ ...decode({ title: "Good" }), id: "good" }));
     await put("formats/bad/format.yaml", "summary: no title\n");

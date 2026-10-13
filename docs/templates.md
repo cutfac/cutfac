@@ -203,8 +203,10 @@ The board holds the line on consent, not the agent:
 4. **Done.** The board copies each new skill to `.claude/skills/` too, so both agents find it, and
    the chat lists the templates and skills the import added.
 
-Only the workspace's own MCP server is loaded for an import, so your other servers cannot act for
-it. Each import is saved in `.factory/imports/<id>.yaml`. A run cut off by a restart shows as
+A link that carries a login or a token (`user:pass@`, `?token=`, an API key) is turned away before
+any agent sees it, and `save_format` refuses to keep one in a template's `source` or `skills`: share
+the public link instead. Only the workspace's own MCP server is loaded for an import, so your other
+servers cannot act for it. Each import is saved in `.factory/imports/<id>.yaml`. A run cut off by a restart shows as
 stopped, and "Try again" picks it up.
 
 The steps the agent follows are in the workspace's `content-factory` skill under "Import a template

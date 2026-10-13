@@ -168,6 +168,15 @@ test("an import needs a web link", async () => {
   expect(error.message).toContain("http(s)");
 });
 
+test("an import refuses a link that carries a password or token", async () => {
+  const error = await t.fail(
+    createImport({ link: "https://example.com/pack?token=abc", agent: "claude" }),
+  );
+
+  expect(error.message).toContain("password or token");
+  expect(await t.run(listImports())).toEqual([]);
+});
+
 test("an import id cannot name a file outside the imports folder", async () => {
   const error = await t.fail(getImport("../factory"));
 

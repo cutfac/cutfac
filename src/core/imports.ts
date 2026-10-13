@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { shortId } from "./items.ts";
 import { FORMAT_FILE } from "./library.ts";
+import { carriesSecret } from "./links.ts";
 import {
   type AgentName,
   type AgentRun,
@@ -69,11 +70,11 @@ export const listImports = Effect.fn("imports.listImports")(function* () {
   return imports.flat().toSorted((a, b) => b.doc.updated.localeCompare(a.doc.updated));
 });
 
-/** The link as the URL parser writes it, which drops stray whitespace, or none if not http(s). */
+/** The link, or none if it is not http(s). */
 const webLink = (text: string) => {
   const url = URL.parse(text.trim());
 
-  return url?.protocol === "http:" || url?.protocol === "https:" ? url.href : undefined;
+  return url?.protocol === "http:" || url?.protocol === "https:" ? url : undefined;
 };
 
 export interface NewImport {
@@ -91,11 +92,20 @@ export const createImport = Effect.fn("imports.createImport")(function* (input: 
     return yield* new InvalidRequest({ message: "The link must be an http(s) URL" });
   }
 
+  // Import files and the agent's session keep the link.
+  if (carriesSecret(link.href)) {
+    return yield* new InvalidRequest({
+      message:
+        "The link carries a password or token. Remove it, or make the page public and share that link.",
+    });
+  }
+
   const id = yield* shortId;
   const now = yield* nowIso;
 
   const doc: ImportDoc = {
-    link,
+    // As the URL parser writes it, which drops stray whitespace.
+    link: link.href,
     agent: input.agent,
     locale: input.locale,
     allowed: false,

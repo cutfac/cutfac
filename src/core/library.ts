@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
+import { carriesSecret } from "./links.ts";
 import { type MediaFile, toMediaFiles } from "./media.ts";
 import { FormatDoc, Product } from "./schema.ts";
 import { Workspace, type WorkspaceService, foldersWith, slugify } from "./workspace.ts";
@@ -78,6 +79,19 @@ export const saveFormat = Effect.fn("library.saveFormat")(function* (input: Form
   const id = requested ?? slugify(doc.title);
 
   if (!isSimpleId(id)) return yield* new InvalidRequest({ message: `Not a format id: ${id}` });
+
+  // format.yaml is shared along with the workspace, so its links must not open anything private.
+  const leak = [
+    ["source.url", doc.source?.url] as const,
+    ...doc.skills.map((skill) => [`the source of skill ${skill.name}`, skill.source] as const),
+  ].find(([, link]) => link !== undefined && carriesSecret(link));
+
+  if (leak !== undefined) {
+    return yield* new InvalidRequest({
+      message: `${leak[0]} carries a password or token; record the link without it`,
+    });
+  }
+
   yield* ws.writeYaml(`${formatDir(ws, id)}/${FORMAT_FILE}`, FormatDoc, doc);
 
   return yield* getFormat(id);
