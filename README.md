@@ -69,9 +69,10 @@
 - **Agents check their own work.** Your agent writes a brief and shot list for you to okay before
   it renders, then looks at the frames it made, every cut included, and fixes the biggest problems
   first.
-- **Templates from any link.** Paste a post, a repo or an Agent Skill and your agent turns it into
-  a template with its own inputs and previews. It asks before installing anything, and the board
-  shows what each template still needs. See [docs/templates.md](docs/templates.md).
+- **Templates from any link.** Paste a post, a repo or an Agent Skill and the board runs your agent
+  on it, turning it into a template with its own inputs and previews. The agent can only read until
+  you press Allow, and the board shows what each template still needs. See
+  [docs/templates.md](docs/templates.md).
 - **Your product in every run.** Import positioning and screenshots from an App Store, Google Play
   or landing page URL. Every agent run reads it, so hooks and CTAs stay on message.
 - **Calendar and metrics.** Plan each post per platform, then log views, likes and comments after it

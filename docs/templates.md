@@ -6,9 +6,9 @@ the CLI and the MCP tools call them formats.
 
 Content Factory does not import templates itself. It defines the folder a template lives in, and
 `check_format` says what a template still lacks. Your agent does the rest: given a post, a repo or a
-skill ("read this link and make it usable here"), it writes the folder, asks you before installing
-anything, and runs `check_format` until the template is ready. The factory never downloads or
-installs anything on its own.
+skill ("read this link and make it usable here"), it writes the folder, installs what it needs once
+you allow it, and runs `check_format` until the template is ready. The board can run your agent on
+a link for you, but the factory itself never downloads or installs anything.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/templates-dark.png">
@@ -182,9 +182,33 @@ reviews the frames.
 
 ## Bringing one in from a link
 
-The Templates page has "Add template", which turns a link into a prompt for your agent. The steps
-the agent follows are in the workspace's `content-factory` skill under "Import a template from a
-link". In short:
+On the Templates page, "Add from link" takes a link and runs your agent on it, Claude Code or
+Codex. The import opens as a chat: you see what the agent does, answer its questions, and it carries
+on in the same session. "Copy prompt" hands the same request to an agent you run yourself instead.
+
+The board holds the line on consent, not the agent:
+
+1. **Reading.** The first run can only read the link, the web and the workspace. Claude Code gets
+   read tools only, and Codex runs in its read-only sandbox; neither can call the MCP tools that
+   write. The agent ends with what the template makes, every skill, package and program it needs
+   (where it comes from, what it is for, its license, and the command that installs it), and the
+   files it will write.
+2. **Allow.** Nothing is installed until you press Allow. You can ask about it first; the agent
+   still cannot write.
+3. **Installing.** After Allow the agent fetches skills as they are published into
+   `.agents/skills/<name>/`, writes the template, and checks it. Claude Code may run only commands
+   that fetch and move files (`git clone`, `curl`, `cp`, `mv`, `mkdir`, `unzip`, `tar`); Codex runs
+   in its workspace-write sandbox with network access. Programs and system packages stay yours to
+   install: the agent gives you the exact commands and lists them in the template's `requires`.
+4. **Done.** The board copies each new skill to `.claude/skills/` too, so both agents find it, and
+   the chat lists the templates and skills the import added.
+
+Only the workspace's own MCP server is loaded for an import, so your other servers cannot act for
+it. Each import is saved in `.factory/imports/<id>.yaml`. A run cut off by a restart shows as
+stopped, and "Try again" picks it up.
+
+The steps the agent follows are in the workspace's `content-factory` skill under "Import a template
+from a link". In short:
 
 1. Read the link and decide what kind of template it is.
 2. List every skill, package and program it needs and what each is for, and install them only after

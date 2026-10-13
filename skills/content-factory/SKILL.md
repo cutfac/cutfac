@@ -95,6 +95,10 @@ into folders.
 The user shares a post, a repo, or a skill and asks to use it here. Turn it into a format, so the
 board can list it, check it, and make items with it.
 
+When the board runs the import, it decides when you may install: you can only read until the user
+presses Allow there. Follow the board's messages about where to install and what is left to the
+user.
+
 1. Read the link and what it points to: the post, the repo's README, the skill's `SKILL.md`, and the
    license. If you cannot read it, say so and ask for the content; do not guess.
 2. Map it onto the format: a structure (hook, beats, pacing) goes into `hookRules`, `structure`, and

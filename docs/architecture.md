@@ -77,6 +77,16 @@ an agent can read works without code here. Installing skills or programs is the 
 the user's consent; the core never downloads or installs anything. Edit requests point the agent at
 the template's README, skills and the files of the item's chosen inputs.
 
+The board can run that agent for the user (`src/core/imports.ts`, `src/core/importRun.ts`). An
+import is a conversation stored in `.factory/imports/<id>.yaml`; each turn resumes the same agent
+session, or replays the conversation when the session is gone. Consent is enforced by what the CLI
+may run, not by asking the agent. Until the user presses Allow, Claude Code gets read tools only and
+Codex its read-only sandbox, and the workspace's MCP write tools are off. After Allow, Claude Code
+may also edit the workspace and run commands that fetch and move files, and Codex gets its
+workspace-write sandbox with network access. Either way only the workspace's MCP server is loaded.
+When a run after Allow ends, `settleInstalls` copies each new skill to the skill folder it is
+missing from (`mirrorSkills`) and records the skills and formats the import added since Allow.
+
 ## Where the UI runs
 
 All options share one local process (API + MCP), because agents, ffmpeg, yt-dlp, and renderers
