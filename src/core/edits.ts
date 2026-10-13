@@ -1,6 +1,6 @@
 import { DateTime, Effect, Option } from "effect";
 
-import { InvalidRequest } from "./errors.ts";
+import { InvalidRequest, type NotFound } from "./errors.ts";
 import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
 import { type MediaCapture, recordMedia } from "./history.ts";
 import {
@@ -15,7 +15,7 @@ import {
 } from "./items.ts";
 import type { Format } from "./library.ts";
 import { extension, ffmpeg, type MediaKind } from "./media.ts";
-import type { EditContext, Feedback, FeedbackInput, Region } from "./schema.ts";
+import type { AgentName, EditContext, Feedback, FeedbackInput, ItemDoc, Region } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
 /** Clip length when the request names a single point instead of a range. */
@@ -34,14 +34,16 @@ export interface EditRequested {
 }
 
 /**
- * Record an edit request and prepare what the agent needs: a snapshot of the media as it is now
- * (the "before" side of the comparison), the selected range as a clip, and the frame with the
- * region drawn on it. A request without media is about the item as a whole, such as making its
- * first video.
+ * Record an edit request and prepare what the agent needs: the selected range as a clip, the
+ * frame with the region drawn on it, and a snapshot of the media as it is now (the "before" side
+ * of the comparison). A request without media is about the item as a whole, such as making its
+ * first video. A request `waiting` for the board's agent gets its snapshot when its turn comes,
+ * so it starts from what the requests before it left.
  */
 export const requestEdit = Effect.fn("edits.requestEdit")(function* (
   id: string,
   input: FeedbackInput,
+  waiting?: AgentName,
 ) {
   const current = yield* getItem(id);
   const mediaName = input.media;
@@ -55,26 +57,17 @@ export const requestEdit = Effect.fn("edits.requestEdit")(function* (
     return yield* new InvalidRequest({ message: "A range or box needs the media file it is on" });
   }
 
-  const added = yield* addFeedback(id, input);
+  const added = yield* addFeedback(id, input, waiting);
+  const before = waiting === undefined ? yield* saveBefore(added.item, added.feedback) : undefined;
 
   if (media === undefined) {
-    // Save the item's files as they are now, so the agent's changes to them can be undone.
-    const captures = added.item.media.map((m) => ({ media: m.name, start: true }));
-    yield* recordMedia(added.item, captures, { cause: "outside" });
     const result: EditRequested = { item: added.item, feedback: added.feedback, warnings: [] };
 
     return result;
   }
 
-  const { context, warnings } = yield* buildContext(
-    added.item,
-    added.feedback,
-    media.name,
-    media.kind,
-  );
-
-  const snapshot = [{ media: media.name, file: context.before, start: true }];
-  yield* recordMedia(added.item, snapshot, { cause: "outside" });
+  const made = yield* buildContext(added.item, added.feedback, media.name, media.kind);
+  const context: EditContext = { ...made.context, before };
 
   const item = yield* mutateItem(id, (doc) =>
     updateFeedback(doc, id, added.feedback.id, (entry) => ({ ...entry, context })),
@@ -83,12 +76,40 @@ export const requestEdit = Effect.fn("edits.requestEdit")(function* (
   const result: EditRequested = {
     item,
     feedback: yield* findFeedback(item, added.feedback.id),
-    warnings,
+    warnings: made.warnings,
   };
 
   return result;
 });
 
+/**
+ * Save the media as it is now: the request's file as its "before" side, and the item's files in
+ * its history, so what the agent changes can be undone. Returns the item-relative copy, if any.
+ */
+const saveBefore = Effect.fnUntraced(function* (item: Item, f: Feedback) {
+  const ws = yield* Workspace;
+  const mediaName = f.media;
+
+  if (mediaName === undefined) {
+    const captures = item.media.map((m) => ({ media: m.name, start: true }));
+    yield* recordMedia(item, captures, { cause: "outside" });
+
+    return undefined;
+  }
+
+  if (!item.media.some((m) => m.name === mediaName)) {
+    return yield* new InvalidRequest({ message: `${mediaName} is no longer on ${item.id}` });
+  }
+
+  const before = `${editDir(item, f.id)}/before.${extension(mediaName)}`;
+  yield* ws.copy(`${item.dir}/${mediaName}`, before);
+  const file = itemRel(item, before);
+  yield* recordMedia(item, [{ media: mediaName, file, start: true }], { cause: "outside" });
+
+  return file;
+});
+
+/** The range as a clip and the frame with the region drawn on it, as the user saw them. */
 const buildContext = Effect.fnUntraced(function* (
   item: Item,
   f: Feedback,
@@ -96,13 +117,10 @@ const buildContext = Effect.fnUntraced(function* (
   kind: MediaKind,
 ) {
   const ws = yield* Workspace;
-  const source = `${item.dir}/${mediaName}`;
-  const sourceAbs = yield* ws.abs(source);
+  const sourceAbs = yield* ws.abs(`${item.dir}/${mediaName}`);
   const dir = editDir(item, f.id);
   const warnings: string[] = [];
-
-  const before = `${dir}/before.${extension(mediaName)}`;
-  yield* ws.copy(source, before);
+  yield* ws.mkdir(dir);
 
   /** One ffmpeg output for the agent; a failure becomes a warning instead of failing the request. */
   const attempt = (label: string, out: string, args: (outAbs: string) => ReadonlyArray<string>) =>
@@ -129,9 +147,90 @@ const buildContext = Effect.fnUntraced(function* (
         )
       : undefined;
 
-  const context: EditContext = { before: itemRel(item, before), clip, frame };
+  const context: EditContext = { clip, frame };
 
   return { context, warnings };
+});
+
+/** A request lined up for the board's agent. */
+export type Waiting = Feedback & { readonly waiting: AgentName };
+
+export const isWaiting = (f: Feedback): f is Waiting =>
+  f.waiting !== undefined && f.status === "open";
+
+/** The requests waiting for the board's agent on an item, in the order they were made. */
+export const waitingLine = (doc: ItemDoc): ReadonlyArray<Waiting> => doc.feedback.filter(isWaiting);
+
+/**
+ * Ready a request for its run. One that waited for others on the item starts from what they
+ * left: the media is saved as its "before" side now, and its changes count from now.
+ */
+export const beginEdit = Effect.fn("edits.beginEdit")(function* (id: string, feedbackId: string) {
+  const item = yield* getItem(id);
+  const f = yield* findFeedback(item, feedbackId);
+
+  if (f.waiting === undefined) return { item, feedback: f };
+
+  const baseline = yield* nowIso;
+  const before = yield* saveBefore(item, f);
+
+  const next = yield* mutateItem(id, (doc) =>
+    updateFeedback(doc, id, feedbackId, (entry) => ({
+      ...entry,
+      baseline,
+      context: before === undefined ? entry.context : { ...entry.context, before },
+    })),
+  );
+
+  return { item: next, feedback: yield* findFeedback(next, feedbackId) };
+});
+
+/** Change what a request still waiting for its turn asks for. */
+export const rewordWaiting = Effect.fn("edits.rewordWaiting")(function* (
+  id: string,
+  feedbackId: string,
+  body: string,
+) {
+  const text = body.trim();
+
+  if (text === "") return yield* new InvalidRequest({ message: "A request needs a message" });
+
+  return yield* mutateItem(id, (doc): Effect.Effect<ItemDoc, InvalidRequest | NotFound> =>
+    doc.feedback.some((f) => f.id === feedbackId && isWaiting(f))
+      ? updateFeedback(doc, id, feedbackId, (entry) => ({ ...entry, body: text }))
+      : Effect.fail(new InvalidRequest({ message: "Only a waiting request can be changed" })),
+  );
+});
+
+/**
+ * Take requests out of the item's waiting line: the one named, or all of them. They never ran, so
+ * they go, with the files made for them.
+ */
+export const cancelWaiting = Effect.fn("edits.cancelWaiting")(function* (
+  id: string,
+  feedbackId?: string,
+) {
+  const ws = yield* Workspace;
+
+  const cancelled = (f: Feedback) =>
+    isWaiting(f) && (feedbackId === undefined || f.id === feedbackId);
+
+  const { doc } = yield* getItem(id);
+
+  if (feedbackId !== undefined && !doc.feedback.some(cancelled)) {
+    return yield* new InvalidRequest({ message: "Only a waiting request can be cancelled" });
+  }
+
+  // One may have started since it was read; it stays.
+  const next = yield* mutateItem(id, (current) =>
+    Effect.succeed({ ...current, feedback: current.feedback.filter((f) => !cancelled(f)) }),
+  );
+
+  const kept = new Set(next.doc.feedback.map((f) => f.id));
+  const gone = doc.feedback.filter((f) => cancelled(f) && !kept.has(f.id));
+  yield* Effect.forEach(gone, (f) => ws.remove(editDir(next, f.id)), { discard: true });
+
+  return next;
 });
 
 /** Frame-accurate re-encode of [start, end); a single point becomes a short clip from it. */
@@ -179,9 +278,11 @@ export function drawboxFilter(r: Region): string {
   return `drawbox=x=iw*${x}:y=ih*${y}:w=iw*${w}:h=ih*${h}:color=red@0.9:t=8`;
 }
 
-/** When the request was made, in epoch milliseconds. */
-export const requestedAtMillis = (f: Feedback) =>
-  Option.match(DateTime.make(f.at), { onNone: () => 0, onSome: DateTime.toEpochMillis });
+const millis = (iso: string) =>
+  Option.match(DateTime.make(iso), { onNone: () => 0, onSome: DateTime.toEpochMillis });
+
+/** When the request's changes start counting, in epoch milliseconds: when work on it began. */
+export const baselineMillis = (f: Feedback) => millis(f.baseline ?? f.at);
 
 /**
  * Save the media as it is now as the "after" side, if it changed since the request.
@@ -232,7 +333,7 @@ const saveAfter = Effect.fnUntraced(function* (item: Item, f: Feedback) {
   if (!(yield* ws.exists(source))) return undefined;
   const { mtime } = yield* ws.stat(source);
 
-  if (mtime <= requestedAtMillis(f)) return undefined;
+  if (mtime <= baselineMillis(f)) return undefined;
   const after = `${editDir(item, f.id)}/after.${extension(mediaName)}`;
   yield* ws.copy(source, after);
 
@@ -422,6 +523,17 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
 
     if (before !== undefined)
       lines.push(`- Saved copy of the media as it is now: ${yield* abs(before)}`);
+
+    if (f.baseline !== undefined && (clip !== undefined || frame !== undefined)) {
+      const { mtime } = yield* ws.stat(`${item.dir}/${f.media}`);
+
+      if (mtime > millis(f.at)) {
+        lines.push(
+          "- Earlier requests on this item changed the media after the user marked this spot. The clip and frame show it as the user saw it; find the same spot in the media as it is now.",
+        );
+      }
+    }
+
     lines.push(
       "",
       "Change only what the request asks for. Write the result over the same media file name; the previous version is already saved, and the user compares before and after on the board.",

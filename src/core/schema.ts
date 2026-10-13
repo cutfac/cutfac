@@ -190,7 +190,7 @@ export const EditContext = Schema.Struct({
     Schema.String.annotate(describe("frame image with the region drawn on it")),
   ),
   before: Schema.optional(
-    Schema.String.annotate(describe("snapshot of the media when the request was made")),
+    Schema.String.annotate(describe("snapshot of the media when work on the request began")),
   ),
   after: Schema.optional(
     Schema.String.annotate(describe("snapshot of the media once the request was handled")),
@@ -236,6 +236,16 @@ export const Feedback = Schema.Struct({
   ...targetFields,
   context: Schema.optional(EditContext),
   run: Schema.optional(AgentRun),
+  waiting: Schema.optional(
+    AgentName.annotate(
+      describe("the board's agent takes this request once the ones before it on the item are done"),
+    ),
+  ),
+  baseline: Schema.optional(
+    Schema.String.annotate(
+      describe("when work began, if later than the request; media changes after it are this one's"),
+    ),
+  ),
   status: Schema.Literals(["open", "resolved"]).pipe(withDefault("open")),
   resolution: Schema.optional(Schema.String),
   resolvedAt: Schema.optional(Schema.String),

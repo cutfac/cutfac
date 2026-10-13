@@ -17,7 +17,14 @@ import {
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { buildEditPrompt, requestedAtMillis, resolveEdit, snapshotAfter } from "./edits.ts";
+import {
+  baselineMillis,
+  beginEdit,
+  buildEditPrompt,
+  resolveEdit,
+  snapshotAfter,
+  waitingLine,
+} from "./edits.ts";
 import { CommandFailed, Conflict, type FactoryError } from "./errors.ts";
 import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
@@ -360,9 +367,10 @@ const STOP_GRACE = "3 seconds";
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.slice(0, 200) ?? "";
 
+/** A request with a run is no longer waiting for its turn. */
 const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
   mutateItem(itemId, (doc) =>
-    updateFeedback(doc, itemId, feedbackId, (entry) => ({ ...entry, run })),
+    updateFeedback(doc, itemId, feedbackId, (entry) => ({ ...entry, run, waiting: undefined })),
   );
 
 const saveSession = (itemId: string, agent: AgentName, sessionId: string | undefined) =>
@@ -511,7 +519,7 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
   const f = yield* findFeedback(item, feedbackId);
 
   if (f.status !== "open") return;
-  const since = requestedAtMillis(f);
+  const since = baselineMillis(f);
 
   const changed =
     f.context?.before === undefined
@@ -525,8 +533,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const ws = yield* Workspace;
   const { itemId, feedbackId, agent } = input;
   const bin = yield* agentBin(agent);
-  const item = yield* getItem(itemId);
-  const f = yield* findFeedback(item, feedbackId);
+  const { item, feedback: f } = yield* beginEdit(itemId, feedbackId);
   const prompt = yield* buildEditPrompt(item, f);
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
@@ -625,6 +632,11 @@ export interface RunSpec<I, R> {
   /** Why a run cannot start while its key has one. */
   readonly busy: string;
   readonly runner: Runner<I, R>;
+  /**
+   * What the key has lined up after a run that finished its work, if anything. A run must take
+   * itself out of the line when it starts, or it would be offered again.
+   */
+  readonly next?: (input: I) => Effect.Effect<Option.Option<I>, never, R>;
 }
 
 /** The runs of one kind, keyed by what they work on. */
@@ -648,9 +660,10 @@ export interface Runs<I> {
   ) => Effect.Effect<A, E, R>;
 }
 
-/** A run that has not reported its end. */
+/** A run; it holds its key until it reports how it ended. */
 interface LiveRun {
   fiber: Fiber.Fiber<void> | undefined;
+  ended: RunEvent["type"] | undefined;
 }
 
 interface Channel {
@@ -711,13 +724,28 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
         Effect.suspend(() => {
           if (channel.live !== run) return Effect.void;
 
-          if (ENDINGS.has(event.type)) channel.live = undefined;
+          if (ENDINGS.has(event.type)) {
+            channel.live = undefined;
+            run.ended = event.type;
+          }
 
           channel.events.push(event);
 
           return PubSub.publish(channel.pubsub, event);
         }),
       );
+
+  // A run that finished its work hands the key to the next one lined up. One that failed or was
+  // stopped leaves the line for the user, and nothing starts while another run holds the key.
+  const startNext = (input: I, channel: Channel) =>
+    channel.turns.withPermits(1)(
+      Effect.gen(function* () {
+        if (spec.next === undefined || channel.live !== undefined) return;
+        const next = yield* spec.next(input);
+
+        if (Option.isSome(next)) yield* start(next.value).pipe(Effect.ignore);
+      }),
+    );
 
   // Every run reports one end: its own, or the one added here. Once it has, these are dropped,
   // such as the "stopped" of a stop that landed as the run finished.
@@ -732,11 +760,12 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
           ? Effect.void
           : emit({ type: "error", error: crashMessage(cause) }),
       ),
+      Effect.andThen(() => (run.ended === "done" ? startNext(input, channel) : Effect.void)),
       Effect.provideContext(context),
     );
   };
 
-  const start = (input: I) =>
+  const start = (input: I): Effect.Effect<void, Conflict> =>
     Effect.gen(function* () {
       const channel = yield* channelFor(spec.key(input));
 
@@ -745,7 +774,7 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
           if (channel.live !== undefined) return yield* new Conflict({ message: spec.busy });
 
           // The run's first event waits for this lock, so its fiber is known by then.
-          const run: LiveRun = { fiber: undefined };
+          const run: LiveRun = { fiber: undefined, ended: undefined };
           channel.live = run;
           channel.subject = Option.some(spec.subject(input));
           channel.events = [];
@@ -803,12 +832,27 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
 export const runsLayer = <Self, I, R>(service: Context.Key<Self, Runs<I>>, spec: RunSpec<I, R>) =>
   Layer.effect(service, makeRunRegistry(spec));
 
-/** Edit requests: one run per item, about one request on it. */
-export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> => ({
+/** The request on the item waiting longest for the board's agent. */
+const nextWaiting = (input: RunInput) =>
+  getItem(input.itemId).pipe(
+    Effect.map((item) =>
+      Option.map(Option.fromNullishOr(waitingLine(item.doc)[0]), (f): RunInput => ({
+        itemId: input.itemId,
+        feedbackId: f.id,
+        agent: f.waiting,
+      })),
+    ),
+    Effect.tapError((error) => Effect.logWarning("Could not read the waiting line", error)),
+    Effect.orElseSucceed(() => Option.none<RunInput>()),
+  );
+
+/** Edit requests: one run per item, about one request on it; the item's waiting line runs in turn. */
+export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R | Workspace> => ({
   key: (input) => input.itemId,
   subject: (input) => input.feedbackId,
   busy: "An agent is already working on this item",
   runner,
+  next: nextWaiting,
 });
 
 export class RunRegistry extends Context.Service<RunRegistry, Runs<RunInput>>()(

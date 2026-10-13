@@ -4,6 +4,7 @@ import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import { inputFieldsOf, resolveInputs } from "./formatSpec.ts";
 import { aspectOf, extension, type MediaFile, mediaKind, probe, toMediaFiles } from "./media.ts";
 import {
+  type AgentName,
   type Feedback,
   type FeedbackInput,
   ItemDoc,
@@ -351,10 +352,14 @@ export const updateItem = (id: string, patch: ItemPatch) =>
     });
   });
 
-/** Append a comment or edit request. An approved item goes back to review. */
+/**
+ * Append a comment or edit request; `waiting` lines it up for the board's agent. An approved item
+ * goes back to review.
+ */
 export const addFeedback = Effect.fn("items.addFeedback")(function* (
   id: string,
   input: FeedbackInput,
+  waiting?: AgentName,
 ) {
   const body = input.body.trim();
 
@@ -369,6 +374,7 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
     timecode: input.timecode,
     end: input.end,
     region: input.region,
+    waiting,
     status: "open",
   };
 

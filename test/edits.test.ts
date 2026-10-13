@@ -7,6 +7,7 @@ import { Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effec
 import {
   type RunEvent,
   type RunInput,
+  type RunSpec,
   type Runner,
   agentInvocation,
   editRuns,
@@ -17,7 +18,10 @@ import {
 } from "../src/core/agentRun.ts";
 import {
   approveEdit,
+  baselineMillis,
+  beginEdit,
   buildEditPrompt,
+  cancelWaiting,
   clipArgs,
   describeTarget,
   drawboxFilter,
@@ -26,11 +30,21 @@ import {
   requestEdit,
   resolveEdit,
   restoreBefore,
+  rewordWaiting,
+  waitingLine,
 } from "../src/core/edits.ts";
 import { Conflict, InvalidRequest } from "../src/core/errors.ts";
-import { addFeedback, createItem, getItem } from "../src/core/items.ts";
+import {
+  addFeedback,
+  createItem,
+  getItem,
+  mutateItem,
+  resolveFeedback,
+  updateFeedback,
+} from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";
 import { Feedback, FeedbackInput, FormatDoc } from "../src/core/schema.ts";
+import type { Workspace } from "../src/core/workspace.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 const base = { id: "a", at: "2026-01-01T00:00:00Z", body: "x" };
@@ -65,6 +79,14 @@ describe("edit targets", () => {
   test("keeps the legacy point timecode", () => {
     expect(describeTarget(decodeFeedback({ ...base, timecode: 4 }))).toBe("at 0:04.0 (4s)");
     expect(describeTarget(decodeFeedback(base))).toBe("the whole file");
+  });
+
+  test("counts a request's changes from when work on it began", () => {
+    const f = decodeFeedback(base);
+    const later = "2026-01-01T00:05:00Z";
+
+    expect(baselineMillis(f)).toBe(Date.parse(base.at));
+    expect(baselineMillis({ ...f, baseline: later })).toBe(Date.parse(later));
   });
 
   test("formats timecodes as minutes and tenths", () => {
@@ -179,6 +201,13 @@ describe("agent CLIs", () => {
   });
 });
 
+/** One run per item, without the item's waiting line, which needs a workspace. */
+const itemRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> => {
+  const { key, subject, busy } = editRuns(runner);
+
+  return { key, subject, busy, runner };
+};
+
 const waitUntilIdle = (isRunning: Effect.Effect<boolean>) =>
   isRunning.pipe(
     Effect.repeat({ until: (running) => !running, schedule: Schedule.spaced("5 millis") }),
@@ -205,7 +234,7 @@ describe("run registry", () => {
         Effect.gen(function* () {
           const started = yield* Deferred.make<void>();
           const finish = yield* Deferred.make<void>();
-          const registry = yield* makeRunRegistry(editRuns(heldRunner(started, finish)));
+          const registry = yield* makeRunRegistry(itemRuns(heldRunner(started, finish)));
 
           yield* registry.start(input);
           const conflict = yield* Effect.flip(registry.start({ ...input, feedbackId: "f2" }));
@@ -243,7 +272,7 @@ describe("run registry", () => {
         Effect.gen(function* () {
           const started = yield* Deferred.make<void>();
           const finish = yield* Deferred.make<void>();
-          const registry = yield* makeRunRegistry(editRuns(heldRunner(started, finish)));
+          const registry = yield* makeRunRegistry(itemRuns(heldRunner(started, finish)));
 
           yield* registry.start(input);
           yield* Deferred.await(started);
@@ -280,7 +309,7 @@ describe("run registry", () => {
 
           // The first run is still winding down after it reported its end.
           const registry = yield* makeRunRegistry(
-            editRuns((run, emit) =>
+            itemRuns((run, emit) =>
               Effect.gen(function* () {
                 yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
                 yield* emit({ type: "done", reply: run.feedbackId });
@@ -339,7 +368,7 @@ describe("run registry", () => {
 
           // Like an import turn, whose last part always runs to the end once it began.
           const registry = yield* makeRunRegistry(
-            editRuns((run, emit) => Effect.uninterruptible(heldRunner(started, finish)(run, emit))),
+            itemRuns((run, emit) => Effect.uninterruptible(heldRunner(started, finish)(run, emit))),
           );
 
           const subscription = yield* registry.subscribe("item");
@@ -369,7 +398,7 @@ describe("run registry", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const registry = yield* makeRunRegistry(
-            editRuns(() => Effect.die(new Error("disk on fire"))),
+            itemRuns(() => Effect.die(new Error("disk on fire"))),
           );
 
           const subscription = yield* registry.subscribe("item");
@@ -580,6 +609,195 @@ describe("edit requests in a workspace", () => {
       const approved = await t.run(approveEdit(id, feedback.id));
 
       expect(approved.doc.feedback[0]?.decision).toBe("approved");
+    },
+    20_000,
+  );
+});
+
+describe("the waiting line", () => {
+  const VIDEO = "[9x16] video.mp4";
+  let t: TestWorkspace;
+
+  beforeEach(async () => {
+    t = await makeWorkspace();
+  });
+
+  afterEach(() => t.remove());
+
+  const newItem = () => t.run(Effect.map(createItem({ title: "Clip" }), (item) => item.id));
+  const itemFile = (id: string, rel: string) => join(t.root, "items", id, rel);
+
+  test("a waiting request saves its before side when its turn comes", async () => {
+    const id = await newItem();
+    await writeFile(itemFile(id, VIDEO), "first");
+
+    const { plain, waiting } = await t.run(
+      Effect.gen(function* () {
+        const now = yield* requestEdit(id, { body: "Now", media: VIDEO });
+
+        return {
+          plain: yield* beginEdit(id, now.feedback.id),
+          waiting: yield* requestEdit(id, { body: "Brighter", media: VIDEO }, "claude"),
+        };
+      }),
+    );
+
+    expect(plain.feedback.baseline).toBeUndefined();
+    expect(waiting.feedback.waiting).toBe("claude");
+    expect(waiting.feedback.context?.before).toBeUndefined();
+    expect(waitingLine(waiting.item.doc).map((f) => f.id)).toEqual([waiting.feedback.id]);
+
+    // The request before it changed the media in the meantime.
+    await writeFile(itemFile(id, VIDEO), "second");
+    const { feedback } = await t.run(beginEdit(id, waiting.feedback.id));
+    const before = feedback.context?.before ?? "";
+
+    expect(feedback.baseline).toBeDefined();
+    expect(before).toBe(`edits/${feedback.id}/before.mp4`);
+    expect(await readFile(itemFile(id, before), "utf8")).toBe("second");
+  });
+
+  test("only a waiting request can be reworded or cancelled", async () => {
+    const id = await newItem();
+
+    const result = await t.run(
+      Effect.gen(function* () {
+        const now = yield* requestEdit(id, { body: "Now" });
+        const first = yield* requestEdit(id, { body: "Later" }, "claude");
+        const second = yield* requestEdit(id, { body: "Last" }, "codex");
+        const reworded = yield* rewordWaiting(id, first.feedback.id, "  Later, but louder ");
+
+        return {
+          now: now.feedback.id,
+          first: first.feedback.id,
+          second: second.feedback.id,
+          body: reworded.doc.feedback.find((f) => f.id === first.feedback.id)?.body,
+          rewordNow: yield* Effect.flip(rewordWaiting(id, now.feedback.id, "x")),
+          cancelNow: yield* Effect.flip(cancelWaiting(id, now.feedback.id)),
+          empty: yield* Effect.flip(rewordWaiting(id, first.feedback.id, " ")),
+        };
+      }),
+    );
+
+    expect(result.body).toBe("Later, but louder");
+    expect(result.rewordNow).toBeInstanceOf(InvalidRequest);
+    expect(result.cancelNow).toBeInstanceOf(InvalidRequest);
+    expect(result.empty).toBeInstanceOf(InvalidRequest);
+
+    // A file made for the request, such as its frame, goes with it.
+    const frame = itemFile(id, `edits/${result.first}/frame.png`);
+    await mkdir(join(frame, ".."), { recursive: true });
+    await writeFile(frame, "png");
+
+    const one = await t.run(cancelWaiting(id, result.first));
+
+    expect(one.doc.feedback.map((f) => f.id)).toEqual([result.now, result.second]);
+    expect(await Bun.file(frame).exists()).toBe(false);
+
+    const all = await t.run(cancelWaiting(id));
+
+    expect(all.doc.feedback.map((f) => f.id)).toEqual([result.now]);
+  });
+
+  test("a finished run starts the item's next waiting request; a failed one stops the line", async () => {
+    const id = await newItem();
+
+    const requests = await t.run(
+      Effect.forEach([undefined, "claude", "codex", "claude"] as const, (agent, index) =>
+        Effect.map(requestEdit(id, { body: `Step ${index}` }, agent), (r) => r.feedback.id),
+      ),
+    );
+
+    const [first = "", second = "", third = "", fourth = ""] = requests;
+
+    // Stands in for the agent: a run leaves the line as it starts, and the third one fails.
+    const runner: Runner<RunInput, Workspace> = (run, emit) =>
+      Effect.gen(function* () {
+        yield* mutateItem(run.itemId, (doc) =>
+          updateFeedback(doc, run.itemId, run.feedbackId, (f) => ({ ...f, waiting: undefined })),
+        ).pipe(Effect.orDie);
+        yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
+
+        if (run.feedbackId === third) return yield* emit({ type: "error", error: "boom" });
+
+        yield* resolveFeedback(run.itemId, run.feedbackId, "Done").pipe(Effect.orDie);
+        yield* emit({ type: "done", reply: "ok" });
+      });
+
+    const result = await t.run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const registry = yield* makeRunRegistry(editRuns(runner));
+          const subscription = yield* registry.subscribe(id);
+
+          const collecting = yield* Effect.forkChild(
+            Stream.runCollect(Stream.take(subscription.events, 6)),
+          );
+
+          yield* registry.start({ itemId: id, feedbackId: first, agent: "claude" });
+          const events = yield* Fiber.join(collecting);
+          yield* waitUntilIdle(registry.isRunning(id));
+
+          return { events, item: yield* getItem(id) };
+        }),
+      ),
+    );
+
+    expect(
+      result.events.map((event) =>
+        event.type === "start" ? `${event.subject} ${event.agent}` : event.type,
+      ),
+    ).toEqual([`${first} claude`, "done", `${second} claude`, "done", `${third} codex`, "error"]);
+    expect(waitingLine(result.item.doc).map((f) => f.id)).toEqual([fourth]);
+  });
+
+  test.skipIf(!hasFfmpeg)(
+    "the prompt says when earlier requests changed the spot the user marked",
+    async () => {
+      const id = await newItem();
+      const video = itemFile(id, VIDEO);
+
+      const generated = Bun.spawnSync(
+        [
+          "ffmpeg",
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc=size=180x320:rate=10:duration=2",
+          "-pix_fmt",
+          "yuv420p",
+          video,
+        ],
+        { stderr: "pipe" },
+      );
+
+      expect(generated.exitCode).toBe(0);
+
+      const old = new Date(Date.now() - 60_000);
+      await utimes(video, old, old);
+
+      const waiting = await t.run(
+        requestEdit(id, { body: "Bigger", media: VIDEO, timecode: 0.5 }, "claude"),
+      );
+
+      expect(waiting.warnings).toEqual([]);
+      expect(waiting.feedback.context?.frame).toBeDefined();
+
+      // The request before it rewrote the video after this one was made.
+      const later = new Date(Date.now() + 60_000);
+      await utimes(video, later, later);
+
+      const prompt = await t.run(
+        Effect.gen(function* () {
+          const { item, feedback } = yield* beginEdit(id, waiting.feedback.id);
+
+          return yield* buildEditPrompt(item, feedback);
+        }),
+      );
+
+      expect(prompt).toContain("Earlier requests on this item changed the media");
     },
     20_000,
   );
