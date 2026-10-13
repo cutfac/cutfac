@@ -48,6 +48,11 @@ const Skill = Schema.Struct({
   copies: Schema.Array(Schema.Struct({ path: Schema.String, state: Schema.String })),
 });
 
+const FormatDetail = Schema.Struct({
+  id: Schema.String,
+  readme: Schema.optional(Schema.String),
+});
+
 const FormatCheck = Schema.Struct({
   ready: Schema.Boolean,
   problems: Schema.Array(Schema.Struct({ kind: Schema.String, subject: Schema.String })),
@@ -253,6 +258,12 @@ test("agents can check a template and fill its inputs", async () => {
     },
     Created,
   );
+
+  // A template the agent has not written a README for yet still reads.
+  const format = await server.call("get_format", { id: "art" }, FormatDetail);
+
+  expect(format.id).toBe("art");
+  expect(format.readme).toBeUndefined();
 
   const check = await server.call("check_format", { id: "art" }, FormatCheck);
 

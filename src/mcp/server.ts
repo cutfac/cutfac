@@ -547,13 +547,19 @@ const countBy = <A>(values: ReadonlyArray<A>, key: (value: A) => string) => {
   return Object.fromEntries(counts);
 };
 
+/**
+ * The result as JSON carries it, without fields left undefined (a format with no README yet). The
+ * MCP result check rejects undefined, and the agent would see only an internal error.
+ */
+const asJson = <A>(value: A): A => JSON.parse(JSON.stringify(value));
+
 const handlers = FactoryToolkit.toLayer(
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolServices>();
     const ws = yield* Workspace;
 
     const run = <A, E>(effect: Effect.Effect<A, E, ToolServices>) =>
-      Effect.provideContext(effect, services);
+      Effect.map(Effect.provideContext(effect, services), asJson);
 
     const itemAbs = (id: string) => ws.abs(`${ws.config.paths.items}/${id}`);
 
