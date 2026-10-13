@@ -7,10 +7,10 @@ import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
 import { type CliEntry, codexServerName, connectAgent, mcpLaunch } from "./core/agents.ts";
-import { SKILL_FOLDERS } from "./core/formatSpec.ts";
 import { importProduct } from "./core/productImport.ts";
 import { addReference, referenceSourceOf } from "./core/references.ts";
-import { PRODUCT_TEMPLATE, SKILL_MARKDOWN } from "./core/templates.ts";
+import { syncSkill } from "./core/skill.ts";
+import { PRODUCT_TEMPLATE } from "./core/templates.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
 import { MCP_VERSION, mcpLayer } from "./mcp/server.ts";
 import { serverLayer } from "./server/app.ts";
@@ -18,8 +18,6 @@ import { serverLayer } from "./server/app.ts";
 const DEFAULT_PORT = 4317;
 
 const DEFAULT_HOST = "127.0.0.1";
-
-const SKILL_TARGETS = SKILL_FOLDERS.map((folder) => `${folder}/content-factory/SKILL.md`);
 
 /**
  * `bun build --compile` serves this module from Bun's virtual filesystem, so the binary starts
@@ -99,14 +97,19 @@ Then open the board:  ${cliLine} serve --workspace ${ws.root}
 `);
 });
 
-/** The agent skill, for Claude Code and for Codex-style agents. Existing copies are kept. */
-const installSkill = Effect.fn("cli.installSkill")(function* () {
-  const ws = yield* Workspace;
+const SKILL_REPORT = {
+  missing: (path: string) => `Installed skill → ${path}`,
+  outdated: (path: string) => `Updated skill → ${path}`,
+  edited: (path: string) => `Kept your edited skill → ${path} (your agent will offer the new one)`,
+  current: () => undefined,
+};
 
-  for (const target of SKILL_TARGETS) {
-    if (yield* ws.exists(target)) continue;
-    yield* ws.writeText(target, SKILL_MARKDOWN);
-    yield* Console.log(`Installed skill → ${target}`);
+/** Bring the agent skill up to date for Claude Code and Codex-style agents, and say what changed. */
+const syncSkillCopies = Effect.fn("cli.syncSkillCopies")(function* () {
+  for (const { path, state } of yield* syncSkill()) {
+    const line = SKILL_REPORT[state](path);
+
+    if (line !== undefined) yield* Console.log(line);
   }
 });
 
@@ -125,7 +128,7 @@ const scaffold = Effect.fn("cli.scaffold")(function* () {
   yield* Effect.forEach([paths.references, paths.formats, paths.items], ws.mkdir, {
     discard: true,
   });
-  yield* installSkill();
+  yield* syncSkillCopies();
 });
 
 const init = Command.make(
@@ -224,6 +227,10 @@ const serve = Command.make(
     return yield* Effect.gen(function* () {
       const ws = yield* Workspace;
       yield* Layer.build(server);
+      // Serving is what matters here; a skill that cannot be written is for the agent to sort out.
+      yield* syncSkillCopies().pipe(
+        Effect.catchTag("WorkspaceError", (error) => Console.error(error.message)),
+      );
 
       const note = Option.isSome(dir)
         ? ""

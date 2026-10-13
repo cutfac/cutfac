@@ -147,6 +147,10 @@ the agent commands, and `factory product import <url>` to refresh the product la
 add a `factory.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
 `STATUS.md` appear on the board, and an `item.yaml` is written on their first edit.
 
+The workspace gets the `content-factory` skill in `.agents/skills/` and `.claude/skills/`. `serve`
+and the MCP server bring it up to date when Content Factory changes it. A copy you edited is kept,
+and your agent offers you the new version instead.
+
 `serve` takes `--port` (default 4317), `--host` (default `127.0.0.1`), and `--web-dir` to serve a
 web build other than `dist/web`.
 

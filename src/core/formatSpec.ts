@@ -4,10 +4,8 @@ import { InvalidRequest } from "./errors.ts";
 import { FORMAT_FILE, type Format, getFormat, isSimpleId } from "./library.ts";
 import { isInstalled } from "./process.ts";
 import type { FormatDoc, InputField } from "./schema.ts";
+import { SKILL_FOLDERS } from "./skill.ts";
 import { Workspace, foldersWith } from "./workspace.ts";
-
-/** Where Claude Code and Codex look for a workspace's Agent Skills. */
-export const SKILL_FOLDERS = [".agents/skills", ".claude/skills"] as const;
 
 /** Skill names as the Agent Skills spec has them: lowercase words joined by hyphens. */
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

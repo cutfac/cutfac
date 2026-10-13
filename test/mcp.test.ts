@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Schema } from "effect";
@@ -37,7 +38,15 @@ const Created = Schema.Struct({ id: Schema.String });
 
 const Scheduled = Schema.Struct({ status: Schema.String });
 
-const Overview = Schema.Struct({ items: Schema.Record(Schema.String, Schema.Finite) });
+const Overview = Schema.Struct({
+  items: Schema.Record(Schema.String, Schema.Finite),
+  notices: Schema.Array(Schema.String),
+});
+
+const Skill = Schema.Struct({
+  markdown: Schema.String,
+  copies: Schema.Array(Schema.Struct({ path: Schema.String, state: Schema.String })),
+});
 
 const FormatCheck = Schema.Struct({
   ready: Schema.Boolean,
@@ -156,6 +165,35 @@ test("lists the workspace tools", async () => {
   expect(names).toContain("set_schedule");
   expect(names).toContain("workspace_overview");
   expect(names).toContain("check_format");
+  expect(names).toContain("get_skill");
+}, 20_000);
+
+test("keeps the workspace skill current and tells the agent about an edited copy", async () => {
+  const bundled = await readFile(
+    join(import.meta.dir, "../skills/content-factory/SKILL.md"),
+    "utf8",
+  );
+
+  const copy = join(t.root, ".claude/skills/content-factory/SKILL.md");
+
+  // The server installed it on start.
+  expect(await readFile(copy, "utf8")).toBe(bundled);
+  expect((await server.call("workspace_overview", {}, Overview)).notices).toEqual([]);
+
+  await writeFile(copy, `${bundled}\n- My own rule.\n`);
+
+  const { notices } = await server.call("workspace_overview", {}, Overview);
+
+  expect(notices).toHaveLength(1);
+  expect(notices[0]).toContain(".claude/skills/content-factory/SKILL.md");
+
+  const skill = await server.call("get_skill", {}, Skill);
+
+  expect(skill.markdown).toBe(bundled);
+  expect(skill.copies.map((c) => c.state)).toEqual(["current", "edited"]);
+  expect(skill.copies.every((c) => c.path.startsWith("/"))).toBe(true);
+
+  await writeFile(copy, bundled);
 }, 20_000);
 
 test("agents can create an item and record a schedule", async () => {

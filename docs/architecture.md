@@ -26,7 +26,7 @@
 | `src/server/` | HTTP API on Effect, `/files/*` with byte ranges, SSE change feed from `fs.watch` and agent run streams |
 | `web/` | React SPA (board, item editor, references, calendar, product) |
 | `electron/` | Desktop shell: starts the server as a sidecar and opens the SPA in a window |
-| `skills/` | Agent skill installed into each workspace by `factory init` |
+| `skills/` | Agent skill copied into each workspace and kept current on `init`, `serve` and MCP start. A copy the user edited is left alone, and `workspace_overview` tells the agent to offer the new one |
 
 ## Editing by chat
 

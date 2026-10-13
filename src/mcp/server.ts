@@ -46,6 +46,15 @@ import {
   ScheduleEntry,
   WorkspaceConfig,
 } from "../core/schema.ts";
+import {
+  BUNDLED_SKILL,
+  type SkillCopy,
+  SkillState,
+  isStale,
+  skillCopies,
+  skillNotices,
+  syncSkill,
+} from "../core/skill.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
 
@@ -54,7 +63,7 @@ export const MCP_NAME = "content-factory";
 export const MCP_VERSION = "0.1.0";
 
 const INSTRUCTIONS =
-  "Content Factory workspace tools. Start with workspace_overview. Items, references, and formats are folders on disk; " +
+  "Content Factory workspace tools. Start with workspace_overview and act on its notices first. Items, references, and formats are folders on disk; " +
   "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item. " +
   "Always read the product (get_product) before writing copy. Resolve each open feedback entry after addressing it. " +
   "Formats are templates: to turn a link into one, follow the content-factory skill's import steps, then call check_format until it is ready.";
@@ -194,6 +203,9 @@ const WorkspaceOverview = tool("workspace_overview", {
     formats: Schema.Array(Schema.Struct({ id: Schema.String, title: Schema.String })),
     references: Schema.Finite,
     openFeedback: Schema.Finite,
+    notices: Schema.Array(Schema.String).annotate(
+      describe("problems with the workspace to act on before the task, and how to fix each"),
+    ),
   }),
   readonly: true,
 });
@@ -417,6 +429,22 @@ const SaveFormat = tool("save_format", {
   overwrites: true,
 });
 
+const GetSkill = tool("get_skill", {
+  description:
+    "The content-factory skill this version of Content Factory ships, and the workspace's copies of it. " +
+    "Missing and outdated copies are replaced on their own; an edited copy is the user's, so change it only with their consent.",
+  success: Schema.Struct({
+    markdown: Schema.String.annotate(describe("the bundled SKILL.md")),
+    copies: Schema.Array(
+      Schema.Struct({
+        path: Schema.String.annotate(describe("absolute path of the copy")),
+        state: SkillState,
+      }),
+    ),
+  }),
+  readonly: true,
+});
+
 const CheckFormat = tool("check_format", {
   description:
     "Whether a format is ready to use: mistakes in its format.yaml, and the skills, programs, and files it names " +
@@ -454,6 +482,7 @@ export const FactoryToolkit = Toolkit.make(
   GetFormat,
   SaveFormat,
   CheckFormat,
+  GetSkill,
 );
 
 /** What the core needs to run a tool; captured once when the server starts. */
@@ -483,12 +512,25 @@ const handlers = FactoryToolkit.toLayer(
 
     const itemAbs = (id: string) => ws.abs(`${ws.config.paths.items}/${id}`);
 
+    // Absolute paths, so the agent can write a copy without knowing the workspace root.
+    const absCopies = (copies: ReadonlyArray<SkillCopy>) =>
+      Effect.forEach(copies, (copy) =>
+        Effect.map(ws.abs(copy.path), (path) => ({ ...copy, path })),
+      );
+
     return FactoryToolkit.of({
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
-            const [items, formats, product, feedback, references] = yield* Effect.all(
-              [listItems(), listFormats(), getProduct(), openFeedback(), listReferences()],
+            const [items, formats, product, feedback, references, copies] = yield* Effect.all(
+              [
+                listItems(),
+                listFormats(),
+                getProduct(),
+                openFeedback(),
+                listReferences(),
+                skillCopies(),
+              ],
               { concurrency: "unbounded" },
             );
 
@@ -500,6 +542,7 @@ const handlers = FactoryToolkit.toLayer(
               formats: formats.map((format) => ({ id: format.id, title: format.doc.title })),
               references: references.length,
               openFeedback: feedback.length,
+              notices: skillNotices(yield* absCopies(copies)),
             };
           }),
         ),
@@ -697,8 +740,36 @@ const handlers = FactoryToolkit.toLayer(
             return { ...check, skills: Object.fromEntries(skills) };
           }),
         ),
+
+      get_skill: () =>
+        run(
+          Effect.gen(function* () {
+            return {
+              markdown: BUNDLED_SKILL.markdown,
+              copies: yield* absCopies(yield* skillCopies()),
+            };
+          }),
+        ),
     });
   }),
+);
+
+/**
+ * Gives a workspace made by an earlier version the current skill before the server takes requests,
+ * so the agent reads it from its first task. A copy that could not be written shows up in
+ * workspace_overview's notices instead, and serving goes on.
+ */
+const SkillSync = Layer.effectDiscard(
+  syncSkill().pipe(
+    Effect.flatMap((copies) =>
+      Effect.forEach(
+        copies.filter(isStale),
+        (copy) => Effect.logInfo(`Wrote the content-factory skill to ${copy.path}`),
+        { discard: true },
+      ),
+    ),
+    Effect.catchTag("WorkspaceError", (error) => Effect.logWarning(error.message)),
+  ),
 );
 
 /**
@@ -720,5 +791,7 @@ export const mcpLayer = McpServer.toolkit(FactoryToolkit).pipe(
       ],
     }),
   ),
+  // Provided last so it is built first: the stdio server starts taking requests once it is built.
+  Layer.provide(SkillSync),
   Layer.provide(Layer.succeed(Logger.LogToStderr, true)),
 );
