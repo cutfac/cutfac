@@ -168,6 +168,15 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
     openItem(item.id);
   }
 
+  // The dialog outlives the page it opened on, so a made item leaves it closed and empty.
+  function reset() {
+    setOpen(false);
+    setTitle("");
+    setFormat(null);
+    setInputs({});
+    setFile(undefined);
+  }
+
   function submit(event: SubmitEvent) {
     event.preventDefault();
 
@@ -176,6 +185,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
     setBusy(true);
     setError(undefined);
     create()
+      .then(reset)
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setBusy(false));
   }
