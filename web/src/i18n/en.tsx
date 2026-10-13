@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { AgentChoice, DetailField, Status } from "../api.ts";
+import type { ImportState } from "../lib/imports.ts";
 import type { TemplateState } from "../lib/templates.ts";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
@@ -113,11 +114,9 @@ export const en = {
     add: "Add from link",
     addTitle: "Add a template from a link",
     addBody:
-      "Paste a link to a template, a skill, or a post. Your agent reads it and sets it up here, and asks before it installs anything.",
+      "Paste a link to a template, a skill, or a post. Your agent reads it here and tells you what it needs. Nothing is installed until you press Allow.",
     link: "Link",
     linkPlaceholder: "Paste a link",
-    prompt: "Prompt for your agent",
-    promptHint: "Paste it into Claude Code or Codex. The template shows up here once it is saved.",
     copyPrompt: "Copy prompt",
     promptCopied: "Prompt copied. Paste it into your agent.",
     copyFix: "Copy fix prompt",
@@ -154,6 +153,46 @@ export const en = {
     structure: "Structure",
     hookRules: "Hook rules",
     checklist: "Checklist",
+  },
+  imports: {
+    listTitle: "Importing",
+    agent: "Agent",
+    start: "Bring it in",
+    noAgent: (link: Link) => (
+      <>No agent is installed. {link("Connect one")}, or copy the prompt into your own agent.</>
+    ),
+    state: {
+      reading: "Reading the link…",
+      waiting: "Waiting for you",
+      installing: "Setting it up…",
+      done: "Done",
+      failed: "Failed",
+      stopped: "Stopped",
+      closed: "Closed",
+    } satisfies Record<ImportState, string>,
+    startMessage: (link: ReactNode) => <>Bring in a template from {link}</>,
+    allowed: "Allowed installs",
+    allowTitle: "Let the agent set it up?",
+    allowBody:
+      "The agent can then install what it listed above and write the template into this workspace. Allow it only if you trust where the link comes from.",
+    allow: "Allow",
+    askFirst: "Not sure? Ask about it below first.",
+    retry: "Try again",
+    /** Sent to the agent as the user's reply when they try again. */
+    retryBody: "Please pick up where you left off.",
+    added: "Added",
+    addedNothing: "Nothing was added yet",
+    addedNothingBody: "Ask the agent below what is left, or finish if you are done.",
+    finish: "Finish",
+    close: "Close import",
+    closedNote: "This import is closed.",
+    placeholder: {
+      waiting: "Ask a question, or press Allow",
+      working: "The agent is working…",
+      reply: "Reply to the agent",
+    },
+    reply: "Reply",
+    loadError: "Could not load the import",
   },
   newItem: {
     open: "New item",

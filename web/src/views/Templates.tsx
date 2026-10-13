@@ -1,9 +1,17 @@
-import { CopyIcon, LayoutTemplateIcon, LinkIcon, PlusIcon, TriangleAlertIcon } from "lucide-react";
-import { useState, type ReactElement, type ReactNode } from "react";
+import {
+  CopyIcon,
+  DownloadIcon,
+  LayoutTemplateIcon,
+  LinkIcon,
+  PlusIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
+import { useEffect, useEffectEvent, useState, type FormEvent, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { ImportChat } from "@/components/import-chat";
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge, badgeVariants } from "@/components/ui/badge";
@@ -44,20 +52,40 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import { Spinner } from "@/components/ui/spinner";
 import { safeHttpUrl } from "@/lib/utils";
 
 import {
   api,
   fileUrl,
+  type AgentName,
   type Format,
   type FormatStatus,
+  type ImportDetail,
   type InputChoice,
   type InputField,
+  type WorkspaceInfo,
 } from "../api.ts";
-import { href, useLive } from "../hooks.ts";
-import { messages, useMessages } from "../i18n/index.ts";
+import { AGENTS } from "../components/editor/chat.tsx";
+import { agentInstalled, href, useAgentStatuses, useLive } from "../hooks.ts";
+import { messages, useLocale, useMessages } from "../i18n/index.ts";
+import {
+  importAgent,
+  importIdOf,
+  importRouteId,
+  importState,
+  isWorking,
+  linkLabel,
+} from "../lib/imports.ts";
+import { NO_RUN } from "../lib/run.ts";
 import {
   coverOf,
   fixPrompt,
@@ -75,29 +103,28 @@ function copyText(text: string, done: string) {
     .catch((cause: Error) => toast.error(messages().common.couldNotCopy(cause.message)));
 }
 
+interface AddTemplateProps {
+  ws: WorkspaceInfo;
+  /** An import started; the list should show it. */
+  onStarted: () => void;
+}
+
 /**
- * Bringing a template in is the agent's job: this turns a link into the prompt that asks for it,
- * so any template, skill, or post the agent can read can become one.
+ * Bringing a template in is the agent's job: the board runs the user's agent on a link to any
+ * template, skill, or post it can read, or turns the link into a prompt to paste into one.
  */
-function AddTemplate({ root, trigger }: { root: string; trigger?: ReactElement }) {
+function AddTemplate({ ws, onStarted }: AddTemplateProps) {
+  const [open, setOpen] = useState(false);
   const t = useMessages();
-  const [link, setLink] = useState("");
-  const prompt = link.trim() === "" ? undefined : importPrompt(link, root);
 
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        if (!open) setLink("");
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          trigger ?? (
-            <Button>
-              <PlusIcon data-icon="inline-start" />
-              {t.templates.add}
-            </Button>
-          )
+          <Button>
+            <PlusIcon data-icon="inline-start" />
+            {t.templates.add}
+          </Button>
         }
       />
       <DialogContent>
@@ -105,74 +132,173 @@ function AddTemplate({ root, trigger }: { root: string; trigger?: ReactElement }
           <DialogTitle>{t.templates.addTitle}</DialogTitle>
           <DialogDescription>{t.templates.addBody}</DialogDescription>
         </DialogHeader>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="template-link">{t.templates.link}</FieldLabel>
-            <InputGroup>
-              <InputGroupAddon>
-                <LinkIcon />
-              </InputGroupAddon>
-              <InputGroupInput
-                id="template-link"
-                type="url"
-                value={link}
-                placeholder={t.templates.linkPlaceholder}
-                onChange={(e) => setLink(e.target.value)}
-              />
-            </InputGroup>
-          </Field>
-          {prompt === undefined ? null : (
-            <Field>
-              <FieldLabel htmlFor="template-prompt">{t.templates.prompt}</FieldLabel>
-              <Textarea
-                id="template-prompt"
-                readOnly
-                value={prompt}
-                className="min-h-40"
-                onFocus={(e) => e.target.select()}
-              />
-              <FieldDescription>{t.templates.promptHint}</FieldDescription>
-            </Field>
-          )}
-        </FieldGroup>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>{t.common.close}</DialogClose>
-          <Button
-            disabled={prompt === undefined}
-            onClick={() => {
-              if (prompt !== undefined) copyText(prompt, t.templates.promptCopied);
-            }}
-          >
-            <CopyIcon data-icon="inline-start" />
-            {t.templates.copyPrompt}
-          </Button>
-        </DialogFooter>
+        <AddTemplateForm
+          ws={ws}
+          onStarted={(detail) => {
+            setOpen(false);
+            onStarted();
+            location.hash = href("templates", importRouteId(detail.id));
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
 }
 
+/**
+ * The dialog's form. It mounts with the dialog, so each opening starts empty and reads which
+ * agents are installed afresh: the user may have just connected one.
+ */
+function AddTemplateForm({
+  ws,
+  onStarted,
+}: {
+  ws: WorkspaceInfo;
+  onStarted: (detail: ImportDetail) => void;
+}) {
+  const statuses = useAgentStatuses();
+  const [link, setLink] = useState("");
+  const [chosen, setChosen] = useState<AgentName | undefined>(undefined);
+  const [sending, setSending] = useState(false);
+  const agent = chosen ?? importAgent(ws.config.agent.default, statuses);
+  const trimmed = link.trim();
+  const locale = useLocale();
+  const t = useMessages();
+
+  const agentItems = AGENTS.map(({ agent: value, label }) => ({
+    value,
+    label,
+    disabled: !agentInstalled(statuses, value),
+  }));
+
+  async function start(event: FormEvent) {
+    event.preventDefault();
+
+    if (trimmed === "" || agent === undefined || sending) return;
+
+    setSending(true);
+
+    try {
+      onStarted(await api.startImport({ link: trimmed, agent, locale }));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : String(cause));
+      setSending(false);
+    }
+  }
+
+  return (
+    <form className="flex flex-col gap-6" onSubmit={(event) => void start(event)}>
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="template-link">{t.templates.link}</FieldLabel>
+          <InputGroup>
+            <InputGroupAddon>
+              <LinkIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              id="template-link"
+              type="url"
+              required
+              value={link}
+              placeholder={t.templates.linkPlaceholder}
+              onChange={(e) => setLink(e.target.value)}
+            />
+          </InputGroup>
+        </Field>
+        {agent === undefined ? (
+          <FieldDescription>
+            {t.imports.noAgent((text) => (
+              <a href={href("setup")}>{text}</a>
+            ))}
+          </FieldDescription>
+        ) : (
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor="template-agent">{t.imports.agent}</FieldLabel>
+            <Select
+              items={agentItems}
+              value={agent}
+              onValueChange={(value) => {
+                if (value !== null) setChosen(value);
+              }}
+            >
+              <SelectTrigger id="template-agent" className="ml-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                {agentItems.map((option) => (
+                  <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+      </FieldGroup>
+      <DialogFooter>
+        <DialogClose render={<Button variant="outline" />}>{t.common.close}</DialogClose>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={trimmed === ""}
+          onClick={() => copyText(importPrompt(trimmed, ws.root), t.templates.promptCopied)}
+        >
+          <CopyIcon data-icon="inline-start" />
+          {t.templates.copyPrompt}
+        </Button>
+        <Button type="submit" disabled={trimmed === "" || agent === undefined || sending}>
+          {sending ? <Spinner data-icon="inline-start" /> : null}
+          {t.imports.start}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** How often the list looks again while an import's agent works; the file watcher skips them. */
+const IMPORT_POLL_MS = 2000;
+
 export function Templates({ selected }: { selected: string | undefined }) {
   const t = useMessages();
   const { data: statuses, error } = useLive("formats-status", api.formatStatuses);
   const { data: ws } = useLive("workspace", api.workspace);
+  const imports = useLive("imports", api.imports);
   const templates = statuses === undefined ? undefined : sortTemplates(statuses);
+  const importId = importIdOf(selected);
+  const open = imports.data?.filter((detail) => !detail.doc.closed) ?? [];
+  const working = open.some((detail) => isWorking(importState(detail, NO_RUN)));
+  const reloadImports = useEffectEvent(imports.reload);
+
+  // An import's agent can finish while it is not open; keep its row's state current.
+  useEffect(() => {
+    if (!working) return;
+
+    const timer = setInterval(() => reloadImports(), IMPORT_POLL_MS);
+
+    return () => clearInterval(timer);
+  }, [working]);
 
   const current =
-    selected === undefined ? templates?.[0] : templates?.find((s) => s.id === selected);
+    importId !== undefined
+      ? undefined
+      : selected === undefined
+        ? templates?.[0]
+        : templates?.find((s) => s.id === selected);
+
+  const add = ws === undefined ? null : <AddTemplate ws={ws} onStarted={imports.reload} />;
 
   return (
     <Page
       width="wide"
       title={t.templates.title}
       description={t.templates.description}
-      actions={ws === undefined ? null : <AddTemplate root={ws.root} />}
+      actions={add}
     >
       {error ? (
         <ErrorAlert title={t.templates.loadError} message={error} />
       ) : templates === undefined ? (
         <ListSkeleton rows={4} />
-      ) : templates.length === 0 ? (
+      ) : templates.length === 0 && open.length === 0 && importId === undefined ? (
         <div className="rounded-3xl border border-dashed">
           <Empty>
             <EmptyHeader>
@@ -186,21 +312,33 @@ export function Templates({ selected }: { selected: string | undefined }) {
                 ))}
               </EmptyDescription>
             </EmptyHeader>
-            {ws === undefined ? null : (
-              <EmptyContent>
-                <AddTemplate root={ws.root} />
-              </EmptyContent>
-            )}
+            {ws === undefined ? null : <EmptyContent>{add}</EmptyContent>}
           </Empty>
         </div>
       ) : (
         <div className="grid grid-cols-[18rem_minmax(0,1fr)] items-start gap-6">
-          <ItemGroup>
-            {templates.map((s) => (
-              <TemplateRow key={s.id} status={s} active={s.id === current?.id} />
-            ))}
-          </ItemGroup>
-          {current ? (
+          <div className="flex flex-col gap-4">
+            {open.length === 0 ? null : (
+              <section className="flex flex-col gap-1.5">
+                <h2 className="px-3 text-xs font-medium text-muted-foreground">
+                  {t.imports.listTitle}
+                </h2>
+                <ItemGroup>
+                  {open.map((detail) => (
+                    <ImportRow key={detail.id} detail={detail} active={detail.id === importId} />
+                  ))}
+                </ItemGroup>
+              </section>
+            )}
+            <ItemGroup>
+              {templates.map((s) => (
+                <TemplateRow key={s.id} status={s} active={s.id === current?.id} />
+              ))}
+            </ItemGroup>
+          </div>
+          {importId !== undefined ? (
+            <ImportChat key={importId} id={importId} onChange={imports.reload} />
+          ) : current ? (
             <TemplateDetail status={current} root={ws?.root} />
           ) : (
             <div className="rounded-3xl border border-dashed">
@@ -218,6 +356,32 @@ export function Templates({ selected }: { selected: string | undefined }) {
         </div>
       )}
     </Page>
+  );
+}
+
+/** An import in progress, above the templates it may add. */
+function ImportRow({ detail, active }: { detail: ImportDetail; active: boolean }) {
+  const t = useMessages();
+  const state = importState(detail, NO_RUN);
+
+  return (
+    <div className="relative rounded-2xl select-none has-focus-visible:*:bg-muted">
+      <Item variant={active ? "muted" : "default"} size="sm">
+        <ItemMedia variant="icon">{isWorking(state) ? <Spinner /> : <DownloadIcon />}</ItemMedia>
+        <ItemContent>
+          <ItemTitle>
+            <a
+              href={href("templates", importRouteId(detail.id))}
+              aria-current={active ? "page" : undefined}
+              className="outline-none after:absolute after:inset-0 after:rounded-2xl"
+            >
+              {linkLabel(detail.doc.link)}
+            </a>
+          </ItemTitle>
+          <ItemDescription>{t.imports.state[state]}</ItemDescription>
+        </ItemContent>
+      </Item>
+    </div>
   );
 }
 

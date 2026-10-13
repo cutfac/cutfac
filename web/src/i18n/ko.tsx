@@ -105,11 +105,9 @@ export const ko: Messages = {
     add: "링크로 추가",
     addTitle: "링크로 템플릿 추가",
     addBody:
-      "템플릿, 스킬, 게시물 링크를 붙여 넣으세요. 에이전트가 읽고 여기서 쓸 수 있게 설정해요. 무언가를 설치하기 전에는 먼저 물어봐요.",
+      "템플릿, 스킬, 게시물 링크를 붙여 넣으세요. 에이전트가 여기서 읽고 필요한 것을 알려 줘요. '허용'을 누르기 전에는 아무것도 설치하지 않아요.",
     link: "링크",
     linkPlaceholder: "링크를 붙여 넣으세요",
-    prompt: "에이전트에게 줄 프롬프트",
-    promptHint: "Claude Code나 Codex에 붙여 넣으세요. 저장되면 템플릿이 여기에 나타나요.",
     copyPrompt: "프롬프트 복사",
     promptCopied: "프롬프트를 복사했어요. 에이전트에 붙여 넣으세요.",
     copyFix: "수정 프롬프트 복사",
@@ -149,6 +147,48 @@ export const ko: Messages = {
     structure: "구성",
     hookRules: "훅 규칙",
     checklist: "체크리스트",
+  },
+  imports: {
+    listTitle: "가져오는 중",
+    agent: "에이전트",
+    start: "가져오기",
+    noAgent: (link) => (
+      <>
+        설치된 에이전트가 없어요. {link("에이전트를 연결")}하거나, 프롬프트를 복사해 쓰던 에이전트에
+        붙여 넣으세요.
+      </>
+    ),
+    state: {
+      reading: "링크를 읽는 중…",
+      waiting: "확인을 기다리는 중",
+      installing: "설정하는 중…",
+      done: "완료",
+      failed: "실패",
+      stopped: "중지됨",
+      closed: "닫힘",
+    },
+    startMessage: (link) => <>{link}에서 템플릿을 가져와 주세요</>,
+    allowed: "설치 허용함",
+    allowTitle: "에이전트가 설정하도록 허용할까요?",
+    allowBody:
+      "허용하면 에이전트가 위에 적은 것을 설치하고 이 워크스페이스에 템플릿을 만들어요. 링크의 출처를 믿을 수 있을 때만 허용하세요.",
+    allow: "허용",
+    askFirst: "궁금한 점이 있으면 먼저 아래에서 물어보세요.",
+    retry: "다시 시도",
+    retryBody: "멈춘 곳부터 이어서 해 주세요.",
+    added: "추가했어요",
+    addedNothing: "아직 추가된 게 없어요",
+    addedNothingBody: "남은 일이 무엇인지 아래에서 물어보거나, 다 됐으면 마치세요.",
+    finish: "마치기",
+    close: "가져오기 닫기",
+    closedNote: "닫힌 가져오기예요.",
+    placeholder: {
+      waiting: "질문하거나 '허용'을 누르세요",
+      working: "에이전트가 작업하는 중이에요…",
+      reply: "에이전트에게 답하세요",
+    },
+    reply: "답장",
+    loadError: "가져오기를 불러오지 못했어요",
   },
   newItem: {
     open: "새 아이템",
