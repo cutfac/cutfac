@@ -2,6 +2,9 @@
 
 Content Factory: a local-first short-form content factory with an MCP server, local API, and web board.
 
+- First principle: natural, agent-first UX. The user's agent should get what it needs (the skill,
+  workspace state, problems and how to fix them) through the tools it already calls, with no manual
+  setup steps for the user. Design every feature for that first, then for people on the board.
 - Runtime and packages: Bun only (`bun`, `bun run`). Lint with `oxlint`, format with `oxfmt`.
 - Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
 - All filesystem access goes through `Workspace` in `src/core/workspace.ts`; never bypass its root guard.

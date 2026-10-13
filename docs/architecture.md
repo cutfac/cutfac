@@ -2,14 +2,19 @@
 
 ## Principles
 
-1. **Local first.** The workspace is a folder on the user's machine and the files are the source of
+1. **Agent-first, naturally.** The user's agent is the main user. What it needs (the skill, the
+   state of the workspace, what is broken and how to fix it) reaches it through the tools it
+   already calls, without the user running setup steps or relaying messages. When the factory
+   cannot do something itself, it tells the agent what to do and why, in words the agent can act
+   on, and the agent asks the user only for decisions and consent.
+2. **Local first.** The workspace is a folder on the user's machine and the files are the source of
    truth. Agents edit the same files directly; the server indexes on demand (no database).
-2. **Bring your own agent.** Claude Code and Codex connect through the stdio MCP server and the
+3. **Bring your own agent.** Claude Code and Codex connect through the stdio MCP server and the
    bundled `content-factory` skill. The factory does deterministic work (probe, cuts, frames,
    checks). Agents do interpretation and production.
-3. **Pull-based feedback.** Comments left on the board are stored in `item.yaml`. The agent reads
+4. **Pull-based feedback.** Comments left on the board are stored in `item.yaml`. The agent reads
    them with `list_open_feedback`, or the user pastes the board's "copy agent prompt".
-4. **Domain-agnostic core.** Product, formats, and renderers are workspace data; chess is one
+5. **Domain-agnostic core.** Product, formats, and renderers are workspace data; chess is one
    workspace, not part of the core.
 
 ## Components
