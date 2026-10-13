@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { AgentChoice, DetailField, Status } from "../api.ts";
+import type { TemplateState } from "../lib/templates.ts";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
@@ -35,6 +36,7 @@ export const en = {
     main: "Main",
     board: "Board",
     references: "References",
+    templates: "Templates",
     calendar: "Calendar",
     product: "Product",
     setup: "Setup",
@@ -64,11 +66,12 @@ export const en = {
     title: "Board",
     loadError: "Could not load the board",
     count: (count: number) => (count === 1 ? "1 item" : `${count} items`),
-    allFormats: "All formats",
-    filterByFormat: "Filter by format",
+    allFormats: "All templates",
+    filterByFormat: "Filter by template",
     archived: "Archived",
     emptyTitle: "Create your first video — the agent will make it",
-    emptyBody: "Give it a title and pick a format. You review the result here and ask for changes.",
+    emptyBody:
+      "Give it a title and pick a template. You review the result here and ask for changes.",
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
     legacy: "legacy",
@@ -101,11 +104,56 @@ export const en = {
     capturesEmpty: (folder: ReactNode) => (
       <>Add reviewed screenshots or screen recordings to {folder}. Agents use them in the videos.</>
     ),
-    formats: "Formats",
-    formatsBody: "The reusable recipes your agent makes videos from.",
-    formatsEmpty: (link: Link) => (
-      <>No formats yet. {link("Analyze a reference")} and ask your agent to save one.</>
+  },
+  templates: {
+    title: "Templates",
+    description:
+      "The recipes your agent makes videos from. Bring one in from any link, or distill one from references.",
+    loadError: "Could not load the templates",
+    add: "Add from link",
+    addTitle: "Add a template from a link",
+    addBody:
+      "Paste a link to a template, a skill, or a post. Your agent reads it and sets it up here, and asks before it installs anything.",
+    link: "Link",
+    linkPlaceholder: "Paste a link",
+    prompt: "Prompt for your agent",
+    promptHint: "Paste it into Claude Code or Codex. The template shows up here once it is saved.",
+    copyPrompt: "Copy prompt",
+    promptCopied: "Prompt copied. Paste it into your agent.",
+    copyFix: "Copy fix prompt",
+    emptyTitle: "No templates yet",
+    emptyBody: (link: Link) => (
+      <>Add one from a link, or {link("analyze a reference")} and ask your agent to save one.</>
     ),
+    missingTitle: "Template not found",
+    missingBody: "It may have been renamed or removed.",
+    state: {
+      ready: "Ready",
+      incomplete: "Needs setup",
+      broken: "Cannot be read",
+    } satisfies Record<TemplateState, string>,
+    incompleteTitle: "This template needs a few things before it can be used",
+    brokenTitle: "This template's format.yaml cannot be read",
+    fixHint: "Copy the fix prompt and give it to your agent.",
+    duration: (min: number, max: number) => `${min}–${max}s`,
+    needsAudio: "Needs audio",
+    skills: "Skills",
+    installed: "Installed",
+    missing: "Not installed",
+    programs: "Programs",
+    tools: "Agent tools",
+    source: "Source",
+    author: "Author",
+    license: "License",
+    inputs: "Inputs",
+    inputsBody: "Picked or written when a new item is made from this template.",
+    required: "Required",
+    freeText: "Free text",
+    default: "Default",
+    defaultValue: (value: string) => `Default: ${value}`,
+    structure: "Structure",
+    hookRules: "Hook rules",
+    checklist: "Checklist",
   },
   newItem: {
     open: "New item",
@@ -116,10 +164,13 @@ export const en = {
     uploadFailed: (message: string) => `Item created, but the upload failed: ${message}`,
     titleLabel: "Title",
     titlePlaceholder: "What is the video about?",
-    format: "Format",
-    noFormat: "No format",
+    format: "Template",
+    noFormat: "No template",
     optional: "Optional",
-    formatHint: "A format gives the agent a proven structure to follow.",
+    formatHint: "A template gives the agent a proven structure to follow.",
+    required: "Required",
+    choose: "Choose…",
+    none: "None",
     file: "Video or image",
     removeFile: "Remove file",
     drop: "Drop a file here, or click to browse",
@@ -234,7 +285,7 @@ export const en = {
     runChecks: "Run checks",
     runAgain: "Run again",
     noVideos: "No videos to check.",
-    format: "Format",
+    format: "Template",
     reference: "Reference",
     title: "Title",
     hook: "Hook",

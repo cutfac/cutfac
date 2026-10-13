@@ -13,6 +13,7 @@ import { ItemView } from "./views/ItemView.tsx";
 import { ProductView } from "./views/ProductView.tsx";
 import { References } from "./views/References.tsx";
 import { Setup } from "./views/Setup.tsx";
+import { Templates } from "./views/Templates.tsx";
 
 export function App() {
   const t = useMessages();
@@ -56,6 +57,8 @@ export function App() {
 
 function renderView(view: string, id: string | undefined) {
   if (view === "references") return <References selected={id} />;
+
+  if (view === "templates") return <Templates selected={id} />;
 
   if (view === "calendar") return <Calendar />;
 

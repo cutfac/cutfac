@@ -1,0 +1,547 @@
+import { CopyIcon, LayoutTemplateIcon, LinkIcon, PlusIcon, TriangleAlertIcon } from "lucide-react";
+import { useState, type ReactElement, type ReactNode } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
+
+import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge, badgeVariants } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { safeHttpUrl } from "@/lib/utils";
+
+import {
+  api,
+  fileUrl,
+  type Format,
+  type FormatStatus,
+  type InputChoice,
+  type InputField,
+} from "../api.ts";
+import { href, useLive } from "../hooks.ts";
+import { messages, useMessages } from "../i18n/index.ts";
+import {
+  coverOf,
+  fixPrompt,
+  importPrompt,
+  isClip,
+  missingFiles,
+  sortTemplates,
+  templateState,
+} from "../lib/templates.ts";
+
+function copyText(text: string, done: string) {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => toast.success(done))
+    .catch((cause: Error) => toast.error(messages().common.couldNotCopy(cause.message)));
+}
+
+/**
+ * Bringing a template in is the agent's job: this turns a link into the prompt that asks for it,
+ * so any template, skill, or post the agent can read can become one.
+ */
+function AddTemplate({ root, trigger }: { root: string; trigger?: ReactElement }) {
+  const t = useMessages();
+  const [link, setLink] = useState("");
+  const prompt = link.trim() === "" ? undefined : importPrompt(link, root);
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) setLink("");
+      }}
+    >
+      <DialogTrigger
+        render={
+          trigger ?? (
+            <Button>
+              <PlusIcon data-icon="inline-start" />
+              {t.templates.add}
+            </Button>
+          )
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t.templates.addTitle}</DialogTitle>
+          <DialogDescription>{t.templates.addBody}</DialogDescription>
+        </DialogHeader>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="template-link">{t.templates.link}</FieldLabel>
+            <InputGroup>
+              <InputGroupAddon>
+                <LinkIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                id="template-link"
+                type="url"
+                value={link}
+                placeholder={t.templates.linkPlaceholder}
+                onChange={(e) => setLink(e.target.value)}
+              />
+            </InputGroup>
+          </Field>
+          {prompt === undefined ? null : (
+            <Field>
+              <FieldLabel htmlFor="template-prompt">{t.templates.prompt}</FieldLabel>
+              <Textarea
+                id="template-prompt"
+                readOnly
+                value={prompt}
+                className="min-h-40"
+                onFocus={(e) => e.target.select()}
+              />
+              <FieldDescription>{t.templates.promptHint}</FieldDescription>
+            </Field>
+          )}
+        </FieldGroup>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>{t.common.close}</DialogClose>
+          <Button
+            disabled={prompt === undefined}
+            onClick={() => {
+              if (prompt !== undefined) copyText(prompt, t.templates.promptCopied);
+            }}
+          >
+            <CopyIcon data-icon="inline-start" />
+            {t.templates.copyPrompt}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function Templates({ selected }: { selected: string | undefined }) {
+  const t = useMessages();
+  const { data: statuses, error } = useLive("formats-status", api.formatStatuses);
+  const { data: ws } = useLive("workspace", api.workspace);
+  const templates = statuses === undefined ? undefined : sortTemplates(statuses);
+
+  const current =
+    selected === undefined ? templates?.[0] : templates?.find((s) => s.id === selected);
+
+  return (
+    <Page
+      width="wide"
+      title={t.templates.title}
+      description={t.templates.description}
+      actions={ws === undefined ? null : <AddTemplate root={ws.root} />}
+    >
+      {error ? (
+        <ErrorAlert title={t.templates.loadError} message={error} />
+      ) : templates === undefined ? (
+        <ListSkeleton rows={4} />
+      ) : templates.length === 0 ? (
+        <div className="rounded-3xl border border-dashed">
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <LayoutTemplateIcon />
+              </EmptyMedia>
+              <EmptyTitle>{t.templates.emptyTitle}</EmptyTitle>
+              <EmptyDescription>
+                {t.templates.emptyBody((text) => (
+                  <a href={href("references")}>{text}</a>
+                ))}
+              </EmptyDescription>
+            </EmptyHeader>
+            {ws === undefined ? null : (
+              <EmptyContent>
+                <AddTemplate root={ws.root} />
+              </EmptyContent>
+            )}
+          </Empty>
+        </div>
+      ) : (
+        <div className="grid grid-cols-[18rem_minmax(0,1fr)] items-start gap-6">
+          <ItemGroup>
+            {templates.map((s) => (
+              <TemplateRow key={s.id} status={s} active={s.id === current?.id} />
+            ))}
+          </ItemGroup>
+          {current ? (
+            <TemplateDetail status={current} root={ws?.root} />
+          ) : (
+            <div className="rounded-3xl border border-dashed">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <LayoutTemplateIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>{t.templates.missingTitle}</EmptyTitle>
+                  <EmptyDescription>{t.templates.missingBody}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </div>
+          )}
+        </div>
+      )}
+    </Page>
+  );
+}
+
+function TemplateRow({ status, active }: { status: FormatStatus; active: boolean }) {
+  const t = useMessages();
+  const state = templateState(status);
+  const image = coverOf(status);
+  const doc = status.format?.doc;
+
+  return (
+    <div className="relative rounded-2xl select-none has-focus-visible:*:bg-muted">
+      <Item variant={active ? "muted" : "default"} size="sm">
+        <ItemMedia variant={image === undefined ? "icon" : "image"}>
+          {image === undefined ? (
+            <LayoutTemplateIcon />
+          ) : (
+            <img src={fileUrl(image)} alt="" loading="lazy" />
+          )}
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>
+            <a
+              href={href("templates", status.id)}
+              aria-current={active ? "page" : undefined}
+              className="outline-none after:absolute after:inset-0 after:rounded-2xl"
+            >
+              {doc?.title ?? status.id}
+            </a>
+          </ItemTitle>
+          <ItemDescription>
+            {state === "ready" ? doc?.summary || t.templates.state.ready : t.templates.state[state]}
+          </ItemDescription>
+        </ItemContent>
+      </Item>
+    </div>
+  );
+}
+
+/** A label and its value, in the two-column list of what a template needs and where it came from. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-wrap items-center gap-1.5">{children}</dd>
+    </>
+  );
+}
+
+function List({
+  title,
+  items,
+  ordered = false,
+}: {
+  title: string;
+  items: string[];
+  ordered?: boolean;
+}) {
+  if (items.length === 0) return null;
+
+  const Tag = ordered ? "ol" : "ul";
+
+  return (
+    <section className="flex flex-col gap-1.5">
+      <h2 className="font-medium">{title}</h2>
+      <Tag className={`${ordered ? "list-decimal" : "list-disc"} pl-5 text-muted-foreground`}>
+        {items.map((entry) => (
+          <li key={entry}>{entry}</li>
+        ))}
+      </Tag>
+    </section>
+  );
+}
+
+function TemplateDetail({ status, root }: { status: FormatStatus; root: string | undefined }) {
+  const t = useMessages();
+  const state = templateState(status);
+  const { format, check } = status;
+  const doc = format?.doc;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{doc?.title ?? status.id}</CardTitle>
+        <CardDescription>{doc?.summary || `formats/${status.id}`}</CardDescription>
+        {state === "ready" || root === undefined ? null : (
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => copyText(fixPrompt(status.id, root), t.templates.promptCopied)}
+            >
+              <CopyIcon data-icon="inline-start" />
+              {t.templates.copyFix}
+            </Button>
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-6 text-sm">
+          {check.problems.length === 0 ? null : (
+            <Alert variant={state === "broken" ? "destructive" : "default"}>
+              <TriangleAlertIcon />
+              <AlertTitle>
+                {state === "broken" ? t.templates.brokenTitle : t.templates.incompleteTitle}
+              </AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc pl-5">
+                  {check.problems.map((p) => (
+                    <li key={`${p.kind}:${p.subject}:${p.message}`}>{p.message}</li>
+                  ))}
+                </ul>
+                <p>{t.templates.fixHint}</p>
+              </AlertDescription>
+            </Alert>
+          )}
+          {format === undefined ? null : <FormatBody format={format} status={status} />}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FormatBody({ format, status }: { format: Format; status: FormatStatus }) {
+  const t = useMessages();
+  const { doc } = format;
+  const source = doc.source?.url === undefined ? undefined : safeHttpUrl(doc.source.url);
+  const missing = missingFiles(status);
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {doc.aspects.map((aspect) => (
+          <Badge key={aspect} variant="secondary">
+            {aspect}
+          </Badge>
+        ))}
+        {doc.duration === undefined ? null : (
+          <Badge variant="secondary">
+            {t.templates.duration(doc.duration.min, doc.duration.max)}
+          </Badge>
+        )}
+        {doc.requireAudio ? <Badge variant="secondary">{t.templates.needsAudio}</Badge> : null}
+        {doc.references.map((r) => (
+          <a key={r} href={href("references", r)} className={badgeVariants({ variant: "outline" })}>
+            {r}
+          </a>
+        ))}
+      </div>
+
+      {doc.skills.length + doc.requires.length + doc.tools.length > 0 ||
+      doc.source !== undefined ? (
+        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-2">
+          {doc.skills.length === 0 ? null : (
+            <Fact label={t.templates.skills}>
+              {doc.skills.map((skill) => {
+                const installed = status.check.skills[skill.name] !== undefined;
+
+                return (
+                  <Badge
+                    key={skill.name}
+                    variant={installed ? "outline" : "destructive"}
+                    title={installed ? t.templates.installed : t.templates.missing}
+                  >
+                    {skill.name}
+                  </Badge>
+                );
+              })}
+            </Fact>
+          )}
+          {doc.requires.length === 0 ? null : (
+            <Fact label={t.templates.programs}>
+              {doc.requires.map((program) => (
+                <code key={program}>{program}</code>
+              ))}
+            </Fact>
+          )}
+          {doc.tools.length === 0 ? null : (
+            <Fact label={t.templates.tools}>
+              {doc.tools.map((tool) => (
+                <code key={tool}>{tool}</code>
+              ))}
+            </Fact>
+          )}
+          {doc.source?.url === undefined ? null : (
+            <Fact label={t.templates.source}>
+              {source === undefined ? (
+                <span className="truncate">{doc.source.url}</span>
+              ) : (
+                <a
+                  href={source}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="truncate underline underline-offset-4"
+                >
+                  {doc.source.url}
+                </a>
+              )}
+            </Fact>
+          )}
+          {doc.source?.author === undefined ? null : (
+            <Fact label={t.templates.author}>{doc.source.author}</Fact>
+          )}
+          {doc.source?.license === undefined ? null : (
+            <Fact label={t.templates.license}>{doc.source.license}</Fact>
+          )}
+        </dl>
+      ) : null}
+
+      {doc.inputs.length === 0 ? null : (
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-0.5">
+            <h2 className="font-medium">{t.templates.inputs}</h2>
+            <p className="text-muted-foreground">{t.templates.inputsBody}</p>
+          </div>
+          {doc.inputs.map((field) => (
+            <InputSummary key={field.id} field={field} dir={format.dir} missing={missing} />
+          ))}
+        </section>
+      )}
+
+      <List title={t.templates.structure} items={doc.structure} ordered />
+      <List title={t.templates.hookRules} items={doc.hookRules} />
+      <List title={t.templates.checklist} items={doc.checklist} />
+
+      {format.readme === undefined ? null : (
+        <>
+          <Separator />
+          <div className="typeset typeset-docs">
+            <Markdown remarkPlugins={[remarkGfm]}>{format.readme}</Markdown>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function InputSummary({
+  field,
+  dir,
+  missing,
+}: {
+  field: InputField;
+  dir: string;
+  missing: ReadonlySet<string>;
+}) {
+  const t = useMessages();
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-medium">{field.title}</h3>
+        {field.required ? <Badge variant="outline">{t.templates.required}</Badge> : null}
+        {field.choices.length === 0 ? <Badge variant="ghost">{t.templates.freeText}</Badge> : null}
+      </div>
+      {field.description === undefined ? null : (
+        <p className="text-muted-foreground">{field.description}</p>
+      )}
+      {field.choices.length === 0 ? (
+        field.default === undefined ? null : (
+          <p className="text-muted-foreground">{t.templates.defaultValue(field.default)}</p>
+        )
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
+          {field.choices.map((choice) => (
+            <ChoiceCard
+              key={choice.id}
+              choice={choice}
+              dir={dir}
+              missing={missing}
+              isDefault={choice.id === field.default}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChoiceCard({
+  choice,
+  dir,
+  missing,
+  isDefault,
+}: {
+  choice: InputChoice;
+  dir: string;
+  missing: ReadonlySet<string>;
+  isDefault: boolean;
+}) {
+  const t = useMessages();
+
+  const preview =
+    choice.preview === undefined || missing.has(choice.preview) ? undefined : choice.preview;
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border">
+      {preview === undefined ? null : isClip(preview) ? (
+        // Preview clips are silent loops that show a look, so they have no captions.
+        // oxlint-disable-next-line jsx-a11y/media-has-caption
+        <video
+          src={fileUrl(`${dir}/${preview}`)}
+          className="aspect-video w-full bg-muted object-cover"
+          muted
+          loop
+          playsInline
+          controls
+        />
+      ) : (
+        <img
+          src={fileUrl(`${dir}/${preview}`)}
+          alt={choice.title}
+          loading="lazy"
+          className="aspect-video w-full bg-muted object-cover"
+        />
+      )}
+      <div className="flex flex-col gap-1 p-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-medium">{choice.title}</span>
+          {isDefault ? <Badge variant="secondary">{t.templates.default}</Badge> : null}
+        </div>
+        {choice.summary === undefined ? null : (
+          <p className="text-muted-foreground">{choice.summary}</p>
+        )}
+      </div>
+    </div>
+  );
+}

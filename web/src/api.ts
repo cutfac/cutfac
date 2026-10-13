@@ -217,6 +217,8 @@ export interface ItemDoc {
   hook?: string;
   caption?: string;
   notes?: string;
+  /** What was picked for the format's inputs, by input id. */
+  inputs?: Partial<Record<string, string>>;
   platforms: Partial<Record<string, PlatformCopy>>;
   schedule: Schedule[];
   metrics: Metrics[];
@@ -314,6 +316,8 @@ export interface ItemPatch {
 export interface NewItem {
   title: string;
   format?: string;
+  /** Values for the format's inputs by input id; the server fills in defaults. */
+  inputs?: Record<string, string>;
 }
 
 export interface Check {
@@ -359,6 +363,26 @@ export interface Reference {
   };
 }
 
+export interface InputChoice {
+  id: string;
+  title: string;
+  summary?: string;
+  /** Format-relative image or clip that shows the choice. */
+  preview?: string;
+  files: string[];
+}
+
+/** Something the user picks or writes when making an item in a format. */
+export interface InputField {
+  id: string;
+  title: string;
+  description?: string;
+  /** Empty for free text. */
+  choices: InputChoice[];
+  default?: string;
+  required: boolean;
+}
+
 export interface Format {
   id: string;
   dir: string;
@@ -367,11 +391,38 @@ export interface Format {
     summary: string;
     references: string[];
     aspects: string[];
+    duration?: { min: number; max: number };
+    requireAudio: boolean;
     hookRules: string[];
     structure: string[];
     checklist: string[];
+    source?: { url?: string; author?: string; license?: string };
+    skills: { name: string; source?: string }[];
+    requires: string[];
+    tools: string[];
+    inputs: InputField[];
   };
   readme?: string;
+}
+
+export type FormatProblemKind = "spec" | "skill" | "program" | "file";
+
+export interface FormatProblem {
+  kind: FormatProblemKind;
+  subject: string;
+  message: string;
+}
+
+/** A format folder, readable or not, and what stands between it and its first item. */
+export interface FormatStatus {
+  id: string;
+  format?: Format;
+  check: {
+    ready: boolean;
+    problems: FormatProblem[];
+    /** Workspace-relative SKILL.md of each installed skill the format names. */
+    skills: Partial<Record<string, string>>;
+  };
 }
 
 export interface ProductDoc {
@@ -502,6 +553,7 @@ export const api = {
     return request<Reference>("/api/references", { method: "POST", body: form });
   },
   formats: () => request<Format[]>("/api/formats"),
+  formatStatuses: () => request<FormatStatus[]>("/api/formats/status"),
 };
 
 function eventData(event: Event): string {

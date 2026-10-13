@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { safeHttpUrl } from "@/lib/utils";
 
 import { api, type ItemDetail, type ItemPatch } from "../../api.ts";
-import { href } from "../../hooks.ts";
+import { href, useLive } from "../../hooks.ts";
 import { type Locale, useLocale, useMessages } from "../../i18n/index.ts";
 
 const showError = (cause: Error) => {
@@ -133,6 +133,18 @@ export function Details({
   const docs = Object.entries(item.docs);
   const t = useMessages();
   const locale = useLocale();
+  const { data: formats } = useLive("formats", api.formats);
+  const format = formats?.find((f) => f.id === doc.format);
+
+  // Inputs read best by the titles their template gives them, as written when it is gone.
+  const inputs = Object.entries(doc.inputs ?? {}).flatMap(([id, value]) => {
+    if (value === undefined) return [];
+
+    const field = format?.doc.inputs.find((f) => f.id === id);
+    const choice = field?.choices.find((c) => c.id === value);
+
+    return [{ id, label: field?.title ?? id, value: choice?.title ?? value }];
+  });
 
   const save = (patch: ItemPatch) => api.updateItem(item.id, patch).then(onItem, showError);
 
@@ -173,7 +185,18 @@ export function Details({
       </FieldGroup>
       {doc.format === undefined && doc.reference === undefined ? null : (
         <dl className="flex flex-col gap-3">
-          {doc.format === undefined ? null : <Fact label={t.item.format}>{doc.format}</Fact>}
+          {doc.format === undefined ? null : (
+            <Fact label={t.item.format}>
+              <a href={href("templates", doc.format)} className="underline underline-offset-4">
+                {format?.doc.title ?? doc.format}
+              </a>
+            </Fact>
+          )}
+          {inputs.map((input) => (
+            <Fact key={input.id} label={input.label}>
+              {input.value}
+            </Fact>
+          ))}
           {doc.reference === undefined ? null : (
             <Fact label={t.item.reference}>
               <a href={href("references", doc.reference)} className="underline underline-offset-4">

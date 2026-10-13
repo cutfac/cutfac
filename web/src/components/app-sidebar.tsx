@@ -6,6 +6,7 @@ import {
   FactoryIcon,
   FolderOpenIcon,
   LanguagesIcon,
+  LayoutTemplateIcon,
   LibraryIcon,
   MessageSquareIcon,
   PackageIcon,
@@ -55,13 +56,14 @@ import {
 import { feedbackUrl } from "../lib/feedback.ts";
 
 interface MainNavItem {
-  view: "board" | "references" | "calendar" | "product";
+  view: "board" | "references" | "templates" | "calendar" | "product";
   icon: LucideIcon;
 }
 
 const MAIN_NAV: ReadonlyArray<MainNavItem> = [
   { view: "board", icon: ClapperboardIcon },
   { view: "references", icon: LibraryIcon },
+  { view: "templates", icon: LayoutTemplateIcon },
   { view: "calendar", icon: CalendarDaysIcon },
   { view: "product", icon: PackageIcon },
 ];

@@ -3,20 +3,11 @@ import type { ReactNode } from "react";
 
 import { ErrorAlert, Page } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { badgeVariants } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemFooter,
-  ItemGroup,
-  ItemTitle,
-} from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { api, fileUrl } from "../api.ts";
-import { href, useLive } from "../hooks.ts";
+import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { ImportForm } from "./Setup.tsx";
 
@@ -152,44 +143,6 @@ export function ProductView() {
         ) : (
           <p className="text-sm text-muted-foreground">
             {t.product.capturesEmpty(<code>product/captures/</code>)}
-          </p>
-        )}
-      </Section>
-
-      <Section title={t.product.formats} description={t.product.formatsBody}>
-        {ws.formats.length > 0 ? (
-          <ItemGroup>
-            {ws.formats.map((f) => (
-              <Item key={f.id} variant="outline">
-                <ItemContent>
-                  <ItemTitle>{f.doc.title}</ItemTitle>
-                  <ItemDescription>{f.doc.summary}</ItemDescription>
-                </ItemContent>
-                {f.doc.references.length > 0 ? (
-                  <ItemFooter>
-                    <div className="flex flex-wrap gap-1">
-                      {f.doc.references.map((r) => (
-                        <a
-                          key={r}
-                          href={href("references", r)}
-                          className={badgeVariants({ variant: "outline" })}
-                        >
-                          {r}
-                        </a>
-                      ))}
-                    </div>
-                  </ItemFooter>
-                ) : null}
-              </Item>
-            ))}
-          </ItemGroup>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {t.product.formatsEmpty((text) => (
-              <a href={href("references")} className="underline underline-offset-4">
-                {text}
-              </a>
-            ))}
           </p>
         )}
       </Section>

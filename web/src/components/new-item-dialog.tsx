@@ -27,11 +27,85 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { megabytes } from "@/lib/utils";
 
-import { api, type Format, type NewItem } from "../api.ts";
+import { api, fileUrl, type Format, type InputField, type NewItem } from "../api.ts";
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { filledInputs, isClip, missingInputs } from "../lib/templates.ts";
 
 const isMedia = (file: File) => file.type.startsWith("video/") || file.type.startsWith("image/");
+
+function openItem(id: string) {
+  location.hash = href("item", id);
+}
+
+interface TemplateInputProps {
+  field: InputField;
+  /** The template's folder, which its choice previews are relative to. */
+  dir: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+/** One of a template's inputs: a pick from its choices, or free text. Blank means its default. */
+function TemplateInput({ field, dir, value, onChange }: TemplateInputProps) {
+  const t = useMessages();
+  const id = `new-item-input-${field.id}`;
+  const needed = field.required && field.default === undefined;
+
+  const items = [
+    ...(needed || field.default !== undefined ? [] : [{ value: null, label: t.newItem.none }]),
+    ...field.choices.map((choice) => ({ value: choice.id, label: choice.title })),
+  ];
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>
+        {field.title}
+        {needed ? <span className="text-muted-foreground">({t.newItem.required})</span> : null}
+      </FieldLabel>
+      {field.choices.length === 0 ? (
+        <Input
+          id={id}
+          required={needed}
+          value={value}
+          placeholder={field.default ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <Select
+          items={items}
+          value={value === "" ? (field.default ?? null) : value}
+          onValueChange={(next) => onChange(next ?? "")}
+        >
+          <SelectTrigger id={id} className="w-full">
+            <SelectValue placeholder={t.newItem.choose} />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            {items.map((item) => {
+              const preview = field.choices.find((c) => c.id === item.value)?.preview;
+
+              return (
+                <SelectItem key={item.value ?? "none"} value={item.value}>
+                  {preview === undefined || isClip(preview) ? null : (
+                    <img
+                      src={fileUrl(`${dir}/${preview}`)}
+                      alt=""
+                      className="size-6 rounded-md object-cover"
+                    />
+                  )}
+                  {item.label}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      )}
+      {field.description === undefined ? null : (
+        <FieldDescription>{field.description}</FieldDescription>
+      )}
+    </Field>
+  );
+}
 
 interface NewItemDialogProps {
   formats: Format[] | undefined;
@@ -39,16 +113,20 @@ interface NewItemDialogProps {
   trigger?: ReactElement;
 }
 
-/** Create an item from a title, an optional format, and optionally a clip to start from. */
+/** Create an item from a title, an optional template and its inputs, and optionally a clip to start from. */
 export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
   const t = useMessages();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [format, setFormat] = useState<string | null>(null);
+  const [inputs, setInputs] = useState<Partial<Record<string, string>>>({});
   const [file, setFile] = useState<File | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const chosen = formats?.find((f) => f.id === format);
+  const fields = chosen?.doc.inputs ?? [];
+  const missing = missingInputs(fields, inputs);
 
   function pick(candidate: File | undefined) {
     if (!candidate) return;
@@ -74,6 +152,10 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
 
     if (format) input.format = format;
 
+    const given = filledInputs(fields, inputs);
+
+    if (Object.keys(given).length > 0) input.inputs = given;
+
     const item = await api.createItem(input);
 
     if (file) {
@@ -83,7 +165,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
         .catch((cause: Error) => toast.error(t.newItem.uploadFailed(cause.message)));
     }
 
-    location.hash = href("item", item.id);
+    openItem(item.id);
   }
 
   function submit(event: SubmitEvent) {
@@ -144,7 +226,14 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
             <Field>
               <FieldLabel htmlFor="new-item-format">{t.newItem.format}</FieldLabel>
               {formats ? (
-                <Select items={formatItems} value={format} onValueChange={setFormat}>
+                <Select
+                  items={formatItems}
+                  value={format}
+                  onValueChange={(next) => {
+                    setFormat(next);
+                    setInputs({});
+                  }}
+                >
                   <SelectTrigger id="new-item-format" className="w-full">
                     <SelectValue placeholder={t.newItem.optional} />
                   </SelectTrigger>
@@ -161,6 +250,17 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
               )}
               <FieldDescription>{t.newItem.formatHint}</FieldDescription>
             </Field>
+            {chosen === undefined
+              ? null
+              : fields.map((field) => (
+                  <TemplateInput
+                    key={`${chosen.id}:${field.id}`}
+                    field={field}
+                    dir={chosen.dir}
+                    value={inputs[field.id] ?? ""}
+                    onChange={(value) => setInputs((prev) => ({ ...prev, [field.id]: value }))}
+                  />
+                ))}
             <Field>
               <FieldLabel htmlFor="new-item-file">{t.newItem.file}</FieldLabel>
               {file ? (
@@ -203,7 +303,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
             <DialogClose render={<Button type="button" variant="outline" />}>
               {t.common.cancel}
             </DialogClose>
-            <Button type="submit" disabled={!title.trim() || busy}>
+            <Button type="submit" disabled={!title.trim() || busy || missing.length > 0}>
               {busy ? <Spinner data-icon="inline-start" /> : null}
               {busy ? (file ? t.newItem.uploading : t.newItem.creating) : t.newItem.create}
             </Button>
