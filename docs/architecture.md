@@ -39,12 +39,20 @@ with ffmpeg and the skill.
    (the range, re-encoded frame-accurately), and `frame.png` (the frame with the box drawn) under
    the item's `edits/<feedback id>/`. The prompt names these files, the timecodes, and the original.
 3. **Run.** `src/core/agentRun.ts` runs `claude -p` or `codex exec` headless in the workspace, one
-   session per item, and streams its steps over SSE (`/api/item/run`). A missing or busy agent
-   leaves the request queued; the chat offers "Copy prompt" so any agent can pick it up.
-4. **Result.** When the run ends, the media as it is now is kept as `after`. The user compares
+   session per item, and streams its steps over SSE (`/api/item/run`). Without an agent the request
+   stays queued; the chat offers "Copy prompt" so any agent can pick it up.
+4. **Line.** One run works on an item at a time. A request sent while the item's agent is busy, or
+   while earlier requests wait, is stored with `waiting: <agent>` and runs in the order requests
+   were made. Its context and `baseline` are taken when its turn begins, so its before side is the
+   result of the run ahead of it. A run that finishes hands the item to the next waiting request; a
+   failed or stopped run pauses the line until the user continues it or cancels the rest
+   (`/api/item/edit/continue`, `/api/item/edit/cancel`). Waiting requests can be reworded
+   (`/api/item/edit/reword`). The user's own agent sees `waiting` in `list_open_feedback` and leaves
+   those requests to the board.
+5. **Result.** When the run ends, the media as it is now is kept as `after`. The user compares
    before and after, then approves (the edit stays) or restores (`before` is copied back), or asks
    again with the same target.
-5. **History.** Each item keeps `history/history.yaml`: an undo stack of media and field changes,
+6. **History.** Each item keeps `history/history.yaml`: an undo stack of media and field changes,
    the saved versions of each media file (the `before` and `after` copies, or copies under
    `history/`), and the version each file should hold. A file that no longer matches it was changed
    outside a request and becomes an entry of its own before the next undo. Undo and redo copy a

@@ -133,7 +133,8 @@ Never write API keys or tokens into the format; they stay in the user's environm
 
 `list_open_feedback` → fix each comment (timecodes are seconds into the named media file) →
 `verify_item` and `review_media` again → `resolve_feedback` with a one-line description of what changed. Do not mark
-an item `approved`; only the user approves.
+an item `approved`; only the user approves. Requests with `waiting` set, or a `run` still running,
+belong to the board's agent, which takes them in turn; leave them unless the user asks.
 
 Edit requests from the board's chat point at a part of one media file: a range (`timecode` to
 `end`, in seconds), a box on a frame (`region`, fractions of the frame), or both. Their `context`

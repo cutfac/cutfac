@@ -168,12 +168,19 @@ web build other than `dist/web`.
 ## Editing a video
 
 Open an item on the board. Drag across the timeline to select a part (or press `I` and `O` at the
-playhead), drag on the video to mark an area, then type what should change and press Enter. The
-server runs `claude -p` or `codex exec` in the workspace, one session per item, and streams its
-steps into the chat. The agent gets a clip of the range, the frame with the box drawn on it, the
-timecodes, and the original file. When it is done, compare before and after, then keep the edit or
-restore the previous version. Without a connected agent, the request waits in the chat and "Copy
-prompt" hands it to any agent you run yourself.
+playhead), drag on the video to mark an area, then type what should change and press Enter. A box
+you draw opens a small request box right beside it, so you can ask about it without leaving the
+frame. The server runs `claude -p` or `codex exec` in the workspace, one session per item, and
+streams its steps into the chat. The agent gets a clip of the range, the frame with the box drawn
+on it, the timecodes, and the original file. When it is done, compare before and after, then keep
+the edit or restore the previous version. Without a connected agent, the request waits in the chat
+and "Copy prompt" hands it to any agent you run yourself.
+
+You don't have to wait for one request to finish before making the next. Requests made while the
+agent is working line up behind its run and start in turn, each from the result of the one before.
+Until its turn comes, a request can be edited or cancelled. Numbered pins on the frame and the
+timeline show the requests still in play; click one to jump to it in the chat. If a run fails or
+is stopped, the rest of the line holds until you press Continue or Cancel all.
 
 Every change to an item can be undone: edits, rollbacks, and changes to its title, status, hook,
 caption, or notes, which you can edit in place in the Details tab. The History tab lists the changes
