@@ -1,4 +1,4 @@
-import { Effect, Option, Predicate, Stream } from "effect";
+import { Config, Effect, Option, Predicate, Stream } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -16,9 +16,23 @@ export interface CommandResult {
   readonly stderr: string;
 }
 
-/** The absolute path of `name` on PATH, if it is installed. */
+const SearchPath = Config.option(Config.String("PATH"));
+
+/**
+ * The absolute path of `name` on PATH, if it is installed. PATH comes from the config provider, so
+ * a test can point it at fake programs.
+ */
 export const which = (name: string): Effect.Effect<Option.Option<string>> =>
-  Effect.sync(() => Option.fromNullishOr(Bun.which(name)));
+  Effect.gen(function* () {
+    const PATH = yield* Effect.orElseSucceed(SearchPath, Option.none);
+
+    return Option.fromNullishOr(
+      Option.match(PATH, {
+        onNone: () => Bun.which(name),
+        onSome: (path) => Bun.which(name, { PATH: path }),
+      }),
+    );
+  });
 
 export const isInstalled = (name: string): Effect.Effect<boolean> =>
   Effect.map(which(name), Option.isSome);
