@@ -532,8 +532,9 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, startedAt: string) {
   const ws = yield* Workspace;
   const { itemId, feedbackId, agent } = input;
-  const bin = yield* agentBin(agent);
+  // First, so a request that waited leaves the line before anything else can change it.
   const { item, feedback: f } = yield* beginEdit(itemId, feedbackId);
+  const bin = yield* agentBin(agent);
   const prompt = yield* buildEditPrompt(item, f);
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });

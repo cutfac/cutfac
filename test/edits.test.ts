@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
+import { Crypto, Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
 
 import {
   type RunEvent,
@@ -34,14 +34,7 @@ import {
   waitingLine,
 } from "../src/core/edits.ts";
 import { Conflict, InvalidRequest } from "../src/core/errors.ts";
-import {
-  addFeedback,
-  createItem,
-  getItem,
-  mutateItem,
-  resolveFeedback,
-  updateFeedback,
-} from "../src/core/items.ts";
+import { addFeedback, createItem, getItem, resolveFeedback } from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";
 import { Feedback, FeedbackInput, FormatDoc } from "../src/core/schema.ts";
 import type { Workspace } from "../src/core/workspace.ts";
@@ -652,6 +645,7 @@ describe("the waiting line", () => {
     const { feedback } = await t.run(beginEdit(id, waiting.feedback.id));
     const before = feedback.context?.before ?? "";
 
+    expect(feedback.waiting).toBeUndefined();
     expect(feedback.baseline).toBeDefined();
     expect(before).toBe(`edits/${feedback.id}/before.mp4`);
     expect(await readFile(itemFile(id, before), "utf8")).toBe("second");
@@ -711,11 +705,9 @@ describe("the waiting line", () => {
     const [first = "", second = "", third = "", fourth = ""] = requests;
 
     // Stands in for the agent: a run leaves the line as it starts, and the third one fails.
-    const runner: Runner<RunInput, Workspace> = (run, emit) =>
+    const runner: Runner<RunInput, Workspace | Crypto.Crypto> = (run, emit) =>
       Effect.gen(function* () {
-        yield* mutateItem(run.itemId, (doc) =>
-          updateFeedback(doc, run.itemId, run.feedbackId, (f) => ({ ...f, waiting: undefined })),
-        ).pipe(Effect.orDie);
+        yield* beginEdit(run.itemId, run.feedbackId).pipe(Effect.orDie);
         yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
 
         if (run.feedbackId === third) return yield* emit({ type: "error", error: "boom" });

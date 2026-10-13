@@ -162,8 +162,9 @@ export const isWaiting = (f: Feedback): f is Waiting =>
 export const waitingLine = (doc: ItemDoc): ReadonlyArray<Waiting> => doc.feedback.filter(isWaiting);
 
 /**
- * Ready a request for its run. One that waited for others on the item starts from what they
- * left: the media is saved as its "before" side now, and its changes count from now.
+ * Ready a request for its run. One that waited for others on the item leaves the line, so it can
+ * no longer be reworded or cancelled, and starts from what they left: the media is saved as its
+ * "before" side now, and its changes count from now.
  */
 export const beginEdit = Effect.fn("edits.beginEdit")(function* (id: string, feedbackId: string) {
   const item = yield* getItem(id);
@@ -177,6 +178,7 @@ export const beginEdit = Effect.fn("edits.beginEdit")(function* (id: string, fee
   const next = yield* mutateItem(id, (doc) =>
     updateFeedback(doc, id, feedbackId, (entry) => ({
       ...entry,
+      waiting: undefined,
       baseline,
       context: before === undefined ? entry.context : { ...entry.context, before },
     })),
