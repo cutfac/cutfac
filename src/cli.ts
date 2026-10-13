@@ -7,6 +7,7 @@ import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
 import { type CliEntry, codexServerName, connectAgent, mcpLaunch } from "./core/agents.ts";
+import { SKILL_FOLDERS } from "./core/formatSpec.ts";
 import { importProduct } from "./core/productImport.ts";
 import { addReference, referenceSourceOf } from "./core/references.ts";
 import { PRODUCT_TEMPLATE, SKILL_MARKDOWN } from "./core/templates.ts";
@@ -18,10 +19,7 @@ const DEFAULT_PORT = 4317;
 
 const DEFAULT_HOST = "127.0.0.1";
 
-const SKILL_TARGETS = [
-  ".agents/skills/content-factory/SKILL.md",
-  ".claude/skills/content-factory/SKILL.md",
-];
+const SKILL_TARGETS = SKILL_FOLDERS.map((folder) => `${folder}/content-factory/SKILL.md`);
 
 /**
  * `bun build --compile` serves this module from Bun's virtual filesystem, so the binary starts

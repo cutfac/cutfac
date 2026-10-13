@@ -1,6 +1,7 @@
 import { Crypto, Effect, Option, Path } from "effect";
 
 import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
+import { inputFieldsOf, resolveInputs } from "./formatSpec.ts";
 import { aspectOf, extension, type MediaFile, mediaKind, probe, toMediaFiles } from "./media.ts";
 import {
   type Feedback,
@@ -213,7 +214,22 @@ export interface NewItemInput {
   readonly reference?: string | undefined;
   readonly hook?: string | undefined;
   readonly notes?: string | undefined;
+  /** Values for the format's inputs, by input id; defaults fill in the rest. */
+  readonly inputs?: Readonly<Record<string, string>> | undefined;
 }
+
+/** A new item's inputs, checked against its format; an item without a format takes none. */
+const itemInputs = Effect.fnUntraced(function* (input: NewItemInput) {
+  const given = input.inputs ?? {};
+
+  if (input.format === undefined) {
+    if (Object.keys(given).length === 0) return {};
+
+    return yield* new InvalidRequest({ message: "Inputs belong to a format; pick one first" });
+  }
+
+  return yield* resolveInputs(input.format, yield* inputFieldsOf(input.format), given);
+});
 
 /** Make a folder and item.yaml for a new piece of content. Ids get a `-2`, `-3`… suffix if taken. */
 export const createItem = Effect.fn("items.createItem")(function* (input: NewItemInput) {
@@ -230,6 +246,7 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
 
   for (let n = 2; yield* ws.exists(itemDir(ws, id)); n++) id = `${base}-${n}`;
 
+  const inputs = yield* itemInputs(input);
   const now = yield* nowIso;
 
   const doc: ItemDoc = {
@@ -238,6 +255,7 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
     reference: input.reference,
     hook: input.hook,
     notes: input.notes,
+    inputs: Object.keys(inputs).length === 0 ? undefined : inputs,
     created: now,
     updated: now,
   };

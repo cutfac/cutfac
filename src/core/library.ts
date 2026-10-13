@@ -18,7 +18,7 @@ export interface Format {
   readonly readme?: string | undefined;
 }
 
-const formatDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.formats}/${id}`;
+export const formatDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.formats}/${id}`;
 
 /** A text file's contents, or `undefined` when it is not there. */
 export const readOptionalText = Effect.fn("library.readOptionalText")(function* (rel: string) {
@@ -58,7 +58,20 @@ export const listFormats = Effect.fn("library.listFormats")(function* () {
     { concurrency: 8 },
   );
 
-  return yield* Effect.forEach(ids, getFormat, { concurrency: 8 });
+  // One unreadable format.yaml shouldn't hide the rest; check_format says what is wrong with it.
+  const formats = yield* Effect.forEach(
+    ids,
+    (id) =>
+      getFormat(id).pipe(
+        Effect.map((format): Format[] => [format]),
+        Effect.catchTag("WorkspaceError", (error) =>
+          Effect.as(Effect.logWarning(error.message), []),
+        ),
+      ),
+    { concurrency: 8 },
+  );
+
+  return formats.flat();
 });
 
 export interface FormatInput extends FormatDoc {
