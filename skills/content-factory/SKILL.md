@@ -26,9 +26,10 @@ into folders.
 
 - **Reference** (`references/<id>/`): a video the user wants to learn from. Preprocessing produces
   `preprocess.json` (scene cuts, sampled frames, contact sheet, audio, optional transcript).
-- **Format** (`formats/<id>/format.yaml`): a reusable recipe distilled from references — aspects,
-  duration range, hook rules, beat structure, checklist, and optional `render` command plus
-  `template/` code.
+- **Format** (`formats/<id>/format.yaml`, a "template" on the board): a reusable recipe — aspects,
+  duration range, hook rules, beat structure, checklist, the skills and programs it is made with,
+  the inputs decided per item (such as a style), and an optional `render` command plus `template/`
+  code. It is distilled from references or brought in from a link.
 - **Item** (`items/<id>/item.yaml` + media): one publishable post. Status flows
   `idea → drafting → review → approved → scheduled → published` (or `archived`).
 
@@ -48,19 +49,49 @@ into folders.
 
 ## Produce items
 
-1. `create_item` with `format` and `reference`; write the hook first. The first 2–3 seconds must be
-   understandable without sound.
-2. Build media with the format's `render` command or template. Name files with the aspect prefix:
+1. `get_format`, then read its `README.md`, the `SKILL.md` of each skill it names, and the files of
+   the choices you pick. If `check_format` says it is not ready, fix that first or tell the user.
+2. `create_item` with `format`, `reference`, and `inputs`; ask the user for required inputs that have
+   no default. Write the hook first. The first 2–3 seconds must be understandable without sound.
+3. Build media with the format's `render` command or template. Name files with the aspect prefix:
    `[9x16] video.mp4`, `[9x16] cover.jpg`, `[3x4] 01-cover.jpg`. One message per slide or scene.
-3. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
+4. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
    and duration match the video; pad with silence if needed.
-4. `verify_item`, then fix every failed check. Look at representative frames yourself (first frame,
+5. `verify_item`, then fix every failed check. Look at representative frames yourself (first frame,
    middle, ending, cover at thumbnail size). Keep text inside the safe zone: roughly the top 12% and
    bottom 20% of 9:16 frames are covered by platform UI.
-5. Write copy with `update_item`: base `caption` plus per-platform `platforms.<p>` fields. Put the
+6. Write copy with `update_item`: base `caption` plus per-platform `platforms.<p>` fields. Put the
    product CTA where the product rules say (first comment or after the caption body). Product claims
    must be accurate.
-6. Set status to `review`. The user reviews on the board.
+7. Set status to `review`. The user reviews on the board.
+
+## Import a template from a link
+
+The user shares a post, a repo, or a skill and asks to use it here. Turn it into a format, so the
+board can list it, check it, and make items with it.
+
+1. Read the link and what it points to: the post, the repo's README, the skill's `SKILL.md`, and the
+   license. If you cannot read it, say so and ask for the content; do not guess.
+2. Map it onto the format: a structure (hook, beats, pacing) goes into `hookRules`, `structure`, and
+   `checklist`; a set of styles or prompts becomes an input with one choice per style and the
+   prompt in that choice's `files`; a tool or skill goes into `skills`, `requires`, and `render`.
+3. List every skill, package, and program it needs, where each comes from, what it is for, and its
+   license, and ask the user before installing any of them. Install only what they agree to, and
+   show an install script before running it. Install skills in the workspace under both
+   `.agents/skills/<name>/` and `.claude/skills/<name>/`.
+4. `save_format` with `title`, `summary`, `aspects`, `duration`, `requireAudio`, `skills` (name and
+   source), `requires` (program names only), `tools` (the narrowest Claude Code permissions the
+   skill needs, such as `Bash(uv:*)`), `inputs`, and `source` (`url`, `author`, `license`). Keep
+   anything else under `metadata`; other unknown keys are dropped.
+5. In the folder it returns, write `README.md` (how to make one item, step by step, for an agent that
+   has never seen the link), the choice files, and previews. Make previews with the template itself
+   or use ones the author licensed for reuse. If you copy code into `template/`, keep its LICENSE.
+6. `check_format` and fix every problem it lists, until `ready` is true. If one cannot be fixed (a
+   program the user declined, an account they have to create), leave it listed and say why.
+7. Tell the user what the template makes, what you installed, and its license, and offer to make a
+   first item.
+
+Never write API keys or tokens into the format; they stay in the user's environment.
 
 ## Handle feedback
 
