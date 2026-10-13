@@ -50,6 +50,16 @@ with ffmpeg and the skill.
    outside a request and becomes an entry of its own before the next undo. Undo and redo copy a
    saved version back and update the request's verdict; they wait until no agent is on the item.
 
+## Reviewing renders
+
+Agents judge a render by looking at it, not at the code that made it. Before rendering, the skill
+has the agent write the item's `brief.md` and `shotlist.md` and get the user's okay. After
+`verify_item`, `review_media` writes `review/<video>/` in the item: frames from the first to the
+last, a contact sheet of them, and a six-frame strip across each detected cut, where half-finished
+motion shows. The agent names the three largest defects, fixes only those, renders, and reviews
+again, so each round is a small, local change. The core only renders frames; judging them is the
+agent's job.
+
 ## Templates
 
 A template (a format in the core) is a folder with a `format.yaml` that declares what making an item

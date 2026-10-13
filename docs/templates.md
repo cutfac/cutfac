@@ -145,6 +145,36 @@ metadata:
   model: example-motion-v2
 ```
 
+## Rendering
+
+`render` and the code in `template/` are up to the template. Agents review and fix the result one
+frame at a time, so a template works best when each frame depends only on what it is told:
+
+- **Seekable.** Any frame renders on its own, without playing the ones before it. `review_media`
+  and board edits look at single frames and short ranges.
+- **No hidden clock.** Motion follows the frame's time, not wall-clock time, timers or what an
+  earlier frame left behind.
+- **Seeded.** Anything random takes a seed from the item's inputs, so a rerender looks the same.
+- **Everything on disk.** A frame is a function of its time, the item's shot list, its assets, the
+  template's style and the seed. Nothing else changes the picture.
+
+Then a fix in one beat changes only that beat, and the agent can check it by rendering a frame.
+
+## Style
+
+A template with a look keeps it in files the agent reads, such as `styles/<choice>.md` for each
+choice or the README for one look:
+
+- the palette as hex values, and what each color is for;
+- type: families, weights, and sizes as a share of the frame height;
+- motion: easing and duration for each kind of object (text, app captures, backgrounds), and what
+  never moves;
+- the generic defaults it must not fall back on, such as a stock font or a centered title that
+  fades in.
+
+Put the checks that follow from the style in `checklist`; the agent goes through them when it
+reviews the frames.
+
 ## Bringing one in from a link
 
 The Templates page has "Add template", which turns a link into a prompt for your agent. The steps

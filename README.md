@@ -66,6 +66,9 @@
 - **References in, formats out.** Drop a video or paste a URL. The factory pulls scene cuts, hook
   frames, a contact sheet and the audio, your agent writes the analysis, and the patterns that work
   become reusable formats.
+- **Agents check their own work.** Your agent writes a brief and shot list for you to okay before
+  it renders, then looks at the frames it made, every cut included, and fixes the biggest problems
+  first.
 - **Templates from any link.** Paste a post, a repo or an Agent Skill and your agent turns it into
   a template with its own inputs and previews. It asks before installing anything, and the board
   shows what each template still needs. See [docs/templates.md](docs/templates.md).
@@ -199,7 +202,8 @@ product/captures/       reviewed app screenshots and recordings
 product/store/          imported store icon, screenshots, and listing.md
 references/<id>/        source video, frames/, contact.jpg, audio.wav, preprocess.json, analysis.md
 formats/<id>/           format.yaml, README.md, previews and choice files, optional template/
-items/<id>/             item.yaml, [9x16] video.mp4, [9x16] cover.jpg, …
+items/<id>/             item.yaml, brief.md, shotlist.md, [9x16] video.mp4, [9x16] cover.jpg, …
+items/<id>/review/      frames, a contact sheet and cut strips of each video, from review_media
 items/<id>/history/     history.yaml: the undo stack and every saved version of the media
 ```
 
