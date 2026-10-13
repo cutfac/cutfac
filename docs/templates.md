@@ -187,6 +187,11 @@ link". In short:
 3. Call `save_format`, then write the README, previews and choice files into the folder it returns.
 4. Call `check_format` and fix what it lists until the template is ready.
 
+A link can hold several templates, such as a pack of styles or a kit of layouts. Variants that
+share a structure and differ only in look become one template with a choice per look; ones that
+differ in structure, aspects or tools become one template each. A skill they share is installed
+once and listed in each template's `skills`, and each template's `source` points at the same link.
+
 ## Rights
 
 Record where a template came from in `source`, and keep its license. A license on a skill or prompt

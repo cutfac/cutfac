@@ -100,6 +100,9 @@ board can list it, check it, and make items with it.
 2. Map it onto the format: a structure (hook, beats, pacing) goes into `hookRules`, `structure`, and
    `checklist`; a set of styles or prompts becomes an input with one choice per style and the
    prompt in that choice's `files`; a tool or skill goes into `skills`, `requires`, and `render`.
+   A link with several templates (a pack or a kit) is one format when they differ only in look, with
+   a choice per look, and one format each when they differ in structure, aspects, or tools. Install
+   a skill they share once and list it in each format's `skills`.
 3. List every skill, package, and program it needs, where each comes from, what it is for, and its
    license, and ask the user before installing any of them. Install only what they agree to, and
    show an install script before running it. Install skills in the workspace under both
