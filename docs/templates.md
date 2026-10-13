@@ -188,7 +188,7 @@ link". In short:
 
 1. Read the link and decide what kind of template it is.
 2. List every skill, package and program it needs and what each is for, and install them only after
-   you agree.
+   you agree. Files are copied as they are, never retyped from a summary.
 3. Call `save_format`, then write the README, previews and choice files into the folder it returns.
 4. Call `check_format` and fix what it lists until the template is ready.
 
