@@ -12,6 +12,7 @@ import {
   NotFound,
   WorkspaceError,
 } from "../core/errors.ts";
+import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import {
   createItem,
@@ -55,7 +56,8 @@ export const MCP_VERSION = "0.1.0";
 const INSTRUCTIONS =
   "Content Factory workspace tools. Start with workspace_overview. Items, references, and formats are folders on disk; " +
   "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item. " +
-  "Always read the product (get_product) before writing copy. Resolve each open feedback entry after addressing it.";
+  "Always read the product (get_product) before writing copy. Resolve each open feedback entry after addressing it. " +
+  "Formats are templates: to turn a link into one, follow the content-factory skill's import steps, then call check_format until it is ready.";
 
 /** How long a markdown doc in get_item may be before it is cut. */
 const DOC_PREVIEW_CHARS = 8000;
@@ -137,6 +139,16 @@ const FormatDetail = Schema.Struct({
 });
 
 const ById = Schema.Struct({ id: Schema.String });
+
+const FormatProblem = Schema.Struct({
+  kind: Schema.Literals(["spec", "skill", "program", "file"]).annotate(
+    describe(
+      "spec: format.yaml itself; skill, program, file: something it names that is not there",
+    ),
+  ),
+  subject: Schema.String,
+  message: Schema.String,
+});
 
 const tool = <
   const Name extends string,
@@ -249,6 +261,13 @@ const CreateItem = tool("create_item", {
     reference: Schema.optional(Schema.String),
     hook: Schema.optional(Schema.String),
     notes: Schema.optional(Schema.String),
+    inputs: Schema.optional(
+      Schema.Record(Schema.String, Schema.String).annotate(
+        describe(
+          "values for the format's inputs by input id (see get_format); defaults fill the rest",
+        ),
+      ),
+    ),
     id: Schema.optional(
       Schema.String.annotate(describe("explicit folder id; defaults to <format>/<slug>")),
     ),
@@ -381,17 +400,36 @@ const ListFormats = tool("list_formats", {
 });
 
 const GetFormat = tool("get_format", {
-  description: "One format recipe with its README and absolute folder (templates live there).",
+  description:
+    "One format with its README and absolute folder. Its skills, inputs, and the files its choices point at " +
+    "are relative to that folder; read them before making an item in it.",
   parameters: ById,
   success: FormatDetail,
   readonly: true,
 });
 
 const SaveFormat = tool("save_format", {
-  description: "Create or replace a format recipe distilled from one or more references.",
+  description:
+    "Create or replace a format's format.yaml, distilled from references or brought in from a link. " +
+    "Write its README, previews, and choice files into the returned folder, then call check_format.",
   parameters: Schema.Struct({ id: Schema.optional(Schema.String), ...FormatDoc.fields }),
   success: Created,
   overwrites: true,
+});
+
+const CheckFormat = tool("check_format", {
+  description:
+    "Whether a format is ready to use: mistakes in its format.yaml, and the skills, programs, and files it names " +
+    "that are missing. Fix every problem it lists; install skills or programs only with the user's consent.",
+  parameters: ById,
+  success: Schema.Struct({
+    ready: Schema.Boolean,
+    problems: Schema.Array(FormatProblem),
+    skills: Schema.Record(Schema.String, Schema.String).annotate(
+      describe("absolute SKILL.md of each skill the format names that is installed"),
+    ),
+  }),
+  readonly: true,
 });
 
 export const FactoryToolkit = Toolkit.make(
@@ -415,6 +453,7 @@ export const FactoryToolkit = Toolkit.make(
   ListFormats,
   GetFormat,
   SaveFormat,
+  CheckFormat,
 );
 
 /** What the core needs to run a tool; captured once when the server starts. */
@@ -643,6 +682,19 @@ const handlers = FactoryToolkit.toLayer(
             const format = yield* saveFormat(input);
 
             return { id: format.id, absDir: yield* ws.abs(format.dir) };
+          }),
+        ),
+
+      check_format: ({ id }) =>
+        run(
+          Effect.gen(function* () {
+            const check = yield* checkFormat(id);
+
+            const skills = yield* Effect.forEach(Object.entries(check.skills), ([name, file]) =>
+              Effect.map(ws.abs(file), (abs): readonly [string, string] => [name, abs]),
+            );
+
+            return { ...check, skills: Object.fromEntries(skills) };
           }),
         ),
     });

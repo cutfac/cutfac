@@ -39,6 +39,15 @@ const Scheduled = Schema.Struct({ status: Schema.String });
 
 const Overview = Schema.Struct({ items: Schema.Record(Schema.String, Schema.Finite) });
 
+const FormatCheck = Schema.Struct({
+  ready: Schema.Boolean,
+  problems: Schema.Array(Schema.Struct({ kind: Schema.String, subject: Schema.String })),
+});
+
+const ItemInputs = Schema.Struct({
+  doc: Schema.Struct({ inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)) }),
+});
+
 /** A newline-delimited JSON-RPC client for `factory mcp`, the way Claude Code talks to it. */
 function startServer(root: string) {
   const child = Bun.spawn(["bun", CLI, "mcp", "--workspace", root], {
@@ -146,6 +155,7 @@ test("lists the workspace tools", async () => {
   expect(names).toContain("create_item");
   expect(names).toContain("set_schedule");
   expect(names).toContain("workspace_overview");
+  expect(names).toContain("check_format");
 }, 20_000);
 
 test("agents can create an item and record a schedule", async () => {
@@ -181,4 +191,42 @@ test("a tool error comes back as an error result, not a crash", async () => {
   );
 
   expect(await server.call("workspace_overview", {}, Overview)).toBeDefined();
+}, 20_000);
+
+test("agents can check a template and fill its inputs", async () => {
+  await server.call(
+    "save_format",
+    {
+      id: "art",
+      title: "Art motion",
+      skills: [{ name: "art-motion" }],
+      inputs: [
+        {
+          id: "style",
+          title: "Style",
+          choices: [
+            { id: "swiss", title: "Swiss" },
+            { id: "neon", title: "Neon" },
+          ],
+          default: "swiss",
+        },
+      ],
+    },
+    Created,
+  );
+
+  const check = await server.call("check_format", { id: "art" }, FormatCheck);
+
+  expect(check.ready).toBe(false);
+  expect(check.problems).toEqual([{ kind: "skill", subject: "art-motion" }]);
+
+  const created = await server.call(
+    "create_item",
+    { title: "Openings", format: "art", inputs: { style: "neon" } },
+    Created,
+  );
+
+  const item = await server.call("get_item", { id: created.id }, ItemInputs);
+
+  expect(item.doc.inputs).toEqual({ style: "neon" });
 }, 20_000);
