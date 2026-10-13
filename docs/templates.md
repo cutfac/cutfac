@@ -10,6 +10,11 @@ skill ("read this link and make it usable here"), it writes the folder, asks you
 anything, and runs `check_format` until the template is ready. The factory never downloads or
 installs anything on its own.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/templates-dark.png">
+  <img alt="The Templates page: a template's skill, source and license, and the styles an item can pick, each with a preview" src="../.github/assets/templates-light.png">
+</picture>
+
 ## Folder
 
 ```

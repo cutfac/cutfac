@@ -89,6 +89,13 @@
   </picture>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/templates-dark.png">
+    <img alt="Templates: a garden scene template with its skill, source and license, and three styles to pick from, each with a preview; another template below still needs setup" src=".github/assets/templates-light.png">
+  </picture>
+</p>
+
 ## Mac app vs. open source
 
 The Mac app, Content Factory Solo, is built from this repository. Both have the same features, and
