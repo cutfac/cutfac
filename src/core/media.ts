@@ -1,7 +1,7 @@
 import { Effect, Match, Schema } from "effect";
 
 import { CommandFailed } from "./errors.ts";
-import { runChecked } from "./process.ts";
+import { run, runChecked, tail } from "./process.ts";
 import { ASPECTS, type Aspect, type FormatDoc } from "./schema.ts";
 import type { Entry } from "./workspace.ts";
 
@@ -138,6 +138,40 @@ export const probe = Effect.fn("media.probe")(function* (absPath: string) {
   );
 
   return parseProbe(json);
+});
+
+/** Run ffmpeg quietly, overwriting outputs; fails with CommandFailed on a non-zero exit. */
+export const ffmpeg = (args: ReadonlyArray<string>) =>
+  Effect.asVoid(runChecked("ffmpeg", ["-y", "-v", "error", ...args]));
+
+/** Parse `pts_time:` values printed by ffmpeg's showinfo filter. */
+export function parseShowinfoTimes(stderr: string): number[] {
+  return Array.from(
+    stderr.matchAll(/pts_time:([\d.]+)/g),
+    (match) => Math.round(Number(match[1]) * 100) / 100,
+  );
+}
+
+/** Seconds where the picture changes enough to count as a cut, by ffmpeg's scene score. */
+export const sceneCuts = Effect.fn("media.sceneCuts")(function* (absPath: string) {
+  const result = yield* run("ffmpeg", [
+    "-hide_banner",
+    "-i",
+    absPath,
+    "-vf",
+    "select='gt(scene,0.3)',showinfo",
+    "-f",
+    "null",
+    "-",
+  ]);
+
+  if (result.code !== 0) {
+    return yield* new CommandFailed({
+      message: `Scene detection failed: ${tail(result.stderr, 2)}`,
+    });
+  }
+
+  return parseShowinfoTimes(result.stderr);
 });
 
 export interface Check {

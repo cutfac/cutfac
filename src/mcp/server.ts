@@ -32,6 +32,7 @@ import {
   referenceSourceOf,
   saveAnalysis,
 } from "../core/references.ts";
+import { DEFAULT_FRAMES, MAX_FRAMES, MAX_STRIPS, reviewMedia } from "../core/review.ts";
 import {
   Aspect,
   Feedback,
@@ -64,7 +65,7 @@ export const MCP_VERSION = "0.1.0";
 
 const INSTRUCTIONS =
   "Content Factory workspace tools. Start with workspace_overview and act on its notices first. Items, references, and formats are folders on disk; " +
-  "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item. " +
+  "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item and review_media. " +
   "Always read the product (get_product) before writing copy. Resolve each open feedback entry after addressing it. " +
   "Formats are templates: to turn a link into one, follow the content-factory skill's import steps, then call check_format until it is ready.";
 
@@ -312,6 +313,49 @@ const VerifyItem = tool("verify_item", {
   readonly: true,
 });
 
+const ReviewShot = Schema.Struct({
+  t: Schema.Finite.annotate(describe("seconds")),
+  file: Schema.String.annotate(describe("relative to absDir")),
+});
+
+const Seconds = Schema.Array(Schema.Finite);
+
+const ReviewMedia = tool("review_media", {
+  description:
+    "Render frames of an item's video so you judge what a viewer sees, not the code that made it: " +
+    "a contact sheet of frames from the first to the last (left to right, top to bottom), each frame " +
+    "larger, and a strip of six frames across each cut, where half-finished motion shows. Open the " +
+    "sheet and strips, then name the three largest defects, each with its time, what you see, and a " +
+    "local fix. Fix only those, render again, and review again. Replaces the video's last review.",
+  parameters: Schema.Struct({
+    id: Id,
+    file: Schema.String.annotate(describe("the video's file name in the item")),
+    times: Schema.optional(
+      Seconds.annotate(
+        describe(
+          `seconds to put on the sheet, up to ${MAX_FRAMES}; defaults to ${DEFAULT_FRAMES} spread evenly`,
+        ),
+      ),
+    ),
+    transitions: Schema.optional(
+      Seconds.annotate(
+        describe(
+          `seconds to see the motion around, up to ${MAX_STRIPS}; defaults to detected cuts, [] for none`,
+        ),
+      ),
+    ),
+  }),
+  success: Schema.Struct({
+    absDir: AbsDir,
+    sheet: Schema.optional(Schema.String.annotate(describe("relative to absDir"))),
+    frames: Schema.Array(ReviewShot),
+    strips: Schema.Array(ReviewShot),
+    notes: Schema.Array(Schema.String).annotate(describe("what could not be made or was left out")),
+  }),
+  overwrites: true,
+  idempotent: true,
+});
+
 const ListOpenFeedback = tool("list_open_feedback", {
   description:
     "All unresolved edit requests the user left on the board, across items. Each can target a time range " +
@@ -469,6 +513,7 @@ export const FactoryToolkit = Toolkit.make(
   CreateItem,
   UpdateItem,
   VerifyItem,
+  ReviewMedia,
   ListOpenFeedback,
   ResolveFeedback,
   SetSchedule,
@@ -634,6 +679,15 @@ const handlers = FactoryToolkit.toLayer(
             ok: media.every((report) => report.ok),
             media,
           })),
+        ),
+
+      review_media: ({ id, file, times, transitions }) =>
+        run(
+          Effect.gen(function* () {
+            const { dir, ...review } = yield* reviewMedia(id, file, { times, transitions });
+
+            return { absDir: yield* ws.abs(dir), ...review };
+          }),
         ),
 
       list_open_feedback: () =>

@@ -14,8 +14,7 @@ import {
   withDecision,
 } from "./items.ts";
 import type { Format } from "./library.ts";
-import { extension, type MediaKind } from "./media.ts";
-import { runChecked } from "./process.ts";
+import { extension, ffmpeg, type MediaKind } from "./media.ts";
 import type { EditContext, Feedback, FeedbackInput, Region } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -26,9 +25,6 @@ export const editDir = (item: Item, feedbackId: string) => `${item.dir}/edits/${
 
 /** Item-relative path (the form feedback.context stores) for a workspace-relative path. */
 const itemRel = (item: Item, rel: string) => rel.slice(item.dir.length + 1);
-
-const ffmpeg = (args: ReadonlyArray<string>) =>
-  Effect.asVoid(runChecked("ffmpeg", ["-y", "-v", "error", ...args]));
 
 export interface EditRequested {
   readonly item: Item;

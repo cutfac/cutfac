@@ -2,7 +2,7 @@ import { Effect, Match, Option, Schema } from "effect";
 
 import { CommandFailed, InvalidRequest, NotFound } from "./errors.ts";
 import { isSimpleId, readOptionalText } from "./library.ts";
-import { extension, mediaKind, probe } from "./media.ts";
+import { extension, mediaKind, probe, sceneCuts } from "./media.ts";
 import { run, tail, which } from "./process.ts";
 import { PreprocessResult, ReferenceDoc } from "./schema.ts";
 import { Workspace, type WorkspaceService, foldersWith, nowIso, slugify } from "./workspace.ts";
@@ -208,14 +208,6 @@ export const addReference = Effect.fn("references.addReference")(function* (
   return yield* getReference(id);
 });
 
-/** Parse `pts_time:` values printed by ffmpeg's showinfo filter. */
-export function parseShowinfoTimes(stderr: string): number[] {
-  return Array.from(
-    stderr.matchAll(/pts_time:([\d.]+)/g),
-    (match) => Math.round(Number(match[1]) * 100) / 100,
-  );
-}
-
 /** Hook frames every 0.5s for the first 3s, then one frame per second; none at or past the end. */
 export function frameTimes(duration: number): number[] {
   const times = new Set<number>();
@@ -260,19 +252,15 @@ export const preprocessReference = Effect.fn("references.preprocessReference")(f
   const duration = reference.doc.probe?.duration ?? (yield* probe(input)).duration;
   const notes: Array<string> = [];
 
-  const cutRun = yield* run("ffmpeg", [
-    "-hide_banner",
-    "-i",
-    input,
-    "-vf",
-    "select='gt(scene,0.3)',showinfo",
-    "-f",
-    "null",
-    "-",
-  ]);
+  const cuts = yield* sceneCuts(input).pipe(
+    Effect.catchTag("CommandFailed", (error) =>
+      Effect.sync((): number[] => {
+        notes.push(error.message);
 
-  if (cutRun.code !== 0) notes.push(`Scene detection failed: ${tail(cutRun.stderr, 2)}`);
-  const cuts = cutRun.code === 0 ? parseShowinfoTimes(cutRun.stderr) : [];
+        return [];
+      }),
+    ),
+  );
 
   yield* ws.mkdir(`${reference.dir}/frames`);
 

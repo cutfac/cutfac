@@ -10,6 +10,7 @@ import {
   aspectOf,
   checkVideo,
   parseProbe,
+  parseShowinfoTimes,
   toMediaFiles,
 } from "../src/core/media.ts";
 import {
@@ -17,7 +18,6 @@ import {
   frameTimes,
   getReference,
   listReferences,
-  parseShowinfoTimes,
   referenceSourceOf,
 } from "../src/core/references.ts";
 import { FormatDoc } from "../src/core/schema.ts";

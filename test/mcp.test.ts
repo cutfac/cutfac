@@ -166,6 +166,7 @@ test("lists the workspace tools", async () => {
   expect(names).toContain("workspace_overview");
   expect(names).toContain("check_format");
   expect(names).toContain("get_skill");
+  expect(names).toContain("review_media");
 }, 20_000);
 
 test("keeps the workspace skill current and tells the agent about an edited copy", async () => {
