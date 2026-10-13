@@ -11,7 +11,7 @@ import {
   Multipart,
 } from "effect/http";
 
-import { RunEvent, RunRegistry } from "../core/agentRun.ts";
+import { RunEvent, RunRegistry, type Runs, agentBin } from "../core/agentRun.ts";
 import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
 import {
   approveEdit,
@@ -20,9 +20,17 @@ import {
   resolveEdit,
   restoreBefore,
 } from "../core/edits.ts";
-import { CommandFailed, Conflict, InvalidRequest } from "../core/errors.ts";
+import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
 import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
+import { ImportRuns, startImport, startTurn } from "../core/importRun.ts";
+import {
+  type Import,
+  type TurnInput,
+  closeImport,
+  getImport,
+  listImports,
+} from "../core/imports.ts";
 import {
   type Item,
   addFeedback,
@@ -32,6 +40,7 @@ import {
   importMedia,
   listItems,
   openFeedback,
+  shortId,
 } from "../core/items.ts";
 import { getFormat, getProduct, listFormats } from "../core/library.ts";
 import { extension } from "../core/media.ts";
@@ -163,6 +172,19 @@ const RunBody = Schema.Struct({
 
 const ConnectBody = Schema.Struct({ agent: AgentName });
 
+const NewImportBody = Schema.Struct({
+  link: Schema.NonEmptyString,
+  agent: Schema.optional(AgentName),
+  /** The board's language, for the agent to write in. */
+  locale: Schema.optional(Schema.NonEmptyString),
+});
+
+/** A reply to the import's agent, or Allow with an optional note. */
+const ImportReplyBody = Schema.Struct({
+  body: Schema.optional(Schema.String),
+  allow: Schema.optional(Schema.Boolean),
+});
+
 const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString) });
 
 const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
@@ -186,6 +208,9 @@ const decodeFeedbackInput = Schema.decodeUnknownEffect(FeedbackInput);
 const encodeRunEvent = Schema.encodeEffect(Schema.fromJsonString(RunEvent));
 
 const queryId = Effect.map(HttpServerRequest.schemaSearchParams(IdQuery), (query) => query.id);
+
+/** A route about the item, import, or reference named by `?id=`. */
+const withId = <A, E, R>(f: (id: string) => Effect.Effect<A, E, R>) => Effect.flatMap(queryId, f);
 
 const nonEmpty = (text: string | undefined) =>
   text === undefined || text.trim() === "" ? undefined : text.trim();
@@ -335,16 +360,88 @@ const runRoute = Effect.gen(function* () {
   const id = yield* queryId;
   const body = yield* HttpServerRequest.schemaBodyJson(RunBody);
   const agent = body.agent ?? defaultAgent(ws);
-
-  if (Option.isNone(yield* which(agent))) {
-    return yield* new CommandFailed({ message: `${agent} CLI not found on PATH` });
-  }
-
+  yield* agentBin(agent);
   yield* findFeedback(yield* getItem(id), body.feedbackId);
   yield* runs.start({ itemId: id, feedbackId: body.feedbackId, agent });
 
   return { ok: true };
 });
+
+// ---------------------------------------------------------------------------------------------
+// Imports
+
+/** An import and whether an agent is on it. */
+const importDetail = Effect.fn("server.importDetail")(function* (found: Import) {
+  const runs = yield* ImportRuns;
+
+  return { ...found, running: yield* runs.isRunning(found.id) };
+});
+
+/** How agents launch this workspace's MCP server. `instead` says what to do when that is unknown. */
+const ownLaunch = (options: ServerOptions, instead: string) =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+
+    if (options.cli === undefined) {
+      return yield* new InvalidRequest({
+        message: `This server does not know how it was launched; ${instead}`,
+      });
+    }
+
+    return mcpLaunch(options.cli, ws.root);
+  });
+
+const COPY_INSTEAD = "copy the import prompt to your agent instead";
+
+/** Start the user's agent on a link, read-only until the user allows installs. */
+const newImportRoute = (options: ServerOptions) =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+    const body = yield* HttpServerRequest.schemaBodyJson(NewImportBody);
+    const server = yield* ownLaunch(options, COPY_INSTEAD);
+    const agent = body.agent ?? defaultAgent(ws);
+    const started = yield* startImport({ link: body.link, agent, locale: body.locale }, server);
+
+    return yield* importDetail(started);
+  });
+
+/** Send the user's reply, or their Allow, to the import's agent in the same session. */
+const importReplyRoute = (options: ServerOptions) =>
+  withId((id) =>
+    Effect.gen(function* () {
+      const body = yield* HttpServerRequest.schemaBodyJson(ImportReplyBody);
+      const allow = body.allow === true;
+      const text = body.body?.trim() ?? "";
+
+      if (!allow && text === "")
+        return yield* new InvalidRequest({ message: "Write a reply first" });
+
+      const server = yield* ownLaunch(options, COPY_INSTEAD);
+      const turn: TurnInput = { id: yield* shortId, kind: allow ? "allow" : "reply", body: text };
+
+      return yield* importDetail(yield* startTurn(id, turn, server));
+    }),
+  );
+
+/** Stop the import's agent, if it is working. */
+const stopImportRoute = withId((id) =>
+  Effect.gen(function* () {
+    const runs = yield* ImportRuns;
+    yield* runs.stop(id);
+
+    return yield* importDetail(yield* getImport(id));
+  }),
+);
+
+/** Stop the import's agent, if it is working, and set the import aside. */
+const closeImportRoute = withId((id) =>
+  Effect.gen(function* () {
+    const runs = yield* ImportRuns;
+    yield* runs.stop(id);
+
+    return yield* importDetail(yield* closeImport(id));
+  }),
+);
 
 // ---------------------------------------------------------------------------------------------
 // Server-sent events
@@ -363,29 +460,38 @@ const eventStream = <E>(events: Stream.Stream<Uint8Array, E>) =>
     headers: { "cache-control": "no-cache" },
   });
 
-/** The item's latest run: a `run` event naming its request, its events so far, then live ones. */
-const runStreamRoute = Effect.gen(function* () {
-  const runs = yield* RunRegistry;
-  const id = yield* queryId;
+/**
+ * The latest run on the queried key: a `run` event naming what it is about (an item's request, an
+ * import's turn), its events so far, then live ones. `find` turns away keys that name nothing, so
+ * a stray id cannot leave a channel behind.
+ */
+const runStreamRoute = <I, R, E, R2>(
+  registry: Effect.Effect<Runs<I>, never, R>,
+  find: (id: string) => Effect.Effect<unknown, E, R2>,
+) =>
+  Effect.gen(function* () {
+    const runs = yield* registry;
+    const id = yield* queryId;
+    yield* find(id);
 
-  // Subscribe inside the stream so the subscription lives exactly as long as the response.
-  const events = Stream.unwrap(
-    Effect.map(runs.subscribe(id), (subscription) => {
-      const head = Option.match(subscription.subject, {
-        onNone: () => Stream.empty,
-        onSome: (subject) => Stream.make(sseEvent("run", subject)),
-      });
+    // Subscribe inside the stream so the subscription lives exactly as long as the response.
+    const events = Stream.unwrap(
+      Effect.map(runs.subscribe(id), (subscription) => {
+        const head = Option.match(subscription.subject, {
+          onNone: () => Stream.empty,
+          onSome: (subject) => Stream.make(sseEvent("run", subject)),
+        });
 
-      const body = Stream.mapEffect(subscription.events, (event) =>
-        Effect.map(encodeRunEvent(event), (data) => sseEvent("agent", data)),
-      );
+        const body = Stream.mapEffect(subscription.events, (event) =>
+          Effect.map(encodeRunEvent(event), (data) => sseEvent("agent", data)),
+        );
 
-      return Stream.concat(head, body);
-    }),
-  );
+        return Stream.concat(head, body);
+      }),
+    );
 
-  return eventStream(events);
-});
+    return eventStream(events);
+  });
 
 /** Workspace paths that changed on disk, so agent writes appear without a reload. */
 const changesRoute = Effect.map(Workspace, (ws) =>
@@ -480,9 +586,6 @@ const json = <A, E extends Failure, R>(
   handler: Effect.Effect<A, E, R>,
 ) => HttpRouter.route(method, path, respond(handler));
 
-const withItemId = <A, E, R>(f: (id: string) => Effect.Effect<A, E, R>) =>
-  Effect.flatMap(queryId, f);
-
 /** The board's API and the workspace files it loads. */
 const apiRoutes = (options: ServerOptions) =>
   HttpRouter.addAll([
@@ -492,17 +595,10 @@ const apiRoutes = (options: ServerOptions) =>
       "POST",
       "/api/agents/connect",
       Effect.gen(function* () {
-        const ws = yield* Workspace;
         const { agent } = yield* HttpServerRequest.schemaBodyJson(ConnectBody);
+        const server = yield* ownLaunch(options, "run `factory agent-setup --connect` instead");
 
-        if (options.cli === undefined) {
-          return yield* new InvalidRequest({
-            message:
-              "This server does not know how it was launched; run `factory agent-setup --connect` instead",
-          });
-        }
-
-        return yield* connectAgent(agent, mcpLaunch(options.cli, ws.root));
+        return yield* connectAgent(agent, server);
       }),
     ),
     json(
@@ -526,12 +622,12 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "GET",
       "/api/item",
-      withItemId((id) => Effect.flatMap(getItem(id), itemDetail)),
+      withId((id) => Effect.flatMap(getItem(id), itemDetail)),
     ),
     json(
       "POST",
       "/api/item/media",
-      withItemId((id) =>
+      withId((id) =>
         Effect.gen(function* () {
           const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
           const { item } = yield* importMedia(id, file.path, file.name);
@@ -543,7 +639,7 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "POST",
       "/api/item/feedback",
-      withItemId((id) =>
+      withId((id) =>
         Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackInput), (input) =>
           Effect.flatMap(addFeedback(id, input), (added) => itemDetail(added.item)),
         ),
@@ -552,7 +648,7 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "POST",
       "/api/item/feedback/resolve",
-      withItemId((id) =>
+      withId((id) =>
         Effect.flatMap(HttpServerRequest.schemaBodyJson(ResolveBody), (body) =>
           Effect.flatMap(
             resolveEdit(id, body.feedbackId, nonEmpty(body.resolution) ?? "Resolved in the web UI"),
@@ -566,7 +662,7 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "POST",
       "/api/item/edit/stop",
-      withItemId((id) =>
+      withId((id) =>
         Effect.map(
           Effect.flatMap(RunRegistry, (runs) => runs.stop(id)),
           (stopped) => ({ ok: true, stopped }),
@@ -587,7 +683,7 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "POST",
       "/api/item/edit/approve",
-      withItemId((id) =>
+      withId((id) =>
         Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
           Effect.flatMap(approveEdit(id, body.feedbackId), itemDetail),
         ),
@@ -596,19 +692,43 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "POST",
       "/api/item/edit/restore",
-      withItemId((id) =>
+      withId((id) =>
         Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
           Effect.flatMap(restoreBefore(id, body.feedbackId), itemDetail),
         ),
       ),
     ),
-    json("GET", "/api/item/verify", withItemId(verifyItem)),
-    HttpRouter.route("GET", "/api/item/run", Effect.catch(runStreamRoute, failureResponse)),
+    json("GET", "/api/item/verify", withId(verifyItem)),
+    HttpRouter.route(
+      "GET",
+      "/api/item/run",
+      Effect.catch(runStreamRoute(RunRegistry, getItem), failureResponse),
+    ),
+
+    json(
+      "GET",
+      "/api/imports",
+      Effect.flatMap(listImports(), (imports) => Effect.forEach(imports, importDetail)),
+    ),
+    json("POST", "/api/imports", newImportRoute(options)),
+    json(
+      "GET",
+      "/api/import",
+      withId((id) => Effect.flatMap(getImport(id), importDetail)),
+    ),
+    json("POST", "/api/import/reply", importReplyRoute(options)),
+    json("POST", "/api/import/stop", stopImportRoute),
+    json("POST", "/api/import/close", closeImportRoute),
+    HttpRouter.route(
+      "GET",
+      "/api/import/run",
+      Effect.catch(runStreamRoute(ImportRuns, getImport), failureResponse),
+    ),
 
     json("GET", "/api/feedback", openFeedback()),
     json("GET", "/api/references", listReferences()),
-    json("GET", "/api/reference", withItemId(getReference)),
-    json("POST", "/api/reference/preprocess", withItemId(preprocessReference)),
+    json("GET", "/api/reference", withId(getReference)),
+    json("POST", "/api/reference/preprocess", withId(preprocessReference)),
     json(
       "POST",
       "/api/references",
@@ -631,7 +751,7 @@ const apiRoutes = (options: ServerOptions) =>
     ),
     json("GET", "/api/formats", listFormats()),
     json("GET", "/api/formats/status", formatStatuses()),
-    json("GET", "/api/format", withItemId(getFormat)),
+    json("GET", "/api/format", withId(getFormat)),
     HttpRouter.route("GET", "/api/events", changesRoute),
 
     HttpRouter.route("GET", `${FILES_PREFIX}*`, Effect.catch(fileRoute, failureResponse)),
@@ -652,7 +772,7 @@ const boardRoutes = (webDir: string) =>
 const historyRoutes = HttpRouter.addAll(
   Effect.map(Semaphore.make(1), (lock) => {
     const recorded = <E, R>(change: (id: string) => Effect.Effect<Item, E, R>) =>
-      withItemId((id) => lock.withPermits(1)(Effect.flatMap(change(id), itemDetail)));
+      withId((id) => lock.withPermits(1)(Effect.flatMap(change(id), itemDetail)));
 
     const travel = <E, R>(change: (id: string) => Effect.Effect<Item, E, R>) =>
       recorded((id) =>
@@ -721,7 +841,7 @@ export const routes = (options: ServerOptions) =>
 /** The board and its API on a local port. Needs the workspace; brings everything else. */
 export const serverLayer = (options: ListenOptions) =>
   HttpRouter.serve(routes(options), { disableLogger: true }).pipe(
-    Layer.provide(RunRegistry.layer),
+    Layer.provide(Layer.mergeAll(RunRegistry.layer, ImportRuns.layer)),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
       BunHttpServer.layer({

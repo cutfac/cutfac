@@ -504,6 +504,49 @@ export interface ImportResult {
   files: string[];
 }
 
+/** The user's side of a template import: the link, a reply, or Allow with an optional note. */
+export interface ImportTurn {
+  id: string;
+  at: string;
+  kind: "start" | "reply" | "allow";
+  body: string;
+  run?: AgentRun;
+}
+
+/** Bringing a template in from a link: the conversation with the agent and what it added. */
+export interface ImportDoc {
+  link: string;
+  agent: AgentName;
+  locale?: string;
+  /** The user pressed Allow; until then the agent may only read. */
+  allowed: boolean;
+  turns: ImportTurn[];
+  /** Skills and formats the import added, once it was allowed to. */
+  skills: string[];
+  formats: string[];
+  closed: boolean;
+  created: string;
+  updated: string;
+}
+
+export interface ImportDetail {
+  id: string;
+  doc: ImportDoc;
+  running: boolean;
+}
+
+export interface NewImport {
+  link: string;
+  agent?: AgentName;
+  /** The board's language, for the agent to write in. */
+  locale?: string;
+}
+
+interface ImportReply {
+  body?: string;
+  allow?: boolean;
+}
+
 export const api = {
   health: () => request<{ ok: true }>("/api/health"),
   workspace: () => request<WorkspaceInfo>("/api/workspace"),
@@ -581,6 +624,18 @@ export const api = {
   },
   formats: () => request<Format[]>("/api/formats"),
   formatStatuses: () => request<FormatStatus[]>("/api/formats/status"),
+  imports: () => request<ImportDetail[]>("/api/imports"),
+  import: (id: string) => request<ImportDetail>(`/api/import${q(id)}`),
+  /** Start the user's agent on a link. It can only read until the user allows installs. */
+  startImport: (input: NewImport) => send<ImportDetail, NewImport>("POST", "/api/imports", input),
+  replyImport: (id: string, body: string) =>
+    send<ImportDetail, ImportReply>("POST", `/api/import/reply${q(id)}`, { body }),
+  /** Let the agent install and write what it listed, with an optional note. */
+  allowImport: (id: string, body: string) =>
+    send<ImportDetail, ImportReply>("POST", `/api/import/reply${q(id)}`, { body, allow: true }),
+  stopImport: (id: string) => send<ImportDetail, {}>("POST", `/api/import/stop${q(id)}`, {}),
+  /** Stop the agent if it is working and set the import aside. */
+  closeImport: (id: string) => send<ImportDetail, {}>("POST", `/api/import/close${q(id)}`, {}),
 };
 
 function eventData(event: Event): string {
@@ -589,11 +644,11 @@ function eventData(event: Event): string {
 }
 
 /**
- * The item's latest agent run: a `run` message naming its request, its events from the start,
- * then live ones. A reconnect replays it all again from `run`.
+ * The latest agent run at `path`: a `run` message naming what it is about, its events from the
+ * start, then live ones. A reconnect replays it all again from `run`.
  */
-export function onAgentRun(id: string, listener: (message: RunMessage) => void): () => void {
-  const source = new EventSource(`${API_BASE}/api/item/run${q(id)}`);
+function onRun(path: string, listener: (message: RunMessage) => void): () => void {
+  const source = new EventSource(`${API_BASE}${path}`);
 
   source.addEventListener("run", (e) => {
     listener({ type: "run", subject: eventData(e) });
@@ -606,6 +661,14 @@ export function onAgentRun(id: string, listener: (message: RunMessage) => void):
 
   return () => source.close();
 }
+
+/** The item's latest agent run, about one of its requests. */
+export const onAgentRun = (id: string, listener: (message: RunMessage) => void) =>
+  onRun(`/api/item/run${q(id)}`, listener);
+
+/** The import's latest agent run, about one of its turns. */
+export const onImportRun = (id: string, listener: (message: RunMessage) => void) =>
+  onRun(`/api/import/run${q(id)}`, listener);
 
 /**
  * Workspace file changes, so agent writes appear live. Every subscriber shares one

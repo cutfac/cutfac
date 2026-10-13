@@ -9,6 +9,8 @@ import { Layer, ManagedRuntime, Schema } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { RunRegistry } from "../src/core/agentRun.ts";
+import { ImportRuns } from "../src/core/importRun.ts";
+import { createImport } from "../src/core/imports.ts";
 import { parseRange, routes } from "../src/server/app.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -44,9 +46,12 @@ describe("routes", () => {
 
     // Route handlers read their services per request, as `serve` does from the server's context.
     const runtime = ManagedRuntime.make(
-      Layer.mergeAll(RunRegistry.layer, FetchHttpClient.layer, BunHttpPlatform.layer).pipe(
-        Layer.provideMerge(t.layer),
-      ),
+      Layer.mergeAll(
+        RunRegistry.layer,
+        ImportRuns.layer,
+        FetchHttpClient.layer,
+        BunHttpPlatform.layer,
+      ).pipe(Layer.provideMerge(t.layer)),
     );
 
     const context = await runtime.context();
@@ -281,5 +286,41 @@ describe("routes", () => {
     expect((await send("/files/factory.yaml")).status).toBe(403);
     expect((await send(`/files/${encodeURIComponent("../outside.mp4")}`)).status).toBe(403);
     expect((await send("/files/items/clip/missing.mp4")).status).toBe(404);
+  });
+
+  test("lists, reads, and closes imports, and starts none without knowing its own launch", async () => {
+    expect(await (await send("/api/imports")).json()).toEqual([]);
+    expect((await send("/api/import?id=zzz")).status).toBe(404);
+
+    const link = "https://example.com/pack";
+    const refused = await sendJson("POST", "/api/imports", { link, agent: "claude" });
+
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: expect.stringContaining("copy the import prompt"),
+    });
+    expect(await (await send("/api/imports")).json()).toEqual([]);
+
+    const { id } = await t.run(createImport({ link, agent: "claude" }));
+    const blank = await sendJson("POST", `/api/import/reply?id=${id}`, { body: "  " });
+
+    expect(await blank.json()).toMatchObject({ error: "Write a reply first" });
+    expect((await sendJson("POST", `/api/import/reply?id=${id}`, { allow: true })).status).toBe(
+      400,
+    );
+
+    expect(await (await send(`/api/import?id=${id}`)).json()).toMatchObject({
+      id,
+      running: false,
+      doc: { link, allowed: false, closed: false },
+    });
+
+    const stopped = await send(`/api/import/stop?id=${id}`, { method: "POST" });
+
+    expect(await stopped.json()).toMatchObject({ id, running: false });
+
+    const closed = await send(`/api/import/close?id=${id}`, { method: "POST" });
+
+    expect(await closed.json()).toMatchObject({ id, running: false, doc: { closed: true } });
   });
 });
