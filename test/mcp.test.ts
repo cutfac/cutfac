@@ -154,7 +154,8 @@ beforeAll(async () => {
   );
 
   server.send({ method: "notifications/initialized" });
-});
+  // The server is a fresh Bun process; on a busy machine it takes seconds to start.
+}, 30_000);
 
 afterAll(async () => {
   server.child.kill();
