@@ -1,6 +1,7 @@
 import { DateTime, Effect, Option } from "effect";
 
 import { InvalidRequest } from "./errors.ts";
+import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
 import { type MediaCapture, recordMedia } from "./history.ts";
 import {
   type Item,
@@ -12,6 +13,7 @@ import {
   updateFeedback,
   withDecision,
 } from "./items.ts";
+import type { Format } from "./library.ts";
 import { extension, type MediaKind } from "./media.ts";
 import { runChecked } from "./process.ts";
 import type { EditContext, Feedback, FeedbackInput, Region } from "./schema.ts";
@@ -320,6 +322,57 @@ export function describeTarget(f: Feedback): string {
   return parts.length === 0 ? "the whole file" : parts.join("; ");
 }
 
+/** The item's inputs as the format names them, with the files to read for each choice. */
+const inputLines = Effect.fnUntraced(function* (item: Item, format: Format | undefined) {
+  const ws = yield* Workspace;
+  const fields = format?.doc.inputs ?? [];
+  const lines: string[] = [];
+
+  for (const [id, value] of Object.entries(item.doc.inputs ?? {})) {
+    const field = fields.find((candidate) => candidate.id === id);
+    const choice = field?.choices.find((candidate) => candidate.id === value);
+
+    if (field === undefined || format === undefined) {
+      lines.push(`- ${id}: ${value}`);
+      continue;
+    }
+
+    if (choice === undefined) {
+      lines.push(`- ${field.title}: ${value}`);
+      continue;
+    }
+
+    const files = yield* Effect.forEach(choice.files, (file) => ws.abs(`${format.dir}/${file}`));
+    const read = files.length === 0 ? "" : `; read ${files.join(", ")}`;
+
+    lines.push(`- ${field.title}: ${choice.title} (${choice.id})${read}`);
+  }
+
+  return lines;
+});
+
+/** The format's own files and skills, and what it still lacks on this machine. */
+const formatLines = Effect.fnUntraced(function* (format: Format) {
+  const ws = yield* Workspace;
+  const check = yield* checkFormatDoc(format);
+  const files = [`${format.dir}/format.yaml`];
+
+  if (format.readme !== undefined) files.push(`${format.dir}/README.md`);
+
+  const read = yield* Effect.forEach(files, (file) => ws.abs(file));
+  const lines = [`- Format: ${format.id}. Read ${read.join(" and ")} first.`];
+
+  const skills = yield* Effect.forEach(Object.entries(check.skills), ([name, file]) =>
+    Effect.map(ws.abs(file), (path) => `${name} (${path})`),
+  );
+
+  if (skills.length > 0) lines.push(`- Skills to follow: ${skills.join(", ")}`);
+
+  const missing = check.problems.map((problem) => problem.message);
+
+  return { lines, missing };
+});
+
 /** The message an agent receives for one request, headless or pasted by the user. */
 export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   item: Item,
@@ -336,13 +389,27 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
     "",
   ];
 
+  const format = Option.getOrUndefined(yield* itemFormat(item.doc.format));
+  const described = format === undefined ? undefined : yield* formatLines(format);
+  const named = item.doc.format === undefined ? [] : [`- Format: ${item.doc.format}`];
+
   const brief = [
-    item.doc.format === undefined ? undefined : `- Format: ${item.doc.format}`,
-    item.doc.hook === undefined ? undefined : `- Hook: ${item.doc.hook}`,
-    item.doc.notes === undefined ? undefined : `- Notes: ${item.doc.notes}`,
-  ].flatMap((line) => (line === undefined ? [] : [line]));
+    ...(described?.lines ?? named),
+    ...(yield* inputLines(item, format)),
+    ...(item.doc.hook === undefined ? [] : [`- Hook: ${item.doc.hook}`]),
+    ...(item.doc.notes === undefined ? [] : [`- Notes: ${item.doc.notes}`]),
+  ];
 
   if (brief.length > 0) lines.push("Item brief:", ...brief, "");
+
+  if (described !== undefined && described.missing.length > 0) {
+    lines.push(
+      "The format still lacks:",
+      ...described.missing.map((message) => `- ${message}`),
+      "If the request needs any of it, say so and stop rather than working around it.",
+      "",
+    );
+  }
 
   lines.push("Target:");
 
@@ -371,10 +438,15 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
       "Work on the media the request is about and keep its file name, so the board keeps showing it.",
     );
   } else {
+    const aspect = format?.doc.aspects[0] ?? "9x16";
+
+    const video =
+      format?.doc.requireAudio === false ? "H.264 mp4" : "H.264/AAC mp4 with an audio track";
+
     lines.push(
-      `- The item has no video yet. Make it in ${folder}, named like \`[9x16] ${item.id.split("/").at(-1) ?? "video"}.mp4\` (the bracket is the aspect ratio).`,
+      `- The item has no video yet. Make it in ${folder}, named like \`[${aspect}] ${item.id.split("/").at(-1) ?? "video"}.mp4\` (the bracket is the aspect ratio).`,
       "",
-      "Render an H.264/AAC mp4 with an audio track that fits the request and the item brief.",
+      `Render an ${video} that fits the request and the item brief.`,
     );
   }
 

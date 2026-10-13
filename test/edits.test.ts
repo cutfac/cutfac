@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
@@ -11,6 +11,7 @@ import {
   makeRunRegistry,
   parseClaudeLine,
   parseCodexLine,
+  toolsFor,
 } from "../src/core/agentRun.ts";
 import {
   approveEdit,
@@ -26,7 +27,8 @@ import {
 } from "../src/core/edits.ts";
 import { Conflict, InvalidRequest } from "../src/core/errors.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
-import { Feedback, FeedbackInput } from "../src/core/schema.ts";
+import { saveFormat } from "../src/core/library.ts";
+import { Feedback, FeedbackInput, FormatDoc } from "../src/core/schema.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 const base = { id: "a", at: "2026-01-01T00:00:00Z", body: "x" };
@@ -106,6 +108,14 @@ describe("agent CLIs", () => {
     expect(first.args).toContain("Read,Bash(ffmpeg:*)");
     expect(first.stdin).toBe("do it");
     expect(next.args.slice(-2)).toEqual(["--resume", "s1"]);
+  });
+
+  test("a format's tools join the workspace's, each once", () => {
+    expect(toolsFor(["Read", "Bash(ffmpeg:*)"], ["Bash(uv:*)", "Read"])).toEqual([
+      "Read",
+      "Bash(ffmpeg:*)",
+      "Bash(uv:*)",
+    ]);
   });
 
   test("codex reads the prompt from stdin and resumes by thread id", () => {
@@ -339,6 +349,61 @@ describe("edit requests in a workspace", () => {
     expect(feedback.context).toBeUndefined();
     expect(prompt).toContain("Request: Make the first video");
     expect(prompt).toContain("- Hook: Wait for it");
+  });
+
+  test("the prompt names the format's files, skills, inputs, and what it lacks", async () => {
+    await mkdir(join(t.root, "formats/art/styles"), { recursive: true });
+    await mkdir(join(t.root, ".agents/skills/art-motion"), { recursive: true });
+    await writeFile(join(t.root, "formats/art/styles/swiss.md"), "Swiss grid\n");
+    await writeFile(join(t.root, "formats/art/README.md"), "# Art\n");
+    await writeFile(
+      join(t.root, ".agents/skills/art-motion/SKILL.md"),
+      "---\nname: art-motion\n---\n",
+    );
+
+    const doc = Schema.decodeSync(FormatDoc)({
+      title: "Art",
+      aspects: ["16x9"],
+      requireAudio: false,
+      skills: [{ name: "art-motion" }],
+      requires: ["surely-not-installed-cf"],
+      inputs: [
+        {
+          id: "style",
+          title: "Style",
+          choices: [{ id: "swiss", title: "Swiss grid", files: ["styles/swiss.md"] }],
+        },
+        { id: "topic", title: "Topic" },
+      ],
+    });
+
+    const prompt = await t.run(
+      Effect.gen(function* () {
+        yield* saveFormat({ ...doc, id: "art" });
+
+        const item = yield* createItem({
+          title: "Forks",
+          format: "art",
+          inputs: { style: "swiss", topic: "Knight forks" },
+        });
+
+        const requested = yield* requestEdit(item.id, { body: "Make it" });
+
+        return yield* buildEditPrompt(requested.item, requested.feedback);
+      }),
+    );
+
+    const art = join(t.root, "formats/art");
+
+    expect(prompt).toContain(`- Format: art. Read ${art}/format.yaml and ${art}/README.md first.`);
+    expect(prompt).toContain(
+      `- Skills to follow: art-motion (${join(t.root, ".agents/skills/art-motion/SKILL.md")})`,
+    );
+    expect(prompt).toContain(`- Style: Swiss grid (swiss); read ${art}/styles/swiss.md`);
+    expect(prompt).toContain("- Topic: Knight forks");
+    expect(prompt).toContain("- surely-not-installed-cf is not installed or not on PATH");
+    expect(prompt).toContain("`[16x9] forks.mp4`");
+    expect(prompt).toContain("Render an H.264 mp4 that fits");
   });
 
   test.skipIf(!hasFfmpeg)(

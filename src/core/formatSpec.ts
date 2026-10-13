@@ -221,6 +221,10 @@ export const formatStatuses = Effect.fn("formatSpec.formatStatuses")(function* (
   return yield* Effect.forEach(ids, formatStatus, { concurrency: 8 });
 });
 
+/** The format an item names, when its folder is there and its format.yaml reads. */
+export const itemFormat = (formatId: string | undefined) =>
+  formatId === undefined ? Effect.succeedNone : Effect.option(getFormat(formatId));
+
 /** Check a format by id, failing only when there is no such format. */
 export const checkFormat = (id: string) => Effect.map(formatStatus(id), (status) => status.check);
 

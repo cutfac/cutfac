@@ -18,6 +18,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { buildEditPrompt, requestedAtMillis, resolveEdit, snapshotAfter } from "./edits.ts";
 import { CommandFailed, Conflict, type FactoryError } from "./errors.ts";
+import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { commandOptions, spawnFailure, tail, which } from "./process.ts";
 import { AgentName, type AgentRun } from "./schema.ts";
@@ -65,6 +66,12 @@ export interface AgentInvocation {
   /** The prompt goes in on stdin so it never collides with option parsing or argv limits. */
   readonly stdin: string;
 }
+
+/** The workspace's allowed tools plus the ones the item's format asks for, each once. */
+export const toolsFor = (
+  workspace: ReadonlyArray<string>,
+  format: ReadonlyArray<string>,
+): ReadonlyArray<string> => [...new Set([...workspace, ...format])];
 
 /** The headless command line for one request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
@@ -424,6 +431,8 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const item = yield* getItem(itemId);
   const f = yield* findFeedback(item, feedbackId);
   const prompt = yield* buildEditPrompt(item, f);
+  const format = yield* itemFormat(item.doc.format);
+  const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
   const mcpConfig = (yield* ws.exists(MCP_FILE)) ? yield* ws.abs(MCP_FILE) : undefined;
   const frame = f.context?.frame;
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
@@ -436,7 +445,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
       prompt,
       sessionId,
       newSessionId,
-      allowedTools: ws.config.agent.claudeAllowedTools,
+      allowedTools: toolsFor(ws.config.agent.claudeAllowedTools, formatTools),
       mcpConfig,
       image,
     });
