@@ -43,6 +43,9 @@ into folders.
    - **On-screen text** — size, position, how long each line stays readable.
    - **Audio** — voice, music, SFX, and where the beat drops.
    - **Payoff and CTA** — how it ends and whether it loops.
+   - **Style** — palette (hex), type (family, weight, size against the frame), composition (grid,
+     margins, where the subject sits), motion (easing, speed, and how each kind of object moves),
+     and texture (grain, blur, shadow). Specific enough to recreate the look without the footage.
    - **Transferable** — what to reuse for the user's app, and what must not be copied (their
      footage, their audio unless licensed, their branding).
 3. Propose a format, or update one with `save_format`, only after the user agrees on the angle.
@@ -52,18 +55,40 @@ into folders.
 1. `get_format`, then read its `README.md`, the `SKILL.md` of each skill it names, and the files of
    the choices you pick. If `check_format` says it is not ready, fix that first or tell the user.
 2. `create_item` with `format`, `reference`, and `inputs`; ask the user for required inputs that have
-   no default. Write the hook first. The first 2–3 seconds must be understandable without sound.
-3. Build media with the format's `render` command or template. Name files with the aspect prefix:
+   no default.
+3. Write `brief.md` in the item folder: the one sentence a viewer should remember, who it is for,
+   duration and aspects, the real assets you will use with their paths (captures, logo, footage),
+   and what to keep or avoid. Never invent screens, numbers, reviews, or quotes. If an asset you
+   need is missing, stop and ask for it.
+4. Write `shotlist.md`: one line per beat with its start time, what is on screen, how it enters and
+   leaves, and why it is there. Cut a beat you cannot justify. The hook comes first, and the first
+   2–3 seconds must be understandable without sound. Give each kind of object (text, app captures,
+   backgrounds) one way of moving, and put the sound beats on the same timeline so cuts land on
+   them. Each aspect is its own composition, not a crop of another.
+5. Show the user the brief and shot list in a few lines and wait for their okay before you render,
+   unless they asked you to go ahead without checking.
+6. Build media with the format's `render` command or template. Name files with the aspect prefix:
    `[9x16] video.mp4`, `[9x16] cover.jpg`, `[3x4] 01-cover.jpg`. One message per slide or scene.
-4. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
+7. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
    and duration match the video; pad with silence if needed.
-5. `verify_item`, then fix every failed check. Look at representative frames yourself (first frame,
-   middle, ending, cover at thumbnail size). Keep text inside the safe zone: roughly the top 12% and
-   bottom 20% of 9:16 frames are covered by platform UI.
-6. Write copy with `update_item`: base `caption` plus per-platform `platforms.<p>` fields. Put the
+8. `verify_item`, then fix every failed check. Then call `review_media` for each video and open the
+   sheet and strips it returns; open images at phone size. Check that:
+   - every line of text is readable at phone size and inside the safe zone (roughly the top 12% and
+     bottom 20% of 9:16 frames are covered by platform UI);
+   - only real assets appear, and type and color stay consistent with the brief;
+   - no frame catches a transition half done in a way that looks broken;
+   - cuts land on the sound beats, and the hook reads in the first 2 seconds;
+   - the last frame works on its own as a poster.
+
+   Name the three largest defects, each with its time, what you see, and a local fix. Fix only
+   those, render, and review again. Stop when nothing above fails or after three rounds, and tell
+   the user what is left.
+
+9. Write copy with `update_item`: base `caption` plus per-platform `platforms.<p>` fields. Put the
    product CTA where the product rules say (first comment or after the caption body). Product claims
    must be accurate.
-7. Set status to `review`. The user reviews on the board.
+10. Set status to `review`. The user reviews on the board, where the brief and shot list show next
+    to the media.
 
 ## Import a template from a link
 
@@ -96,7 +121,7 @@ Never write API keys or tokens into the format; they stay in the user's environm
 ## Handle feedback
 
 `list_open_feedback` → fix each comment (timecodes are seconds into the named media file) →
-`verify_item` again → `resolve_feedback` with a one-line description of what changed. Do not mark
+`verify_item` and `review_media` again → `resolve_feedback` with a one-line description of what changed. Do not mark
 an item `approved`; only the user approves.
 
 Edit requests from the board's chat point at a part of one media file: a range (`timecode` to
