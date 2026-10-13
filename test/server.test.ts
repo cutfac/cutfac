@@ -114,6 +114,46 @@ describe("routes", () => {
     expect(await read.json()).toMatchObject({ id: "first-cut", doc: { title: "First cut" } });
   });
 
+  test("lists every format with what it lacks, and makes items with its inputs", async () => {
+    await mkdir(join(t.root, "formats/art"), { recursive: true });
+    await writeFile(
+      join(t.root, "formats/art/format.yaml"),
+      "title: Art\nrequires: [surely-not-installed-cf]\ninputs:\n  - id: style\n    title: Style\n    choices: [{ id: swiss, title: Swiss }, { id: neon, title: Neon }]\n    default: swiss\n",
+    );
+    await mkdir(join(t.root, "formats/broken"), { recursive: true });
+    await writeFile(join(t.root, "formats/broken/format.yaml"), "summary: no title\n");
+
+    const statuses = await send("/api/formats/status");
+
+    expect(await statuses.json()).toMatchObject([
+      {
+        id: "art",
+        format: { doc: { title: "Art" } },
+        check: {
+          ready: false,
+          problems: [{ kind: "program", subject: "surely-not-installed-cf" }],
+        },
+      },
+      { id: "broken", check: { ready: false, problems: [{ kind: "spec" }] } },
+    ]);
+
+    const created = await sendJson("POST", "/api/items", {
+      title: "Openings",
+      format: "art",
+      inputs: { style: "neon" },
+    });
+
+    expect(await created.json()).toMatchObject({ doc: { inputs: { style: "neon" } } });
+
+    const wrong = await sendJson("POST", "/api/items", {
+      title: "Endgames",
+      format: "art",
+      inputs: { style: "pastel" },
+    });
+
+    expect(wrong.status).toBe(400);
+  });
+
   test("undoes and redoes item changes", async () => {
     await sendJson("POST", "/api/items", { title: "Cut" });
 

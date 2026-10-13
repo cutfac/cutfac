@@ -21,6 +21,7 @@ import {
   restoreBefore,
 } from "../core/edits.ts";
 import { CommandFailed, Conflict, InvalidRequest } from "../core/errors.ts";
+import { formatStatuses } from "../core/formatSpec.ts";
 import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
 import {
   type Item,
@@ -141,6 +142,7 @@ const NewItemBody = Schema.Struct({
   reference: Schema.optional(Schema.NonEmptyString),
   hook: Schema.optional(Schema.String),
   notes: Schema.optional(Schema.String),
+  inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
 
 const FeedbackRef = Schema.Struct({ feedbackId: Schema.NonEmptyString });
@@ -626,6 +628,7 @@ const apiRoutes = (options: ServerOptions) =>
       }),
     ),
     json("GET", "/api/formats", listFormats()),
+    json("GET", "/api/formats/status", formatStatuses()),
     json("GET", "/api/format", withItemId(getFormat)),
     HttpRouter.route("GET", "/api/events", changesRoute),
 
