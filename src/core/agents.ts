@@ -30,6 +30,37 @@ export interface AgentStatus {
 
 export const SERVER_NAME = "content-factory";
 
+/** The MCP tools that only read the workspace: all an agent may call before the user allows more. */
+export const MCP_READ_TOOLS = [
+  "workspace_overview",
+  "get_product",
+  "list_items",
+  "get_item",
+  "verify_item",
+  "list_open_feedback",
+  "list_references",
+  "get_reference",
+  "list_formats",
+  "get_format",
+  "check_format",
+  "get_skill",
+] as const;
+
+/** The MCP tools that write to the workspace or reach the network. */
+export const MCP_WRITE_TOOLS = [
+  "import_product",
+  "create_item",
+  "update_item",
+  "review_media",
+  "resolve_feedback",
+  "set_schedule",
+  "record_metrics",
+  "add_reference",
+  "preprocess_reference",
+  "save_reference_analysis",
+  "save_format",
+] as const;
+
 const MCP_FILE = ".mcp.json";
 
 /** How an agent should start this workspace's MCP server. */
