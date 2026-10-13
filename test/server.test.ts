@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // The web handler is the test's entry point, so it provides every layer the routes need.
 // @effect-diagnostics strictEffectProvide:off
 import { BunHttpPlatform } from "@effect/platform-bun";
-import { Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
-import { RunRegistry } from "../src/core/agentRun.ts";
+import { type RunEvent, RunRegistry } from "../src/core/agentRun.ts";
 import { ImportRuns } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
 import { parseRange, routes } from "../src/server/app.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("parseRange", () => {
   test("reads one byte range against the file size", () => {
@@ -36,43 +36,27 @@ describe("parseRange", () => {
   });
 });
 
-describe("routes", () => {
-  let t: TestWorkspace;
-  let handler: (request: Request) => Promise<Response>;
-  let dispose: () => Promise<void>;
+const ended = (event: RunEvent) =>
+  event.type === "done" || event.type === "error" || event.type === "stopped";
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Routes");
+/** The board's API on a test workspace, finding only the fake agents. */
+const makeServer = async (t: TestWorkspace, fakes: FakeAgents) => {
+  // Route handlers read their services per request, as `serve` does from the server's context.
+  const runtime = ManagedRuntime.make(
+    Layer.mergeAll(
+      RunRegistry.layer,
+      ImportRuns.layer,
+      FetchHttpClient.layer,
+      BunHttpPlatform.layer,
+    ).pipe(Layer.provideMerge(t.layer), Layer.provideMerge(fakes.layer)),
+  );
 
-    // Route handlers read their services per request, as `serve` does from the server's context.
-    const runtime = ManagedRuntime.make(
-      Layer.mergeAll(
-        RunRegistry.layer,
-        ImportRuns.layer,
-        FetchHttpClient.layer,
-        BunHttpPlatform.layer,
-      ).pipe(Layer.provideMerge(t.layer)),
-    );
-
-    const context = await runtime.context();
-    const app = routes({}).pipe(Layer.provide(Layer.merge(t.layer, BunHttpPlatform.layer)));
-    const web = HttpRouter.toWebHandler(app, { disableLogger: true });
-
-    handler = (request) => web.handler(request, context);
-
-    dispose = async () => {
-      await web.dispose();
-      await runtime.dispose();
-    };
-  });
-
-  afterEach(async () => {
-    await dispose();
-    await t.remove();
-  });
+  const context = await runtime.context();
+  const app = routes({}).pipe(Layer.provide(Layer.merge(t.layer, BunHttpPlatform.layer)));
+  const web = HttpRouter.toWebHandler(app, { disableLogger: true });
 
   const send = (path: string, init: RequestInit = {}) =>
-    handler(new Request(`http://localhost${path}`, init));
+    web.handler(new Request(`http://localhost${path}`, init), context);
 
   const sendJson = (method: string, path: string, body: Schema.JsonObject) =>
     send(path, {
@@ -80,6 +64,38 @@ describe("routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+
+  const dispose = async () => {
+    await web.dispose();
+    await runtime.dispose();
+  };
+
+  return { runtime, send, sendJson, dispose };
+};
+
+type Server = Awaited<ReturnType<typeof makeServer>>;
+
+describe("routes", () => {
+  let t: TestWorkspace;
+  let fakes: FakeAgents;
+  let server: Server;
+
+  beforeEach(async () => {
+    t = await makeWorkspace("Routes");
+    fakes = await makeFakeAgents();
+    server = await makeServer(t, fakes);
+  });
+
+  afterEach(async () => {
+    await server.dispose();
+    await fakes.remove();
+    await t.remove();
+  });
+
+  const send = (path: string, init: RequestInit = {}) => server.send(path, init);
+
+  const sendJson = (method: string, path: string, body: Schema.JsonObject) =>
+    server.sendJson(method, path, body);
 
   const upload = (id: string, file: File) => {
     const form = new FormData();
@@ -322,5 +338,160 @@ describe("routes", () => {
     const closed = await send(`/api/import/close?id=${id}`, { method: "POST" });
 
     expect(await closed.json()).toMatchObject({ id, running: false, doc: { closed: true } });
+  });
+});
+
+describe("an item's waiting line", () => {
+  let t: TestWorkspace;
+  let fakes: FakeAgents;
+  let server: Server;
+
+  beforeEach(async () => {
+    t = await makeWorkspace("Line");
+    fakes = await makeFakeAgents();
+    server = await makeServer(t, fakes);
+  });
+
+  afterEach(async () => {
+    // Stops any agent still running before the workspace is removed.
+    await server.dispose();
+    await fakes.remove();
+    await t.remove();
+  });
+
+  /**
+   * A `claude` that records its prompt, holds until the test lets it go, then answers in
+   * stream-json, or fails partway when the request says so.
+   */
+  const fakeClaude = () =>
+    fakes.bin(
+      "claude",
+      `n=$(ls "${fakes.calls}" | wc -l | tr -d ' ')
+call="${fakes.calls}/$n"
+cat > "$call.stdin"
+while [ ! -f "${fakes.dir}/release" ]; do sleep 0.02; done
+echo '{"type":"system","subtype":"init","session_id":"sess-'$n'"}'
+if grep -q 'This one fails' "$call.stdin"; then echo 'boom' >&2; exit 1; fi
+echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Done."}'
+`,
+    );
+
+  /** The request each call was about, oldest first. */
+  const asked = async () => {
+    const names = (await readdir(fakes.calls)).toSorted((a, b) => parseInt(a) - parseInt(b));
+
+    const prompts = await Promise.all(
+      names.map((name) => readFile(join(fakes.calls, name), "utf8")),
+    );
+
+    return prompts.map((prompt) => /^Request: (.*)$/m.exec(prompt)?.[1]);
+  };
+
+  /**
+   * Listens for the next `total` run endings on the item; the returned function resolves once
+   * `count` of them have come.
+   */
+  const endings = async (id: string, total: number) => {
+    const seen: Array<RunEvent["type"]> = [];
+    let changed = Promise.withResolvers<void>();
+    const listening = Promise.withResolvers<void>();
+
+    void server.runtime.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const runs = yield* RunRegistry;
+          const { events } = yield* runs.subscribe(id);
+          listening.resolve();
+
+          yield* events.pipe(
+            Stream.filter(ended),
+            Stream.take(total),
+            Stream.runForEach((event) =>
+              Effect.sync(() => {
+                seen.push(event.type);
+                changed.resolve();
+                changed = Promise.withResolvers();
+              }),
+            ),
+          );
+        }),
+      ),
+    );
+
+    await listening.promise;
+
+    return async (count: number) => {
+      while (seen.length < count) await changed.promise;
+
+      return seen.slice(0, count);
+    };
+  };
+
+  const ask = async (body: string, agent = "claude") => {
+    const response = await server.sendJson("POST", "/api/item/edit?id=clip", { agent, body });
+
+    // SAFETY: the edit route answers with these fields.
+    return (await response.json()) as { feedbackId: string; sent: string; item: unknown };
+  };
+
+  test("requests made while the agent works run after it, in order, and wait after a failure", async () => {
+    await fakeClaude();
+    await server.sendJson("POST", "/api/items", { title: "Clip" });
+
+    const first = await ask("First");
+    const second = await ask("Second. This one fails");
+    const third = await ask("Third");
+    const dropped = await ask("Dropped");
+
+    expect([first.sent, second.sent, third.sent]).toEqual(["claude", "claude", "claude"]);
+    expect(second.item).toMatchObject({
+      running: true,
+      doc: { feedback: [{ body: "First" }, { body: "Second. This one fails", waiting: "claude" }] },
+    });
+
+    const reworded = await server.sendJson("POST", "/api/item/edit/reword?id=clip", {
+      feedbackId: third.feedbackId,
+      body: "Third, louder",
+    });
+
+    expect(reworded.status).toBe(200);
+
+    const cancelled = await server.sendJson("POST", "/api/item/edit/cancel?id=clip", {
+      feedbackId: dropped.feedbackId,
+    });
+
+    expect(await cancelled.json()).toMatchObject({ doc: { feedback: { length: 3 } } });
+
+    const running = await server.sendJson("POST", "/api/item/edit/reword?id=clip", {
+      feedbackId: first.feedbackId,
+      body: "Too late",
+    });
+
+    expect(running.status).toBe(400);
+
+    const after = await endings("clip", 3);
+    await writeFile(join(fakes.dir, "release"), "");
+
+    expect(await after(2)).toEqual(["done", "error"]);
+    expect(await (await server.send("/api/item?id=clip")).json()).toMatchObject({
+      running: false,
+      doc: {
+        feedback: [
+          { run: { status: "done" } },
+          { run: { status: "failed" } },
+          { body: "Third, louder", waiting: "claude" },
+        ],
+      },
+    });
+
+    const continued = await server.send("/api/item/edit/continue?id=clip", { method: "POST" });
+
+    expect(await continued.json()).toEqual({ ok: true });
+    expect(await after(3)).toEqual(["done", "error", "done"]);
+    expect(await asked()).toEqual(["First", "Second. This one fails", "Third, louder"]);
+
+    const idle = await server.send("/api/item/edit/continue?id=clip", { method: "POST" });
+
+    expect(idle.status).toBe(400);
   });
 });

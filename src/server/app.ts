@@ -16,9 +16,12 @@ import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/age
 import {
   approveEdit,
   buildEditPrompt,
+  cancelWaiting,
   requestEdit,
   resolveEdit,
   restoreBefore,
+  rewordWaiting,
+  waitingLine,
 } from "../core/edits.ts";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
@@ -170,6 +173,11 @@ const RunBody = Schema.Struct({
   agent: Schema.optional(AgentName),
 });
 
+/** One waiting request, or every one on the item. */
+const CancelBody = Schema.Struct({ feedbackId: Schema.optional(Schema.NonEmptyString) });
+
+const RewordBody = Schema.Struct({ feedbackId: Schema.NonEmptyString, body: Schema.String });
+
 const ConnectBody = Schema.Struct({ agent: AgentName });
 
 const NewImportBody = Schema.Struct({
@@ -291,6 +299,13 @@ interface Dispatch {
 const defaultAgent = (ws: WorkspaceService): AgentName =>
   ws.config.agent.default === "queue" ? "claude" : ws.config.agent.default;
 
+const queuedInstead = (reason: string): Dispatch => ({
+  sent: "queue",
+  warnings: [`${reason}; the request is queued instead`],
+});
+
+const missingCli = (agent: AgentName) => `${agent} CLI not found on PATH`;
+
 /** Start the agent on a recorded request, or leave it queued when the agent cannot start. */
 const dispatch = Effect.fnUntraced(function* (
   itemId: string,
@@ -299,29 +314,47 @@ const dispatch = Effect.fnUntraced(function* (
 ) {
   const runs = yield* RunRegistry;
 
-  if (Option.isNone(yield* which(agent))) {
-    const queued: Dispatch = {
-      sent: "queue",
-      warnings: [`${agent} CLI not found on PATH; the request is queued instead`],
-    };
-
-    return queued;
-  }
+  if (Option.isNone(yield* which(agent))) return queuedInstead(missingCli(agent));
 
   return yield* runs.start({ itemId, feedbackId, agent }).pipe(
     Effect.as<Dispatch>({ sent: agent, warnings: [] }),
-    Effect.catchTag("Conflict", (error) =>
-      Effect.succeed<Dispatch>({
-        sent: "queue",
-        warnings: [`${error.message}; the request is queued instead`],
-      }),
-    ),
+    Effect.catchTag("Conflict", (error) => Effect.succeed(queuedInstead(error.message))),
   );
 });
 
 /**
+ * Record a request and hand it to `via`: now, or once the item's run and the requests waiting
+ * before it are done. Requests on an item run in the order they were made.
+ */
+const sendEdit = Effect.fnUntraced(function* (id: string, input: FeedbackInput, via: AgentChoice) {
+  const runs = yield* RunRegistry;
+
+  if (via === "queue") {
+    const queued: Dispatch = { sent: "queue", warnings: [] };
+
+    return { requested: yield* requestEdit(id, input), dispatched: queued };
+  }
+
+  const busy = (yield* runs.isRunning(id)) || waitingLine((yield* getItem(id)).doc).length > 0;
+
+  if (!busy) {
+    const requested = yield* requestEdit(id, input);
+
+    return { requested, dispatched: yield* dispatch(id, requested.feedback.id, via) };
+  }
+
+  if (Option.isNone(yield* which(via))) {
+    return { requested: yield* requestEdit(id, input), dispatched: queuedInstead(missingCli(via)) };
+  }
+
+  const waiting: Dispatch = { sent: via, warnings: [] };
+
+  return { requested: yield* requestEdit(id, input, via), dispatched: waiting };
+});
+
+/**
  * Record an edit request with its context files, then start the agent headlessly (streamed on
- * /api/item/run) or leave it queued for copy-paste.
+ * /api/item/run), line it up behind the item's run, or leave it queued for copy-paste.
  */
 const editRoute = Effect.gen(function* () {
   const ws = yield* Workspace;
@@ -333,20 +366,11 @@ const editRoute = Effect.gen(function* () {
   const input = yield* decodeFeedbackInput(body);
   const via = agent ?? ws.config.agent.default;
 
-  // A second request waits here and is turned away before it is recorded.
+  // Requests take turns here, so each sees whether the one before it started or lined up.
   return yield* runs.exclusive(
     id,
     Effect.gen(function* () {
-      if (via !== "queue" && (yield* runs.isRunning(id))) {
-        return yield* new Conflict({
-          message:
-            "An agent is already working on this item; stop it, wait for it, or queue the request",
-        });
-      }
-
-      const requested = yield* requestEdit(id, input);
-      const queued: Dispatch = { sent: "queue", warnings: [] };
-      const dispatched = via === "queue" ? queued : yield* dispatch(id, requested.feedback.id, via);
+      const { requested, dispatched } = yield* sendEdit(id, input, via);
 
       return {
         item: yield* itemDetail(requested.item),
@@ -368,10 +392,33 @@ const runRoute = Effect.gen(function* () {
   const agent = body.agent ?? defaultAgent(ws);
   yield* agentBin(agent);
   yield* findFeedback(yield* getItem(id), body.feedbackId);
-  yield* runs.start({ itemId: id, feedbackId: body.feedbackId, agent });
+  yield* runs.exclusive(id, runs.start({ itemId: id, feedbackId: body.feedbackId, agent }));
 
   return { ok: true };
 });
+
+/** Start the item's waiting line again, after a run on it failed or was stopped. */
+const continueRoute = withId((id) =>
+  Effect.gen(function* () {
+    const runs = yield* RunRegistry;
+
+    return yield* runs.exclusive(
+      id,
+      Effect.gen(function* () {
+        const first = waitingLine((yield* getItem(id)).doc)[0];
+
+        if (first === undefined) {
+          return yield* new InvalidRequest({ message: "No request is waiting on this item" });
+        }
+
+        yield* agentBin(first.waiting);
+        yield* runs.start({ itemId: id, feedbackId: first.id, agent: first.waiting });
+
+        return { ok: true };
+      }),
+    );
+  }),
+);
 
 // ---------------------------------------------------------------------------------------------
 // Imports
@@ -653,6 +700,25 @@ const apiRoutes = (options: ServerOptions) =>
     ),
     json("POST", "/api/item/edit", editRoute),
     json("POST", "/api/item/edit/run", runRoute),
+    json("POST", "/api/item/edit/continue", continueRoute),
+    json(
+      "POST",
+      "/api/item/edit/cancel",
+      withId((id) =>
+        Effect.flatMap(HttpServerRequest.schemaBodyJson(CancelBody), (body) =>
+          Effect.flatMap(cancelWaiting(id, body.feedbackId), itemDetail),
+        ),
+      ),
+    ),
+    json(
+      "POST",
+      "/api/item/edit/reword",
+      withId((id) =>
+        Effect.flatMap(HttpServerRequest.schemaBodyJson(RewordBody), (body) =>
+          Effect.flatMap(rewordWaiting(id, body.feedbackId, body.body), itemDetail),
+        ),
+      ),
+    ),
     json(
       "POST",
       "/api/item/edit/stop",

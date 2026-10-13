@@ -360,7 +360,8 @@ const ListOpenFeedback = tool("list_open_feedback", {
   description:
     "All unresolved edit requests the user left on the board, across items. Each can target a time range " +
     "(timecode → end, seconds) and a region (x, y, w, h as fractions of the frame at `at` seconds). " +
-    "context holds item-relative files prepared for you: clip (the range), frame (red box = region), before (saved copy).",
+    "context holds item-relative files prepared for you: clip (the range), frame (red box = region), before (saved copy). " +
+    "Requests with `waiting` set, or a `run` still running, are the board's agent's; leave them unless the user asks.",
   success: Schema.Struct({ feedback: Schema.Array(OpenFeedbackEntry) }),
   readonly: true,
 });
