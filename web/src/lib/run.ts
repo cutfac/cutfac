@@ -79,3 +79,36 @@ export function closingReply(steps: ReadonlyArray<RunStep>, reply: string | unde
 
   return { steps: repeated ? steps.toSpliced(index, 1) : steps, reply: text };
 }
+
+/** One run as a message shows it, streamed or saved. */
+export interface RunView {
+  readonly agent: AgentName | undefined;
+  readonly status: AgentRun["status"] | undefined;
+  readonly running: boolean;
+  readonly steps: ReadonlyArray<RunStep>;
+  readonly reply: string | undefined;
+  readonly error: string | undefined;
+}
+
+/**
+ * Where a run stands: the streamed one when it is about this message, else the saved one. A saved
+ * run still marked running with no agent behind it (`alive` false) was cut off, by a server restart
+ * say, so it shows as stopped.
+ */
+export function runView(
+  saved: AgentRun | undefined,
+  live: LiveRun | undefined,
+  alive: boolean,
+): RunView {
+  const status = live?.status ?? saved?.status;
+  const interrupted = live === undefined && status === "running" && !alive;
+
+  return {
+    agent: live?.agent ?? saved?.agent,
+    status: interrupted ? "stopped" : status,
+    running: status === "running" && !interrupted,
+    steps: live?.steps ?? [],
+    reply: live?.reply ?? saved?.reply,
+    error: live?.error ?? saved?.error,
+  };
+}

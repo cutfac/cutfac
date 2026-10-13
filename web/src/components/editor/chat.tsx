@@ -7,7 +7,7 @@ import {
   Undo2Icon,
   WrenchIcon,
 } from "lucide-react";
-import { useEffect, useState, type RefObject } from "react";
+import { useState, type RefObject } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -42,14 +42,14 @@ import {
   type ItemDetail,
   type Media,
 } from "../../api.ts";
-import { href } from "../../hooks.ts";
+import { agentInstalled, href, useAgentStatuses } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
-import { closingReply, type LiveRun, type RunStep } from "../../lib/run.ts";
+import { closingReply, runView, type LiveRun, type RunStep, type RunView } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
 import { CompareDialog } from "./compare-dialog.tsx";
 import { Composer, copyPrompt } from "./composer.tsx";
 
-const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
+export const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
   { agent: "claude", label: "Claude" },
   { agent: "codex", label: "Codex" },
 ];
@@ -57,6 +57,10 @@ const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
 /** The agent's product name, or undefined when a run has not said which agent it is. */
 export const agentLabel = (agent: AgentName | undefined) =>
   AGENTS.find((entry) => entry.agent === agent)?.label;
+
+/** When a message was sent, as the chat shows it under the message. */
+export const clockTime = (at: string, locale: string) =>
+  new Date(at).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 
 /** Past this many steps, a finished run folds them away behind its reply. */
 const FOLD_STEPS = 4;
@@ -98,24 +102,8 @@ export function Chat({
   onRetarget,
   onCompare,
 }: ChatProps) {
-  const [statuses, setStatuses] = useState<ReadonlyArray<AgentStatus> | undefined>(undefined);
+  const statuses = useAgentStatuses();
   const t = useMessages();
-
-  // Which agents are installed changes only when the user installs one; once per visit is enough.
-  useEffect(() => {
-    let alive = true;
-    api.agents().then(
-      (list) => {
-        if (alive) setStatuses(list);
-      },
-      // Without the list every agent stays selectable; the server falls back and says why.
-      () => undefined,
-    );
-
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const requests = item.doc.feedback.toSorted((a, b) => a.at.localeCompare(b.at));
   const running = item.running || run.status === "running";
@@ -234,25 +222,6 @@ interface RequestProps {
   actions: RequestActions;
 }
 
-/** Where a request stands, from the streamed run when there is one, else from the saved one. */
-function stateOf(item: ItemDetail, feedback: Feedback, live: LiveRun | undefined) {
-  const saved = feedback.run;
-  const status = live?.status ?? saved?.status;
-
-  // A saved run still marked running with no process behind it was cut off (a server restart).
-  const interrupted = live === undefined && status === "running" && !item.running;
-  const running = status === "running" && !interrupted;
-
-  return {
-    agent: live?.agent ?? saved?.agent,
-    status: interrupted ? ("stopped" as const) : status,
-    running,
-    steps: live?.steps ?? [],
-    reply: live?.reply ?? saved?.reply,
-    error: live?.error ?? saved?.error,
-  };
-}
-
 /** The media changed since the request: the agent wrote a result that waits for a decision. */
 function hasResult(item: ItemDetail, feedback: Feedback, running: boolean): boolean {
   const context = feedback.context;
@@ -267,11 +236,11 @@ function hasResult(item: ItemDetail, feedback: Feedback, running: boolean): bool
 }
 
 function Request({ item, feedback, live, statuses, actions }: RequestProps) {
-  const state = stateOf(item, feedback, live);
+  const state = runView(feedback.run, live, item.running);
   const target = targetOf(feedback);
   const result = hasResult(item, feedback, state.running);
   const open = feedback.status === "open" && feedback.decision === undefined;
-  const { steps, reply } = closingReply(state.steps, state.reply);
+  const replied = closingReply(state.steps, state.reply).reply !== undefined;
   const t = useMessages();
   const locale = useLocale();
 
@@ -296,41 +265,13 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
             </BubbleContent>
           </Bubble>
           <MessageFooter>
-            {feedback.media ?? t.chat.newMedia} ·{" "}
-            {new Date(feedback.at).toLocaleTimeString(locale, {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
+            {feedback.media ?? t.chat.newMedia} · {clockTime(feedback.at, locale)}
           </MessageFooter>
         </MessageContent>
       </Message>
       <Message>
         <MessageContent>
-          <MessageHeader>{agentLabel(state.agent) ?? t.chat.agent}</MessageHeader>
-          {steps.length > 0 ? (
-            <Steps steps={steps} folded={!state.running && steps.length > FOLD_STEPS} />
-          ) : null}
-          {reply === undefined ? null : <Reply text={reply} />}
-          {state.running ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner />
-              {t.chat.working}
-              <Button variant="ghost" size="xs" onClick={actions.stop}>
-                <CircleStopIcon data-icon="inline-start" />
-                {t.chat.stop}
-              </Button>
-            </div>
-          ) : null}
-          {state.status === "failed" ? (
-            <Bubble variant="destructive">
-              <BubbleContent>
-                <p className="whitespace-pre-wrap">{state.error ?? t.chat.failed}</p>
-              </BubbleContent>
-            </Bubble>
-          ) : null}
-          {state.status === "stopped" ? (
-            <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
-          ) : null}
+          <RunReport run={state} onStop={actions.stop} />
           {state.status === undefined && open ? (
             <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
           ) : null}
@@ -343,10 +284,49 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
             />
           ) : null}
           {result ? <Result item={item} feedback={feedback} actions={actions} /> : null}
-          <Outcome feedback={feedback} replied={reply !== undefined} />
+          <Outcome feedback={feedback} replied={replied} />
         </MessageContent>
       </Message>
     </div>
+  );
+}
+
+/**
+ * The agent's answer to one message: the steps it took, its reply, and how it ended. The message
+ * adds what it offers next.
+ */
+export function RunReport({ run, onStop }: { run: RunView; onStop: () => void }) {
+  const { steps, reply } = closingReply(run.steps, run.reply);
+  const t = useMessages();
+
+  return (
+    <>
+      <MessageHeader>{agentLabel(run.agent) ?? t.chat.agent}</MessageHeader>
+      {steps.length > 0 ? (
+        <Steps steps={steps} folded={!run.running && steps.length > FOLD_STEPS} />
+      ) : null}
+      {reply === undefined ? null : <Reply text={reply} />}
+      {run.running ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner />
+          {t.chat.working}
+          <Button variant="ghost" size="xs" onClick={onStop}>
+            <CircleStopIcon data-icon="inline-start" />
+            {t.chat.stop}
+          </Button>
+        </div>
+      ) : null}
+      {run.status === "failed" ? (
+        <Bubble variant="destructive">
+          <BubbleContent>
+            <p className="whitespace-pre-wrap">{run.error ?? t.chat.failed}</p>
+          </BubbleContent>
+        </Bubble>
+      ) : null}
+      {run.status === "stopped" ? (
+        <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
+      ) : null}
+    </>
   );
 }
 
@@ -405,10 +385,9 @@ function RunActions({
   retry: boolean;
   actions: RequestActions;
 }) {
-  const installed = (agent: AgentName) =>
-    statuses === undefined || statuses.some((status) => status.agent === agent && status.installed);
+  const none =
+    statuses !== undefined && !AGENTS.some(({ agent }) => agentInstalled(statuses, agent));
 
-  const none = statuses !== undefined && !AGENTS.some(({ agent }) => installed(agent));
   const t = useMessages();
 
   return (
@@ -418,7 +397,7 @@ function RunActions({
           key={agent}
           variant="outline"
           size="xs"
-          disabled={!installed(agent)}
+          disabled={!agentInstalled(statuses, agent)}
           onClick={() => actions.run(feedback, agent)}
         >
           {retry ? t.chat.retryWith(label) : t.chat.runWith(label)}

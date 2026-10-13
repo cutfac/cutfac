@@ -26,6 +26,7 @@ import {
   type ItemDetail,
   type Media,
 } from "../../api.ts";
+import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 
@@ -50,8 +51,7 @@ export function preferredAgent(
 ): AgentChoice {
   if (statuses === undefined) return preferred ?? "queue";
 
-  const usable = (agent: AgentChoice) =>
-    agent === "queue" || statuses.some((status) => status.agent === agent && status.installed);
+  const usable = (agent: AgentChoice) => agent === "queue" || agentInstalled(statuses, agent);
 
   if (preferred !== undefined && usable(preferred)) return preferred;
 
@@ -169,10 +169,7 @@ export function Composer({
   const agentItems = (["claude", "codex", "queue"] as const).map((value) => ({
     value,
     label: agentLabel(value, t),
-    disabled:
-      value !== "queue" &&
-      statuses !== undefined &&
-      !statuses.some((status) => status.agent === value && status.installed),
+    disabled: value !== "queue" && !agentInstalled(statuses, value),
   }));
 
   return (

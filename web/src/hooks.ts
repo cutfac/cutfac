@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { onWorkspaceChange } from "./api.ts";
+import { api, onWorkspaceChange, type AgentStatus } from "./api.ts";
 
 interface Loaded<T> {
   key: string;
@@ -65,6 +65,38 @@ export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
     setData: (data) => setLoaded({ key, version, data }),
   };
 }
+
+/**
+ * Which agents are installed, loaded once per mount: that changes only when the user installs one.
+ * Undefined until it loads or when it fails; then every agent stays selectable, and the server
+ * says why when one cannot start.
+ */
+export function useAgentStatuses(): ReadonlyArray<AgentStatus> | undefined {
+  const [statuses, setStatuses] = useState<ReadonlyArray<AgentStatus>>();
+
+  useEffect(() => {
+    let alive = true;
+    api.agents().then(
+      (list) => {
+        if (alive) setStatuses(list);
+      },
+      () => undefined,
+    );
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return statuses;
+}
+
+/** Whether the user can pick an agent: it is installed, or the list has not said otherwise. */
+export const agentInstalled = (
+  statuses: ReadonlyArray<AgentStatus> | undefined,
+  agent: AgentStatus["agent"],
+) =>
+  statuses === undefined || statuses.some((status) => status.agent === agent && status.installed);
 
 type Route = readonly [view: string, id: string | undefined];
 

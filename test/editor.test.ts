@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Feedback, RunMessage } from "../web/src/api.ts";
-import { closingReply, NO_RUN, reduceRun, type LiveRun } from "../web/src/lib/run.ts";
+import type { AgentRun, Feedback, RunMessage } from "../web/src/api.ts";
+import { closingReply, NO_RUN, reduceRun, runView, type LiveRun } from "../web/src/lib/run.ts";
 import {
   describeTarget,
   NO_TARGET,
@@ -132,5 +132,50 @@ describe("run transcript", () => {
       reply: "Done.",
     });
     expect(closingReply([tool], "  ")).toEqual({ steps: [tool], reply: undefined });
+  });
+
+  test("a run shows as streamed, else as saved", () => {
+    const saved: AgentRun = {
+      agent: "codex",
+      status: "done",
+      startedAt: "2026-10-12T00:00:00.000Z",
+      reply: "Saved reply.",
+    };
+
+    const live = fold([
+      { type: "start", subject: "f1", agent: "claude" },
+      { type: "text", text: "Looking." },
+    ]);
+
+    expect(runView(saved, undefined, false)).toEqual({
+      agent: "codex",
+      status: "done",
+      running: false,
+      steps: [],
+      reply: "Saved reply.",
+      error: undefined,
+    });
+    expect(runView(saved, live, false)).toMatchObject({
+      agent: "claude",
+      status: "running",
+      running: true,
+      steps: [{ kind: "text", text: "Looking." }],
+      reply: "Saved reply.",
+    });
+  });
+
+  test("a saved run marked running with no agent behind it was cut off", () => {
+    const saved: AgentRun = {
+      agent: "claude",
+      status: "running",
+      startedAt: "2026-10-12T00:00:00.000Z",
+    };
+
+    expect(runView(saved, undefined, false)).toMatchObject({ status: "stopped", running: false });
+    expect(runView(saved, undefined, true)).toMatchObject({ status: "running", running: true });
+    expect(runView(undefined, undefined, false)).toMatchObject({
+      status: undefined,
+      running: false,
+    });
   });
 });
