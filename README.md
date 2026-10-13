@@ -66,6 +66,9 @@
 - **References in, formats out.** Drop a video or paste a URL. The factory pulls scene cuts, hook
   frames, a contact sheet and the audio, your agent writes the analysis, and the patterns that work
   become reusable formats.
+- **Templates from any link.** Paste a post, a repo or an Agent Skill and your agent turns it into
+  a template with its own inputs and previews. It asks before installing anything, and the board
+  shows what each template still needs. See [docs/templates.md](docs/templates.md).
 - **Your product in every run.** Import positioning and screenshots from an App Store, Google Play
   or landing page URL. Every agent run reads it, so hooks and CTAs stay on message.
 - **Calendar and metrics.** Plan each post per platform, then log views, likes and comments after it
@@ -191,7 +194,7 @@ product/product.yaml    positioning, audience, stores, CTA, brand, rules
 product/captures/       reviewed app screenshots and recordings
 product/store/          imported store icon, screenshots, and listing.md
 references/<id>/        source video, frames/, contact.jpg, audio.wav, preprocess.json, analysis.md
-formats/<id>/           format.yaml, optional template/ and README.md
+formats/<id>/           format.yaml, README.md, previews and choice files, optional template/
 items/<id>/             item.yaml, [9x16] video.mp4, [9x16] cover.jpg, …
 items/<id>/history/     history.yaml: the undo stack and every saved version of the media
 ```
@@ -204,7 +207,8 @@ bun run dev:web                      # Vite on :5173, proxies /api and /files
 bun test && bun run typecheck && bun run lint
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap.
+See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap, and
+[docs/templates.md](docs/templates.md) for the template spec.
 
 ## License
 

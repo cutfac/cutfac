@@ -45,6 +45,18 @@ with ffmpeg and the skill.
    outside a request and becomes an entry of its own before the next undo. Undo and redo copy a
    saved version back and update the request's verdict; they wait until no agent is on the item.
 
+## Templates
+
+A template (a format in the core) is a folder with a `format.yaml` that declares what making an item
+with it takes: Agent Skills, programs on `PATH`, extra agent tools, and inputs chosen per item. The
+spec is in [templates.md](templates.md).
+
+The factory has no importers. The user's agent reads a link and writes the folder; the core only
+decodes it and reports what is missing (`check_format`, `/api/formats/status`), so any source that
+an agent can read works without code here. Installing skills or programs is the agent's job, with
+the user's consent; the core never downloads or installs anything. Edit requests point the agent at
+the template's README, skills and the files of the item's chosen inputs.
+
 ## Where the UI runs
 
 All options share one local process (API + MCP), because agents, ffmpeg, yt-dlp, and renderers
