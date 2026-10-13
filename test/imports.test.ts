@@ -87,8 +87,10 @@ test("every MCP tool is either a read tool or a write tool, matching its readonl
   }
 });
 
+const LINK = "https://packs.example.com/reels";
+
 test("Claude reads only, with only this workspace's server, until the user allows", () => {
-  const args = claudeImportFlags("read", SERVER);
+  const args = claudeImportFlags("read", SERVER, LINK);
   const tools = valueOf(args, "--tools").split(",");
   const allowed = valueOf(args, "--allowedTools").split(",");
   const denied = valueOf(args, "--disallowedTools").split(",");
@@ -108,14 +110,45 @@ test("Claude reads only, with only this workspace's server, until the user allow
   });
 });
 
+test("an import never reads outside the workspace, credentials, or .env files", () => {
+  for (const phase of ["read", "install"] as const) {
+    const args = claudeImportFlags(phase, SERVER, LINK);
+    const denied = valueOf(args, "--disallowedTools").split(",");
+    const settings = JSON.parse(valueOf(args, "--settings"));
+
+    expect(settings.permissions).toEqual({ blockReadsOutsideWorkingDirectories: true });
+    expect(denied).toContain("Read(~/.ssh/**)");
+    expect(denied).toContain("Read(./.env)");
+    expect(denied).toContain("Read(./**/.env.*)");
+  }
+});
+
+test("after Allow, Claude's shell commands run in the sandbox, reaching only the link's host and code hosts", () => {
+  const { sandbox } = JSON.parse(valueOf(claudeImportFlags("install", SERVER, LINK), "--settings"));
+
+  expect(sandbox).toMatchObject({
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    autoAllowBashIfSandboxed: false,
+    network: { strictAllowlist: true },
+  });
+
+  expect(sandbox.network.allowedDomains).toContain("packs.example.com");
+  expect(sandbox.network.allowedDomains).toContain("github.com");
+
+  const reading = JSON.parse(valueOf(claudeImportFlags("read", SERVER, LINK), "--settings"));
+
+  expect(reading.sandbox).toBeUndefined();
+});
+
 test("after Allow, Claude may fetch and write in the workspace, but not run what it fetched", () => {
-  const args = claudeImportFlags("install", SERVER);
+  const args = claudeImportFlags("install", SERVER, LINK);
   const tools = valueOf(args, "--tools").split(",");
   const allowed = valueOf(args, "--allowedTools").split(",");
 
   expect(tools).toContain("Write");
   expect(tools).toContain("Bash");
-  expect(args).not.toContain("--disallowedTools");
   expect(allowed).toContain("Edit(./**)");
   expect(allowed).not.toContain("Write");
   expect(allowed).not.toContain("Bash");
@@ -425,9 +458,9 @@ describe("running a turn", () => {
   };
 
   /**
-   * A `claude` that records its arguments and prompt, and answers in stream-json. Given the
-   * install tools, it puts a stub skill in the workspace, as an agent that installed one would.
-   * It never reaches the network.
+   * A `claude` that records its arguments, its prompt, and whether it was told to keep credentials
+   * from its commands, and answers in stream-json. Given the install tools, it puts a stub skill
+   * in the workspace, as an agent that installed one would. It never reaches the network.
    */
   const fakeClaude = () =>
     fakeBin(
@@ -435,6 +468,7 @@ describe("running a turn", () => {
       `calls="${join(fakes, "calls")}"
 call="$calls/$(ls "$calls" | grep -c 'args$')"
 printf '%s\\n' "$@" > "$call.args"
+printf '%s' "$CLAUDE_CODE_SUBPROCESS_ENV_SCRUB" > "$call.scrub"
 cat > "$call.stdin"
 case "$*" in
   *"Bash(git clone:*)"*) mkdir -p .agents/skills/stub && printf '# stub\\n' > .agents/skills/stub/SKILL.md ;;
@@ -456,6 +490,7 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
         return {
           args: (await readFile(`${base}.args`, "utf8")).trimEnd().split("\n"),
           stdin: await readFile(`${base}.stdin`, "utf8"),
+          scrub: await readFile(`${base}.scrub`, "utf8"),
         };
       }),
     );
@@ -508,6 +543,7 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
     expect(valueOf(second?.args ?? [], "--resume")).toBe("sess-1");
     expect(valueOf(second?.args ?? [], "--allowedTools")).toContain("Edit(./**)");
     expect(second?.stdin).toBe(ALLOW_RULES);
+    expect([first?.scrub, second?.scrub]).toEqual(["1", "1"]);
 
     const installed = await t.run(getImport(started.id));
 

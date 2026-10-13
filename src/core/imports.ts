@@ -270,6 +270,7 @@ export const ALLOW_RULES = [
   "- Install skills in the workspace under `.agents/skills/<name>/`; the board copies each new skill folder to `.claude/skills/`. If you cannot write there, use `.claude/skills/<name>/`.",
   "- Copy files byte for byte with `git clone` or with `curl` on the raw URL. Never retype them from a summary.",
   "- Programs and system packages (brew, apt, pip, npm -g, uv tool) are the user's to install. Give the exact commands and keep the programs in the format's `requires`.",
+  "- If a download, command, or write is refused, do not look for a way around it: tell the user what it was for and give them the command to run themselves.",
   "- Then call save_format, write the README, choice files, and previews into the folder it returns, and call check_format until the template is ready or only the user's steps are left.",
   "End with what you installed, what the template makes, and what the user still has to do.",
 ].join("\n");

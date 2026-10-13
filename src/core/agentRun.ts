@@ -73,6 +73,8 @@ export interface AgentInvocation {
   readonly args: ReadonlyArray<string>;
   /** The prompt goes in on stdin so it never collides with option parsing or argv limits. */
   readonly stdin: string;
+  /** Added to the environment the agent inherits. */
+  readonly env?: Readonly<Record<string, string>>;
 }
 
 /** The workspace's allowed tools plus the ones the item's format asks for, each once. */
@@ -425,6 +427,8 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
 
   const command = ChildProcess.make(invocation.command, invocation.args, {
     ...commandOptions({ cwd: ws.root, stdin: invocation.stdin }),
+    env: invocation.env,
+    extendEnv: true,
     forceKillAfter: STOP_GRACE,
   });
 

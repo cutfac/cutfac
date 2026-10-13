@@ -79,12 +79,81 @@ const CLAUDE_INSTALL_ALLOWED = [
 const claudeMcpTool = (name: string) => `mcp__${SERVER_NAME}__${name}`;
 
 /**
- * Claude's flags for an import turn. `--tools` is what Claude can see at all, and
+ * What an import may never read, in either phase: credentials in the home folder and the
+ * workspace's `.env` files. Newer Claude Code also closes everything outside the workspace;
+ * these rules hold on older versions too, and for shell commands in the sandbox.
+ */
+const CLAUDE_READ_DENIED = [
+  "~/.ssh/**",
+  "~/.aws/**",
+  "~/.config/gh/**",
+  "~/.config/gcloud/**",
+  "~/.gnupg/**",
+  "~/.docker/**",
+  "~/.kube/**",
+  "~/.netrc",
+  "~/.npmrc",
+  "./.env",
+  "./.env.*",
+  "./**/.env",
+  "./**/.env.*",
+].map((path) => `Read(${path})`);
+
+/**
+ * Claude Code strips credentials such as API keys from the environment of the commands it runs, so
+ * a command an import page talked it into cannot send them anywhere. Codex ignores it.
+ */
+const IMPORT_ENV = { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1" };
+
+/** Where skills are published, besides the link itself. */
+const CODE_HOSTS = [
+  "github.com",
+  "*.github.com",
+  "*.githubusercontent.com",
+  "gitlab.com",
+  "bitbucket.org",
+  "codeberg.org",
+  "huggingface.co",
+];
+
+/**
+ * Claude's settings for an import turn. After Allow, shell commands run in Claude Code's sandbox:
+ * they write only in the workspace (never its `.claude` settings, skills or hooks), reach only the
+ * link's host and code hosts, and fail rather than run outside it.
+ */
+function claudeImportSettings(phase: ImportPhase, link: string): string {
+  const permissions = { blockReadsOutsideWorkingDirectories: true };
+
+  if (phase === "read") return JSON.stringify({ permissions });
+
+  const host = URL.parse(link)?.hostname;
+
+  return JSON.stringify({
+    permissions,
+    sandbox: {
+      enabled: true,
+      failIfUnavailable: true,
+      allowUnsandboxedCommands: false,
+      // Sandboxed commands still need an allow rule, so fetched code never runs.
+      autoAllowBashIfSandboxed: false,
+      network: {
+        allowedDomains: host === undefined ? CODE_HOSTS : [...new Set([host, ...CODE_HOSTS])],
+        // Refused rather than left waiting for an answer no one can give.
+        strictAllowlist: true,
+      },
+    },
+  });
+}
+
+/**
+ * Claude's flags for an import of `link`. `--tools` is what Claude can see at all, and
  * `--allowedTools` what it may use without asking, which a headless run cannot do. Only this
  * workspace's MCP server is loaded, so the user's other servers cannot act for it.
  */
-export function claudeImportFlags(phase: ImportPhase, server: McpLaunch): string[] {
-  const mcp = [
+export function claudeImportFlags(phase: ImportPhase, server: McpLaunch, link: string): string[] {
+  const shared = [
+    "--settings",
+    claudeImportSettings(phase, link),
     "--strict-mcp-config",
     "--mcp-config",
     JSON.stringify({ mcpServers: { [SERVER_NAME]: server } }),
@@ -97,8 +166,8 @@ export function claudeImportFlags(phase: ImportPhase, server: McpLaunch): string
       "--allowedTools",
       [...CLAUDE_READ_TOOLS, ...MCP_READ_TOOLS.map(claudeMcpTool)].join(","),
       "--disallowedTools",
-      MCP_WRITE_TOOLS.map(claudeMcpTool).join(","),
-      ...mcp,
+      [...CLAUDE_READ_DENIED, ...MCP_WRITE_TOOLS.map(claudeMcpTool)].join(","),
+      ...shared,
     ];
   }
 
@@ -107,7 +176,9 @@ export function claudeImportFlags(phase: ImportPhase, server: McpLaunch): string
     [...CLAUDE_READ_TOOLS, "Write", "Edit", "Bash"].join(","),
     "--allowedTools",
     [...CLAUDE_INSTALL_ALLOWED, `mcp__${SERVER_NAME}`].join(","),
-    ...mcp,
+    "--disallowedTools",
+    CLAUDE_READ_DENIED.join(","),
+    ...shared,
   ];
 }
 
@@ -198,7 +269,7 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
 
   const flags =
     agent === "claude"
-      ? claudeImportFlags(phase, server)
+      ? claudeImportFlags(phase, server, doc.link)
       : codexImportConfig(phase, server, ours, yield* codexOtherServers(bin, ours));
 
   // Without a session to resume, the prompt carries the conversation so far.
@@ -209,7 +280,10 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
     agent,
     stored: doc.session,
     invocation: (session) =>
-      Effect.succeed(agentCommand(agent, bin, prompt(session), flags, session)),
+      Effect.succeed({
+        ...agentCommand(agent, bin, prompt(session), flags, session),
+        env: IMPORT_ENV,
+      }),
     save: (sessionId) => saveImportSession(importId, sessionId),
     emit,
   });
