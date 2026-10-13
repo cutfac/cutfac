@@ -8,6 +8,7 @@ import {
   Option,
   Path,
   Schema,
+  Semaphore,
   Stream,
 } from "effect";
 import type { PlatformError } from "effect/PlatformError";
@@ -65,6 +66,14 @@ export class Workspace extends Context.Service<
     /** Direct children, without dotfiles, sorted by name. Empty when the folder is missing. */
     readonly list: (rel: string) => Effect.Effect<ReadonlyArray<Entry>, WorkspaceError>;
     readonly remove: (rel: string) => Effect.Effect<void, WorkspaceError>;
+    /**
+     * Run `effect` while no other effect holding `key` runs, such as two read-modify-writes of one
+     * file. Not reentrant: `effect` must not take the same key.
+     */
+    readonly exclusive: <A, E, R>(
+      key: string,
+      effect: Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E, R>;
     /**
      * Workspace-relative paths that changed on disk, debounced, without dot folders, `dist`, or
      * `node_modules`. The stream ends if the platform cannot watch the folder.
@@ -328,6 +337,15 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   );
 
   const config = yield* readYaml(CONFIG_FILE, WorkspaceConfig);
+  const locks = new Map<string, Semaphore.Semaphore>();
+
+  const exclusive = <A, E, R>(key: string, effect: Effect.Effect<A, E, R>) =>
+    Effect.suspend(() => {
+      const lock = locks.get(key) ?? Semaphore.makeUnsafe(1);
+      locks.set(key, lock);
+
+      return lock.withPermits(1)(effect);
+    });
 
   return Workspace.of({
     root,
@@ -347,6 +365,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     stat,
     list,
     remove,
+    exclusive,
     changes,
   });
 });

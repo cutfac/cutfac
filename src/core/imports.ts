@@ -124,21 +124,30 @@ export const createImport = Effect.fn("imports.createImport")(function* (input: 
   return created;
 });
 
-/** Read-modify-write an import. `change` returns the next doc, or fails to leave the file as it is. */
+/**
+ * Read-modify-write an import, one at a time per import. `change` returns the next doc, or fails
+ * to leave the file as it is.
+ */
 const mutateImport = Effect.fnUntraced(function* <E, R>(
   id: string,
   change: (doc: ImportDoc) => Effect.Effect<ImportDoc, E, R>,
 ) {
   const ws = yield* Workspace;
-  const found = yield* getImport(id);
-  const next = yield* change(found.doc);
-  const updated = yield* nowIso;
-  const doc: ImportDoc = { ...next, updated };
-  yield* ws.writeYaml(importPath(id), ImportDoc, doc);
 
-  const result: Import = { id, doc };
+  return yield* ws.exclusive(
+    `import:${id}`,
+    Effect.gen(function* () {
+      const found = yield* getImport(id);
+      const next = yield* change(found.doc);
+      const updated = yield* nowIso;
+      const doc: ImportDoc = { ...next, updated };
+      yield* ws.writeYaml(importPath(id), ImportDoc, doc);
 
-  return result;
+      const result: Import = { id, doc };
+
+      return result;
+    }),
+  );
 });
 
 /** Why `kind` cannot be the next turn of `doc`, if it cannot. */

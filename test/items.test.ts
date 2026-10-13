@@ -40,6 +40,23 @@ describe("items in a workspace", () => {
 
   afterEach(() => t.remove());
 
+  test("writes to one item at the same time keep each other's changes", async () => {
+    const bodies = Array.from({ length: 12 }, (_, n) => `Note ${n}`);
+
+    const item = await t.run(
+      Effect.gen(function* () {
+        const created = yield* createItem({ title: "Busy" });
+        yield* Effect.forEach(bodies, (body) => addFeedback(created.id, { body }), {
+          concurrency: "unbounded",
+        });
+
+        return yield* getItem(created.id);
+      }),
+    );
+
+    expect(item.doc.feedback.map((f) => f.body).toSorted()).toEqual(bodies.toSorted());
+  });
+
   test("creates, updates, and dedupes ids", async () => {
     const [a, b, updated, merged] = await t.run(
       Effect.gen(function* () {

@@ -266,20 +266,28 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
 });
 
 /**
- * Read-modify-write an item. `change` returns the next doc, or fails to leave the file as it is.
- * Legacy items get an item.yaml on first write.
+ * Read-modify-write an item, one at a time per item, so an agent run and the board writing the
+ * same item.yaml do not drop each other's changes. `change` returns the next doc, or fails to
+ * leave the file as it is; it must not write the item itself. Legacy items get an item.yaml on
+ * first write.
  */
 export const mutateItem = Effect.fn("items.mutateItem")(function* <E, R>(
   id: string,
   change: (doc: ItemDoc, item: Item) => Effect.Effect<ItemDoc, E, R>,
 ) {
   const ws = yield* Workspace;
-  const item = yield* getItem(id);
-  const next = yield* change(item.doc, item);
-  const updated = yield* nowIso;
-  yield* ws.writeYaml(`${item.dir}/${ITEM_FILE}`, ItemDoc, { ...next, updated });
 
-  return yield* getItem(id);
+  return yield* ws.exclusive(
+    `item:${id}`,
+    Effect.gen(function* () {
+      const item = yield* getItem(id);
+      const next = yield* change(item.doc, item);
+      const updated = yield* nowIso;
+      yield* ws.writeYaml(`${item.dir}/${ITEM_FILE}`, ItemDoc, { ...next, updated });
+
+      return yield* getItem(id);
+    }),
+  );
 });
 
 /** Replace one feedback entry, failing if the item has none with that id. */
