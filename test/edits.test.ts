@@ -270,6 +270,100 @@ describe("run registry", () => {
     expect(result.again).toBe(false);
   });
 
+  test("a run frees its item once it reports its end, and its late events are dropped", async () => {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const ended = yield* Deferred.make<void>();
+          const linger = yield* Deferred.make<void>();
+          const lateSent = yield* Deferred.make<void>();
+
+          // The first run is still winding down after it reported its end.
+          const registry = yield* makeRunRegistry(
+            editRuns((run, emit) =>
+              Effect.gen(function* () {
+                yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
+                yield* emit({ type: "done", reply: run.feedbackId });
+
+                if (run.feedbackId !== "f1") return;
+
+                yield* Deferred.succeed(ended, undefined);
+                yield* Deferred.await(linger);
+                yield* emit({ type: "text", text: "late" });
+                yield* Deferred.succeed(lateSent, undefined);
+              }),
+            ),
+          );
+
+          const subscription = yield* registry.subscribe("item");
+
+          const collecting = yield* Effect.forkChild(
+            Stream.runCollect(Stream.take(subscription.events, 6)),
+          );
+
+          yield* registry.start(input);
+          yield* Deferred.await(ended);
+          const running = yield* registry.isRunning("item");
+          const stopped = yield* registry.stop("item");
+          yield* registry.start({ ...input, feedbackId: "f2" });
+          yield* Deferred.succeed(linger, undefined);
+          yield* Deferred.await(lateSent);
+          yield* waitUntilIdle(registry.isRunning("item"));
+          yield* registry.start({ ...input, feedbackId: "f3" });
+
+          return { running, stopped, events: yield* Fiber.join(collecting) };
+        }),
+      ),
+    );
+
+    expect(result.running).toBe(false);
+    expect(result.stopped).toBe(false);
+    expect(
+      result.events.map((event) => [event.type, "subject" in event ? event.subject : ""]),
+    ).toEqual([
+      ["start", "f1"],
+      ["done", ""],
+      ["start", "f2"],
+      ["done", ""],
+      ["start", "f3"],
+      ["done", ""],
+    ]);
+  });
+
+  test("a stop that lands as the run finishes adds nothing after its end", async () => {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const started = yield* Deferred.make<void>();
+          const finish = yield* Deferred.make<void>();
+
+          // Like an import turn, whose last part always runs to the end once it began.
+          const registry = yield* makeRunRegistry(
+            editRuns((run, emit) => Effect.uninterruptible(heldRunner(started, finish)(run, emit))),
+          );
+
+          const subscription = yield* registry.subscribe("item");
+
+          const collecting = yield* Effect.forkChild(
+            Stream.runCollect(Stream.take(subscription.events, 4)),
+          );
+
+          yield* registry.start(input);
+          yield* Deferred.await(started);
+          const stopping = yield* Effect.forkChild(registry.stop("item"));
+          yield* Effect.sleep("20 millis");
+          yield* Deferred.succeed(finish, undefined);
+          yield* Fiber.join(stopping);
+          yield* registry.start({ ...input, feedbackId: "f2" });
+
+          return yield* Fiber.join(collecting);
+        }),
+      ),
+    );
+
+    expect(result.map((event) => event.type)).toEqual(["start", "text", "done", "start"]);
+  });
+
   test("a crashing runner becomes an error event and frees the item", async () => {
     const events = await Effect.runPromise(
       Effect.scoped(

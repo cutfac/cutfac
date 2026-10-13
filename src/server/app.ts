@@ -23,14 +23,14 @@ import {
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
 import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
-import { ImportRuns, startImport, startTurn } from "../core/importRun.ts";
 import {
-  type Import,
-  type TurnInput,
-  closeImport,
-  getImport,
-  listImports,
-} from "../core/imports.ts";
+  ImportRuns,
+  startImport,
+  startTurn,
+  stopAndCloseImport,
+  stopImport,
+} from "../core/importRun.ts";
+import { type Import, type TurnInput, getImport, listImports } from "../core/imports.ts";
 import {
   type Item,
   addFeedback,
@@ -333,24 +333,30 @@ const editRoute = Effect.gen(function* () {
   const input = yield* decodeFeedbackInput(body);
   const via = agent ?? ws.config.agent.default;
 
-  if (via !== "queue" && (yield* runs.isRunning(id))) {
-    return yield* new Conflict({
-      message:
-        "An agent is already working on this item; stop it, wait for it, or queue the request",
-    });
-  }
+  // A second request waits here and is turned away before it is recorded.
+  return yield* runs.exclusive(
+    id,
+    Effect.gen(function* () {
+      if (via !== "queue" && (yield* runs.isRunning(id))) {
+        return yield* new Conflict({
+          message:
+            "An agent is already working on this item; stop it, wait for it, or queue the request",
+        });
+      }
 
-  const requested = yield* requestEdit(id, input);
-  const queued: Dispatch = { sent: "queue", warnings: [] };
-  const dispatched = via === "queue" ? queued : yield* dispatch(id, requested.feedback.id, via);
+      const requested = yield* requestEdit(id, input);
+      const queued: Dispatch = { sent: "queue", warnings: [] };
+      const dispatched = via === "queue" ? queued : yield* dispatch(id, requested.feedback.id, via);
 
-  return {
-    item: yield* itemDetail(requested.item),
-    feedbackId: requested.feedback.id,
-    sent: dispatched.sent,
-    warnings: [...requested.warnings, ...dispatched.warnings],
-    prompt: yield* buildEditPrompt(requested.item, requested.feedback),
-  };
+      return {
+        item: yield* itemDetail(requested.item),
+        feedbackId: requested.feedback.id,
+        sent: dispatched.sent,
+        warnings: [...requested.warnings, ...dispatched.warnings],
+        prompt: yield* buildEditPrompt(requested.item, requested.feedback),
+      };
+    }),
+  );
 });
 
 /** Send a queued request to an agent. */
@@ -425,23 +431,11 @@ const importReplyRoute = (options: ServerOptions) =>
 
 /** Stop the import's agent, if it is working. */
 const stopImportRoute = withId((id) =>
-  Effect.gen(function* () {
-    const runs = yield* ImportRuns;
-    yield* runs.stop(id);
-
-    return yield* importDetail(yield* getImport(id));
-  }),
+  Effect.andThen(stopImport(id), Effect.flatMap(getImport(id), importDetail)),
 );
 
 /** Stop the import's agent, if it is working, and set the import aside. */
-const closeImportRoute = withId((id) =>
-  Effect.gen(function* () {
-    const runs = yield* ImportRuns;
-    yield* runs.stop(id);
-
-    return yield* importDetail(yield* closeImport(id));
-  }),
-);
+const closeImportRoute = withId((id) => Effect.flatMap(stopAndCloseImport(id), importDetail));
 
 // ---------------------------------------------------------------------------------------------
 // Server-sent events

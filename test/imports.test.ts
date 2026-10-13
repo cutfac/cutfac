@@ -5,7 +5,16 @@ import { dirname, join } from "node:path";
 
 // The end-to-end tests run the import registry against the test workspace.
 // @effect-diagnostics strictEffectProvide:off
-import { ConfigProvider, Context, Effect, Layer, ManagedRuntime, Option, Stream } from "effect";
+import {
+  ConfigProvider,
+  Context,
+  Effect,
+  Layer,
+  ManagedRuntime,
+  Option,
+  Result,
+  Stream,
+} from "effect";
 import { Tool } from "effect/ai";
 
 import { MCP_READ_TOOLS, MCP_WRITE_TOOLS, type McpLaunch } from "../src/core/agents.ts";
@@ -16,6 +25,7 @@ import {
   codexOtherServers,
   startImport,
   startTurn,
+  stopAndCloseImport,
 } from "../src/core/importRun.ts";
 import {
   ALLOW_RULES,
@@ -507,6 +517,57 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
     const busy = await run(Effect.flip(startTurn(started.id, turn("r1", "reply", "hi"), SERVER)));
 
     expect(busy.message).toContain("already working");
+  });
+
+  test("of two replies at once, one starts and the other is turned away unrecorded", async () => {
+    await fakeClaude();
+
+    const started = await run(
+      startImport({ link: "https://example.com", agent: "claude" }, SERVER),
+    );
+
+    await runEnd(started.id);
+    await fakeBin("claude", "sleep 30\n");
+
+    const replies = await run(
+      Effect.forEach(
+        ["r1", "r2"],
+        (id) => Effect.result(startTurn(started.id, turn(id, "reply", "hi"), SERVER)),
+        { concurrency: "unbounded" },
+      ),
+    );
+
+    expect(replies.filter(Result.isFailure).map((reply) => reply.failure.message)).toEqual([
+      expect.stringContaining("already working"),
+    ]);
+
+    const { doc } = await t.run(getImport(started.id));
+
+    expect(doc.turns.map((entry) => entry.run?.status)).toEqual(["done", "running"]);
+  });
+
+  test("closing while a reply comes in leaves the import closed with no agent on it", async () => {
+    await fakeBin("claude", "sleep 30\n");
+
+    const started = await run(
+      startImport({ link: "https://example.com", agent: "claude" }, SERVER),
+    );
+
+    await run(
+      Effect.all(
+        [
+          stopAndCloseImport(started.id),
+          Effect.result(startTurn(started.id, turn("r1", "reply", "hi"), SERVER)),
+        ],
+        { concurrency: "unbounded" },
+      ),
+    );
+
+    const { doc } = await t.run(getImport(started.id));
+
+    expect(doc.closed).toBe(true);
+    expect(doc.turns.map((entry) => entry.run?.status)).toEqual(["stopped"]);
+    expect(await run(Effect.flatMap(ImportRuns, (runs) => runs.isRunning(started.id)))).toBe(false);
   });
 
   test("stopping the agent records the turn as stopped", async () => {

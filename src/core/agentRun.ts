@@ -3,7 +3,8 @@ import {
   Context,
   Crypto,
   Effect,
-  FiberMap,
+  Fiber,
+  FiberSet,
   Layer,
   Option,
   Predicate,
@@ -625,65 +626,102 @@ export interface RunSpec<I, R> {
 /** The runs of one kind, keyed by what they work on. */
 export interface Runs<I> {
   readonly start: (input: I) => Effect.Effect<void, Conflict>;
-  /** Interrupt the key's run; resolves once the agent is gone and the stop is recorded. */
+  /**
+   * Interrupt the key's run; resolves once the agent is gone and the stop is recorded. False when
+   * no run was working, including one that already reported its end.
+   */
   readonly stop: (key: string) => Effect.Effect<boolean>;
+  /** Whether the key has a run that has not reported its end yet. */
   readonly isRunning: (key: string) => Effect.Effect<boolean>;
   readonly subscribe: (key: string) => Effect.Effect<RunSubscription, never, Scope.Scope>;
+  /**
+   * Run `effect` while no other exclusive effect on the key runs, so a check and the start it
+   * guards, or a stop and what follows it, are not cut in on.
+   */
+  readonly exclusive: <A, E, R>(
+    key: string,
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
+}
+
+/** A run that has not reported its end. */
+interface LiveRun {
+  fiber: Fiber.Fiber<void> | undefined;
 }
 
 interface Channel {
   readonly pubsub: PubSub.PubSub<RunEvent>;
+  /** Takes turns between exclusive effects on the key. */
+  readonly turns: Semaphore.Semaphore;
   subject: Option.Option<string>;
   events: Array<RunEvent>;
+  /** The run the key is busy with; the events of any other are late and dropped. */
+  live: LiveRun | undefined;
 }
+
+const ENDINGS = new Set<RunEvent["type"]>(["done", "stopped", "error"]);
 
 const crashMessage = (cause: Cause.Cause<never>) =>
   firstLine(Cause.pretty(cause)) || "The agent run crashed";
 
 /**
- * One run at a time per key. A board that connects mid-run, or reloads, gets the latest run's
- * events replayed before live ones. Persistent state lives in the workspace, not here.
+ * One run at a time per key. A run holds its key until it reports its end, not until its fiber
+ * is gone, so the next one can start as soon as the board hears it ended. A board that connects
+ * mid-run, or reloads, gets the latest run's events replayed before live ones. Persistent state
+ * lives in the workspace, not here.
  */
 export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<I, R>) {
   const context = yield* Effect.context<R>();
-  const runs = yield* FiberMap.make<string>();
+  const fibers = yield* FiberSet.make();
   const channels = new Map<string, Channel>();
   // Recording an event and taking a snapshot for a new subscriber must not interleave, or a
   // subscriber would see an event twice or miss it.
   const lock = yield* Semaphore.make(1);
   const locked = lock.withPermits(1);
 
-  const channelFor = Effect.fnUntraced(function* (key: string) {
-    const existing = channels.get(key);
+  const channelFor = (key: string) =>
+    locked(
+      Effect.gen(function* () {
+        const existing = channels.get(key);
 
-    if (existing !== undefined) return existing;
+        if (existing !== undefined) return existing;
 
-    const created: Channel = {
-      pubsub: yield* PubSub.unbounded<RunEvent>(),
-      subject: Option.none(),
-      events: [],
-    };
+        const created: Channel = {
+          pubsub: yield* PubSub.unbounded<RunEvent>(),
+          turns: yield* Semaphore.make(1),
+          subject: Option.none(),
+          events: [],
+          live: undefined,
+        };
 
-    channels.set(key, created);
+        channels.set(key, created);
 
-    return created;
-  });
+        return created;
+      }),
+    );
 
   const emitTo =
-    (channel: Channel): Emit =>
+    (channel: Channel, run: LiveRun): Emit =>
     (event) =>
       locked(
         Effect.suspend(() => {
+          if (channel.live !== run) return Effect.void;
+
+          if (ENDINGS.has(event.type)) channel.live = undefined;
+
           channel.events.push(event);
 
           return PubSub.publish(channel.pubsub, event);
         }),
       );
 
-  const supervise = (input: I, channel: Channel) => {
-    const emit = emitTo(channel);
+  // Every run reports one end: its own, or the one added here. Once it has, these are dropped,
+  // such as the "stopped" of a stop that landed as the run finished.
+  const supervise = (input: I, channel: Channel, run: LiveRun) => {
+    const emit = emitTo(channel, run);
 
     return spec.runner(input, emit).pipe(
+      Effect.andThen(emit({ type: "error", error: "The agent run ended without a result" })),
       Effect.onInterrupt(() => emit({ type: "stopped" })),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
@@ -695,47 +733,64 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   };
 
   const start = (input: I) =>
-    locked(
-      Effect.gen(function* () {
-        const key = spec.key(input);
+    Effect.gen(function* () {
+      const channel = yield* channelFor(spec.key(input));
 
-        if (yield* FiberMap.has(runs, key)) return yield* new Conflict({ message: spec.busy });
+      yield* locked(
+        Effect.gen(function* () {
+          if (channel.live !== undefined) return yield* new Conflict({ message: spec.busy });
 
-        const channel = yield* channelFor(key);
-        channel.subject = Option.some(spec.subject(input));
-        channel.events = [];
-        yield* FiberMap.run(runs, key, supervise(input, channel), { onlyIfMissing: true });
-      }),
-    );
+          // The run's first event waits for this lock, so its fiber is known by then.
+          const run: LiveRun = { fiber: undefined };
+          channel.live = run;
+          channel.subject = Option.some(spec.subject(input));
+          channel.events = [];
+          run.fiber = yield* FiberSet.run(fibers, supervise(input, channel, run));
+        }),
+      );
+    });
 
   const stop = (key: string) =>
     Effect.gen(function* () {
-      const running = yield* FiberMap.has(runs, key);
+      // Read under the lock, which a starting run holds until its fiber is known.
+      const fiber = yield* locked(Effect.sync(() => channels.get(key)?.live?.fiber));
 
-      if (running) yield* FiberMap.remove(runs, key);
+      if (fiber === undefined) return false;
 
-      return running;
+      // Not under the lock: the run reports its stop through it.
+      yield* Fiber.interrupt(fiber);
+
+      return true;
     });
 
-  const isRunning = (key: string) => FiberMap.has(runs, key);
+  const isRunning = (key: string) => Effect.sync(() => channels.get(key)?.live !== undefined);
 
   const subscribe = (key: string) =>
-    locked(
-      Effect.gen(function* () {
-        const channel = yield* channelFor(key);
-        const subscription = yield* PubSub.subscribe(channel.pubsub);
-        const replay = [...channel.events];
+    Effect.gen(function* () {
+      const channel = yield* channelFor(key);
 
-        const result: RunSubscription = {
-          subject: channel.subject,
-          events: Stream.concat(Stream.fromIterable(replay), Stream.fromSubscription(subscription)),
-        };
+      return yield* locked(
+        Effect.gen(function* () {
+          const subscription = yield* PubSub.subscribe(channel.pubsub);
+          const replay = [...channel.events];
 
-        return result;
-      }),
-    );
+          const result: RunSubscription = {
+            subject: channel.subject,
+            events: Stream.concat(
+              Stream.fromIterable(replay),
+              Stream.fromSubscription(subscription),
+            ),
+          };
 
-  const registry: Runs<I> = { start, stop, isRunning, subscribe };
+          return result;
+        }),
+      );
+    });
+
+  const exclusive = <A, E, R2>(key: string, effect: Effect.Effect<A, E, R2>) =>
+    Effect.flatMap(channelFor(key), (channel) => channel.turns.withPermits(1)(effect));
+
+  const registry: Runs<I> = { start, stop, isRunning, subscribe, exclusive };
 
   return registry;
 });

@@ -26,6 +26,7 @@ import {
   type RunEnd,
   type TurnInput,
   beginTurn,
+  closeImport,
   createImport,
   endTurn,
   freshPrompt,
@@ -285,22 +286,51 @@ export const startTurn = Effect.fn("importRun.startTurn")(function* (
   server: McpLaunch,
 ) {
   const runs = yield* ImportRuns;
-  const { doc } = yield* getImport(importId);
 
-  if (yield* runs.isRunning(importId)) return yield* new Conflict({ message: BUSY });
+  // A second reply waits here and is turned away before it is recorded.
+  return yield* runs.exclusive(
+    importId,
+    Effect.gen(function* () {
+      const { doc } = yield* getImport(importId);
 
-  yield* agentBin(doc.agent);
+      if (yield* runs.isRunning(importId)) return yield* new Conflict({ message: BUSY });
 
-  const begun = yield* beginTurn(importId, turn, yield* nowIso);
-  const input: ImportInput = { importId, turnId: turn.id, server };
+      yield* agentBin(doc.agent);
 
-  yield* runs
-    .start(input)
-    .pipe(
-      Effect.tapError((error) => finishTurn(input, { status: "failed", error: error.message })),
-    );
+      const begun = yield* beginTurn(importId, turn, yield* nowIso);
+      const input: ImportInput = { importId, turnId: turn.id, server };
 
-  return begun;
+      yield* runs
+        .start(input)
+        .pipe(
+          Effect.tapError((error) => finishTurn(input, { status: "failed", error: error.message })),
+        );
+
+      return begun;
+    }),
+  );
+});
+
+/** Stop the import's agent, if it is working; resolves once the stop is recorded. */
+export const stopImport = Effect.fn("importRun.stopImport")(function* (importId: string) {
+  const runs = yield* ImportRuns;
+
+  return yield* runs.exclusive(importId, runs.stop(importId));
+});
+
+/**
+ * Stop the import's agent, if it is working, and set the import aside before a reply can start
+ * another.
+ */
+export const stopAndCloseImport = Effect.fn("importRun.stopAndCloseImport")(function* (
+  importId: string,
+) {
+  const runs = yield* ImportRuns;
+
+  return yield* runs.exclusive(
+    importId,
+    Effect.andThen(runs.stop(importId), closeImport(importId)),
+  );
 });
 
 /** Record a new import and start the agent on its link. */
