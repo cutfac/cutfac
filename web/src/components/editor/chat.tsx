@@ -169,7 +169,7 @@ export function Chat({
                     <Request
                       item={item}
                       feedback={feedback}
-                      live={run.feedbackId === feedback.id ? run : undefined}
+                      live={run.subject === feedback.id ? run : undefined}
                       statuses={statuses}
                       actions={actions}
                     />

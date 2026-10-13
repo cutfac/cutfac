@@ -76,15 +76,15 @@ const fold = (messages: ReadonlyArray<RunMessage>, from: LiveRun = NO_RUN) =>
 describe("run transcript", () => {
   test("collects steps and the reply", () => {
     const run = fold([
-      { type: "run", feedbackId: "f1" },
-      { type: "start", feedbackId: "f1", agent: "claude" },
+      { type: "run", subject: "f1" },
+      { type: "start", subject: "f1", agent: "claude" },
       { type: "text", text: "Trimming the intro." },
       { type: "tool", name: "Bash", detail: "ffmpeg -i in.mp4" },
       { type: "done", reply: "Trimmed 0.4s." },
     ]);
 
     expect(run).toEqual({
-      feedbackId: "f1",
+      subject: "f1",
       agent: "claude",
       status: "done",
       steps: [
@@ -97,8 +97,8 @@ describe("run transcript", () => {
 
   test("a reconnect replays the run instead of appending it twice", () => {
     const replay: ReadonlyArray<RunMessage> = [
-      { type: "run", feedbackId: "f1" },
-      { type: "start", feedbackId: "f1", agent: "codex" },
+      { type: "run", subject: "f1" },
+      { type: "start", subject: "f1", agent: "codex" },
       { type: "text", text: "Working." },
     ];
 
@@ -107,16 +107,16 @@ describe("run transcript", () => {
 
   test("a new run on the same stream starts over", () => {
     const first = fold([
-      { type: "start", feedbackId: "f1", agent: "claude" },
+      { type: "start", subject: "f1", agent: "claude" },
       { type: "error", error: "exit 1" },
     ]);
 
     expect(first.status).toBe("failed");
     expect(first.error).toBe("exit 1");
 
-    const second = fold([{ type: "start", feedbackId: "f2", agent: "claude" }], first);
+    const second = fold([{ type: "start", subject: "f2", agent: "claude" }], first);
 
-    expect(second).toEqual({ feedbackId: "f2", agent: "claude", status: "running", steps: [] });
+    expect(second).toEqual({ subject: "f2", agent: "claude", status: "running", steps: [] });
     expect(fold([{ type: "stopped" }], second).status).toBe("stopped");
   });
 

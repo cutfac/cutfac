@@ -4,9 +4,10 @@ export type RunStep =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "tool"; readonly name: string; readonly detail?: string };
 
-/** The agent's latest run on an item, as the chat shows it while it streams. */
+/** The agent's latest run, as the chat shows it while it streams. */
 export interface LiveRun {
-  readonly feedbackId: string | undefined;
+  /** What the run is about: a request on an item, or a turn of an import. */
+  readonly subject: string | undefined;
   readonly agent: AgentName | undefined;
   readonly status: AgentRun["status"];
   readonly steps: ReadonlyArray<RunStep>;
@@ -15,7 +16,7 @@ export interface LiveRun {
 }
 
 export const NO_RUN: LiveRun = {
-  feedbackId: undefined,
+  subject: undefined,
   agent: undefined,
   status: "done",
   steps: [],
@@ -30,10 +31,10 @@ const append = (run: LiveRun, step: RunStep): LiveRun => ({ ...run, steps: [...r
 export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
   switch (message.type) {
     case "run":
-      return { ...NO_RUN, feedbackId: message.feedbackId, status: "running" };
+      return { ...NO_RUN, subject: message.subject, status: "running" };
 
     case "start":
-      return { ...NO_RUN, feedbackId: message.feedbackId, agent: message.agent, status: "running" };
+      return { ...NO_RUN, subject: message.subject, agent: message.agent, status: "running" };
 
     case "text":
       return append(run, { kind: "text", text: message.text });

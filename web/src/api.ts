@@ -139,17 +139,20 @@ export interface Feedback {
   decision?: "approved" | "restored";
 }
 
-/** What the board shows while an agent works on a request. */
+/** What the board shows while an agent works: on a request on an item, or on a turn of an import. */
 export type RunEvent =
-  | { type: "start"; feedbackId: string; agent: AgentName }
+  | { type: "start"; subject: string; agent: AgentName }
   | { type: "text"; text: string }
   | { type: "tool"; name: string; detail?: string }
   | { type: "done"; reply: string }
   | { type: "stopped" }
   | { type: "error"; error: string };
 
-/** What the run stream says: the request it is about (first on every connect), then its events. */
-export type RunMessage = RunEvent | { type: "run"; feedbackId: string };
+/**
+ * What a run stream says: what the run is about (first on every connect), then its events. On an
+ * item the subject is a request; on an import, a turn.
+ */
+export type RunMessage = RunEvent | { type: "run"; subject: string };
 
 /** An edit request: what to change and, optionally, where. Without media it asks for new media. */
 export interface EditInput {
@@ -593,7 +596,7 @@ export function onAgentRun(id: string, listener: (message: RunMessage) => void):
   const source = new EventSource(`${API_BASE}/api/item/run${q(id)}`);
 
   source.addEventListener("run", (e) => {
-    listener({ type: "run", feedbackId: eventData(e) });
+    listener({ type: "run", subject: eventData(e) });
   });
 
   source.addEventListener("agent", (e) => {

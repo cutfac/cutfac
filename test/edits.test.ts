@@ -5,9 +5,11 @@ import { join } from "node:path";
 import { Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
 
 import {
-  type EditRunner,
   type RunEvent,
+  type RunInput,
+  type Runner,
   agentInvocation,
+  editRuns,
   makeRunRegistry,
   parseClaudeLine,
   parseCodexLine,
@@ -184,10 +186,10 @@ const waitUntilIdle = (isRunning: Effect.Effect<boolean>) =>
 
 /** A runner that reports progress, then holds until `finish` completes. */
 const heldRunner =
-  (started: Deferred.Deferred<void>, finish: Deferred.Deferred<void>): EditRunner<never> =>
+  (started: Deferred.Deferred<void>, finish: Deferred.Deferred<void>): Runner<RunInput, never> =>
   (run, emit) =>
     Effect.gen(function* () {
-      yield* emit({ type: "start", feedbackId: run.feedbackId, agent: run.agent });
+      yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
       yield* emit({ type: "text", text: "working" });
       yield* Deferred.succeed(started, undefined);
       yield* Deferred.await(finish);
@@ -203,7 +205,7 @@ describe("run registry", () => {
         Effect.gen(function* () {
           const started = yield* Deferred.make<void>();
           const finish = yield* Deferred.make<void>();
-          const registry = yield* makeRunRegistry(heldRunner(started, finish));
+          const registry = yield* makeRunRegistry(editRuns(heldRunner(started, finish)));
 
           yield* registry.start(input);
           const conflict = yield* Effect.flip(registry.start({ ...input, feedbackId: "f2" }));
@@ -219,19 +221,19 @@ describe("run registry", () => {
           const events = yield* Fiber.join(collecting);
           yield* waitUntilIdle(registry.isRunning("item"));
 
-          return { conflict, feedbackId: subscription.feedbackId, events };
+          return { conflict, subject: subscription.subject, events };
         }),
       ),
     );
 
     const expected: RunEvent[] = [
-      { type: "start", feedbackId: "f1", agent: "claude" },
+      { type: "start", subject: "f1", agent: "claude" },
       { type: "text", text: "working" },
       { type: "done", reply: "ok" },
     ];
 
     expect(result.conflict).toBeInstanceOf(Conflict);
-    expect(Option.getOrUndefined(result.feedbackId)).toBe("f1");
+    expect(Option.getOrUndefined(result.subject)).toBe("f1");
     expect(result.events).toEqual(expected);
   });
 
@@ -241,7 +243,7 @@ describe("run registry", () => {
         Effect.gen(function* () {
           const started = yield* Deferred.make<void>();
           const finish = yield* Deferred.make<void>();
-          const registry = yield* makeRunRegistry(heldRunner(started, finish));
+          const registry = yield* makeRunRegistry(editRuns(heldRunner(started, finish)));
 
           yield* registry.start(input);
           yield* Deferred.await(started);
@@ -272,7 +274,10 @@ describe("run registry", () => {
     const events = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const registry = yield* makeRunRegistry(() => Effect.die(new Error("disk on fire")));
+          const registry = yield* makeRunRegistry(
+            editRuns(() => Effect.die(new Error("disk on fire"))),
+          );
+
           const subscription = yield* registry.subscribe("item");
 
           const collecting = yield* Effect.forkChild(

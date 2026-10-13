@@ -24,9 +24,12 @@ import { commandOptions, spawnFailure, tail, which } from "./process.ts";
 import { AgentName, type AgentRun } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
-/** What the board shows while an agent works on a request. */
+/**
+ * What the board shows while an agent works. `subject` is what the run is about: the request on an
+ * item, or the turn of an import.
+ */
 export const RunEvent = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("start"), feedbackId: Schema.String, agent: AgentName }),
+  Schema.Struct({ type: Schema.Literal("start"), subject: Schema.String, agent: AgentName }),
   Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
   Schema.Struct({
     type: Schema.Literal("tool"),
@@ -50,11 +53,15 @@ export interface ParsedLine {
 
 const NOTHING: ParsedLine = { events: [] };
 
-export interface InvocationOptions {
-  readonly bin: string;
-  readonly prompt: string;
+/** The session to resume, or the id to give a new one (Codex picks its own). */
+export interface SessionArgs {
   readonly sessionId: string | undefined;
   readonly newSessionId: string;
+}
+
+export interface InvocationOptions extends SessionArgs {
+  readonly bin: string;
+  readonly prompt: string;
   readonly allowedTools: ReadonlyArray<string>;
   readonly mcpConfig?: string | undefined;
   readonly image?: string | undefined;
@@ -73,41 +80,39 @@ export const toolsFor = (
   format: ReadonlyArray<string>,
 ): ReadonlyArray<string> => [...new Set([...workspace, ...format])];
 
-/** The headless command line for one request, resuming the item's session when it has one. */
-export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
-  const { bin, prompt, sessionId, mcpConfig, image } = options;
+/** `claude -p` streaming JSON, with `flags` deciding what it may do. */
+export function claudeCommand(
+  bin: string,
+  prompt: string,
+  flags: ReadonlyArray<string>,
+  session: SessionArgs,
+): AgentInvocation {
+  return {
+    command: bin,
+    args: [
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      ...flags,
+      ...(session.sessionId === undefined
+        ? ["--session-id", session.newSessionId]
+        : ["--resume", session.sessionId]),
+    ],
+    stdin: prompt,
+  };
+}
 
-  if (agent === "claude") {
-    return {
-      command: bin,
-      args: [
-        "-p",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--permission-mode",
-        "acceptEdits",
-        "--allowedTools",
-        options.allowedTools.join(","),
-        ...(mcpConfig === undefined ? [] : ["--mcp-config", mcpConfig]),
-        ...(sessionId === undefined
-          ? ["--session-id", options.newSessionId]
-          : ["--resume", sessionId]),
-      ],
-      stdin: prompt,
-    };
-  }
-
-  // `codex exec resume` takes no --sandbox flag, so set the policy through config for both forms.
-  const shared = [
-    "--json",
-    "--skip-git-repo-check",
-    "-c",
-    'sandbox_mode="workspace-write"',
-    "-c",
-    'approval_policy="never"',
-    ...(image === undefined ? [] : ["--image", image]),
-  ];
+/** `codex exec --json`, with `flags` deciding what it may do. */
+export function codexCommand(
+  bin: string,
+  prompt: string,
+  flags: ReadonlyArray<string>,
+  sessionId: string | undefined,
+): AgentInvocation {
+  const shared = ["--json", "--skip-git-repo-check", ...flags];
 
   return {
     command: bin,
@@ -117,6 +122,35 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
         : ["exec", "resume", ...shared, sessionId, "-"],
     stdin: prompt,
   };
+}
+
+/**
+ * Codex config overrides. `codex exec resume` takes no --sandbox flag, so policies always go
+ * through config, which both forms accept.
+ */
+export const codexConfig = (entries: ReadonlyArray<string>) =>
+  entries.flatMap((entry) => ["-c", entry]);
+
+/** The headless command line for one edit request, resuming the item's session when it has one. */
+export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
+  const { bin, prompt, mcpConfig, image } = options;
+
+  if (agent === "claude") {
+    const flags = [
+      "--allowedTools",
+      options.allowedTools.join(","),
+      ...(mcpConfig === undefined ? [] : ["--mcp-config", mcpConfig]),
+    ];
+
+    return claudeCommand(bin, prompt, flags, options);
+  }
+
+  const flags = [
+    ...codexConfig(['sandbox_mode="workspace-write"', 'approval_policy="never"']),
+    ...(image === undefined ? [] : ["--image", image]),
+  ];
+
+  return codexCommand(bin, prompt, flags, options.sessionId);
 }
 
 const MAX_DETAIL = 160;
@@ -295,7 +329,7 @@ export interface RunInput {
 export type Emit = (event: RunEvent) => Effect.Effect<void>;
 
 /** Runs one request to the end, reporting progress through `emit`. Never fails: errors become events. */
-export type EditRunner<R> = (input: RunInput, emit: Emit) => Effect.Effect<void, never, R>;
+export type Runner<I, R> = (input: I, emit: Emit) => Effect.Effect<void, never, R>;
 
 const MCP_FILE = ".mcp.json";
 
@@ -326,20 +360,26 @@ interface Attempt extends Progress {
   readonly stderr: string;
 }
 
+/** Where a conversation keeps its session; `undefined` forgets it. */
+export type SaveSession<R> = (
+  sessionId: string | undefined,
+) => Effect.Effect<void, FactoryError, R>;
+
 /**
  * Spawn the agent, stream its stdout through `parse`, and save its session the moment it is known
  * so a stop or crash still leaves the next request in the same conversation. Closing the scope
  * (a stop) terminates the agent's whole process group.
  */
-const attemptAgent = Effect.fnUntraced(function* (
-  input: RunInput,
+const attemptAgent = Effect.fnUntraced(function* <R>(
+  agent: AgentName,
   invocation: AgentInvocation,
   storedSession: string | undefined,
   emit: Emit,
+  save: SaveSession<R>,
 ) {
   const ws = yield* Workspace;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const parse = input.agent === "claude" ? parseClaudeLine : parseCodexLine;
+  const parse = agent === "claude" ? parseClaudeLine : parseCodexLine;
 
   const progress = yield* Ref.make<Progress>({
     reply: "",
@@ -353,7 +393,7 @@ const attemptAgent = Effect.fnUntraced(function* (
     const { session } = yield* Ref.get(progress);
 
     if (parsed.sessionId !== undefined && parsed.sessionId !== session) {
-      yield* saveSession(input.itemId, input.agent, parsed.sessionId);
+      yield* save(parsed.sessionId);
     }
 
     yield* Ref.update(progress, (state) => ({
@@ -383,9 +423,7 @@ const attemptAgent = Effect.fnUntraced(function* (
 
       return { stderr, code };
     }),
-  ).pipe(
-    Effect.catchTag("PlatformError", (error) => Effect.fail(spawnFailure(input.agent)(error))),
-  );
+  ).pipe(Effect.catchTag("PlatformError", (error) => Effect.fail(spawnFailure(agent)(error))));
 
   const attempt: Attempt = { ...(yield* Ref.get(progress)), ...exit };
 
@@ -400,6 +438,47 @@ const failureOf = (agent: AgentName, attempt: Attempt) => {
 
   return detail === "" ? `${agent} exited with code ${attempt.code}` : detail;
 };
+
+/** One turn of a conversation with an agent that keeps its session somewhere persistent. */
+export interface Conversation<R> {
+  readonly agent: AgentName;
+  /** The session to resume, if there is one. */
+  readonly stored: string | undefined;
+  /** The command line for the turn; with no session to resume, the prompt must stand alone. */
+  readonly invocation: (session: SessionArgs) => Effect.Effect<AgentInvocation, FactoryError, R>;
+  readonly save: SaveSession<R>;
+  readonly emit: Emit;
+}
+
+export interface TurnResult {
+  readonly reply: string;
+  /** Why the turn failed, if it did. */
+  readonly failure: string | undefined;
+}
+
+/** Run one turn, starting a fresh session when the stored one is gone. */
+export const converse = Effect.fnUntraced(function* <R>(conversation: Conversation<R>) {
+  const crypto = yield* Crypto.Crypto;
+  const { agent, stored, save, emit } = conversation;
+
+  const attempt = Effect.fnUntraced(function* (sessionId: string | undefined) {
+    const newSessionId = yield* Effect.orDie(crypto.randomUUIDv4());
+    const invocation = yield* conversation.invocation({ sessionId, newSessionId });
+
+    return yield* attemptAgent(agent, invocation, sessionId, emit, save);
+  });
+
+  const first = yield* attempt(stored);
+
+  // A resumed session the agent no longer has fails before it reports any session: start fresh.
+  const staleSession =
+    stored !== undefined && first.session === stored && failureOf(agent, first) !== undefined;
+
+  const final = staleSession ? yield* Effect.andThen(save(undefined), attempt(undefined)) : first;
+  const result: TurnResult = { reply: final.reply, failure: failureOf(agent, final) };
+
+  return result;
+});
 
 /** The request is handled once its media changed, even if the agent forgot resolve_feedback. */
 const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: string) {
@@ -420,7 +499,6 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 
 const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, startedAt: string) {
   const ws = yield* Workspace;
-  const crypto = yield* Crypto.Crypto;
   const { itemId, feedbackId, agent } = input;
   const bin = yield* which(agent);
 
@@ -437,63 +515,45 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const frame = f.context?.frame;
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
 
-  const invocationFor = Effect.fnUntraced(function* (sessionId: string | undefined) {
-    const newSessionId = yield* Effect.orDie(crypto.randomUUIDv4());
+  yield* setRun(itemId, feedbackId, { agent, status: "running", startedAt });
+  yield* emit({ type: "start", subject: feedbackId, agent });
 
-    return agentInvocation(agent, {
-      bin: bin.value,
-      prompt,
-      sessionId,
-      newSessionId,
-      allowedTools: toolsFor(ws.config.agent.claudeAllowedTools, formatTools),
-      mcpConfig,
-      image,
-    });
+  const { reply, failure } = yield* converse({
+    agent,
+    stored: item.doc.sessions[agent],
+    invocation: (session) =>
+      Effect.succeed(
+        agentInvocation(agent, {
+          ...session,
+          bin: bin.value,
+          prompt,
+          allowedTools: toolsFor(ws.config.agent.claudeAllowedTools, formatTools),
+          mcpConfig,
+          image,
+        }),
+      ),
+    save: (sessionId) => saveSession(itemId, agent, sessionId),
+    emit,
   });
 
-  yield* setRun(itemId, feedbackId, { agent, status: "running", startedAt });
-  yield* emit({ type: "start", feedbackId, agent });
-
-  const stored = item.doc.sessions[agent];
-  const first = yield* attemptAgent(input, yield* invocationFor(stored), stored, emit);
-
-  // A resumed session the agent no longer has fails before it reports any session: start fresh.
-  const staleSession =
-    stored !== undefined && first.session === stored && failureOf(agent, first) !== undefined;
-
-  const attempt = staleSession
-    ? yield* saveSession(itemId, agent, undefined).pipe(
-        Effect.andThen(invocationFor(undefined)),
-        Effect.flatMap((invocation) => attemptAgent(input, invocation, undefined, emit)),
-      )
-    : first;
-
-  const failure = failureOf(agent, attempt);
   const finishedAt = yield* nowIso;
 
   if (failure !== undefined) {
-    const reply = attempt.reply === "" ? undefined : attempt.reply;
     yield* setRun(itemId, feedbackId, {
       agent,
       status: "failed",
       startedAt,
       finishedAt,
       error: failure,
-      reply,
+      reply: reply === "" ? undefined : reply,
     });
 
     return yield* emit({ type: "error", error: failure });
   }
 
-  yield* settleFeedback(input, attempt.reply);
-  yield* setRun(itemId, feedbackId, {
-    agent,
-    status: "done",
-    startedAt,
-    finishedAt,
-    reply: attempt.reply,
-  });
-  yield* emit({ type: "done", reply: attempt.reply });
+  yield* settleFeedback(input, reply);
+  yield* setRun(itemId, feedbackId, { agent, status: "done", startedAt, finishedAt, reply });
+  yield* emit({ type: "done", reply });
 });
 
 /**
@@ -531,15 +591,35 @@ export const runEdit = Effect.fn("agentRun.runEdit")(function* (input: RunInput,
 });
 
 export interface RunSubscription {
-  /** The request the latest run is about, if the item has had one since the server started. */
-  readonly feedbackId: Option.Option<string>;
+  /** What the latest run is about, if the key has had one since the server started. */
+  readonly subject: Option.Option<string>;
   /** The latest run's events so far, then everything after, across later runs too. */
   readonly events: Stream.Stream<RunEvent>;
 }
 
-interface ItemChannel {
+/** What a registry runs and how its runs are keyed. */
+export interface RunSpec<I, R> {
+  /** One run at a time per key, such as the item a request is on. */
+  readonly key: (input: I) => string;
+  /** What a run is about, sent to subscribers before its events. */
+  readonly subject: (input: I) => string;
+  /** Why a run cannot start while its key has one. */
+  readonly busy: string;
+  readonly runner: Runner<I, R>;
+}
+
+/** The runs of one kind, keyed by what they work on. */
+export interface Runs<I> {
+  readonly start: (input: I) => Effect.Effect<void, Conflict>;
+  /** Interrupt the key's run; resolves once the agent is gone and the stop is recorded. */
+  readonly stop: (key: string) => Effect.Effect<boolean>;
+  readonly isRunning: (key: string) => Effect.Effect<boolean>;
+  readonly subscribe: (key: string) => Effect.Effect<RunSubscription, never, Scope.Scope>;
+}
+
+interface Channel {
   readonly pubsub: PubSub.PubSub<RunEvent>;
-  feedbackId: Option.Option<string>;
+  subject: Option.Option<string>;
   events: Array<RunEvent>;
 }
 
@@ -547,36 +627,36 @@ const crashMessage = (cause: Cause.Cause<never>) =>
   firstLine(Cause.pretty(cause)) || "The agent run crashed";
 
 /**
- * One run at a time per item. A board that connects mid-run, or reloads, gets the latest run's
- * events replayed before live ones. Persistent state lives in item.yaml, not here.
+ * One run at a time per key. A board that connects mid-run, or reloads, gets the latest run's
+ * events replayed before live ones. Persistent state lives in the workspace, not here.
  */
-export const makeRunRegistry = Effect.fnUntraced(function* <R>(runner: EditRunner<R>) {
+export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<I, R>) {
   const context = yield* Effect.context<R>();
   const runs = yield* FiberMap.make<string>();
-  const channels = new Map<string, ItemChannel>();
+  const channels = new Map<string, Channel>();
   // Recording an event and taking a snapshot for a new subscriber must not interleave, or a
   // subscriber would see an event twice or miss it.
   const lock = yield* Semaphore.make(1);
   const locked = lock.withPermits(1);
 
-  const channelFor = Effect.fnUntraced(function* (itemId: string) {
-    const existing = channels.get(itemId);
+  const channelFor = Effect.fnUntraced(function* (key: string) {
+    const existing = channels.get(key);
 
     if (existing !== undefined) return existing;
 
-    const created: ItemChannel = {
+    const created: Channel = {
       pubsub: yield* PubSub.unbounded<RunEvent>(),
-      feedbackId: Option.none(),
+      subject: Option.none(),
       events: [],
     };
 
-    channels.set(itemId, created);
+    channels.set(key, created);
 
     return created;
   });
 
   const emitTo =
-    (channel: ItemChannel): Emit =>
+    (channel: Channel): Emit =>
     (event) =>
       locked(
         Effect.suspend(() => {
@@ -586,10 +666,10 @@ export const makeRunRegistry = Effect.fnUntraced(function* <R>(runner: EditRunne
         }),
       );
 
-  const supervise = (input: RunInput, channel: ItemChannel) => {
+  const supervise = (input: I, channel: Channel) => {
     const emit = emitTo(channel);
 
-    return runner(input, emit).pipe(
+    return spec.runner(input, emit).pipe(
       Effect.onInterrupt(() => emit({ type: "stopped" })),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
@@ -600,41 +680,40 @@ export const makeRunRegistry = Effect.fnUntraced(function* <R>(runner: EditRunne
     );
   };
 
-  const start = (input: RunInput) =>
+  const start = (input: I) =>
     locked(
       Effect.gen(function* () {
-        if (yield* FiberMap.has(runs, input.itemId)) {
-          return yield* new Conflict({ message: "An agent is already working on this item" });
-        }
+        const key = spec.key(input);
 
-        const channel = yield* channelFor(input.itemId);
-        channel.feedbackId = Option.some(input.feedbackId);
+        if (yield* FiberMap.has(runs, key)) return yield* new Conflict({ message: spec.busy });
+
+        const channel = yield* channelFor(key);
+        channel.subject = Option.some(spec.subject(input));
         channel.events = [];
-        yield* FiberMap.run(runs, input.itemId, supervise(input, channel), { onlyIfMissing: true });
+        yield* FiberMap.run(runs, key, supervise(input, channel), { onlyIfMissing: true });
       }),
     );
 
-  /** Interrupt the item's run; resolves once the agent is gone and the stop is recorded. */
-  const stop = (itemId: string) =>
+  const stop = (key: string) =>
     Effect.gen(function* () {
-      const running = yield* FiberMap.has(runs, itemId);
+      const running = yield* FiberMap.has(runs, key);
 
-      if (running) yield* FiberMap.remove(runs, itemId);
+      if (running) yield* FiberMap.remove(runs, key);
 
       return running;
     });
 
-  const isRunning = (itemId: string) => FiberMap.has(runs, itemId);
+  const isRunning = (key: string) => FiberMap.has(runs, key);
 
-  const subscribe = (itemId: string) =>
+  const subscribe = (key: string) =>
     locked(
       Effect.gen(function* () {
-        const channel = yield* channelFor(itemId);
+        const channel = yield* channelFor(key);
         const subscription = yield* PubSub.subscribe(channel.pubsub);
         const replay = [...channel.events];
 
         const result: RunSubscription = {
-          feedbackId: channel.feedbackId,
+          subject: channel.subject,
           events: Stream.concat(Stream.fromIterable(replay), Stream.fromSubscription(subscription)),
         };
 
@@ -642,17 +721,21 @@ export const makeRunRegistry = Effect.fnUntraced(function* <R>(runner: EditRunne
       }),
     );
 
-  return { start, stop, isRunning, subscribe };
+  const registry: Runs<I> = { start, stop, isRunning, subscribe };
+
+  return registry;
 });
 
-export class RunRegistry extends Context.Service<
-  RunRegistry,
-  {
-    readonly start: (input: RunInput) => Effect.Effect<void, Conflict>;
-    readonly stop: (itemId: string) => Effect.Effect<boolean>;
-    readonly isRunning: (itemId: string) => Effect.Effect<boolean>;
-    readonly subscribe: (itemId: string) => Effect.Effect<RunSubscription, never, Scope.Scope>;
-  }
->()("content-factory/RunRegistry") {
-  static readonly layer = Layer.effect(RunRegistry, makeRunRegistry(runEdit));
+/** Edit requests: one run per item, about one request on it. */
+export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> => ({
+  key: (input) => input.itemId,
+  subject: (input) => input.feedbackId,
+  busy: "An agent is already working on this item",
+  runner,
+});
+
+export class RunRegistry extends Context.Service<RunRegistry, Runs<RunInput>>()(
+  "content-factory/RunRegistry",
+) {
+  static readonly layer = Layer.effect(RunRegistry, makeRunRegistry(editRuns(runEdit)));
 }

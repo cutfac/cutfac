@@ -371,9 +371,9 @@ const runStreamRoute = Effect.gen(function* () {
   // Subscribe inside the stream so the subscription lives exactly as long as the response.
   const events = Stream.unwrap(
     Effect.map(runs.subscribe(id), (subscription) => {
-      const head = Option.match(subscription.feedbackId, {
+      const head = Option.match(subscription.subject, {
         onNone: () => Stream.empty,
-        onSome: (feedbackId) => Stream.make(sseEvent("run", feedbackId)),
+        onSome: (subject) => Stream.make(sseEvent("run", subject)),
       });
 
       const body = Stream.mapEffect(subscription.events, (event) =>
