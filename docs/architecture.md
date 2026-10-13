@@ -60,6 +60,11 @@ motion shows. The agent names the three largest defects, fixes only those, rende
 again, so each round is a small, local change. The core only renders frames; judging them is the
 agent's job.
 
+Each review also writes `review.yaml` (the video, when, which frames and strips, and what could not
+be made). The item's Checks tab reads it to show the user what the agent last judged each video by,
+and says so when the video changed after the review. The same tab shows whether the item's template
+is ready and the checklist renders are held to.
+
 ## Templates
 
 A template (a format in the core) is a folder with a `format.yaml` that declares what making an item
