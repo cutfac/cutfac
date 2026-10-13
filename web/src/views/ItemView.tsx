@@ -50,6 +50,7 @@ import {
 } from "../api.ts";
 import { agentLabel, Chat } from "../components/editor/chat.tsx";
 import { Checks } from "../components/editor/checks.tsx";
+import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
 import { Hint, keepFocus } from "../components/editor/hint.tsx";
 import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
@@ -57,11 +58,12 @@ import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
-import { href, useLive } from "../hooks.ts";
+import { href, useAgentStatuses, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EDIT_KEYS, onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { Player } from "../lib/player.ts";
+import { pinsOn } from "../lib/requests.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import {
   anchorOf,
@@ -121,6 +123,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const [loop, setLoop] = useState(true);
   const [run, setRun] = useState<LiveRun>(NO_RUN);
   const [shortcuts, setShortcuts] = useState(false);
+  const [tab, setTab] = useState<string>("chat");
+  const statuses = useAgentStatuses();
+  const [chosen, setChosen] = useState<AgentChoice | undefined>(undefined);
+  const agent = chosen ?? preferredAgent(defaultAgent, statuses);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
@@ -159,6 +165,14 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
 
     if (switching) player.seekOnLoad(at);
     else player.seek(at);
+  }
+
+  /** Show where a past request pointed: its media, its moment, its outline. */
+  function show(feedback: Feedback) {
+    const shown = targetOf(feedback);
+
+    goTo(feedback.media, anchorOf(shown));
+    setGhost(shown);
   }
 
   function pick(name: string) {
@@ -267,6 +281,8 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     );
   }
 
+  const pins = pinsOn(item, media?.name, run);
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
@@ -293,7 +309,16 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 setTarget((current) => withRegion(current, region));
                 setGhost(undefined);
               }}
-              onMarked={focusComposer}
+              ask={{
+                agent,
+                onSend: (body) =>
+                  sendRequest(item.id, editInput(body, agent, media, target), setData).then(clear),
+              }}
+              pins={pins}
+              onPin={(feedback) => {
+                show(feedback);
+                setTab("chat");
+              }}
             />
             {video ? (
               <>
@@ -307,6 +332,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     setGhost(undefined);
                   }}
                   onMarked={focusComposer}
+                  pins={pins}
                 />
                 <Transport
                   player={player}
@@ -336,7 +362,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
         )}
       </section>
       <aside className="flex min-h-0 w-105 shrink-0 flex-col border-l">
-        <Tabs defaultValue="chat" className="min-h-0 flex-1">
+        <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
           <div className="border-b p-2">
             <TabsList className="w-full">
               <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
@@ -352,16 +378,13 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               media={media}
               run={run}
               target={target}
-              defaultAgent={defaultAgent}
+              statuses={statuses}
+              agent={agent}
+              onAgent={setChosen}
               inputRef={inputRef}
               onItem={setData}
               onClearTarget={clear}
-              onShow={(feedback: Feedback) => {
-                const shown = targetOf(feedback);
-
-                goTo(feedback.media, anchorOf(shown));
-                setGhost(shown);
-              }}
+              onShow={show}
               onRetarget={(feedback: Feedback) => {
                 const again = targetOf(feedback);
 

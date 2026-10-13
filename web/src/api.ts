@@ -133,6 +133,10 @@ export interface Feedback {
   region?: Region;
   context?: EditContext;
   run?: AgentRun;
+  /** Lined up for this agent behind the item's run and the requests before it. */
+  waiting?: AgentName;
+  /** When a request that waited began its run; its changes count from then. */
+  baseline?: string;
   status: "open" | "resolved";
   resolution?: string;
   resolvedAt?: string;
@@ -575,6 +579,22 @@ export const api = {
       "POST",
       `/api/item/edit/run${q(id)}`,
       { feedbackId, agent },
+    ),
+  /** Run the requests waiting on the item again, after a run before them failed or was stopped. */
+  continueEdits: (id: string) =>
+    send<{ ok: true }, {}>("POST", `/api/item/edit/continue${q(id)}`, {}),
+  /** Take a waiting request out of the line, or every one when no id is given. */
+  cancelWaiting: (id: string, feedbackId?: string) =>
+    send<ItemDetail, { feedbackId?: string }>(
+      "POST",
+      `/api/item/edit/cancel${q(id)}`,
+      feedbackId === undefined ? {} : { feedbackId },
+    ),
+  rewordWaiting: (id: string, feedbackId: string, body: string) =>
+    send<ItemDetail, { feedbackId: string; body: string }>(
+      "POST",
+      `/api/item/edit/reword${q(id)}`,
+      { feedbackId, body },
     ),
   /** Interrupt the agent working on this item; the request stays open. */
   stopEdit: (id: string) => send<{ ok: true }, {}>("POST", `/api/item/edit/stop${q(id)}`, {}),

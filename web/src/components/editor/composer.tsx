@@ -80,7 +80,12 @@ export function copyPrompt(prompt: string) {
 }
 
 /** The request as the server takes it, with only the parts of the target that are set. */
-function editInput(body: string, agent: AgentChoice, media: Media | undefined, target: Target) {
+export function editInput(
+  body: string,
+  agent: AgentChoice,
+  media: Media | undefined,
+  target: Target,
+) {
   const input: EditInput = { body, agent };
 
   if (media !== undefined) input.media = media.name;
@@ -94,12 +99,47 @@ function editInput(body: string, agent: AgentChoice, media: Media | undefined, t
   return input;
 }
 
+/**
+ * Ask for an edit. The item comes back with the request on it, sent or lined up behind the item's
+ * run; when it went to no agent, its prompt is copied to paste into one.
+ */
+export async function sendRequest(
+  id: string,
+  input: EditInput,
+  onItem: (item: ItemDetail) => void,
+): Promise<void> {
+  const receipt = await api.requestEdit(id, input);
+  onItem(receipt.item);
+
+  for (const warning of receipt.warnings) toast.warning(warning);
+
+  if (receipt.sent === "queue") copyPrompt(receipt.prompt);
+}
+
+/** Enter while an IME is composing (Korean, Japanese, …) confirms the syllable, not the message. */
+export const composing = (event: KeyboardEvent<HTMLElement>) =>
+  event.nativeEvent.isComposing || event.keyCode === 229;
+
+/** Show why a request could not be sent. */
+export const sendFailed = (cause: unknown) =>
+  toast.error(cause instanceof Error ? cause.message : String(cause));
+
+/** The agent picker's choices; an agent that is not installed shows but cannot be picked. */
+const agentItems = (statuses: ReadonlyArray<AgentStatus> | undefined, t: Messages) =>
+  (["claude", "codex", "queue"] as const).map((value) => ({
+    value,
+    label: agentLabel(value, t),
+    disabled: value !== "queue" && !agentInstalled(statuses, value),
+  }));
+
 interface ComposerProps {
   item: ItemDetail;
   media: Media | undefined;
   target: Target;
   statuses: ReadonlyArray<AgentStatus> | undefined;
-  defaultAgent: AgentChoice | undefined;
+  /** Where requests go; the frame's box prompt sends to the same one. */
+  agent: AgentChoice;
+  onAgent: (agent: AgentChoice) => void;
   /** An agent is working on this item, so an empty composer offers to stop it. */
   running: boolean;
   inputRef: RefObject<HTMLTextAreaElement | null>;
@@ -117,7 +157,8 @@ export function Composer({
   media,
   target,
   statuses,
-  defaultAgent,
+  agent,
+  onAgent,
   running,
   inputRef,
   onItem,
@@ -125,9 +166,7 @@ export function Composer({
   onStop,
 }: ComposerProps) {
   const [body, setBody] = useState("");
-  const [chosen, setChosen] = useState<AgentChoice | undefined>(undefined);
   const [sending, setSending] = useState(false);
-  const agent = chosen ?? preferredAgent(defaultAgent, statuses);
   const empty = isEmptyTarget(target);
   const text = body.trim();
   const t = useMessages();
@@ -139,24 +178,18 @@ export function Composer({
     setSending(true);
 
     try {
-      const receipt = await api.requestEdit(item.id, editInput(text, agent, media, target));
-      onItem(receipt.item);
+      await sendRequest(item.id, editInput(text, agent, media, target), onItem);
       setBody("");
       onClearTarget();
-
-      for (const warning of receipt.warnings) toast.warning(warning);
-
-      if (receipt.sent === "queue") copyPrompt(receipt.prompt);
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : String(cause));
+      sendFailed(cause);
     } finally {
       setSending(false);
     }
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter while an IME is composing (Korean, Japanese, …) confirms the syllable, not the message.
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (composing(event)) return;
 
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -166,11 +199,7 @@ export function Composer({
     }
   }
 
-  const agentItems = (["claude", "codex", "queue"] as const).map((value) => ({
-    value,
-    label: agentLabel(value, t),
-    disabled: value !== "queue" && !agentInstalled(statuses, value),
-  }));
+  const choices = agentItems(statuses, t);
 
   return (
     <div className="flex flex-col gap-2 border-t p-3">
@@ -220,17 +249,17 @@ export function Composer({
         />
         <InputGroupAddon align="block-end">
           <Select
-            items={agentItems}
+            items={choices}
             value={agent}
             onValueChange={(value) => {
-              if (value !== null) setChosen(value);
+              if (value !== null) onAgent(value);
             }}
           >
             <SelectTrigger size="sm" aria-label={t.composer.agent}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
-              {agentItems.map((option) => (
+              {choices.map((option) => (
                 <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
                   {option.label}
                 </SelectItem>

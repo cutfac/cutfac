@@ -3,11 +3,15 @@ import {
   CircleStopIcon,
   ClipboardCopyIcon,
   CrosshairIcon,
+  HourglassIcon,
   MessageSquareReplyIcon,
+  PencilIcon,
+  PlayIcon,
   Undo2Icon,
   WrenchIcon,
+  XIcon,
 } from "lucide-react";
-import { useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -32,6 +36,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
   api,
@@ -42,12 +47,13 @@ import {
   type ItemDetail,
   type Media,
 } from "../../api.ts";
-import { agentInstalled, href, useAgentStatuses } from "../../hooks.ts";
+import { agentInstalled, href } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
+import { hasResult, inOrder, linePaused, waitingLine } from "../../lib/requests.ts";
 import { closingReply, runView, type LiveRun, type RunStep, type RunView } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
 import { CompareDialog } from "./compare-dialog.tsx";
-import { Composer, copyPrompt } from "./composer.tsx";
+import { composing, Composer, copyPrompt } from "./composer.tsx";
 
 export const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
   { agent: "claude", label: "Claude" },
@@ -76,7 +82,9 @@ interface ChatProps {
   media: Media | undefined;
   run: LiveRun;
   target: Target;
-  defaultAgent: AgentChoice | undefined;
+  statuses: ReadonlyArray<AgentStatus> | undefined;
+  agent: AgentChoice;
+  onAgent: (agent: AgentChoice) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onItem: (item: ItemDetail) => void;
   onClearTarget: () => void;
@@ -94,7 +102,9 @@ export function Chat({
   media,
   run,
   target,
-  defaultAgent,
+  statuses,
+  agent,
+  onAgent,
   inputRef,
   onItem,
   onClearTarget,
@@ -102,11 +112,18 @@ export function Chat({
   onRetarget,
   onCompare,
 }: ChatProps) {
-  const statuses = useAgentStatuses();
   const t = useMessages();
 
-  const requests = item.doc.feedback.toSorted((a, b) => a.at.localeCompare(b.at));
+  const requests = inOrder(item);
+  const line = waitingLine(requests);
   const running = item.running || run.status === "running";
+
+  /** How many requests run before a waiting one, counting the run going now. */
+  const aheadOf = (feedback: Feedback) => {
+    const place = line.indexOf(feedback);
+
+    return place < 0 ? undefined : place + (running ? 1 : 0);
+  };
 
   const actions: RequestActions = {
     show: onShow,
@@ -115,8 +132,8 @@ export function Chat({
       inputRef.current?.focus();
     },
     compare: onCompare,
-    run: (feedback, agent) => {
-      api.runEdit(item.id, feedback.id, agent).catch(showError);
+    run: (feedback, runner) => {
+      api.runEdit(item.id, feedback.id, runner).catch(showError);
     },
     copy: (feedback) => {
       api.editPrompt(item.id, feedback.id).then(({ prompt }) => copyPrompt(prompt), showError);
@@ -136,6 +153,10 @@ export function Chat({
         })
         .catch(showError);
     },
+    reword: (feedback, body) => api.rewordWaiting(item.id, feedback.id, body).then(onItem),
+    cancel: (feedback) => {
+      api.cancelWaiting(item.id, feedback.id).then(onItem, showError);
+    },
   };
 
   return (
@@ -148,7 +169,7 @@ export function Chat({
               {requests.length === 0 ? (
                 <Welcome hasMedia={media !== undefined} />
               ) : (
-                requests.map((feedback) => (
+                requests.map((feedback, index) => (
                   <MessageScrollerItem
                     key={feedback.id}
                     messageId={feedback.id}
@@ -157,6 +178,8 @@ export function Chat({
                     <Request
                       item={item}
                       feedback={feedback}
+                      number={index + 1}
+                      ahead={aheadOf(feedback)}
                       live={run.subject === feedback.id ? run : undefined}
                       statuses={statuses}
                       actions={actions}
@@ -169,12 +192,24 @@ export function Chat({
           <MessageScrollerButton />
         </MessageScroller>
       </MessageScrollerProvider>
+      {linePaused(item, run) ? (
+        <Paused
+          count={line.length}
+          onResume={() => {
+            api.continueEdits(item.id).catch(showError);
+          }}
+          onCancelAll={() => {
+            api.cancelWaiting(item.id).then(onItem, showError);
+          }}
+        />
+      ) : null}
       <Composer
         item={item}
         media={media}
         target={target}
         statuses={statuses}
-        defaultAgent={defaultAgent}
+        agent={agent}
+        onAgent={onAgent}
         running={running}
         inputRef={inputRef}
         onItem={onItem}
@@ -211,31 +246,26 @@ interface RequestActions {
   stop: () => void;
   approve: (feedback: Feedback) => void;
   restore: (feedback: Feedback) => void;
+  /** Change a waiting request; resolves once the change is saved. */
+  reword: (feedback: Feedback, body: string) => Promise<void>;
+  cancel: (feedback: Feedback) => void;
 }
 
 interface RequestProps {
   item: ItemDetail;
   feedback: Feedback;
+  /** Its place in the chat, which its pin on the frame shows too. */
+  number: number;
+  /** For a request lined up behind others, how many run before it. */
+  ahead: number | undefined;
   /** The streamed run, when the latest run on this item is about this request. */
   live: LiveRun | undefined;
   statuses: ReadonlyArray<AgentStatus> | undefined;
   actions: RequestActions;
 }
 
-/** The media changed since the request: the agent wrote a result that waits for a decision. */
-function hasResult(item: ItemDetail, feedback: Feedback, running: boolean): boolean {
-  const context = feedback.context;
-
-  if (running || feedback.decision !== undefined || context?.before === undefined) return false;
-
-  if (context.after !== undefined) return true;
-
-  const current = item.media.find((media) => media.name === feedback.media);
-
-  return current !== undefined && current.mtime > Date.parse(feedback.at);
-}
-
-function Request({ item, feedback, live, statuses, actions }: RequestProps) {
+function Request({ item, feedback, number, ahead, live, statuses, actions }: RequestProps) {
+  const [rewording, setRewording] = useState(false);
   const state = runView(feedback.run, live, item.running);
   const target = targetOf(feedback);
   const result = hasResult(item, feedback, state.running);
@@ -259,30 +289,52 @@ function Request({ item, feedback, live, statuses, actions }: RequestProps) {
               <span className="tabular-nums">{describeTarget(target, t.target.boxAt)}</span>
             </Button>
           )}
-          <Bubble variant="secondary" align="end">
-            <BubbleContent>
-              <p className="whitespace-pre-wrap">{feedback.body}</p>
-            </BubbleContent>
-          </Bubble>
+          {rewording && ahead !== undefined ? (
+            <Reword
+              body={feedback.body}
+              onSave={(body) =>
+                actions.reword(feedback, body).then(() => setRewording(false), showError)
+              }
+              onCancel={() => setRewording(false)}
+            />
+          ) : (
+            <Bubble variant="secondary" align="end">
+              <BubbleContent>
+                <p className="whitespace-pre-wrap">{feedback.body}</p>
+              </BubbleContent>
+            </Bubble>
+          )}
           <MessageFooter>
-            {feedback.media ?? t.chat.newMedia} · {clockTime(feedback.at, locale)}
+            <span className="tabular-nums">#{number}</span> · {feedback.media ?? t.chat.newMedia} ·{" "}
+            {clockTime(feedback.at, locale)}
           </MessageFooter>
         </MessageContent>
       </Message>
       <Message>
         <MessageContent>
-          <RunReport run={state} onStop={actions.stop} />
-          {state.status === undefined && open ? (
-            <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
-          ) : null}
-          {open && !state.running && state.status !== "done" ? (
-            <RunActions
+          {ahead === undefined ? (
+            <>
+              <RunReport run={state} onStop={actions.stop} />
+              {state.status === undefined && open ? (
+                <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
+              ) : null}
+              {open && !state.running && state.status !== "done" ? (
+                <RunActions
+                  feedback={feedback}
+                  statuses={statuses}
+                  retry={state.status !== undefined}
+                  actions={actions}
+                />
+              ) : null}
+            </>
+          ) : (
+            <Waiting
               feedback={feedback}
-              statuses={statuses}
-              retry={state.status !== undefined}
-              actions={actions}
+              ahead={ahead}
+              onReword={() => setRewording(true)}
+              onCancel={() => actions.cancel(feedback)}
             />
-          ) : null}
+          )}
           {result ? <Result item={item} feedback={feedback} actions={actions} /> : null}
           <Outcome feedback={feedback} replied={replied} />
         </MessageContent>
@@ -412,6 +464,133 @@ function RunActions({
           {t.chat.connectAgent}
         </a>
       ) : null}
+    </div>
+  );
+}
+
+/** A request lined up behind the item's run: it can still be changed or taken back. */
+function Waiting({
+  feedback,
+  ahead,
+  onReword,
+  onCancel,
+}: {
+  feedback: Feedback;
+  ahead: number;
+  onReword: () => void;
+  onCancel: () => void;
+}) {
+  const t = useMessages();
+  const agent = agentLabel(feedback.waiting) ?? t.chat.agent;
+
+  return (
+    <>
+      <MessageHeader>{agent}</MessageHeader>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <HourglassIcon className="size-3.5 shrink-0" />
+        {t.chat.waiting(agent, ahead)}
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button variant="outline" size="xs" onClick={onReword}>
+          <PencilIcon data-icon="inline-start" />
+          {t.chat.reword}
+        </Button>
+        <Button variant="ghost" size="xs" onClick={onCancel}>
+          <XIcon data-icon="inline-start" />
+          {t.chat.cancelRequest}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** The words of a waiting request, open to change. Enter saves, Esc leaves them as they were. */
+function Reword({
+  body,
+  onSave,
+  onCancel,
+}: {
+  body: string;
+  onSave: (body: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(body);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const next = text.trim();
+  const t = useMessages();
+
+  // The user asked to edit it, so the text is where their keys should go.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  function save() {
+    if (next === "" || saving) return;
+
+    setSaving(true);
+    onSave(next).finally(() => setSaving(false));
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <Textarea
+        ref={inputRef}
+        value={text}
+        rows={3}
+        aria-label={t.composer.request}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (composing(event)) return;
+
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            save();
+          } else if (event.key === "Escape") {
+            onCancel();
+          }
+        }}
+      />
+      <div className="flex justify-end gap-1.5">
+        <Button variant="ghost" size="xs" onClick={onCancel}>
+          {t.chat.cancel}
+        </Button>
+        <Button size="xs" disabled={next === "" || saving} onClick={save}>
+          {t.chat.save}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The line stopped behind a run that did not finish: go on with it, or drop what is left. */
+function Paused({
+  count,
+  onResume,
+  onCancelAll,
+}: {
+  count: number;
+  onResume: () => void;
+  onCancelAll: () => void;
+}) {
+  const t = useMessages();
+
+  return (
+    <div className="flex flex-col gap-2 border-t bg-muted/50 px-4 py-3">
+      <p className="flex items-center gap-1.5 text-sm">
+        <HourglassIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        {t.chat.paused(count)}
+      </p>
+      <div className="flex gap-1.5">
+        <Button size="xs" onClick={onResume}>
+          <PlayIcon data-icon="inline-start" />
+          {t.chat.resume}
+        </Button>
+        <Button variant="outline" size="xs" onClick={onCancelAll}>
+          <XIcon data-icon="inline-start" />
+          {t.chat.cancelAll}
+        </Button>
+      </div>
     </div>
   );
 }

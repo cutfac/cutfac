@@ -445,6 +445,32 @@ export const ko: Messages = {
     askAgain: "다시 요청",
     kept: "유지함",
     rolledBackBadge: "되돌림",
+    waiting: (agent, ahead) =>
+      ahead === 0 ? `다음 차례 · ${agent}` : `${agent} 기다리는 중 · 앞에 ${ahead}개`,
+    reword: "수정",
+    save: "저장",
+    cancel: "취소",
+    cancelRequest: "요청 취소",
+    paused: (count) => `앞선 실행이 끝나지 않아서 요청 ${count}개가 멈춰 있어요.`,
+    resume: "계속",
+    cancelAll: "모두 취소",
+  },
+  boxPrompt: {
+    label: "이 박스에 대한 요청",
+    hint: (agent) =>
+      agent === undefined
+        ? "Enter로 프롬프트 복사 · Esc로 닫기"
+        : `Enter로 ${agent}에게 보내기 · Esc로 닫기`,
+    send: "보내기",
+  },
+  pins: {
+    state: {
+      working: "작업 중",
+      waiting: "대기 중",
+      halted: "끝나지 않음",
+      review: "확인 대기",
+    },
+    title: (number, state) => `#${number} · ${state}`,
   },
   composer: {
     queue: "프롬프트 복사",

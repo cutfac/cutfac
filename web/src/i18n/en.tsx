@@ -449,6 +449,42 @@ export const en = {
     askAgain: "Ask again",
     kept: "Kept",
     rolledBackBadge: "Rolled back",
+    /** A request lined up behind others on the item; `ahead` is how many run before it. */
+    waiting: (agent: string, ahead: number) =>
+      ahead === 0
+        ? `Next for ${agent}`
+        : `Waiting for ${agent} · ${ahead} ${ahead === 1 ? "request" : "requests"} ahead`,
+    reword: "Edit",
+    save: "Save",
+    cancel: "Cancel",
+    cancelRequest: "Cancel request",
+    /** The line stopped because the run before it failed or was stopped. */
+    paused: (count: number) =>
+      count === 1
+        ? "1 request is on hold because the run before it did not finish."
+        : `${count} requests are on hold because the run before them did not finish.`,
+    resume: "Continue",
+    cancelAll: "Cancel all",
+  },
+  /** The small request box that opens beside a box drawn on the frame. */
+  boxPrompt: {
+    label: "Request for this box",
+    /** `agent` is the agent's name, or undefined when the request is copied as a prompt. */
+    hint: (agent: string | undefined) =>
+      agent === undefined
+        ? "Enter copies the prompt · Esc closes"
+        : `Enter sends to ${agent} · Esc closes`,
+    send: "Send",
+  },
+  /** Numbered pins on the frame and the timeline for the requests still in play. */
+  pins: {
+    state: {
+      working: "Working",
+      waiting: "Waiting",
+      halted: "Did not finish",
+      review: "Ready to review",
+    },
+    title: (number: number, state: string) => `#${number} · ${state}`,
   },
   composer: {
     /** The agent choice that sends nothing and copies the prompt instead. */

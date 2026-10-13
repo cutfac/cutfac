@@ -3,8 +3,10 @@ import { useEffect, useState, type PointerEvent } from "react";
 import type { Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
-import { clampUnit, percent, type Target } from "../../lib/target.ts";
+import type { Pin } from "../../lib/requests.ts";
+import { anchorOf, clampUnit, percent, targetOf, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
+import { PinBadge } from "./pin.tsx";
 
 /** Thumbnails along the track; enough to recognise a scene, few enough to grab in a second. */
 const FRAMES = 16;
@@ -116,6 +118,8 @@ interface TimelineProps {
   onRange: (from: number, to?: number) => void;
   /** A range was dragged out: the moment to start typing what should change in it. */
   onMarked: () => void;
+  /** The requests on this video still in play, numbered where they point. */
+  pins: ReadonlyArray<Pin>;
 }
 
 /**
@@ -123,7 +127,7 @@ interface TimelineProps {
  * an edit is about. The selection shows in the editor's one colour, with the box's frame as a
  * diamond on top.
  */
-export function Timeline({ player, src, target, ghost, onRange, onMarked }: TimelineProps) {
+export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }: TimelineProps) {
   const duration = usePlayer(player, (state) => state.duration);
   const frames = useFilmstrip(src);
   const [scrub, setScrub] = useState<Scrub | undefined>(undefined);
@@ -225,6 +229,18 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked }: Time
           />
         )}
         <Playhead player={player} duration={duration} />
+        {pins.map((pin) => {
+          const at = anchorOf(targetOf(pin.feedback));
+
+          return at === undefined ? null : (
+            <PinBadge
+              key={pin.feedback.id}
+              pin={pin}
+              style={{ "--at": fraction(at) }}
+              className="pointer-events-none absolute bottom-1 left-(--at) -translate-x-1/2 scale-90"
+            />
+          );
+        })}
       </div>
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>0:00.0</span>

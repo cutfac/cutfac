@@ -1,11 +1,14 @@
 import { XIcon } from "lucide-react";
-import { useState, type PointerEvent, type ReactNode } from "react";
+import { useState, type PointerEvent, type ReactNode, type Ref } from "react";
 
-import type { Region } from "../../api.ts";
+import type { Feedback, Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
+import type { Pin } from "../../lib/requests.ts";
 import { clampUnit, percent, roundTime } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
+import { BoxPrompt, type BoxAsk } from "./box-prompt.tsx";
+import { PinBadge, usePinTitle } from "./pin.tsx";
 
 /** A drag shorter than this, as a fraction of the frame, was a click that wobbled. */
 const MIN_BOX = 0.02;
@@ -73,17 +76,35 @@ interface StageProps {
   /** A past request's box, outlined so the user sees what it pointed at. */
   ghost: Region | undefined;
   onRegion: (region: Region | undefined) => void;
-  /** A box was drawn: the moment to start typing what should change in it. */
-  onMarked: () => void;
+  /** Where a request about a freshly drawn box goes, asked right beside the box. */
+  ask: BoxAsk;
+  /** The requests on this media still in play; the ones about a box are numbered on it. */
+  pins: ReadonlyArray<Pin>;
+  onPin: (feedback: Feedback) => void;
 }
 
 /**
  * The frame being edited. Click plays and pauses; dragging across it marks a box on the current
- * frame, which is how the user points at something in the picture.
+ * frame, which is how the user points at something in the picture, and opens a small request box
+ * beside it. Requests still in play keep a numbered pin on their box.
  */
-export function Stage({ player, src, kind, ratio, region, ghost, onRegion, onMarked }: StageProps) {
+export function Stage({
+  player,
+  src,
+  kind,
+  ratio,
+  region,
+  ghost,
+  onRegion,
+  ask,
+  pins,
+  onPin,
+}: StageProps) {
   const [drag, setDrag] = useState<Drag | undefined>(undefined);
   const [imageRatio, setImageRatio] = useState<number | undefined>(undefined);
+  /** The box the request box was opened for; it stays open only while that box is the one set. */
+  const [asking, setAsking] = useState<Region | undefined>(undefined);
+  const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
   const videoRatio = usePlayer(player, (state) => state.ratio);
   const frameRatio = (kind === "video" ? videoRatio : imageRatio) ?? ratio ?? 9 / 16;
 
@@ -125,9 +146,9 @@ export function Stage({ player, src, kind, ratio, region, ghost, onRegion, onMar
 
     if (box.w < MIN_BOX || box.h < MIN_BOX) return;
 
-    const at = kind === "video" ? roundTime(player.getState().time) : 0;
-    onRegion({ ...box, at });
-    onMarked();
+    const marked = { ...box, at: kind === "video" ? roundTime(player.getState().time) : 0 };
+    onRegion(marked);
+    setAsking(marked);
   }
 
   const draft = drag?.drawing === true ? boxBetween(drag.from, drag.to) : undefined;
@@ -169,29 +190,90 @@ export function Stage({ player, src, kind, ratio, region, ghost, onRegion, onMar
           onPointerCancel={() => setDrag(undefined)}
         />
         {ghost !== undefined && ghost !== region ? <AreaMark box={ghost} look="ghost" /> : null}
+        {pins.map((pin) =>
+          pin.feedback.region === undefined ? null : (
+            <PinMark
+              key={pin.feedback.id}
+              player={player}
+              pin={pin}
+              region={pin.feedback.region}
+              onPin={onPin}
+            />
+          ),
+        )}
         {region !== undefined && draft === undefined ? (
-          <RegionBox player={player} region={region} onRemove={() => onRegion(undefined)} />
+          <RegionBox
+            ref={setAnchor}
+            player={player}
+            region={region}
+            onRemove={() => onRegion(undefined)}
+          />
         ) : null}
         {draft === undefined ? null : <AreaMark box={draft} look="draft" />}
       </div>
+      {region === undefined ? null : (
+        <BoxPrompt
+          ask={ask}
+          open={asking === region}
+          onClose={() => setAsking(undefined)}
+          anchor={anchor}
+          side={region.x + region.w / 2 < 0.5 ? "right" : "left"}
+        />
+      )}
     </div>
   );
 }
 
+/** The playhead is at the box's frame, or close enough that the box still marks it. */
+const useNearBox = (player: Player, region: Region) =>
+  usePlayer(player, (state) => Math.abs(state.time - region.at) <= BOX_NEAR);
+
+/** A request's number at its box's corner; it opens the request in the chat. */
+function PinMark({
+  player,
+  pin,
+  region,
+  onPin,
+}: {
+  player: Player;
+  pin: Pin;
+  region: Region;
+  onPin: (feedback: Feedback) => void;
+}) {
+  const near = useNearBox(player, region);
+  const title = usePinTitle()(pin);
+
+  return (
+    <button
+      type="button"
+      style={{ "--x": percent(region.x), "--y": percent(region.y) }}
+      data-near={near}
+      title={title}
+      aria-label={title}
+      className="absolute top-(--y) left-(--x) m-1 rounded-full transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring data-[near=false]:opacity-50"
+      onClick={() => onPin(pin.feedback)}
+    >
+      <PinBadge pin={pin} />
+    </button>
+  );
+}
+
 function RegionBox({
+  ref,
   player,
   region,
   onRemove,
 }: {
+  ref: Ref<HTMLDivElement>;
   player: Player;
   region: Region;
   onRemove: () => void;
 }) {
-  const near = usePlayer(player, (state) => Math.abs(state.time - region.at) <= BOX_NEAR);
+  const near = useNearBox(player, region);
   const t = useMessages();
 
   return (
-    <AreaMark box={region} look="set" near={near}>
+    <AreaMark ref={ref} box={region} look="set" near={near}>
       <div className="pointer-events-auto absolute -top-8 left-0 flex items-center gap-0.5 rounded-lg bg-selection p-0.5 text-xs font-medium text-selection-foreground">
         <button
           type="button"
@@ -219,11 +301,13 @@ function RegionBox({
  * `ghost` is a past request's box, `draft` the one being drawn, `set` the one that will be sent.
  */
 function AreaMark({
+  ref,
   box,
   look,
   near = true,
   children,
 }: {
+  ref?: Ref<HTMLDivElement>;
   box: Box;
   look: "ghost" | "draft" | "set";
   near?: boolean;
@@ -231,6 +315,7 @@ function AreaMark({
 }) {
   return (
     <div
+      ref={ref}
       style={{
         "--x": percent(box.x),
         "--y": percent(box.y),

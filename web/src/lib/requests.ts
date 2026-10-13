@@ -1,0 +1,73 @@
+import type { Feedback, ItemDetail } from "../api.ts";
+import { runView, type LiveRun } from "./run.ts";
+
+/** The item's requests in the order they were made, which is how the chat numbers them. */
+export const inOrder = (item: ItemDetail) =>
+  item.doc.feedback.toSorted((a, b) => a.at.localeCompare(b.at));
+
+export const isWaiting = (feedback: Feedback) =>
+  feedback.waiting !== undefined && feedback.status === "open";
+
+/** The requests lined up for the board's agent, in the order they will run. */
+export const waitingLine = (requests: ReadonlyArray<Feedback>) => requests.filter(isWaiting);
+
+/**
+ * Requests wait and nothing runs: the run before them failed, was stopped, or was cut off. Right
+ * after a run finishes its work the next one is about to start, so the line is moving, not held.
+ */
+export function linePaused(item: ItemDetail, live: LiveRun): boolean {
+  if (item.running || live.status === "running" || !item.doc.feedback.some(isWaiting)) return false;
+
+  return live.subject === undefined || live.status !== "done";
+}
+
+/**
+ * The media changed since the request's run began: the agent wrote a result that waits for a
+ * decision. A request that waited counts from when its turn came, not from when it was made.
+ */
+export function hasResult(item: ItemDetail, feedback: Feedback, running: boolean): boolean {
+  const context = feedback.context;
+
+  if (running || feedback.decision !== undefined || context?.before === undefined) return false;
+
+  if (context.after !== undefined) return true;
+
+  const current = item.media.find((media) => media.name === feedback.media);
+
+  return current !== undefined && current.mtime > Date.parse(feedback.baseline ?? feedback.at);
+}
+
+/** Where a request still in play stands, as its pin on the frame shows it. */
+export type PinState = "working" | "waiting" | "halted" | "review";
+
+/** A request still in play, numbered as the chat numbers it. */
+export interface Pin {
+  readonly feedback: Feedback;
+  readonly number: number;
+  readonly state: PinState;
+}
+
+function pinState(item: ItemDetail, feedback: Feedback, live: LiveRun): PinState | undefined {
+  const run = runView(feedback.run, live.subject === feedback.id ? live : undefined, item.running);
+
+  if (run.running) return "working";
+
+  if (isWaiting(feedback)) return "waiting";
+
+  if (hasResult(item, feedback, false)) return "review";
+
+  const open = feedback.status === "open" && feedback.decision === undefined;
+
+  if (open && (run.status === "failed" || run.status === "stopped")) return "halted";
+
+  return undefined;
+}
+
+/** The requests on `media` still in play: working, waiting, halted, or waiting for a decision. */
+export function pinsOn(item: ItemDetail, media: string | undefined, live: LiveRun): Pin[] {
+  return inOrder(item).flatMap((feedback, index) => {
+    const state = feedback.media === media ? pinState(item, feedback, live) : undefined;
+
+    return state === undefined ? [] : [{ feedback, number: index + 1, state }];
+  });
+}
