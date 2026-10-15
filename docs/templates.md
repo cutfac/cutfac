@@ -77,7 +77,8 @@ required ones.
 
 - A skill is an [Agent Skill](https://agentskills.io) folder with a `SKILL.md`. The check looks for
   it in the workspace at `.agents/skills/<name>/` (Codex) and `.claude/skills/<name>/` (Claude
-  Code). Install it in both so either agent finds it. `name` is the folder name, lowercase words
+  Code). Install it in `.agents/skills/` and copy it to `.claude/skills/` so either agent finds it;
+  an import run from the board makes that copy itself. `name` is the folder name, lowercase words
   joined by hyphens; `source` says where to get it.
 - `requires` lists programs the template runs. The check only looks them up on `PATH`.
 - `tools` is added to Claude Code's allowed tools when the board asks an agent to edit an item of

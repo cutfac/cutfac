@@ -111,10 +111,12 @@ user.
    a skill they share once and list it in each format's `skills`.
 3. List every skill, package, and program it needs, where each comes from, what it is for, and its
    license, and ask the user before installing any of them. Install only what they agree to, and
-   show an install script before running it. Install skills in the workspace under both
-   `.agents/skills/<name>/` and `.claude/skills/<name>/`. Copy files byte for byte (`git clone`,
-   or `curl` on the raw URL); a fetch tool that summarizes pages is for reading, and a summary is
-   never a copy. If you have no way to copy them, say so and ask the user.
+   show an install script before running it. Install skills in the workspace under
+   `.agents/skills/<name>/`. When the board runs the import it copies each new skill to
+   `.claude/skills/<name>/`; otherwise put a copy there too. Copy files byte for byte with
+   `git clone`, or `curl` on the raw URL, rather than an installer such as `npx skills add`; a fetch
+   tool that summarizes pages is for reading, and a summary is never a copy. If you have no way to
+   copy them, say so and ask the user.
 4. `save_format` with `title`, `summary`, `aspects`, `duration`, `requireAudio`, `skills` (name and
    source), `requires` (program names only), `tools` (the narrowest Claude Code permissions the
    skill needs, such as `Bash(uv:*)`), `inputs`, and `source` (`url`, `author`, `license`). Keep
