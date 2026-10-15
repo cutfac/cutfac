@@ -113,7 +113,13 @@ export interface EditContext {
   after?: string;
 }
 
-export interface AgentRun {
+/** The model and effort a run uses; one left out is whatever the agent CLI defaults to. */
+export interface ModelSettings {
+  model?: string;
+  effort?: string;
+}
+
+export interface AgentRun extends ModelSettings {
   agent: AgentName;
   status: "running" | "done" | "failed" | "stopped";
   startedAt: string;
@@ -135,6 +141,10 @@ export interface Feedback {
   run?: AgentRun;
   /** Lined up for this agent behind the item's run and the requests before it. */
   waiting?: AgentName;
+  /** The model the waiting request runs on. */
+  model?: string;
+  /** The effort the waiting request runs with. */
+  effort?: string;
   /** When a request that waited began its run; its changes count from then. */
   baseline?: string;
   status: "open" | "resolved";
@@ -145,7 +155,7 @@ export interface Feedback {
 
 /** What the board shows while an agent works: on a request on an item, or on a turn of an import. */
 export type RunEvent =
-  | { type: "start"; subject: string; agent: AgentName }
+  | ({ type: "start"; subject: string; agent: AgentName } & ModelSettings)
   | { type: "text"; text: string }
   | { type: "tool"; name: string; detail?: string }
   | { type: "done"; reply: string }
@@ -159,7 +169,7 @@ export type RunEvent =
 export type RunMessage = RunEvent | { type: "run"; subject: string };
 
 /** An edit request: what to change and, optionally, where. Without media it asks for new media. */
-export interface EditInput {
+export interface EditInput extends ModelSettings {
   body: string;
   media?: string;
   timecode?: number;
@@ -485,10 +495,22 @@ export interface WorkspaceInfo {
   openFeedback: number;
 }
 
+/** A model the board offers for an agent, and the efforts it takes. */
+export interface ModelOption {
+  /** What the agent CLI takes, such as `opus`. */
+  id: string;
+  label: string;
+  efforts: string[];
+  defaultEffort?: string;
+}
+
 export interface AgentStatus {
   agent: AgentName;
   installed: boolean;
   connected: boolean;
+  models: ModelOption[];
+  /** The efforts that suit whatever model the agent picks itself. */
+  efforts: string[];
 }
 
 export interface AgentConnection {
@@ -574,11 +596,11 @@ export const api = {
     }),
   requestEdit: (id: string, input: EditInput) =>
     send<EditReceipt, EditInput>("POST", `/api/item/edit${q(id)}`, input),
-  runEdit: (id: string, feedbackId: string, agent: AgentName) =>
-    send<{ ok: true }, { feedbackId: string; agent: AgentName }>(
+  runEdit: (id: string, feedbackId: string, agent: AgentName, settings: ModelSettings) =>
+    send<{ ok: true }, { feedbackId: string; agent: AgentName } & ModelSettings>(
       "POST",
       `/api/item/edit/run${q(id)}`,
-      { feedbackId, agent },
+      { feedbackId, agent, ...settings },
     ),
   /** Run the requests waiting on the item again, after a run before them failed or was stopped. */
   continueEdits: (id: string) =>

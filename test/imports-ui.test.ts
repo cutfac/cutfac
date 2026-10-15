@@ -137,6 +137,8 @@ const status = (agent: AgentStatus["agent"], installed: boolean): AgentStatus =>
   agent,
   installed,
   connected: false,
+  models: [],
+  efforts: [],
 });
 
 describe("import agent", () => {

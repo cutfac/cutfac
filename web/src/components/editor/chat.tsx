@@ -46,9 +46,17 @@ import {
   type Feedback,
   type ItemDetail,
   type Media,
+  type ModelSettings,
 } from "../../api.ts";
 import { agentInstalled, href } from "../../hooks.ts";
-import { useLocale, useMessages } from "../../i18n/index.ts";
+import { useLocale, useMessages, type Messages } from "../../i18n/index.ts";
+import {
+  pickedSettings,
+  settingsLabels,
+  statusOf,
+  type ModelPicks,
+  type NamedSettings,
+} from "../../lib/models.ts";
 import { hasResult, inOrder, linePaused, waitingLine } from "../../lib/requests.ts";
 import { closingReply, runView, type LiveRun, type RunStep, type RunView } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
@@ -63,6 +71,18 @@ export const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
 /** The agent's product name, or undefined when a run has not said which agent it is. */
 export const agentLabel = (agent: AgentName | undefined) =>
   AGENTS.find((entry) => entry.agent === agent)?.label;
+
+/** Who answers a message: the agent, with the model and effort when the request picked them. */
+const answerer = (
+  agent: AgentName | undefined,
+  settings: NamedSettings,
+  statuses: ReadonlyArray<AgentStatus> | undefined,
+  t: Messages,
+) =>
+  [
+    agentLabel(agent) ?? t.chat.agent,
+    ...settingsLabels(statusOf(statuses, agent), settings, t),
+  ].join(" · ");
 
 /** When a message was sent, as the chat shows it under the message. */
 export const clockTime = (at: string, locale: string) =>
@@ -85,6 +105,9 @@ interface ChatProps {
   statuses: ReadonlyArray<AgentStatus> | undefined;
   agent: AgentChoice;
   onAgent: (agent: AgentChoice) => void;
+  /** The model and effort picked for each agent. */
+  picks: ModelPicks;
+  onPick: (agent: AgentName, settings: ModelSettings) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onItem: (item: ItemDetail) => void;
   onClearTarget: () => void;
@@ -105,6 +128,8 @@ export function Chat({
   statuses,
   agent,
   onAgent,
+  picks,
+  onPick,
   inputRef,
   onItem,
   onClearTarget,
@@ -133,7 +158,9 @@ export function Chat({
     },
     compare: onCompare,
     run: (feedback, runner) => {
-      api.runEdit(item.id, feedback.id, runner).catch(showError);
+      api
+        .runEdit(item.id, feedback.id, runner, pickedSettings(statuses, picks, runner))
+        .catch(showError);
     },
     copy: (feedback) => {
       api.editPrompt(item.id, feedback.id).then(({ prompt }) => copyPrompt(prompt), showError);
@@ -210,6 +237,8 @@ export function Chat({
         statuses={statuses}
         agent={agent}
         onAgent={onAgent}
+        settings={pickedSettings(statuses, picks, agent)}
+        onPick={onPick}
         running={running}
         inputRef={inputRef}
         onItem={onItem}
@@ -314,7 +343,7 @@ function Request({ item, feedback, number, ahead, live, statuses, actions }: Req
         <MessageContent>
           {ahead === undefined ? (
             <>
-              <RunReport run={state} onStop={actions.stop} />
+              <RunReport run={state} statuses={statuses} onStop={actions.stop} />
               {state.status === undefined && open ? (
                 <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
               ) : null}
@@ -330,6 +359,7 @@ function Request({ item, feedback, number, ahead, live, statuses, actions }: Req
           ) : (
             <Waiting
               feedback={feedback}
+              statuses={statuses}
               ahead={ahead}
               onReword={() => setRewording(true)}
               onCancel={() => actions.cancel(feedback)}
@@ -347,13 +377,22 @@ function Request({ item, feedback, number, ahead, live, statuses, actions }: Req
  * The agent's answer to one message: the steps it took, its reply, and how it ended. The message
  * adds what it offers next.
  */
-export function RunReport({ run, onStop }: { run: RunView; onStop: () => void }) {
+export function RunReport({
+  run,
+  statuses,
+  onStop,
+}: {
+  run: RunView;
+  /** What the agents list, to name the model the run used. */
+  statuses?: ReadonlyArray<AgentStatus> | undefined;
+  onStop: () => void;
+}) {
   const { steps, reply } = closingReply(run.steps, run.reply);
   const t = useMessages();
 
   return (
     <>
-      <MessageHeader>{agentLabel(run.agent) ?? t.chat.agent}</MessageHeader>
+      <MessageHeader>{answerer(run.agent, run, statuses, t)}</MessageHeader>
       {steps.length > 0 ? (
         <Steps steps={steps} folded={!run.running && steps.length > FOLD_STEPS} />
       ) : null}
@@ -471,11 +510,13 @@ function RunActions({
 /** A request lined up behind the item's run: it can still be changed or taken back. */
 function Waiting({
   feedback,
+  statuses,
   ahead,
   onReword,
   onCancel,
 }: {
   feedback: Feedback;
+  statuses: ReadonlyArray<AgentStatus> | undefined;
   ahead: number;
   onReword: () => void;
   onCancel: () => void;
@@ -485,7 +526,7 @@ function Waiting({
 
   return (
     <>
-      <MessageHeader>{agent}</MessageHeader>
+      <MessageHeader>{answerer(feedback.waiting, feedback, statuses, t)}</MessageHeader>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <HourglassIcon className="size-3.5 shrink-0" />
         {t.chat.waiting(agent, ahead)}

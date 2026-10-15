@@ -21,14 +21,18 @@ import {
 import {
   api,
   type AgentChoice,
+  type AgentName,
   type AgentStatus,
   type EditInput,
   type ItemDetail,
   type Media,
+  type ModelSettings,
 } from "../../api.ts";
 import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
+import { offersModels, statusOf } from "../../lib/models.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
+import { ModelPicker } from "./model-picker.tsx";
 
 /** What the request points at, which picks the starting points and the placeholder. */
 function scopeOf(target: Target, media: Media | undefined) {
@@ -83,10 +87,11 @@ export function copyPrompt(prompt: string) {
 export function editInput(
   body: string,
   agent: AgentChoice,
+  settings: ModelSettings,
   media: Media | undefined,
   target: Target,
 ) {
-  const input: EditInput = { body, agent };
+  const input: EditInput = { body, agent, ...settings };
 
   if (media !== undefined) input.media = media.name;
 
@@ -140,6 +145,9 @@ interface ComposerProps {
   /** Where requests go; the frame's box prompt sends to the same one. */
   agent: AgentChoice;
   onAgent: (agent: AgentChoice) => void;
+  /** The model and effort the agent runs with, as a request to it is sent. */
+  settings: ModelSettings;
+  onPick: (agent: AgentName, settings: ModelSettings) => void;
   /** An agent is working on this item, so an empty composer offers to stop it. */
   running: boolean;
   inputRef: RefObject<HTMLTextAreaElement | null>;
@@ -159,6 +167,8 @@ export function Composer({
   statuses,
   agent,
   onAgent,
+  settings,
+  onPick,
   running,
   inputRef,
   onItem,
@@ -178,7 +188,7 @@ export function Composer({
     setSending(true);
 
     try {
-      await sendRequest(item.id, editInput(text, agent, media, target), onItem);
+      await sendRequest(item.id, editInput(text, agent, settings, media, target), onItem);
       setBody("");
       onClearTarget();
     } catch (cause) {
@@ -200,6 +210,7 @@ export function Composer({
   }
 
   const choices = agentItems(statuses, t);
+  const status = statusOf(statuses, agent);
 
   return (
     <div className="flex flex-col gap-2 border-t p-3">
@@ -266,6 +277,13 @@ export function Composer({
               ))}
             </SelectContent>
           </Select>
+          {agent !== "queue" && offersModels(status) ? (
+            <ModelPicker
+              status={status}
+              settings={settings}
+              onPick={(next) => onPick(agent, next)}
+            />
+          ) : null}
           {running && text === "" ? (
             <InputGroupButton
               variant="secondary"

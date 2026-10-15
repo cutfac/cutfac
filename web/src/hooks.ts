@@ -1,6 +1,13 @@
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { api, onWorkspaceChange, type AgentStatus } from "./api.ts";
+import {
+  api,
+  onWorkspaceChange,
+  type AgentName,
+  type AgentStatus,
+  type ModelSettings,
+} from "./api.ts";
+import type { ModelPicks } from "./lib/models.ts";
 
 interface Loaded<T> {
   key: string;
@@ -121,6 +128,53 @@ export function useHashRoute(): Route {
 
 export const href = (view: string, id?: string) =>
   id === undefined ? `#/${view}` : `#/${view}/${encodeURIComponent(id)}`;
+
+/** Where this browser keeps one part of an agent's pick, such as `factory.model.claude`. */
+const pickKey = (agent: AgentName, part: keyof ModelSettings) => `factory.${part}.${agent}`;
+
+function readPick(agent: AgentName): ModelSettings {
+  const settings: ModelSettings = {};
+
+  try {
+    for (const part of ["model", "effort"] as const) {
+      const value = localStorage.getItem(pickKey(agent, part));
+
+      if (value !== null && value !== "") settings[part] = value;
+    }
+  } catch {
+    // Storage can be blocked; the agent starts on its own default.
+  }
+
+  return settings;
+}
+
+/**
+ * The model and effort picked for each agent, kept in this browser so the next request starts
+ * where the last one left off. What the agent no longer offers is dropped where it is sent.
+ */
+export function useModelPicks() {
+  const [picks, setPicks] = useState((): ModelPicks => ({
+    claude: readPick("claude"),
+    codex: readPick("codex"),
+  }));
+
+  const pick = (agent: AgentName, settings: ModelSettings) => {
+    setPicks({ ...picks, [agent]: settings });
+
+    try {
+      for (const part of ["model", "effort"] as const) {
+        const value = settings[part];
+
+        if (value === undefined) localStorage.removeItem(pickKey(agent, part));
+        else localStorage.setItem(pickKey(agent, part), value);
+      }
+    } catch {
+      // The pick just won't survive a reload.
+    }
+  };
+
+  return [picks, pick] as const;
+}
 
 const SIDEBAR_OPEN_KEY = "factory.sidebar.open";
 

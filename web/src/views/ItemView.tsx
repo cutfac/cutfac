@@ -58,10 +58,11 @@ import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
-import { href, useAgentStatuses, useLive } from "../hooks.ts";
+import { href, useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EDIT_KEYS, onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { redoable, undoable } from "../lib/history.ts";
+import { pickedSettings } from "../lib/models.ts";
 import { Player } from "../lib/player.ts";
 import { pinsOn } from "../lib/requests.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
@@ -127,6 +128,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const statuses = useAgentStatuses();
   const [chosen, setChosen] = useState<AgentChoice | undefined>(undefined);
   const agent = chosen ?? preferredAgent(defaultAgent, statuses);
+  const [picks, setPick] = useModelPicks();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
@@ -312,7 +314,11 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               ask={{
                 agent,
                 onSend: (body) =>
-                  sendRequest(item.id, editInput(body, agent, media, target), setData).then(clear),
+                  sendRequest(
+                    item.id,
+                    editInput(body, agent, pickedSettings(statuses, picks, agent), media, target),
+                    setData,
+                  ).then(clear),
               }}
               pins={pins}
               onPin={(feedback) => {
@@ -381,6 +387,8 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               statuses={statuses}
               agent={agent}
               onAgent={setChosen}
+              picks={picks}
+              onPick={setPick}
               inputRef={inputRef}
               onItem={setData}
               onClearTarget={clear}

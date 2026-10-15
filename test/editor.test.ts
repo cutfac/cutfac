@@ -137,6 +137,8 @@ describe("run transcript", () => {
   test("a run shows as streamed, else as saved", () => {
     const saved: AgentRun = {
       agent: "codex",
+      model: "gpt-b",
+      effort: "high",
       status: "done",
       startedAt: "2026-10-12T00:00:00.000Z",
       reply: "Saved reply.",
@@ -149,6 +151,8 @@ describe("run transcript", () => {
 
     expect(runView(saved, undefined, false)).toEqual({
       agent: "codex",
+      model: "gpt-b",
+      effort: "high",
       status: "done",
       running: false,
       steps: [],
@@ -162,6 +166,14 @@ describe("run transcript", () => {
       steps: [{ kind: "text", text: "Looking." }],
       reply: "Saved reply.",
     });
+    // The streamed run picked no model, so the older run's does not show on it.
+    expect(runView(saved, live, false)).toMatchObject({ model: undefined, effort: undefined });
+
+    const picked = fold([
+      { type: "start", subject: "f1", agent: "claude", model: "opus", effort: "max" },
+    ]);
+
+    expect(runView(saved, picked, false)).toMatchObject({ model: "opus", effort: "max" });
   });
 
   test("a saved run marked running with no agent behind it was cut off", () => {

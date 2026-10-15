@@ -9,6 +9,9 @@ export interface LiveRun {
   /** What the run is about: a request on an item, or a turn of an import. */
   readonly subject: string | undefined;
   readonly agent: AgentName | undefined;
+  /** The model and effort the run was started with; left out, the agent's defaults. */
+  readonly model?: string | undefined;
+  readonly effort?: string | undefined;
   readonly status: AgentRun["status"];
   readonly steps: ReadonlyArray<RunStep>;
   readonly reply?: string;
@@ -34,7 +37,14 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
       return { ...NO_RUN, subject: message.subject, status: "running" };
 
     case "start":
-      return { ...NO_RUN, subject: message.subject, agent: message.agent, status: "running" };
+      return {
+        ...NO_RUN,
+        subject: message.subject,
+        agent: message.agent,
+        model: message.model,
+        effort: message.effort,
+        status: "running",
+      };
 
     case "text":
       return append(run, { kind: "text", text: message.text });
@@ -83,6 +93,8 @@ export function closingReply(steps: ReadonlyArray<RunStep>, reply: string | unde
 /** One run as a message shows it, streamed or saved. */
 export interface RunView {
   readonly agent: AgentName | undefined;
+  readonly model: string | undefined;
+  readonly effort: string | undefined;
   readonly status: AgentRun["status"] | undefined;
   readonly running: boolean;
   readonly steps: ReadonlyArray<RunStep>;
@@ -105,6 +117,9 @@ export function runView(
 
   return {
     agent: live?.agent ?? saved?.agent,
+    // A run streamed without a model ran on the default, whatever an older saved run used.
+    model: live === undefined ? saved?.model : live.model,
+    effort: live === undefined ? saved?.effort : live.effort,
     status: interrupted ? "stopped" : status,
     running: status === "running" && !interrupted,
     steps: live?.steps ?? [],
