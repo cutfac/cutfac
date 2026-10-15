@@ -30,6 +30,7 @@ import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { commandOptions, spawnFailure, tail, which } from "./process.ts";
 import { AgentName, type AgentRun } from "./schema.ts";
+import { sourceHosts } from "./sources.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
 /**
@@ -73,6 +74,8 @@ export interface InvocationOptions extends SessionArgs {
   readonly allowedTools: ReadonlyArray<string>;
   readonly mcpConfig?: string | undefined;
   readonly image?: string | undefined;
+  /** Hosts of the web pages the user pointed the item at, which the agent may read. */
+  readonly hosts?: ReadonlyArray<string> | undefined;
 }
 
 export interface AgentInvocation {
@@ -165,17 +168,19 @@ export const agentBin = (agent: AgentName) =>
 
 /** The headless command line for one edit request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
-  const { bin, prompt, mcpConfig, image } = options;
+  const { bin, prompt, mcpConfig, image, hosts = [] } = options;
+  const fetch = hosts.map((host) => `WebFetch(domain:${host})`);
+  const search = hosts.length === 0 ? [] : ['web_search="live"'];
 
   const flags =
     agent === "claude"
       ? [
           "--allowedTools",
-          options.allowedTools.join(","),
+          [...options.allowedTools, ...fetch].join(","),
           ...(mcpConfig === undefined ? [] : ["--mcp-config", mcpConfig]),
         ]
       : [
-          ...codexConfig(['sandbox_mode="workspace-write"', 'approval_policy="never"']),
+          ...codexConfig(['sandbox_mode="workspace-write"', 'approval_policy="never"', ...search]),
           ...(image === undefined ? [] : ["--image", image]),
         ];
 
@@ -557,6 +562,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
           allowedTools: toolsFor(ws.config.agent.claudeAllowedTools, formatTools),
           mcpConfig,
           image,
+          hosts: sourceHosts(item.doc.sources),
         }),
       ),
     save: (sessionId) => saveSession(itemId, agent, sessionId),

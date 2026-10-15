@@ -318,12 +318,25 @@ export const ImportDoc = Schema.Struct({
 
 export type ImportDoc = typeof ImportDoc.Type;
 
+/** A folder or file on this computer, or a web page, that agents should read for an item. */
+export const ItemSource = Schema.Union([
+  Schema.Struct({
+    path: Schema.String.annotate(describe("absolute, or relative to the workspace")),
+  }),
+  Schema.Struct({ url: Url.annotate(describe("an http or https page")) }),
+]);
+
+export type ItemSource = typeof ItemSource.Type;
+
 /** items/<id>/item.yaml */
 export const ItemDoc = Schema.Struct({
   title: Schema.String,
   status: ItemStatus.pipe(withDefault("idea")),
   format: Schema.optional(Schema.String),
   reference: Schema.optional(Schema.String),
+  sources: Schema.Array(ItemSource)
+    .annotate(describe("what the user wants agents to read when they work on this item"))
+    .pipe(withDefault([])),
   hook: Schema.optional(Schema.String),
   caption: Schema.optional(Schema.String),
   platforms: Schema.Record(Platform, Schema.optional(PlatformCopy)).pipe(withDefault({})),
@@ -353,6 +366,9 @@ export const ItemPatch = Schema.Struct({
   status: Schema.optionalKey(ItemStatus),
   format: Schema.optionalKey(Schema.String),
   reference: Schema.optionalKey(Schema.String),
+  sources: Schema.optionalKey(
+    Schema.Array(ItemSource).annotate(describe("replaces the item's whole list")),
+  ),
   hook: Schema.optionalKey(Schema.String),
   caption: Schema.optionalKey(Schema.String),
   notes: Schema.optionalKey(Schema.String),

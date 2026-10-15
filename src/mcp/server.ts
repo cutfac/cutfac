@@ -289,7 +289,8 @@ const CreateItem = tool("create_item", {
 });
 
 const UpdateItem = tool("update_item", {
-  description: "Patch item fields. Platform copy is merged per platform.",
+  description:
+    "Patch item fields. Platform copy is merged per platform. `sources` replaces the item's list of folders, files, and web pages that agents read when they work on it.",
   parameters: Schema.Struct({ id: Id, ...ItemPatch.fields }),
   success: Schema.Struct({
     id: Schema.String,

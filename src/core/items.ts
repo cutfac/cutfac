@@ -16,6 +16,7 @@ import {
   type PlatformCopy,
   type ScheduleEntry,
 } from "./schema.ts";
+import { cleanSources } from "./sources.ts";
 import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.ts";
 
 export const ITEM_FILE = "item.yaml";
@@ -139,6 +140,7 @@ export function emptyItemDoc(title: string, status: ItemStatus): ItemDoc {
   return {
     title,
     status,
+    sources: [],
     platforms: {},
     schedule: [],
     metrics: [],
@@ -341,16 +343,19 @@ function mergePlatforms(
   return { ...current, ...Object.fromEntries(merged) };
 }
 
-export const updateItem = (id: string, patch: ItemPatch) =>
-  mutateItem(id, (doc) => {
-    const { platforms, ...fields } = patch;
+export const updateItem = Effect.fn("items.updateItem")(function* (id: string, patch: ItemPatch) {
+  const { platforms, sources, ...fields } = patch;
+  const cleaned = sources === undefined ? undefined : yield* cleanSources(sources);
 
-    return Effect.succeed({
+  return yield* mutateItem(id, (doc) =>
+    Effect.succeed({
       ...doc,
       ...fields,
+      sources: cleaned ?? doc.sources,
       platforms: platforms === undefined ? doc.platforms : mergePlatforms(doc.platforms, platforms),
-    });
-  });
+    }),
+  );
+});
 
 /**
  * Append a comment or edit request; `waiting` lines it up for the board's agent. An approved item

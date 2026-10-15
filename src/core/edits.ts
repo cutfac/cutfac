@@ -1,4 +1,4 @@
-import { DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option, Path } from "effect";
 
 import { InvalidRequest, type NotFound } from "./errors.ts";
 import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
@@ -15,6 +15,7 @@ import {
 } from "./items.ts";
 import type { Format } from "./library.ts";
 import { extension, ffmpeg, type MediaKind } from "./media.ts";
+import { refDir } from "./references.ts";
 import type { AgentName, EditContext, Feedback, FeedbackInput, ItemDoc, Region } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -472,6 +473,25 @@ const formatLines = Effect.fnUntraced(function* (format: Format) {
   return { lines, missing };
 });
 
+/** What the user pointed the item at: folders and files on this computer, pages, a reference. */
+const sourceLines = Effect.fnUntraced(function* (item: Item) {
+  const ws = yield* Workspace;
+  const path = yield* Path.Path;
+
+  const lines = item.doc.sources.map((source) =>
+    "url" in source
+      ? `- ${source.url} (a web page)`
+      : `- ${path.resolve(ws.root, source.path)} (on this computer)`,
+  );
+
+  if (item.doc.reference !== undefined) {
+    const dir = path.resolve(ws.root, refDir(ws, item.doc.reference));
+    lines.push(`- ${dir} (a saved reference video; get_reference has its analysis)`);
+  }
+
+  return lines;
+});
+
 /** The message an agent receives for one request, headless or pasted by the user. */
 export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   item: Item,
@@ -500,6 +520,16 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   ];
 
   if (brief.length > 0) lines.push("Item brief:", ...brief, "");
+
+  const sources = yield* sourceLines(item);
+
+  if (sources.length > 0) {
+    lines.push(
+      "Sources the user pointed this item at. Read what helps with the request, and never change them:",
+      ...sources,
+      "",
+    );
+  }
 
   if (described !== undefined && described.missing.length > 0) {
     lines.push(

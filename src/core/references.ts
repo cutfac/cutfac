@@ -46,7 +46,7 @@ const decodePreprocess = Schema.decodeUnknownOption(PreprocessJson);
 
 const encodePreprocess = Schema.encodeEffect(PreprocessJson);
 
-const refDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.references}/${id}`;
+export const refDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.references}/${id}`;
 
 export const getReference = Effect.fn("references.getReference")(function* (id: string) {
   const ws = yield* Workspace;
