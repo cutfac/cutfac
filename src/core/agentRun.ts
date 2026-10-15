@@ -30,7 +30,7 @@ import { CommandFailed, Conflict, type FactoryError } from "./errors.ts";
 import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { commandOptions, spawnFailure, tail, which } from "./process.ts";
-import { AgentName, type AgentPick, type AgentRun } from "./schema.ts";
+import { AgentName, type AgentPick, type AgentRun, ModelSettings } from "./schema.ts";
 import { sourceHosts } from "./sources.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -39,7 +39,12 @@ import { Workspace, nowIso } from "./workspace.ts";
  * item, or the turn of an import.
  */
 export const RunEvent = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("start"), subject: Schema.String, agent: AgentName }),
+  Schema.Struct({
+    type: Schema.Literal("start"),
+    subject: Schema.String,
+    agent: AgentName,
+    ...ModelSettings.fields,
+  }),
   Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
   Schema.Struct({
     type: Schema.Literal("tool"),
@@ -571,7 +576,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
 
   yield* setRun(itemId, feedbackId, { ...pick, status: "running", startedAt });
-  yield* emit({ type: "start", subject: feedbackId, agent });
+  yield* emit({ type: "start", subject: feedbackId, ...pick });
 
   const { reply, failure } = yield* converse({
     agent,

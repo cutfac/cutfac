@@ -531,10 +531,35 @@ echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Do
       doc: { feedback: [{ body: "First" }, { waiting: "claude", model: "opus", effort: "high" }] },
     });
 
+    const listening = Promise.withResolvers<void>();
+
+    const starts = server.runtime.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const { events } = yield* (yield* RunRegistry).subscribe("clip");
+          listening.resolve();
+
+          return yield* Stream.runCollect(
+            events.pipe(
+              Stream.filter((event) => event.type === "start"),
+              Stream.take(2),
+            ),
+          );
+        }),
+      ),
+    );
+
+    await listening.promise;
+
     const after = await endings("clip", 2);
     await writeFile(join(fakes.dir, "release"), "");
 
     expect(await after(2)).toEqual(["done", "done"]);
+    // The board names the model a run started on while it streams.
+    expect(await starts).toMatchObject([
+      { subject: first.feedbackId, model: "sonnet" },
+      { subject: second.feedbackId, model: "opus", effort: "high" },
+    ]);
     expect(await flagged("--model")).toEqual(["sonnet", "opus"]);
     expect(await flagged("--effort")).toEqual([undefined, "high"]);
 
