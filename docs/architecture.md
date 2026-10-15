@@ -37,10 +37,15 @@ with ffmpeg and the skill.
    are stored on the feedback entry in `item.yaml` (`timecode`, `end`, `region`).
 2. **Context.** Before the agent starts, the core saves `before.*` (a copy of the media), `clip.mp4`
    (the range, re-encoded frame-accurately), and `frame.png` (the frame with the box drawn) under
-   the item's `edits/<feedback id>/`. The prompt names these files, the timecodes, and the original.
+   the item's `edits/<feedback id>/`. The prompt names these files, the timecodes, and the original,
+   and lists the item's `sources`: folders, files, and http(s) links the user wants read, stored
+   relative when inside the workspace and absolute outside it (`src/core/sources.ts`). Nothing is
+   read when they are saved; the agent says when one is gone.
 3. **Run.** `src/core/agentRun.ts` runs `claude -p` or `codex exec` headless in the workspace, one
-   session per item, and streams its steps over SSE (`/api/item/run`). Without an agent the request
-   stays queued; the chat offers "Copy prompt" so any agent can pick it up.
+   session per item, and streams its steps over SSE (`/api/item/run`). A request may name the model
+   and effort (`claude --model --effort`, `codex -m` with `model_reasoning_effort`); left out, each
+   CLI uses its own default. Claude Code may fetch from the hosts of the item's source links. Without
+   an agent the request stays queued; the chat offers "Copy prompt" so any agent can pick it up.
 4. **Line.** One run works on an item at a time. A request sent while the item's agent is busy, or
    while earlier requests wait, is stored with `waiting: <agent>` and runs in the order requests
    were made. Its context and `baseline` are taken when its turn begins, so its before side is the

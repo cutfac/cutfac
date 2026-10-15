@@ -78,7 +78,8 @@
 - **Calendar and metrics.** Plan each post per platform, then log views, likes and comments after it
   goes out.
 - **Bring your own agent.** Claude Code and Codex connect through the built-in MCP server and run
-  on your machine. Without one, "Copy prompt" hands the request to any agent you like.
+  on your machine, with the model and reasoning effort you pick in the chat. Without one, "Copy
+  prompt" hands the request to any agent you like.
 - **Files, not a database.** A workspace is plain folders and YAML, so it works with Git, Finder and
   your editor.
 - **English and Korean.**
@@ -175,6 +176,12 @@ streams its steps into the chat. The agent gets a clip of the range, the frame w
 on it, the timecodes, and the original file. When it is done, compare before and after, then keep
 the edit or restore the previous version. Without a connected agent, the request waits in the chat
 and "Copy prompt" hands it to any agent you run yourself.
+
+Press `+` in the chat to give the agent something to read whenever it works on the video: paste a
+link or a folder or file path, or in the desktop app choose one from disk. They show as chips above
+the message and are saved in `item.yaml` as `sources`. Next to the agent, pick the model and
+reasoning effort it runs with; the choice is kept per agent in that browser, and each run names the
+ones it used.
 
 You don't have to wait for one request to finish before making the next. Requests made while the
 agent is working line up behind its run and start in turn, each from the result of the one before.
