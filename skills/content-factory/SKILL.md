@@ -31,7 +31,10 @@ into folders.
   the inputs decided per item (such as a style), and an optional `render` command plus `template/`
   code. It is distilled from references or brought in from a link.
 - **Item** (`items/<id>/item.yaml` + media): one publishable post. Status flows
-  `idea → drafting → review → approved → scheduled → published` (or `archived`).
+  `idea → drafting → review → approved → scheduled → published` (or `archived`). Its `sources` are
+  folders, files, and web pages the user wants you to read whenever you work on it: read what helps
+  before you write or change anything, and never change them. When the user points you at one to
+  build on, add it with `update_item` (`sources` replaces the whole list).
 
 ## Analyze a reference
 
