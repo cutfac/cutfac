@@ -4,7 +4,7 @@ import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import { inputFieldsOf, resolveInputs } from "./formatSpec.ts";
 import { aspectOf, extension, type MediaFile, mediaKind, probe, toMediaFiles } from "./media.ts";
 import {
-  type AgentName,
+  type AgentPick,
   type Feedback,
   type FeedbackInput,
   ItemDoc,
@@ -364,7 +364,7 @@ export const updateItem = Effect.fn("items.updateItem")(function* (id: string, p
 export const addFeedback = Effect.fn("items.addFeedback")(function* (
   id: string,
   input: FeedbackInput,
-  waiting?: AgentName,
+  waiting?: AgentPick,
 ) {
   const body = input.body.trim();
 
@@ -379,7 +379,9 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
     timecode: input.timecode,
     end: input.end,
     region: input.region,
-    waiting,
+    waiting: waiting?.agent,
+    model: waiting?.model,
+    effort: waiting?.effort,
     status: "open",
   };
 

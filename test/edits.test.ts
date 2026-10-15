@@ -36,7 +36,7 @@ import {
 import { Conflict, InvalidRequest } from "../src/core/errors.ts";
 import { addFeedback, createItem, getItem, resolveFeedback } from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";
-import { Feedback, FeedbackInput, FormatDoc } from "../src/core/schema.ts";
+import { type AgentPick, Feedback, FeedbackInput, FormatDoc } from "../src/core/schema.ts";
 import type { Workspace } from "../src/core/workspace.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -630,7 +630,7 @@ describe("the waiting line", () => {
 
         return {
           plain: yield* beginEdit(id, now.feedback.id),
-          waiting: yield* requestEdit(id, { body: "Brighter", media: VIDEO }, "claude"),
+          waiting: yield* requestEdit(id, { body: "Brighter", media: VIDEO }, { agent: "claude" }),
         };
       }),
     );
@@ -657,8 +657,8 @@ describe("the waiting line", () => {
     const result = await t.run(
       Effect.gen(function* () {
         const now = yield* requestEdit(id, { body: "Now" });
-        const first = yield* requestEdit(id, { body: "Later" }, "claude");
-        const second = yield* requestEdit(id, { body: "Last" }, "codex");
+        const first = yield* requestEdit(id, { body: "Later" }, { agent: "claude" });
+        const second = yield* requestEdit(id, { body: "Last" }, { agent: "codex" });
         const reworded = yield* rewordWaiting(id, first.feedback.id, "  Later, but louder ");
 
         return {
@@ -696,17 +696,26 @@ describe("the waiting line", () => {
   test("a finished run starts the item's next waiting request; a failed one stops the line", async () => {
     const id = await newItem();
 
+    const picks: ReadonlyArray<AgentPick | undefined> = [
+      undefined,
+      { agent: "claude", model: "opus", effort: "high" },
+      { agent: "codex" },
+      { agent: "claude" },
+    ];
+
     const requests = await t.run(
-      Effect.forEach([undefined, "claude", "codex", "claude"] as const, (agent, index) =>
-        Effect.map(requestEdit(id, { body: `Step ${index}` }, agent), (r) => r.feedback.id),
+      Effect.forEach(picks, (pick, index) =>
+        Effect.map(requestEdit(id, { body: `Step ${index}` }, pick), (r) => r.feedback.id),
       ),
     );
 
     const [first = "", second = "", third = "", fourth = ""] = requests;
+    const started: Array<RunInput> = [];
 
     // Stands in for the agent: a run leaves the line as it starts, and the third one fails.
     const runner: Runner<RunInput, Workspace | Crypto.Crypto> = (run, emit) =>
       Effect.gen(function* () {
+        started.push(run);
         yield* beginEdit(run.itemId, run.feedbackId).pipe(Effect.orDie);
         yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
 
@@ -741,6 +750,12 @@ describe("the waiting line", () => {
       ),
     ).toEqual([`${first} claude`, "done", `${second} claude`, "done", `${third} codex`, "error"]);
     expect(waitingLine(result.item.doc).map((f) => f.id)).toEqual([fourth]);
+
+    // A waiting request keeps the model and effort it was sent with until its run takes them.
+    expect(started[1]).toMatchObject({ feedbackId: second, model: "opus", effort: "high" });
+    expect(started[2]?.model).toBeUndefined();
+    const ran = result.item.doc.feedback.find((f) => f.id === second);
+    expect([ran?.waiting, ran?.model, ran?.effort]).toEqual([undefined, undefined, undefined]);
   });
 
   test.skipIf(!hasFfmpeg)(
@@ -771,7 +786,7 @@ describe("the waiting line", () => {
       await utimes(video, old, old);
 
       const waiting = await t.run(
-        requestEdit(id, { body: "Bigger", media: VIDEO, timecode: 0.5 }, "claude"),
+        requestEdit(id, { body: "Bigger", media: VIDEO, timecode: 0.5 }, { agent: "claude" }),
       );
 
       expect(waiting.warnings).toEqual([]);

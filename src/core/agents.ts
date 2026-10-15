@@ -1,6 +1,7 @@
 import { Effect, Option, Schema } from "effect";
 
 import { WorkspaceError } from "./errors.ts";
+import { type AgentModels, CLAUDE_MODELS, NO_MODELS, codexModels } from "./models.ts";
 import { isInstalled, run, which } from "./process.ts";
 import type { AgentName } from "./schema.ts";
 import { Workspace, slugify } from "./workspace.ts";
@@ -22,7 +23,8 @@ export interface AgentConnection {
   readonly detail: string;
 }
 
-export interface AgentStatus {
+/** Whether the agent can run here, and the models the board may offer it. */
+export interface AgentStatus extends AgentModels {
   readonly agent: AgentName;
   readonly installed: boolean;
   readonly connected: boolean;
@@ -169,7 +171,10 @@ export const connectCodex = Effect.fn("agents.connectCodex")(function* (launch: 
 export const connectAgent = (agent: AgentName, launch: McpLaunch) =>
   agent === "claude" ? connectClaude(launch) : connectCodex(launch);
 
-/** Whether each supported agent CLI is installed and already pointed at this workspace. */
+/**
+ * Whether each supported agent CLI is installed and already pointed at this workspace, and the
+ * models it can run.
+ */
 export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
   const ws = yield* Workspace;
 
@@ -180,18 +185,29 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
 
   const codex = yield* which("codex");
 
-  const codexConnected = yield* Option.match(codex, {
-    onNone: () => Effect.succeed(false),
+  const [codexConnected, codexOffers] = yield* Option.match(codex, {
+    onNone: () => Effect.succeed([false, NO_MODELS] as const),
     onSome: (bin) =>
-      run(bin, ["mcp", "get", codexServerName(ws.config.name)]).pipe(
-        Effect.map((result) => result.code === 0),
-        Effect.orElseSucceed(() => false),
+      Effect.all(
+        [
+          run(bin, ["mcp", "get", codexServerName(ws.config.name)]).pipe(
+            Effect.map((result) => result.code === 0),
+            Effect.orElseSucceed(() => false),
+          ),
+          codexModels(bin),
+        ],
+        { concurrency: "unbounded" },
       ),
   });
 
   const status: ReadonlyArray<AgentStatus> = [
-    { agent: "claude", installed: yield* isInstalled("claude"), connected: claudeConnected },
-    { agent: "codex", installed: Option.isSome(codex), connected: codexConnected },
+    {
+      agent: "claude",
+      installed: yield* isInstalled("claude"),
+      connected: claudeConnected,
+      ...CLAUDE_MODELS,
+    },
+    { agent: "codex", installed: Option.isSome(codex), connected: codexConnected, ...codexOffers },
   ];
 
   return status;

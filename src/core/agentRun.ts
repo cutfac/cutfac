@@ -24,12 +24,13 @@ import {
   resolveEdit,
   snapshotAfter,
   waitingLine,
+  waitingPick,
 } from "./edits.ts";
 import { CommandFailed, Conflict, type FactoryError } from "./errors.ts";
 import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { commandOptions, spawnFailure, tail, which } from "./process.ts";
-import { AgentName, type AgentRun } from "./schema.ts";
+import { AgentName, type AgentPick, type AgentRun } from "./schema.ts";
 import { sourceHosts } from "./sources.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -76,6 +77,8 @@ export interface InvocationOptions extends SessionArgs {
   readonly image?: string | undefined;
   /** Hosts of the web pages the user pointed the item at, which the agent may read. */
   readonly hosts?: ReadonlyArray<string> | undefined;
+  readonly model?: string | undefined;
+  readonly effort?: string | undefined;
 }
 
 export interface AgentInvocation {
@@ -166,22 +169,36 @@ export const agentBin = (agent: AgentName) =>
     }),
   );
 
+/** `[flag, value]` when there is a value, so a setting left out keeps the CLI's default. */
+const flag = (name: string, value: string | undefined) =>
+  value === undefined ? [] : [name, value];
+
 /** The headless command line for one edit request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
-  const { bin, prompt, mcpConfig, image, hosts = [] } = options;
+  const { bin, prompt, mcpConfig, image, hosts = [], model, effort } = options;
   const fetch = hosts.map((host) => `WebFetch(domain:${host})`);
   const search = hosts.length === 0 ? [] : ['web_search="live"'];
+  // The schema keeps an effort to lowercase letters, so it is safe inside the TOML string.
+  const reasoning = effort === undefined ? [] : [`model_reasoning_effort="${effort}"`];
 
   const flags =
     agent === "claude"
       ? [
           "--allowedTools",
           [...options.allowedTools, ...fetch].join(","),
-          ...(mcpConfig === undefined ? [] : ["--mcp-config", mcpConfig]),
+          ...flag("--mcp-config", mcpConfig),
+          ...flag("--model", model),
+          ...flag("--effort", effort),
         ]
       : [
-          ...codexConfig(['sandbox_mode="workspace-write"', 'approval_policy="never"', ...search]),
-          ...(image === undefined ? [] : ["--image", image]),
+          ...codexConfig([
+            'sandbox_mode="workspace-write"',
+            'approval_policy="never"',
+            ...search,
+            ...reasoning,
+          ]),
+          ...flag("-m", model),
+          ...flag("--image", image),
         ];
 
   return agentCommand(agent, bin, prompt, flags, options);
@@ -354,10 +371,9 @@ export function parseCodexLine(line: string): ParsedLine {
   });
 }
 
-export interface RunInput {
+export interface RunInput extends AgentPick {
   readonly itemId: string;
   readonly feedbackId: string;
-  readonly agent: AgentName;
 }
 
 export type Emit = (event: RunEvent) => Effect.Effect<void>;
@@ -372,10 +388,16 @@ const STOP_GRACE = "3 seconds";
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.slice(0, 200) ?? "";
 
-/** A request with a run is no longer waiting for its turn. */
+/** A request with a run is no longer waiting for its turn; the run keeps its model and effort. */
 const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
   mutateItem(itemId, (doc) =>
-    updateFeedback(doc, itemId, feedbackId, (entry) => ({ ...entry, run, waiting: undefined })),
+    updateFeedback(doc, itemId, feedbackId, (entry) => ({
+      ...entry,
+      run,
+      waiting: undefined,
+      model: undefined,
+      effort: undefined,
+    })),
   );
 
 const saveSession = (itemId: string, agent: AgentName, sessionId: string | undefined) =>
@@ -536,7 +558,8 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 
 const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, startedAt: string) {
   const ws = yield* Workspace;
-  const { itemId, feedbackId, agent } = input;
+  const { itemId, feedbackId, agent, model, effort } = input;
+  const pick: AgentPick = { agent, model, effort };
   // First, so a request that waited leaves the line before anything else can change it.
   const { item, feedback: f } = yield* beginEdit(itemId, feedbackId);
   const bin = yield* agentBin(agent);
@@ -547,7 +570,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const frame = f.context?.frame;
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
 
-  yield* setRun(itemId, feedbackId, { agent, status: "running", startedAt });
+  yield* setRun(itemId, feedbackId, { ...pick, status: "running", startedAt });
   yield* emit({ type: "start", subject: feedbackId, agent });
 
   const { reply, failure } = yield* converse({
@@ -563,6 +586,8 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
           mcpConfig,
           image,
           hosts: sourceHosts(item.doc.sources),
+          model,
+          effort,
         }),
       ),
     save: (sessionId) => saveSession(itemId, agent, sessionId),
@@ -573,7 +598,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
 
   if (failure !== undefined) {
     yield* setRun(itemId, feedbackId, {
-      agent,
+      ...pick,
       status: "failed",
       startedAt,
       finishedAt,
@@ -585,7 +610,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   }
 
   yield* settleFeedback(input, reply);
-  yield* setRun(itemId, feedbackId, { agent, status: "done", startedAt, finishedAt, reply });
+  yield* setRun(itemId, feedbackId, { ...pick, status: "done", startedAt, finishedAt, reply });
   yield* emit({ type: "done", reply });
 });
 
@@ -595,14 +620,15 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
  * already wrote as the "after" side.
  */
 export const runEdit = Effect.fn("agentRun.runEdit")(function* (input: RunInput, emit: Emit) {
-  const { itemId, feedbackId, agent } = input;
+  const { itemId, feedbackId, agent, model, effort } = input;
+  const pick: AgentPick = { agent, model, effort };
   const startedAt = yield* nowIso;
 
   const recordFailure = (error: FactoryError) =>
     Effect.gen(function* () {
       const finishedAt = yield* nowIso;
       yield* setRun(itemId, feedbackId, {
-        agent,
+        ...pick,
         status: "failed",
         startedAt,
         finishedAt,
@@ -614,7 +640,7 @@ export const runEdit = Effect.fn("agentRun.runEdit")(function* (input: RunInput,
   const recordStop = Effect.gen(function* () {
     yield* snapshotAfter(itemId, feedbackId);
     const finishedAt = yield* nowIso;
-    yield* setRun(itemId, feedbackId, { agent, status: "stopped", startedAt, finishedAt });
+    yield* setRun(itemId, feedbackId, { ...pick, status: "stopped", startedAt, finishedAt });
   }).pipe(Effect.ignore({ log: true }));
 
   yield* performEdit(input, emit, startedAt).pipe(
@@ -846,7 +872,7 @@ const nextWaiting = (input: RunInput) =>
       Option.map(Option.fromNullishOr(waitingLine(item.doc)[0]), (f): RunInput => ({
         itemId: input.itemId,
         feedbackId: f.id,
-        agent: f.waiting,
+        ...waitingPick(f),
       })),
     ),
     Effect.tapError((error) => Effect.logWarning("Could not read the waiting line", error)),

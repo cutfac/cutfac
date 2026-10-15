@@ -22,6 +22,7 @@ import {
   restoreBefore,
   rewordWaiting,
   waitingLine,
+  waitingPick,
 } from "../core/edits.ts";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
@@ -56,7 +57,14 @@ import {
   preprocessReference,
 } from "../core/references.ts";
 import { listReviews } from "../core/review.ts";
-import { AgentChoice, AgentName, FeedbackInput, ItemPatch } from "../core/schema.ts";
+import {
+  AgentChoice,
+  AgentName,
+  type AgentPick,
+  FeedbackInput,
+  ItemPatch,
+  ModelSettings,
+} from "../core/schema.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
 
@@ -166,11 +174,12 @@ const ResolveBody = Schema.Struct({
 });
 
 /** Read beside the FeedbackInput fields of the same body. */
-const EditVia = Schema.Struct({ agent: Schema.optional(AgentChoice) });
+const EditVia = Schema.Struct({ agent: Schema.optional(AgentChoice), ...ModelSettings.fields });
 
 const RunBody = Schema.Struct({
   feedbackId: Schema.NonEmptyString,
   agent: Schema.optional(AgentName),
+  ...ModelSettings.fields,
 });
 
 /** One waiting request, or every one on the item. */
@@ -307,17 +316,13 @@ const queuedInstead = (reason: string): Dispatch => ({
 const missingCli = (agent: AgentName) => `${agent} CLI not found on PATH`;
 
 /** Start the agent on a recorded request, or leave it queued when the agent cannot start. */
-const dispatch = Effect.fnUntraced(function* (
-  itemId: string,
-  feedbackId: string,
-  agent: AgentName,
-) {
+const dispatch = Effect.fnUntraced(function* (itemId: string, feedbackId: string, pick: AgentPick) {
   const runs = yield* RunRegistry;
 
-  if (Option.isNone(yield* which(agent))) return queuedInstead(missingCli(agent));
+  if (Option.isNone(yield* which(pick.agent))) return queuedInstead(missingCli(pick.agent));
 
-  return yield* runs.start({ itemId, feedbackId, agent }).pipe(
-    Effect.as<Dispatch>({ sent: agent, warnings: [] }),
+  return yield* runs.start({ itemId, feedbackId, ...pick }).pipe(
+    Effect.as<Dispatch>({ sent: pick.agent, warnings: [] }),
     Effect.catchTag("Conflict", (error) => Effect.succeed(queuedInstead(error.message))),
   );
 });
@@ -326,7 +331,12 @@ const dispatch = Effect.fnUntraced(function* (
  * Record a request and hand it to `via`: now, or once the item's run and the requests waiting
  * before it are done. Requests on an item run in the order they were made.
  */
-const sendEdit = Effect.fnUntraced(function* (id: string, input: FeedbackInput, via: AgentChoice) {
+const sendEdit = Effect.fnUntraced(function* (
+  id: string,
+  input: FeedbackInput,
+  via: AgentChoice,
+  settings: ModelSettings,
+) {
   const runs = yield* RunRegistry;
 
   if (via === "queue") {
@@ -335,12 +345,13 @@ const sendEdit = Effect.fnUntraced(function* (id: string, input: FeedbackInput, 
     return { requested: yield* requestEdit(id, input), dispatched: queued };
   }
 
+  const pick: AgentPick = { agent: via, ...settings };
   const busy = (yield* runs.isRunning(id)) || waitingLine((yield* getItem(id)).doc).length > 0;
 
   if (!busy) {
     const requested = yield* requestEdit(id, input);
 
-    return { requested, dispatched: yield* dispatch(id, requested.feedback.id, via) };
+    return { requested, dispatched: yield* dispatch(id, requested.feedback.id, pick) };
   }
 
   if (Option.isNone(yield* which(via))) {
@@ -349,7 +360,7 @@ const sendEdit = Effect.fnUntraced(function* (id: string, input: FeedbackInput, 
 
   const waiting: Dispatch = { sent: via, warnings: [] };
 
-  return { requested: yield* requestEdit(id, input, via), dispatched: waiting };
+  return { requested: yield* requestEdit(id, input, pick), dispatched: waiting };
 });
 
 /**
@@ -362,7 +373,7 @@ const editRoute = Effect.gen(function* () {
   const id = yield* queryId;
   const request = yield* HttpServerRequest.HttpServerRequest;
   const body = yield* request.json;
-  const { agent } = yield* decodeEditVia(body);
+  const { agent, ...settings } = yield* decodeEditVia(body);
   const input = yield* decodeFeedbackInput(body);
   const via = agent ?? ws.config.agent.default;
 
@@ -370,7 +381,7 @@ const editRoute = Effect.gen(function* () {
   return yield* runs.exclusive(
     id,
     Effect.gen(function* () {
-      const { requested, dispatched } = yield* sendEdit(id, input, via);
+      const { requested, dispatched } = yield* sendEdit(id, input, via, settings);
 
       return {
         item: yield* itemDetail(requested.item),
@@ -389,10 +400,10 @@ const runRoute = Effect.gen(function* () {
   const runs = yield* RunRegistry;
   const id = yield* queryId;
   const body = yield* HttpServerRequest.schemaBodyJson(RunBody);
-  const agent = body.agent ?? defaultAgent(ws);
+  const { feedbackId, agent = defaultAgent(ws), ...settings } = body;
   yield* agentBin(agent);
-  yield* findFeedback(yield* getItem(id), body.feedbackId);
-  yield* runs.exclusive(id, runs.start({ itemId: id, feedbackId: body.feedbackId, agent }));
+  yield* findFeedback(yield* getItem(id), feedbackId);
+  yield* runs.exclusive(id, runs.start({ itemId: id, feedbackId, agent, ...settings }));
 
   return { ok: true };
 });
@@ -412,7 +423,7 @@ const continueRoute = withId((id) =>
         }
 
         yield* agentBin(first.waiting);
-        yield* runs.start({ itemId: id, feedbackId: first.id, agent: first.waiting });
+        yield* runs.start({ itemId: id, feedbackId: first.id, ...waitingPick(first) });
 
         return { ok: true };
       }),

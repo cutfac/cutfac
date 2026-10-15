@@ -11,6 +11,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http";
 import { type RunEvent, RunRegistry } from "../src/core/agentRun.ts";
 import { ImportRuns } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
+import type { Feedback } from "../src/core/schema.ts";
 import { parseRange, routes } from "../src/server/app.ts";
 import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -360,14 +361,15 @@ describe("an item's waiting line", () => {
   });
 
   /**
-   * A `claude` that records its prompt, holds until the test lets it go, then answers in
-   * stream-json, or fails partway when the request says so.
+   * A `claude` that records its prompt and flags, holds until the test lets it go, then answers
+   * in stream-json, or fails partway when the request says so.
    */
   const fakeClaude = () =>
     fakes.bin(
       "claude",
-      `n=$(ls "${fakes.calls}" | wc -l | tr -d ' ')
+      `n=$(ls "${fakes.calls}" | grep -c stdin)
 call="${fakes.calls}/$n"
+printf '%s\n' "$@" > "$call.args"
 cat > "$call.stdin"
 while [ ! -f "${fakes.dir}/release" ]; do sleep 0.02; done
 echo '{"type":"system","subtype":"init","session_id":"sess-'$n'"}'
@@ -376,16 +378,27 @@ echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Do
 `,
     );
 
-  /** The request each call was about, oldest first. */
-  const asked = async () => {
-    const names = (await readdir(fakes.calls)).toSorted((a, b) => parseInt(a) - parseInt(b));
+  /** What each call recorded in its `.kind` file, oldest first. */
+  const recorded = async (kind: "stdin" | "args") => {
+    const names = (await readdir(fakes.calls))
+      .filter((name) => name.endsWith(`.${kind}`))
+      .toSorted((a, b) => parseInt(a) - parseInt(b));
 
-    const prompts = await Promise.all(
-      names.map((name) => readFile(join(fakes.calls, name), "utf8")),
-    );
-
-    return prompts.map((prompt) => /^Request: (.*)$/m.exec(prompt)?.[1]);
+    return Promise.all(names.map((name) => readFile(join(fakes.calls, name), "utf8")));
   };
+
+  /** The request each call was about, oldest first. */
+  const asked = async () =>
+    (await recorded("stdin")).map((prompt) => /^Request: (.*)$/m.exec(prompt)?.[1]);
+
+  /** The value after `flag` in each call's arguments, oldest first. */
+  const flagged = async (flag: string) =>
+    (await recorded("args")).map((args) => {
+      const lines = args.split("\n");
+      const at = lines.indexOf(flag);
+
+      return at === -1 ? undefined : lines[at + 1];
+    });
 
   /**
    * Listens for the next `total` run endings on the item; the returned function resolves once
@@ -427,8 +440,12 @@ echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Do
     };
   };
 
-  const ask = async (body: string, agent = "claude") => {
-    const response = await server.sendJson("POST", "/api/item/edit?id=clip", { agent, body });
+  const ask = async (body: string, settings: Schema.JsonObject = {}) => {
+    const response = await server.sendJson("POST", "/api/item/edit?id=clip", {
+      agent: "claude",
+      body,
+      ...settings,
+    });
 
     // SAFETY: the edit route answers with these fields.
     return (await response.json()) as { feedbackId: string; sent: string; item: unknown };
@@ -493,5 +510,52 @@ echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Do
     const idle = await server.send("/api/item/edit/continue?id=clip", { method: "POST" });
 
     expect(idle.status).toBe(400);
+  });
+
+  test("a request runs on the model and effort it was sent with, also after waiting", async () => {
+    await fakeClaude();
+    await server.sendJson("POST", "/api/items", { title: "Clip" });
+
+    const refused = await server.sendJson("POST", "/api/item/edit?id=clip", {
+      agent: "claude",
+      body: "Sneaky",
+      model: "--dangerously-skip-permissions",
+    });
+
+    expect(refused.status).toBe(400);
+
+    const first = await ask("First", { model: "sonnet" });
+    const second = await ask("Second", { model: "opus", effort: "high" });
+
+    expect(second.item).toMatchObject({
+      doc: { feedback: [{ body: "First" }, { waiting: "claude", model: "opus", effort: "high" }] },
+    });
+
+    const after = await endings("clip", 2);
+    await writeFile(join(fakes.dir, "release"), "");
+
+    expect(await after(2)).toEqual(["done", "done"]);
+    expect(await flagged("--model")).toEqual(["sonnet", "opus"]);
+    expect(await flagged("--effort")).toEqual([undefined, "high"]);
+
+    const item = await (await server.send("/api/item?id=clip")).json();
+
+    expect(item).toMatchObject({
+      doc: {
+        feedback: [
+          { id: first.feedbackId, run: { model: "sonnet", status: "done" } },
+          { id: second.feedbackId, run: { model: "opus", effort: "high", status: "done" } },
+        ],
+      },
+    });
+
+    // SAFETY: the item route answers with the item's document.
+    const waited = (item as { doc: { feedback: ReadonlyArray<Feedback> } }).doc.feedback[1];
+
+    expect([waited?.waiting, waited?.model, waited?.effort]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 });

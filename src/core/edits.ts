@@ -16,7 +16,15 @@ import {
 import type { Format } from "./library.ts";
 import { extension, ffmpeg, type MediaKind } from "./media.ts";
 import { refDir } from "./references.ts";
-import type { AgentName, EditContext, Feedback, FeedbackInput, ItemDoc, Region } from "./schema.ts";
+import type {
+  AgentName,
+  AgentPick,
+  EditContext,
+  Feedback,
+  FeedbackInput,
+  ItemDoc,
+  Region,
+} from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
 /** Clip length when the request names a single point instead of a range. */
@@ -44,7 +52,7 @@ export interface EditRequested {
 export const requestEdit = Effect.fn("edits.requestEdit")(function* (
   id: string,
   input: FeedbackInput,
-  waiting?: AgentName,
+  waiting?: AgentPick,
 ) {
   const current = yield* getItem(id);
   const mediaName = input.media;
@@ -159,6 +167,13 @@ export type Waiting = Feedback & { readonly waiting: AgentName };
 export const isWaiting = (f: Feedback): f is Waiting =>
   f.waiting !== undefined && f.status === "open";
 
+/** The agent, model, and effort a waiting request was sent to. */
+export const waitingPick = (f: Waiting): AgentPick => ({
+  agent: f.waiting,
+  model: f.model,
+  effort: f.effort,
+});
+
 /** The requests waiting for the board's agent on an item, in the order they were made. */
 export const waitingLine = (doc: ItemDoc): ReadonlyArray<Waiting> => doc.feedback.filter(isWaiting);
 
@@ -180,6 +195,8 @@ export const beginEdit = Effect.fn("edits.beginEdit")(function* (id: string, fee
     updateFeedback(doc, id, feedbackId, (entry) => ({
       ...entry,
       waiting: undefined,
+      model: undefined,
+      effort: undefined,
       baseline,
       context: before === undefined ? entry.context : { ...entry.context, before },
     })),

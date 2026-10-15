@@ -57,6 +57,28 @@ export const AgentChoice = Schema.Literals([...AGENTS, "queue"]);
 
 export type AgentChoice = typeof AgentChoice.Type;
 
+/** A model as its agent CLI names it: an alias such as `opus`, or a full id. */
+export const ModelName = Schema.String.check(
+  Schema.isPattern(/^[A-Za-z0-9][\w.:[\]-]*$/),
+  Schema.isMaxLength(100),
+);
+
+/** How hard the agent thinks, in its CLI's words, such as `low` or `high`. */
+export const Effort = Schema.String.check(Schema.isPattern(/^[a-z]+$/), Schema.isMaxLength(20));
+
+/** The model and effort a run uses; one left out is whatever the agent CLI defaults to. */
+export const ModelSettings = Schema.Struct({
+  model: Schema.optional(ModelName),
+  effort: Schema.optional(Effort),
+});
+
+export type ModelSettings = typeof ModelSettings.Type;
+
+/** The agent, model, and effort that take an edit request. */
+export interface AgentPick extends ModelSettings {
+  readonly agent: AgentName;
+}
+
 export const DEFAULT_CLAUDE_TOOLS = [
   "Read",
   "Write",
@@ -201,6 +223,7 @@ export type EditContext = typeof EditContext.Type;
 
 export const AgentRun = Schema.Struct({
   agent: AgentName,
+  ...ModelSettings.fields,
   status: Schema.Literals(["running", "done", "failed", "stopped"]),
   startedAt: Schema.String,
   finishedAt: Schema.optional(Schema.String),
@@ -241,6 +264,8 @@ export const Feedback = Schema.Struct({
       describe("the board's agent takes this request once the ones before it on the item are done"),
     ),
   ),
+  model: Schema.optional(ModelName.annotate(describe("the model the waiting request runs on"))),
+  effort: Schema.optional(Effort.annotate(describe("the effort the waiting request runs with"))),
   baseline: Schema.optional(
     Schema.String.annotate(
       describe("when work began, if later than the request; media changes after it are this one's"),
