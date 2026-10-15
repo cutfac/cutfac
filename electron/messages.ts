@@ -32,6 +32,7 @@ const en = {
   zoom: "Zoom",
   front: "Bring All to Front",
   chooseWorkspace: "Choose or create a folder for your content workspace",
+  chooseSource: "Choose a folder or file for your agent to read",
   couldNotStart: "Content Factory could not start",
   serverStopped: "The local server stopped",
 };
@@ -71,6 +72,7 @@ export const MESSAGES: Record<Locale, typeof en> = {
     zoom: "확대/축소",
     front: "모두 앞으로 가져오기",
     chooseWorkspace: "콘텐츠 워크스페이스로 쓸 폴더를 고르거나 새로 만드세요",
+    chooseSource: "에이전트가 읽을 폴더나 파일을 고르세요",
     couldNotStart: "Content Factory를 시작하지 못했어요",
     serverStopped: "로컬 서버가 멈췄어요",
   },

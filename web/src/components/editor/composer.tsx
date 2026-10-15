@@ -1,15 +1,35 @@
-import { ArrowUpIcon, CrosshairIcon, SquareIcon, XIcon } from "lucide-react";
-import { useState, type KeyboardEvent, type RefObject } from "react";
+import {
+  ArrowUpIcon,
+  CrosshairIcon,
+  FileIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  LinkIcon,
+  PlusIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react";
+import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
+  InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -25,12 +45,15 @@ import {
   type AgentStatus,
   type EditInput,
   type ItemDetail,
+  type ItemSource,
   type Media,
   type ModelSettings,
 } from "../../api.ts";
+import { desktop } from "../../desktop.ts";
 import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
+import { sourceKey, sourceOf, sourceView } from "../../lib/sources.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { ModelPicker } from "./model-picker.tsx";
 
@@ -137,6 +160,153 @@ const agentItems = (statuses: ReadonlyArray<AgentStatus> | undefined, t: Message
     disabled: value !== "queue" && !agentInstalled(statuses, value),
   }));
 
+interface SourcesProps {
+  item: ItemDetail;
+  onItem: (item: ItemDetail) => void;
+}
+
+/** Save the item's list of sources; it comes back as the server tidied it. */
+const saveSources = (item: ItemDetail, sources: ItemSource[], onItem: (item: ItemDetail) => void) =>
+  api.updateItem(item.id, { sources }).then(onItem);
+
+const SOURCE_ICONS = { folder: FolderIcon, file: FileIcon, link: LinkIcon };
+
+/** What agents read whenever they work on this item, each with a way to drop it. */
+function SourceChips({ item, onItem }: SourcesProps) {
+  const t = useMessages();
+  const { sources } = item.doc;
+
+  if (sources.length === 0) return null;
+
+  const remove = (source: ItemSource) =>
+    saveSources(
+      item,
+      sources.filter((other) => sourceKey(other) !== sourceKey(source)),
+      onItem,
+    ).catch(sendFailed);
+
+  return (
+    <ul className="flex flex-wrap gap-1.5" aria-label={t.composer.sources.list}>
+      {sources.map((source) => {
+        const view = sourceView(source);
+        const label = view.label ?? t.composer.sources.workspace;
+        const Icon = SOURCE_ICONS[view.kind];
+
+        return (
+          <li key={sourceKey(source)} className="min-w-0">
+            <Badge variant="outline" className="h-6 max-w-64" title={view.full}>
+              <Icon data-icon="inline-start" />
+              {view.kind === "link" ? (
+                <a
+                  href={view.full}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate hover:underline"
+                >
+                  {label}
+                </a>
+              ) : (
+                <span className="truncate">{label}</span>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-5"
+                data-icon="inline-end"
+                aria-label={t.composer.sources.remove(label)}
+                onClick={() => void remove(source)}
+              >
+                <XIcon />
+              </Button>
+            </Badge>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Point the item at a folder, file, or web page for agents to read: paste a path or a link, or
+ * in the desktop app choose one from disk.
+ */
+function AddSource({ item, onItem }: SourcesProps) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const t = useMessages();
+  // Only the desktop app can open a file dialog that hands back a path.
+  const pickPath = desktop?.pickPath;
+
+  function add(source: ItemSource | undefined) {
+    if (source === undefined || saving) return;
+
+    setSaving(true);
+    saveSources(item, [...item.doc.sources, source], onItem)
+      .then(() => {
+        setText("");
+        setOpen(false);
+      }, sendFailed)
+      .finally(() => setSaving(false));
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={<InputGroupButton size="icon-sm" aria-label={t.composer.sources.add} />}
+      >
+        <PlusIcon />
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-80" initialFocus={inputRef}>
+        <PopoverHeader>
+          <PopoverTitle>{t.composer.sources.title}</PopoverTitle>
+          <PopoverDescription>{t.composer.sources.description}</PopoverDescription>
+        </PopoverHeader>
+        <InputGroup>
+          <InputGroupInput
+            ref={inputRef}
+            value={text}
+            placeholder={t.composer.sources.placeholder}
+            aria-label={t.composer.sources.placeholder}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (composing(event) || event.key !== "Enter") return;
+
+              event.preventDefault();
+              add(sourceOf(text));
+            }}
+          />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              variant="secondary"
+              disabled={text.trim() === "" || saving}
+              onClick={() => add(sourceOf(text))}
+            >
+              {t.composer.sources.submit}
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+        {pickPath === undefined ? null : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={saving}
+            onClick={() => {
+              pickPath().then((path) => {
+                if (path !== undefined) add({ path });
+              }, sendFailed);
+            }}
+          >
+            <FolderOpenIcon />
+            {t.composer.sources.choose}
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 interface ComposerProps {
   item: ItemDetail;
   media: Media | undefined;
@@ -229,6 +399,7 @@ export function Composer({
           </Button>
         ))}
       </div>
+      <SourceChips item={item} onItem={onItem} />
       <InputGroup>
         <InputGroupAddon align="block-start">
           {empty ? (
@@ -259,6 +430,7 @@ export function Composer({
           onKeyDown={onKeyDown}
         />
         <InputGroupAddon align="block-end">
+          <AddSource item={item} onItem={onItem} />
           <Select
             items={choices}
             value={agent}

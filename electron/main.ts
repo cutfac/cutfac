@@ -19,6 +19,7 @@ import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts"
 import {
   EDIT_COMMAND_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
+  PICK_PATH_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LOCALE_CHANNEL,
 } from "./ipc.ts";
@@ -96,6 +97,11 @@ if (!app.requestSingleInstanceLock()) {
     assertFromApp(event);
 
     return revealInWorkspace(target);
+  });
+  ipcMain.handle(PICK_PATH_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return pickSource();
   });
   ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
     if (!isFromApp(event) || !isLocale(next) || next === locale) return;
@@ -223,18 +229,32 @@ function menuTemplate(): MenuItemConstructorOptions[] {
   return template;
 }
 
-async function pickWorkspace(): Promise<string | undefined> {
-  const options = {
-    properties: ["openDirectory", "createDirectory"],
-    message: MESSAGES[locale].chooseWorkspace,
-    defaultPath: workspaceRoot ? path.dirname(workspaceRoot) : app.getPath("documents"),
-  } satisfies Electron.OpenDialogOptions;
-
+/** Shows an open dialog over the window when there is one. Resolves undefined if cancelled. */
+async function pickOne(options: Electron.OpenDialogOptions): Promise<string | undefined> {
   const result = await (window
     ? dialog.showOpenDialog(window, options)
     : dialog.showOpenDialog(options));
 
   return result.canceled ? undefined : result.filePaths[0];
+}
+
+function pickWorkspace(): Promise<string | undefined> {
+  return pickOne({
+    properties: ["openDirectory", "createDirectory"],
+    message: MESSAGES[locale].chooseWorkspace,
+    defaultPath: workspaceRoot ? path.dirname(workspaceRoot) : app.getPath("documents"),
+  });
+}
+
+/**
+ * Asks for a folder or file for agents to read. macOS lets one dialog pick either; elsewhere it
+ * picks a folder, and a file can still be typed or pasted in the chat.
+ */
+function pickSource(): Promise<string | undefined> {
+  return pickOne({
+    properties: ["openDirectory", "openFile"],
+    message: MESSAGES[locale].chooseSource,
+  });
 }
 
 /** Asks for a folder and switches to it. Resolves false if cancelled or if it failed to start. */

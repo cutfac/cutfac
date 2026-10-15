@@ -226,11 +226,16 @@ export interface PlatformCopy {
   firstComment?: string;
 }
 
+/** A folder or file on this computer, or a web page, that agents should read for an item. */
+export type ItemSource = { path: string } | { url: string };
+
 export interface ItemDoc {
   title: string;
   status: Status;
   format?: string;
   reference?: string;
+  /** What the user wants agents to read when they work on this item. */
+  sources: ItemSource[];
   hook?: string;
   caption?: string;
   notes?: string;
@@ -352,6 +357,8 @@ export interface ItemPatch {
   caption?: string;
   hook?: string;
   notes?: string;
+  /** Replaces the item's whole list. */
+  sources?: ItemSource[];
 }
 
 export interface NewItem {

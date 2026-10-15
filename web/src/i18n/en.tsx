@@ -535,6 +535,19 @@ export const en = {
         max: "Max",
       },
     },
+    /** Folders, files, and web pages agents read whenever they work on the item. */
+    sources: {
+      add: "Add a folder, file, or link for agents to read",
+      list: "What agents read",
+      title: "Sources",
+      description: "Agents read these whenever they work on this video.",
+      placeholder: "Paste a link or a folder path",
+      submit: "Add",
+      choose: "Choose a folder or file…",
+      /** The workspace folder itself, which has no name of its own to show. */
+      workspace: "This workspace",
+      remove: (name: string) => `Remove ${name}`,
+    },
     stop: "Stop the agent",
     send: "Send (Enter)",
   },

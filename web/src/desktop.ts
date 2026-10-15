@@ -8,6 +8,11 @@ export interface FactoryDesktop {
   openWorkspace: () => Promise<boolean>;
   /** Show a workspace file or folder in Finder / Explorer. `path` is absolute. */
   revealPath: (path: string) => Promise<void>;
+  /**
+   * Ask for a folder or file anywhere on this computer. Resolves its absolute path, or undefined if
+   * cancelled.
+   */
+  pickPath: () => Promise<string | undefined>;
   /** Tell the app which language the board shows, so its menus and dialogs match. */
   setLocale: (locale: Locale) => void;
   /** Undo and Redo chosen from the app menu or its shortcuts. Returns an unsubscribe. */
