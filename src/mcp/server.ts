@@ -14,14 +14,7 @@ import {
 } from "../core/errors.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
-import {
-  createItem,
-  getItem,
-  listItems,
-  openFeedback,
-  recordMetrics,
-  upsertSchedule,
-} from "../core/items.ts";
+import { createItem, getItem, listItems, openFeedback } from "../core/items.ts";
 import { getFormat, getProduct, listFormats, saveFormat } from "../core/library.ts";
 import { importProduct } from "../core/productImport.ts";
 import {
@@ -40,11 +33,9 @@ import {
   ItemDoc,
   ItemPatch,
   ItemStatus,
-  MetricsEntry,
   PreprocessResult,
   Product,
   ReferenceDoc,
-  ScheduleEntry,
   WorkspaceConfig,
 } from "../core/schema.ts";
 import {
@@ -290,7 +281,7 @@ const CreateItem = tool("create_item", {
 
 const UpdateItem = tool("update_item", {
   description:
-    "Patch item fields. Platform copy is merged per platform. `sources` replaces the item's list of folders, files, and web pages that agents read when they work on it.",
+    "Patch item fields. `sources` replaces the item's list of folders, files, and web pages that agents read when they work on it.",
   parameters: Schema.Struct({ id: Id, ...ItemPatch.fields }),
   success: Schema.Struct({
     id: Schema.String,
@@ -373,23 +364,6 @@ const ResolveFeedback = tool("resolve_feedback", {
     "the edited file is saved as the 'after' version the user compares and approves.",
   parameters: Schema.Struct({ item: Id, feedbackId: Schema.String, resolution: Schema.String }),
   success: Ok,
-});
-
-const SetSchedule = tool("set_schedule", {
-  description:
-    "Record a planned, scheduled, or published post for one platform (e.g. after scheduling through Postiz).",
-  parameters: Schema.Struct({ id: Id, ...ScheduleEntry.fields }),
-  success: Schema.Struct({ status: ItemStatus, schedule: Schema.Array(ScheduleEntry) }),
-  overwrites: true,
-  idempotent: true,
-});
-
-const RecordMetrics = tool("record_metrics", {
-  description: "Append a metrics snapshot for a published item.",
-  parameters: Schema.Struct({ id: Id, ...MetricsEntry.fields }),
-  success: Schema.Struct({
-    metrics: Schema.Finite.annotate(describe("snapshots recorded so far")),
-  }),
 });
 
 const ListReferences = tool("list_references", {
@@ -518,8 +492,6 @@ export const FactoryToolkit = Toolkit.make(
   ReviewMedia,
   ListOpenFeedback,
   ResolveFeedback,
-  SetSchedule,
-  RecordMetrics,
   ListReferences,
   AddReference,
   GetReference,
@@ -713,17 +685,6 @@ const handlers = FactoryToolkit.toLayer(
 
       resolve_feedback: ({ item, feedbackId, resolution }) =>
         run(Effect.as(resolveEdit(item, feedbackId, resolution), { ok: true } as const)),
-
-      set_schedule: ({ id, ...entry }) =>
-        run(
-          Effect.map(upsertSchedule(id, entry), (item) => ({
-            status: item.doc.status,
-            schedule: item.doc.schedule,
-          })),
-        ),
-
-      record_metrics: ({ id, ...entry }) =>
-        run(Effect.map(recordMetrics(id, entry), (item) => ({ metrics: item.doc.metrics.length }))),
 
       list_references: () =>
         run(

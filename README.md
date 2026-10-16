@@ -75,8 +75,6 @@
   [docs/templates.md](docs/templates.md).
 - **Your product in every run.** Import positioning and screenshots from an App Store, Google Play
   or landing page URL. Every agent run reads it, so hooks and CTAs stay on message.
-- **Calendar and metrics.** Plan each post per platform, then log views, likes and comments after it
-  goes out.
 - **Bring your own agent.** Claude Code and Codex connect through the built-in MCP server and run
   on your machine, with the model and reasoning effort you pick in the chat. Without one, "Copy
   prompt" hands the request to any agent you like.
@@ -104,16 +102,16 @@ The Mac app, Content Factory Solo, is built from this repository. Both have the 
 we don't lock any of them behind a license key. Paying gets you a signed build that updates itself,
 plus content we prepare for you.
 
-| Area                                                         | Solo (Mac app)                                    | Open source (this repository)                  |
-| ------------------------------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
-| **Cost**                                                     | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
-| **Setup**                                                    | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
-| **Updates**                                                  | Install themselves                                | Pull and rebuild                               |
-| **Board, editor, references, formats, calendar, MCP server** | Included                                          | Included                                       |
-| **Agents**                                                   | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
-| **Reference feed and format packs**                          | Included once they ship                           | Not included                                   |
-| **Data**                                                     | Plain folders on your Mac                         | Plain folders on your machine                  |
-| **If you stop paying**                                       | The app keeps working at the last version you had | Not applicable                                 |
+| Area                                               | Solo (Mac app)                                    | Open source (this repository)                  |
+| -------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| **Cost**                                           | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
+| **Setup**                                          | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
+| **Updates**                                        | Install themselves                                | Pull and rebuild                               |
+| **Board, editor, references, formats, MCP server** | Included                                          | Included                                       |
+| **Agents**                                         | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
+| **Reference feed and format packs**                | Included once they ship                           | Not included                                   |
+| **Data**                                           | Plain folders on your Mac                         | Plain folders on your machine                  |
+| **If you stop paying**                             | The app keeps working at the last version you had | Not applicable                                 |
 | **Source and changes**                                       | Built from this repository                        | Fork and modify under the AGPL-3.0             |
 
 ## Privacy
@@ -190,7 +188,7 @@ timeline show the requests still in play; click one to jump to it in the chat. I
 is stopped, the rest of the line holds until you press Continue or Cancel all.
 
 Every change to an item can be undone: edits, rollbacks, and changes to its title, status, hook,
-caption, or notes, which you can edit in place in the Details tab. The History tab lists the changes
+or notes, which you can edit in place in the Details tab. The History tab lists the changes
 to jump back to and every saved version of each file to preview or restore.
 
 Shortcuts: `Space` play or pause, `I`/`O` set the start or end, `L` loop the selection, `←`/`→` step
@@ -243,7 +241,7 @@ with those names. Nothing is sent until the form is submitted.
 ## Workspace layout
 
 ```
-factory.yaml            name, timezone, platforms, paths
+factory.yaml            name, paths, default agent
 product/product.yaml    positioning, audience, stores, CTA, brand, rules
 product/captures/       reviewed app screenshots and recordings
 product/store/          imported store icon, screenshots, and listing.md

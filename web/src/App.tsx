@@ -8,7 +8,6 @@ import { api } from "./api.ts";
 import { href, useHashRoute, useLive, useSidebarOpen } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
 import { Board } from "./views/Board.tsx";
-import { Calendar } from "./views/Calendar.tsx";
 import { ItemView } from "./views/ItemView.tsx";
 import { ProductView } from "./views/ProductView.tsx";
 import { References } from "./views/References.tsx";
@@ -59,8 +58,6 @@ function renderView(view: string, id: string | undefined) {
   if (view === "references") return <References selected={id} />;
 
   if (view === "templates") return <Templates selected={id} />;
-
-  if (view === "calendar") return <Calendar />;
 
   if (view === "product") return <ProductView />;
 

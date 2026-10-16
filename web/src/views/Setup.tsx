@@ -164,16 +164,6 @@ export function Setup() {
                 <dd>{ws.name}</dd>
                 <dt className="text-muted-foreground">{t.setup.folder}</dt>
                 <dd className="font-mono text-xs break-all">{ws.root}</dd>
-                <dt className="text-muted-foreground">{t.setup.timezone}</dt>
-                <dd>{ws.config.timezone}</dd>
-                <dt className="text-muted-foreground">{t.setup.platforms}</dt>
-                <dd className="flex flex-wrap gap-1">
-                  {ws.config.platforms.map((p) => (
-                    <Badge key={p} variant="secondary">
-                      {p}
-                    </Badge>
-                  ))}
-                </dd>
                 <dt className="text-muted-foreground">{t.setup.defaultAgent}</dt>
                 <dd>{t.setup.agents[ws.config.agent.default]}</dd>
               </dl>

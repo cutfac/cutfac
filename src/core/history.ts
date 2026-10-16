@@ -196,7 +196,6 @@ interface DetailSource {
   readonly title?: string | undefined;
   readonly status?: ItemStatus | undefined;
   readonly hook?: string | null | undefined;
-  readonly caption?: string | null | undefined;
   readonly notes?: string | null | undefined;
 }
 
@@ -210,8 +209,6 @@ function pickDetails(source: DetailSource, fields: ReadonlySet<DetailField>): De
   if (fields.has("status") && source.status !== undefined) values.status = source.status;
 
   if (fields.has("hook")) values.hook = source.hook ?? null;
-
-  if (fields.has("caption")) values.caption = source.caption ?? null;
 
   if (fields.has("notes")) values.notes = source.notes ?? null;
 
@@ -227,7 +224,6 @@ export function applyDetails(doc: ItemDoc, values: DetailValues): ItemDoc {
     title: values.title ?? doc.title,
     status: values.status ?? doc.status,
     hook: optionalField(values.hook, doc.hook),
-    caption: optionalField(values.caption, doc.caption),
     notes: optionalField(values.notes, doc.notes),
   };
 }

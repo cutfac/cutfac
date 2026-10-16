@@ -55,8 +55,6 @@ export const MCP_WRITE_TOOLS = [
   "update_item",
   "review_media",
   "resolve_feedback",
-  "set_schedule",
-  "record_metrics",
   "add_reference",
   "preprocess_reference",
   "save_reference_analysis",

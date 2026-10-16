@@ -1,6 +1,6 @@
 ---
 name: content-factory
-description: Work inside a Content Factory workspace — turn reference short-form videos into reusable formats, produce short-form items (9:16 video, carousels) that market the user's app, handle review feedback from the web board, verify uploads, and record scheduling and metrics. Use whenever the user mentions references, formats, items, the board, feedback, or short-form content for their app.
+description: Work inside a Content Factory workspace — turn reference short-form videos into reusable formats, produce short-form items (9:16 video, carousels) that market the user's app, handle review feedback from the web board, and verify uploads. Use whenever the user mentions references, formats, items, the board, feedback, or short-form content for their app.
 ---
 
 # Content Factory
@@ -87,9 +87,8 @@ into folders.
    those, render, and review again. Stop when nothing above fails or after three rounds, and tell
    the user what is left.
 
-9. Write copy with `update_item`: base `caption` plus per-platform `platforms.<p>` fields. Put the
-   product CTA where the product rules say (first comment or after the caption body). Product claims
-   must be accurate.
+9. Put the post copy, the caption and the CTA where the product rules say, in the item's `notes`
+   with `update_item`. Product claims must be accurate.
 10. Set status to `review`. The user reviews on the board, where the brief and shot list show next
     to the media.
 
@@ -148,14 +147,6 @@ frame, with the box drawn in red), and `before.*` (the media as it was). Open th
 change anything. Write the result over the same media file name and never touch `before.*`; the
 user compares the two and keeps or rolls back the edit. Change only the selected part unless the
 request says otherwise, and end with a plain summary for someone who does not use video editors.
-
-## Scheduling and metrics
-
-- Never schedule, publish, or delete posts unless the user explicitly asks. When they do, use their
-  scheduler (for example Postiz), then record the result with `set_schedule` (ISO time with offset,
-  status, external id).
-- Record metrics only from observed numbers or the user's report (`record_metrics`). Never invent
-  numbers. Compare items that share a format to suggest the next variant.
 
 ## Rights
 

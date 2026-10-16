@@ -14,7 +14,7 @@ import {
   openFeedback,
   resolveFeedback,
   updateItem,
-  upsertSchedule,
+  upgradeItemDoc,
 } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
@@ -28,6 +28,16 @@ describe("legacyStatus", () => {
     expect(legacyStatus("- status: draft", false)).toBe("drafting");
     expect(legacyStatus("# Notes", true)).toBe("review");
     expect(legacyStatus("", false)).toBe("idea");
+  });
+});
+
+describe("upgradeItemDoc", () => {
+  const doc = { title: "Clip", status: "review", sources: [], feedback: [], sessions: {} } as const;
+
+  test("starts the notes with a caption when there were none, and drops a blank one", () => {
+    expect(upgradeItemDoc({ ...doc, caption: " Win fast " }).notes).toBe("Caption: Win fast");
+    expect(upgradeItemDoc({ ...doc, caption: "  " })).toEqual(doc);
+    expect(upgradeItemDoc(doc)).toEqual(doc);
   });
 });
 
@@ -63,22 +73,16 @@ describe("items in a workspace", () => {
         const first = yield* createItem({ title: "Fried Liver Trap", format: "trap" });
         const second = yield* createItem({ title: "Fried Liver Trap", format: "trap" });
 
-        const reviewed = yield* updateItem(first.id, {
-          status: "review",
-          platforms: { tiktok: { caption: "one" } },
-        });
+        const reviewed = yield* updateItem(first.id, { status: "review", hook: "One move" });
+        const noted = yield* updateItem(first.id, { notes: "Film it on a wooden board" });
 
-        const tagged = yield* updateItem(first.id, {
-          platforms: { tiktok: { hashtags: ["#chess"] } },
-        });
-
-        return [first, second, reviewed, tagged] as const;
+        return [first, second, reviewed, noted] as const;
       }),
     );
 
     expect([a.id, b.id]).toEqual(["trap/fried-liver-trap", "trap/fried-liver-trap-2"]);
     expect(updated.doc.status).toBe("review");
-    expect(merged.doc.platforms.tiktok).toEqual({ caption: "one", hashtags: ["#chess"] });
+    expect([merged.doc.hook, merged.doc.notes]).toEqual(["One move", "Film it on a wooden board"]);
   });
 
   test("rejects a blank title and an id that climbs out of the items folder", async () => {
@@ -120,28 +124,26 @@ describe("items in a workspace", () => {
     expect(await t.fail(resolveFeedback(id, "nope", "done"))).toBeInstanceOf(NotFound);
   });
 
-  test("schedule entries drive status", async () => {
-    const at = "2026-10-12T19:00:00+09:00";
+  test("a caption from an earlier version moves into the notes and stays there", async () => {
+    const dir = join(t.root, "items/posts/opening");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, "item.yaml"),
+      "title: Opening\nstatus: review\nnotes: Keep it short\ncaption: Three moves to win\n",
+    );
 
-    const { scheduled, done } = await t.run(
+    const { read, written } = await t.run(
       Effect.gen(function* () {
-        const item = yield* createItem({ title: "Post" });
-        yield* upsertSchedule(item.id, { platform: "tiktok", at, status: "scheduled" });
-        const pending = yield* getItem(item.id);
+        const before = yield* getItem("posts/opening");
+        yield* updateItem(before.id, { hook: "Win fast" });
 
-        const published = yield* upsertSchedule(item.id, {
-          platform: "tiktok",
-          at,
-          status: "published",
-        });
-
-        return { scheduled: pending, done: published };
+        return { read: before, written: yield* getItem(before.id) };
       }),
     );
 
-    expect(scheduled.doc.status).toBe("scheduled");
-    expect(done.doc.status).toBe("published");
-    expect(done.doc.schedule).toHaveLength(1);
+    expect(read.doc.notes).toBe("Keep it short\n\nCaption: Three moves to win");
+    expect(written.doc.notes).toBe("Keep it short\n\nCaption: Three moves to win");
+    expect(await Bun.file(join(dir, "item.yaml")).text()).not.toContain("caption:");
   });
 
   test("discovers legacy folders and upgrades them on write", async () => {

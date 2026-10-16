@@ -1,4 +1,4 @@
-import { ArchiveIcon, CalendarIcon, ClapperboardIcon, MessageSquareIcon } from "lucide-react";
+import { ArchiveIcon, ClapperboardIcon, MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
 
 import { NewItemDialog } from "@/components/new-item-dialog";
@@ -25,7 +25,7 @@ import { Toggle } from "@/components/ui/toggle";
 
 import { api, fileUrl, STATUSES, type ItemSummary } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
-import { useLocale, useMessages } from "../i18n/index.ts";
+import { useMessages } from "../i18n/index.ts";
 
 export function Board() {
   const t = useMessages();
@@ -198,11 +198,6 @@ function ItemCard({
   formatTitle: (id: string) => string;
 }) {
   const t = useMessages();
-  const locale = useLocale();
-
-  const next = item.schedule
-    .filter((s) => s.status !== "cancelled")
-    .toSorted((a, b) => a.at.localeCompare(b.at))[0];
 
   return (
     <div className="relative rounded-3xl transition-shadow select-none hover:*:shadow-md has-focus-visible:*:shadow-md">
@@ -235,18 +230,6 @@ function ItemCard({
                   </Badge>
                 ) : null}
               </div>
-              {next ? (
-                <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <CalendarIcon className="size-3 shrink-0" />
-                  <span className="truncate">
-                    {new Date(next.at).toLocaleDateString(locale, {
-                      month: "short",
-                      day: "numeric",
-                    })}{" "}
-                    · {next.platform}
-                  </span>
-                </p>
-              ) : null}
             </div>
           </div>
         </CardContent>

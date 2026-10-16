@@ -270,7 +270,6 @@ const itemSummary = (item: Item) => ({
   status: item.doc.status,
   format: item.doc.format,
   hook: item.doc.hook,
-  schedule: item.doc.schedule,
   openFeedback: item.doc.feedback.filter((f) => f.status === "open").length,
   media: item.media,
   updatedAt: item.updatedAt,

@@ -2,7 +2,7 @@
 // Each command handler is an entry point: the workspace layer depends on the parsed --workspace.
 // @effect-diagnostics strictEffectProvide:off
 import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Cause, Console, DateTime, Effect, FileSystem, Layer, Option, Path } from "effect";
+import { Cause, Console, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
@@ -161,7 +161,6 @@ const init = Command.make(
 
     const created = yield* initWorkspace(root, {
       name: Option.getOrElse(name, () => path.basename(root)),
-      timezone: DateTime.zoneToString(DateTime.zoneMakeLocal()),
       paths: Option.match(items, { onNone: () => ({}), onSome: (folder) => ({ items: folder }) }),
     });
 

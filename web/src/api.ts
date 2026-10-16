@@ -86,13 +86,6 @@ export interface Media {
   mtime: number;
 }
 
-export interface Schedule {
-  platform: string;
-  at: string;
-  status: string;
-  url?: string;
-}
-
 export type AgentName = "claude" | "codex";
 
 export type AgentChoice = AgentName | "queue";
@@ -193,18 +186,6 @@ export interface EditReceipt {
   prompt: string;
 }
 
-export interface Metrics {
-  platform: string;
-  at: string;
-  views?: number;
-  likes?: number;
-  comments?: number;
-  shares?: number;
-  saves?: number;
-  follows?: number;
-  installs?: number;
-}
-
 export interface ItemSummary {
   id: string;
   dir: string;
@@ -213,17 +194,9 @@ export interface ItemSummary {
   status: Status;
   format?: string;
   hook?: string;
-  schedule: Schedule[];
   openFeedback: number;
   media: Media[];
   updatedAt: number;
-}
-
-export interface PlatformCopy {
-  title?: string;
-  caption?: string;
-  hashtags?: string[];
-  firstComment?: string;
 }
 
 /** A folder or file on this computer, or a web page, that agents should read for an item. */
@@ -237,13 +210,9 @@ export interface ItemDoc {
   /** What the user wants agents to read when they work on this item. */
   sources: ItemSource[];
   hook?: string;
-  caption?: string;
   notes?: string;
   /** What was picked for the format's inputs, by input id. */
   inputs?: Partial<Record<string, string>>;
-  platforms: Partial<Record<string, PlatformCopy>>;
-  schedule: Schedule[];
-  metrics: Metrics[];
   feedback: Feedback[];
   created?: string;
   updated?: string;
@@ -283,14 +252,13 @@ export interface MediaChange {
   feedbackId?: string;
 }
 
-export type DetailField = "title" | "status" | "hook" | "caption" | "notes";
+export type DetailField = "title" | "status" | "hook" | "notes";
 
 /** Item fields as a change left them; `null` is a field that was not set. */
 export interface DetailValues {
   title?: string;
   status?: Status;
   hook?: string | null;
-  caption?: string | null;
   notes?: string | null;
 }
 
@@ -354,7 +322,6 @@ export interface MediaReview {
 export interface ItemPatch {
   status?: Status;
   title?: string;
-  caption?: string;
   hook?: string;
   notes?: string;
   /** Replaces the item's whole list. */
@@ -487,8 +454,6 @@ export interface WorkspaceInfo {
   name: string;
   root: string;
   config: {
-    timezone: string;
-    platforms: string[];
     paths: { product: string; references: string; formats: string; items: string };
     agent: { default: AgentChoice };
   };

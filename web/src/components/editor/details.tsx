@@ -7,11 +7,10 @@ import { toast } from "sonner";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { safeHttpUrl } from "@/lib/utils";
 
 import { api, type ItemDetail, type ItemPatch } from "../../api.ts";
 import { href, useLive } from "../../hooks.ts";
-import { type Locale, useLocale, useMessages } from "../../i18n/index.ts";
+import { useMessages } from "../../i18n/index.ts";
 
 const showError = (cause: Error) => {
   toast.error(cause.message);
@@ -115,11 +114,8 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const count = (value: number | undefined, locale: Locale) => value?.toLocaleString(locale) ?? "–";
-
 /**
- * The item's plan and record. Title, hook, caption, and notes save when you leave the field, as
- * changes you can undo; captions per platform, schedule, and numbers come from the agents.
+ * The item's plan. Title, hook, and notes save when you leave the field, as changes you can undo.
  */
 export function Details({
   item,
@@ -129,10 +125,8 @@ export function Details({
   onItem: (item: ItemDetail) => void;
 }) {
   const { doc } = item;
-  const platforms = Object.entries(doc.platforms);
   const docs = Object.entries(item.docs);
   const t = useMessages();
-  const locale = useLocale();
   const { data: formats } = useLive("formats", api.formats);
   const format = formats?.find((f) => f.id === doc.format);
 
@@ -167,14 +161,6 @@ export function Details({
           onSave={(hook) => save({ hook })}
         />
         <TextField
-          id="item-caption"
-          label={t.item.caption}
-          value={doc.caption ?? ""}
-          placeholder={t.item.captionPlaceholder}
-          multiline
-          onSave={(caption) => save({ caption })}
-        />
-        <TextField
           id="item-notes"
           label={t.item.notes}
           value={doc.notes ?? ""}
@@ -205,86 +191,6 @@ export function Details({
             </Fact>
           )}
         </dl>
-      )}
-      {platforms.map(([platform, copy]) =>
-        copy === undefined ? null : (
-          <section key={platform} className="flex flex-col gap-1.5">
-            <h2 className="font-medium capitalize">{platform}</h2>
-            {copy.title === undefined ? null : <p className="font-medium">{copy.title}</p>}
-            {copy.caption === undefined ? null : (
-              <p className="whitespace-pre-wrap">{copy.caption}</p>
-            )}
-            {copy.hashtags === undefined || copy.hashtags.length === 0 ? null : (
-              <p className="text-muted-foreground">{copy.hashtags.join(" ")}</p>
-            )}
-            {copy.firstComment === undefined ? null : (
-              <p className="whitespace-pre-wrap text-muted-foreground">
-                {t.item.firstComment(copy.firstComment)}
-              </p>
-            )}
-          </section>
-        ),
-      )}
-      {doc.schedule.length === 0 ? null : (
-        <section className="flex flex-col gap-1.5">
-          <h2 className="font-medium">{t.item.schedule}</h2>
-          <ul className="flex flex-col gap-1">
-            {doc.schedule.map((slot) => {
-              const link = slot.url === undefined ? undefined : safeHttpUrl(slot.url);
-
-              return (
-                <li key={slot.platform} className="text-muted-foreground">
-                  <span className="text-foreground capitalize">{slot.platform}</span> ·{" "}
-                  {new Date(slot.at).toLocaleString(locale)} · {t.scheduleStatus(slot.status)}
-                  {link === undefined ? null : (
-                    <>
-                      {" · "}
-                      <a
-                        href={link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline underline-offset-4"
-                      >
-                        {t.item.open}
-                      </a>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-      {doc.metrics.length === 0 ? null : (
-        <section className="flex flex-col gap-1.5">
-          <h2 className="font-medium">{t.item.metrics}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs tabular-nums">
-              <thead className="text-left text-muted-foreground">
-                <tr>
-                  <th className="py-1 font-medium">{t.item.platform}</th>
-                  <th className="py-1 font-medium">{t.item.date}</th>
-                  <th className="py-1 text-right font-medium">{t.item.views}</th>
-                  <th className="py-1 text-right font-medium">{t.item.likes}</th>
-                  <th className="py-1 text-right font-medium">{t.item.shares}</th>
-                  <th className="py-1 text-right font-medium">{t.item.saves}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {doc.metrics.map((row) => (
-                  <tr key={`${row.platform}-${row.at}`} className="border-t">
-                    <td className="py-1 capitalize">{row.platform}</td>
-                    <td className="py-1">{new Date(row.at).toLocaleDateString(locale)}</td>
-                    <td className="py-1 text-right">{count(row.views, locale)}</td>
-                    <td className="py-1 text-right">{count(row.likes, locale)}</td>
-                    <td className="py-1 text-right">{count(row.shares, locale)}</td>
-                    <td className="py-1 text-right">{count(row.saves, locale)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
       )}
       {docs.map(([name, text]) =>
         text === undefined ? null : (

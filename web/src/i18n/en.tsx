@@ -7,14 +7,6 @@ import type { TemplateState } from "../lib/templates.ts";
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
 
-const SCHEDULE_STATUS = new Map([
-  ["planned", "Planned"],
-  ["scheduled", "Scheduled"],
-  ["published", "Published"],
-  ["failed", "Failed"],
-  ["cancelled", "Cancelled"],
-]);
-
 /**
  * Every piece of copy in the board. Other languages are typed as `Messages`, so a missing or
  * misnamed key fails the type check. Agent prompts stay in English and are not here.
@@ -38,7 +30,6 @@ export const en = {
     board: "Board",
     references: "References",
     templates: "Templates",
-    calendar: "Calendar",
     product: "Product",
     setup: "Setup",
     sendFeedback: "Send feedback",
@@ -61,8 +52,6 @@ export const en = {
     published: "Published",
     archived: "Archived",
   } satisfies Record<Status, string>,
-  /** Schedule entries are free-form in the workspace, so an unknown status shows as written. */
-  scheduleStatus: (status: string) => SCHEDULE_STATUS.get(status) ?? status,
   board: {
     title: "Board",
     loadError: "Could not load the board",
@@ -77,14 +66,6 @@ export const en = {
     openFeedback: (count: number) => `${count} open`,
     legacy: "legacy",
     legacyHint: "Folder without item.yaml; status derived from STATUS.md",
-  },
-  calendar: {
-    title: "Calendar",
-    loadError: "Could not load the calendar",
-    empty: "Nothing scheduled yet. When your agent schedules a post, it shows up here.",
-    previous: "Previous month",
-    next: "Next month",
-    today: "Today",
   },
   product: {
     title: "Product",
@@ -247,8 +228,6 @@ export const en = {
       "Everything the factory makes is a plain file in this folder. You can back it up or put it in git.",
     name: "Name",
     folder: "Folder",
-    timezone: "Timezone",
-    platforms: "Platforms",
     defaultAgent: "Default agent",
     showFolder: "Show folder",
     connected: (agent: string) => `${agent} is connected`,
@@ -324,22 +303,10 @@ export const en = {
     reference: "Reference",
     title: "Title",
     hook: "Hook",
-    caption: "Caption",
     notes: "Notes",
     hookPlaceholder: "The line that makes people stay",
-    captionPlaceholder: "What goes under the post",
     notesPlaceholder: "Anything worth remembering about this video",
     titleRequired: "The title cannot be empty.",
-    firstComment: (comment: string) => `First comment: ${comment}`,
-    schedule: "Schedule",
-    open: "Open",
-    metrics: "Metrics",
-    platform: "Platform",
-    date: "Date",
-    views: "Views",
-    likes: "Likes",
-    shares: "Shares",
-    saves: "Saves",
   },
   checks: {
     template: "Template",
@@ -395,7 +362,6 @@ export const en = {
       title: "title",
       status: "status",
       hook: "hook",
-      caption: "caption",
       notes: "notes",
     } satisfies Record<DetailField, string>,
   },

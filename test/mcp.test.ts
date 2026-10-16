@@ -36,7 +36,7 @@ const ToolResult = Schema.Struct({
 
 const Created = Schema.Struct({ id: Schema.String });
 
-const Scheduled = Schema.Struct({ status: Schema.String });
+const Updated = Schema.Struct({ status: Schema.String });
 
 const Overview = Schema.Struct({
   items: Schema.Record(Schema.String, Schema.Finite),
@@ -168,7 +168,8 @@ test("lists the workspace tools", async () => {
   const names = tools.map((tool) => tool.name);
 
   expect(names).toContain("create_item");
-  expect(names).toContain("set_schedule");
+  expect(names).toContain("update_item");
+  expect(names).not.toContain("set_schedule");
   expect(names).toContain("workspace_overview");
   expect(names).toContain("check_format");
   expect(names).toContain("get_skill");
@@ -203,7 +204,7 @@ test("keeps the workspace skill current and tells the agent about an edited copy
   await writeFile(copy, bundled);
 }, 20_000);
 
-test("agents can create an item and record a schedule", async () => {
+test("agents can create an item and hand it over for review", async () => {
   const created = await server.call(
     "create_item",
     { title: "First post", format: "demo" },
@@ -212,22 +213,17 @@ test("agents can create an item and record a schedule", async () => {
 
   expect(created.id).toBe("demo/first-post");
 
-  const scheduled = await server.call(
-    "set_schedule",
-    {
-      id: created.id,
-      platform: "tiktok",
-      at: "2026-10-13T19:00:00+09:00",
-      status: "scheduled",
-    },
-    Scheduled,
+  const updated = await server.call(
+    "update_item",
+    { id: created.id, status: "review", hook: "One move wins" },
+    Updated,
   );
 
-  expect(scheduled.status).toBe("scheduled");
+  expect(updated.status).toBe("review");
 
   const overview = await server.call("workspace_overview", {}, Overview);
 
-  expect(overview.items).toEqual({ scheduled: 1 });
+  expect(overview.items).toEqual({ review: 1 });
 }, 20_000);
 
 test("a tool error comes back as an error result, not a crash", async () => {

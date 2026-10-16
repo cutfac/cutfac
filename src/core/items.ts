@@ -1,4 +1,4 @@
-import { Crypto, Effect, Option, Path } from "effect";
+import { Crypto, Effect, Option, Path, Schema } from "effect";
 
 import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import { inputFieldsOf, resolveInputs } from "./formatSpec.ts";
@@ -10,11 +10,6 @@ import {
   ItemDoc,
   type ItemPatch,
   type ItemStatus,
-  type MetricsEntry,
-  PLATFORMS,
-  type Platform,
-  type PlatformCopy,
-  type ScheduleEntry,
 } from "./schema.ts";
 import { cleanSources } from "./sources.ts";
 import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.ts";
@@ -42,6 +37,20 @@ export interface Item {
 }
 
 const itemDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.items}/${id}`;
+
+/** item.yaml as earlier versions also wrote it, with a caption apart from the notes. */
+const StoredItemDoc = Schema.Struct({ ...ItemDoc.fields, caption: Schema.optional(Schema.String) });
+
+/** Moves what earlier versions kept in fields of their own to where it lives now. */
+export function upgradeItemDoc({ caption, ...doc }: typeof StoredItemDoc.Type): ItemDoc {
+  const kept = caption?.trim() ?? "";
+
+  if (kept === "") return doc;
+
+  const moved = `Caption: ${kept}`;
+
+  return { ...doc, notes: doc.notes === undefined ? moved : `${doc.notes}\n\n${moved}` };
+}
 
 /** An item id is a `/`-separated path under the items folder, such as `hooks/first-try`. */
 export const isItemId = (id: string) =>
@@ -122,7 +131,7 @@ export const getItem = Effect.fn("items.getItem")(function* (id: string) {
 
   const doc = legacy
     ? yield* deriveLegacyDoc(dir, id, docs, media)
-    : yield* ws.readYaml(`${dir}/${ITEM_FILE}`, ItemDoc);
+    : upgradeItemDoc(yield* ws.readYaml(`${dir}/${ITEM_FILE}`, StoredItemDoc));
 
   const item: Item = { id, dir, legacy, doc, media, docs, updatedAt };
 
@@ -141,9 +150,6 @@ export function emptyItemDoc(title: string, status: ItemStatus): ItemDoc {
     title,
     status,
     sources: [],
-    platforms: {},
-    schedule: [],
-    metrics: [],
     feedback: [],
     sessions: {},
   };
@@ -330,30 +336,12 @@ export function findFeedback(item: Item, feedbackId: string): Effect.Effect<Feed
     : Effect.succeed(entry);
 }
 
-function mergePlatforms(
-  current: ItemDoc["platforms"],
-  patch: NonNullable<ItemPatch["platforms"]>,
-): ItemDoc["platforms"] {
-  const merged = PLATFORMS.flatMap((platform): ReadonlyArray<readonly [Platform, PlatformCopy]> => {
-    const copy = patch[platform];
-
-    return copy === undefined ? [] : [[platform, { ...current[platform], ...copy }]];
-  });
-
-  return { ...current, ...Object.fromEntries(merged) };
-}
-
 export const updateItem = Effect.fn("items.updateItem")(function* (id: string, patch: ItemPatch) {
-  const { platforms, sources, ...fields } = patch;
+  const { sources, ...fields } = patch;
   const cleaned = sources === undefined ? undefined : yield* cleanSources(sources);
 
   return yield* mutateItem(id, (doc) =>
-    Effect.succeed({
-      ...doc,
-      ...fields,
-      sources: cleaned ?? doc.sources,
-      platforms: platforms === undefined ? doc.platforms : mergePlatforms(doc.platforms, platforms),
-    }),
+    Effect.succeed({ ...doc, ...fields, sources: cleaned ?? doc.sources }),
   );
 });
 
@@ -407,23 +395,6 @@ export const resolveFeedback = (id: string, feedbackId: string, resolution: stri
       })),
     ),
   );
-
-export const upsertSchedule = (id: string, entry: ScheduleEntry) =>
-  mutateItem(id, (doc) => {
-    const others = doc.schedule.filter((s) => s.platform !== entry.platform);
-
-    const status: ItemStatus =
-      entry.status === "published"
-        ? "published"
-        : entry.status === "scheduled" && doc.status !== "published"
-          ? "scheduled"
-          : doc.status;
-
-    return Effect.succeed({ ...doc, schedule: [...others, entry], status });
-  });
-
-export const recordMetrics = (id: string, entry: MetricsEntry) =>
-  mutateItem(id, (doc) => Effect.succeed({ ...doc, metrics: [...doc.metrics, entry] }));
 
 export interface OpenFeedback {
   readonly item: string;

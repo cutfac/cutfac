@@ -8,7 +8,7 @@ import type {
 } from "../api.ts";
 import type { Messages } from "../i18n/index.ts";
 
-const FIELDS: ReadonlyArray<DetailField> = ["title", "status", "hook", "caption", "notes"];
+const FIELDS: ReadonlyArray<DetailField> = ["title", "status", "hook", "notes"];
 
 /** Longest request quoted in a change's name; the rest is in the chat. */
 const QUOTE_LENGTH = 48;

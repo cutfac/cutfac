@@ -34,12 +34,6 @@ export const ItemStatus = Schema.Literals(ITEM_STATUSES);
 
 export type ItemStatus = typeof ItemStatus.Type;
 
-export const PLATFORMS = ["tiktok", "instagram", "youtube", "facebook", "threads", "x"] as const;
-
-export const Platform = Schema.Literals(PLATFORMS);
-
-export type Platform = typeof Platform.Type;
-
 export const ASPECTS = ["9x16", "4x5", "3x4", "1x1", "16x9"] as const;
 
 export const Aspect = Schema.Literals(ASPECTS);
@@ -99,8 +93,6 @@ export const DEFAULT_CLAUDE_TOOLS = [
 /** factory.yaml at the workspace root. Paths are workspace-relative. */
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
-  timezone: Schema.String.pipe(withDefault("UTC")),
-  platforms: Schema.Array(Platform).pipe(withDefault(["tiktok", "instagram", "youtube"])),
   paths: Schema.Struct({
     product: Schema.String.pipe(withDefault("product")),
     references: Schema.String.pipe(withDefault("references")),
@@ -111,12 +103,6 @@ export const WorkspaceConfig = Schema.Struct({
     default: AgentChoice.pipe(withDefault("claude")),
     claudeAllowedTools: Schema.Array(Schema.String).pipe(withDefault(DEFAULT_CLAUDE_TOOLS)),
   }).pipe(withDefault({})),
-  postiz: Schema.optional(
-    Schema.Struct({
-      url: Url,
-      apiKeyEnv: Schema.String.pipe(withDefault("POSTIZ_API_KEY")),
-    }),
-  ),
 });
 
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
@@ -144,48 +130,6 @@ export const Product = Schema.Struct({
 });
 
 export type Product = typeof Product.Type;
-
-export const PlatformCopy = Schema.Struct({
-  title: Schema.optional(Schema.String),
-  caption: Schema.optional(Schema.String),
-  hashtags: Schema.optional(Schema.Array(Schema.String)),
-  firstComment: Schema.optional(Schema.String),
-});
-
-export type PlatformCopy = typeof PlatformCopy.Type;
-
-export const SCHEDULE_STATUSES = [
-  "planned",
-  "scheduled",
-  "published",
-  "failed",
-  "cancelled",
-] as const;
-
-export const ScheduleEntry = Schema.Struct({
-  platform: Platform,
-  at: Schema.String.annotate(describe("ISO 8601 with offset")),
-  status: Schema.Literals(SCHEDULE_STATUSES).pipe(withDefault("planned")),
-  externalId: Schema.optional(Schema.String),
-  url: Schema.optional(Schema.String),
-});
-
-export type ScheduleEntry = typeof ScheduleEntry.Type;
-
-export const MetricsEntry = Schema.Struct({
-  platform: Platform,
-  at: Schema.String,
-  views: Schema.optional(Count),
-  likes: Schema.optional(Count),
-  comments: Schema.optional(Count),
-  shares: Schema.optional(Count),
-  saves: Schema.optional(Count),
-  follows: Schema.optional(Count),
-  installs: Schema.optional(Count),
-  note: Schema.optional(Schema.String),
-});
-
-export type MetricsEntry = typeof MetricsEntry.Type;
 
 /** A box drawn on one frame. Coordinates are fractions (0–1) of the frame size. */
 export const Region = Schema.Struct({
@@ -363,10 +307,6 @@ export const ItemDoc = Schema.Struct({
     .annotate(describe("what the user wants agents to read when they work on this item"))
     .pipe(withDefault([])),
   hook: Schema.optional(Schema.String),
-  caption: Schema.optional(Schema.String),
-  platforms: Schema.Record(Platform, Schema.optional(PlatformCopy)).pipe(withDefault({})),
-  schedule: Schema.Array(ScheduleEntry).pipe(withDefault([])),
-  metrics: Schema.Array(MetricsEntry).pipe(withDefault([])),
   feedback: Schema.Array(Feedback).pipe(withDefault([])),
   sessions: Schema.Record(AgentName, Schema.optional(Schema.String))
     .annotate(
@@ -385,7 +325,7 @@ export const ItemDoc = Schema.Struct({
 
 export type ItemDoc = typeof ItemDoc.Type;
 
-/** A partial update to item.yaml from the board or an agent. Platform copy merges per platform. */
+/** A partial update to item.yaml from the board or an agent. */
 export const ItemPatch = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
   status: Schema.optionalKey(ItemStatus),
@@ -395,9 +335,7 @@ export const ItemPatch = Schema.Struct({
     Schema.Array(ItemSource).annotate(describe("replaces the item's whole list")),
   ),
   hook: Schema.optionalKey(Schema.String),
-  caption: Schema.optionalKey(Schema.String),
   notes: Schema.optionalKey(Schema.String),
-  platforms: Schema.optionalKey(Schema.Record(Platform, Schema.optional(PlatformCopy))),
 });
 
 export type ItemPatch = typeof ItemPatch.Type;
@@ -444,7 +382,7 @@ export const MediaChange = Schema.Struct({
 
 export type MediaChange = typeof MediaChange.Type;
 
-export const DETAIL_FIELDS = ["title", "status", "hook", "caption", "notes"] as const;
+export const DETAIL_FIELDS = ["title", "status", "hook", "notes"] as const;
 
 export type DetailField = (typeof DETAIL_FIELDS)[number];
 
@@ -453,7 +391,6 @@ export const DetailValues = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
   status: Schema.optionalKey(ItemStatus),
   hook: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  caption: Schema.optionalKey(Schema.NullOr(Schema.String)),
   notes: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 

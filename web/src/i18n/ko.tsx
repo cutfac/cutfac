@@ -1,13 +1,5 @@
 import type { Messages } from "./en.tsx";
 
-const SCHEDULE_STATUS = new Map([
-  ["planned", "계획됨"],
-  ["scheduled", "예약됨"],
-  ["published", "게시됨"],
-  ["failed", "실패"],
-  ["cancelled", "취소됨"],
-]);
-
 /** Korean copy, in the polite 해요체 the rest of the product uses. */
 export const ko: Messages = {
   common: {
@@ -28,7 +20,6 @@ export const ko: Messages = {
     board: "보드",
     references: "레퍼런스",
     templates: "템플릿",
-    calendar: "캘린더",
     product: "제품",
     setup: "설정",
     sendFeedback: "피드백 보내기",
@@ -51,7 +42,6 @@ export const ko: Messages = {
     published: "게시됨",
     archived: "보관됨",
   },
-  scheduleStatus: (status) => SCHEDULE_STATUS.get(status) ?? status,
   board: {
     title: "보드",
     loadError: "보드를 불러오지 못했어요",
@@ -65,14 +55,6 @@ export const ko: Messages = {
     openFeedback: (count) => `${count}개 남음`,
     legacy: "이전 형식",
     legacyHint: "item.yaml이 없는 폴더예요. 상태는 STATUS.md에서 읽었어요",
-  },
-  calendar: {
-    title: "캘린더",
-    loadError: "캘린더를 불러오지 못했어요",
-    empty: "아직 예약된 게시물이 없어요. 에이전트가 게시물을 예약하면 여기에 보여요.",
-    previous: "이전 달",
-    next: "다음 달",
-    today: "오늘",
   },
   product: {
     title: "제품",
@@ -242,8 +224,6 @@ export const ko: Messages = {
       "팩토리가 만드는 모든 것은 이 폴더의 일반 파일이에요. 백업하거나 git에 올려도 돼요.",
     name: "이름",
     folder: "폴더",
-    timezone: "시간대",
-    platforms: "플랫폼",
     defaultAgent: "기본 에이전트",
     showFolder: "폴더 보기",
     connected: (agent) => `${agent}을(를) 연결했어요`,
@@ -319,22 +299,10 @@ export const ko: Messages = {
     reference: "레퍼런스",
     title: "제목",
     hook: "훅",
-    caption: "캡션",
     notes: "메모",
     hookPlaceholder: "끝까지 보게 만드는 첫 문장",
-    captionPlaceholder: "게시물 아래에 들어갈 글",
     notesPlaceholder: "이 영상에 대해 기억해 둘 것",
     titleRequired: "제목은 비워 둘 수 없어요.",
-    firstComment: (comment) => `첫 댓글: ${comment}`,
-    schedule: "게시 일정",
-    open: "열기",
-    metrics: "성과",
-    platform: "플랫폼",
-    date: "날짜",
-    views: "조회",
-    likes: "좋아요",
-    shares: "공유",
-    saves: "저장",
   },
   checks: {
     template: "템플릿",
@@ -389,7 +357,6 @@ export const ko: Messages = {
       title: "제목",
       status: "상태",
       hook: "훅",
-      caption: "캡션",
       notes: "메모",
     },
   },

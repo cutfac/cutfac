@@ -44,7 +44,7 @@ function Section({ title, children }: { title: ReactNode; children: ReactNode })
 
 /**
  * What stands between the item and a good upload: whether its template is ready and what renders are
- * held to, the frames the agent last judged each video by, and the platforms' upload rules.
+ * held to, and the frames the agent last judged each video by.
  */
 export function Checks({ item }: { item: ItemDetail }) {
   return (
