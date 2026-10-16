@@ -36,7 +36,8 @@ into folders.
   `drafting → review → done` (or `archived`). Its `sources` are
   folders, files, and web pages the user wants you to read whenever you work on it: read what helps
   before you write or change anything, and never change them. When the user points you at one to
-  build on, add it with `update_item` (`sources` replaces the whole list).
+  build on, add it with `update_item` (`sources` replaces the whole list). A folder of content
+  without `item.yaml` is not on the board; `create_item` with its `id` brings it in as is.
 
 ## Learn
 

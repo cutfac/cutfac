@@ -112,6 +112,31 @@ describe("items in a workspace", () => {
     expect([merged.doc.hook, merged.doc.notes]).toEqual(["One step", "Film it on a wooden table"]);
   });
 
+  test("an explicit id brings in a folder without item.yaml, unless it holds items", async () => {
+    const dir = join(t.root, "items/lessons/repotting");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "notes.md"), "# Repotting\n");
+    await writeFile(join(dir, "[1x1] 01-hook.jpg"), "");
+    await mkdir(join(t.root, "items/guides/watering"), { recursive: true });
+    await writeFile(join(t.root, "items/guides/watering/item.yaml"), "title: Watering\n");
+
+    const [adopted, group] = await t.run(
+      Effect.all([
+        createItem({ title: "Repotting", id: "lessons/repotting" }),
+        createItem({ title: "Guides", id: "guides" }),
+      ]),
+    );
+
+    expect([adopted.id, adopted.doc.title, adopted.docs]).toEqual([
+      "lessons/repotting",
+      "Repotting",
+      ["notes.md"],
+    ]);
+    expect(adopted.media.map((m) => m.name)).toEqual(["[1x1] 01-hook.jpg"]);
+    expect(await Bun.file(join(dir, "item.yaml")).exists()).toBe(true);
+    expect(group.id).toBe("guides-2");
+  });
+
   test("rejects a blank title and an id that climbs out of the items folder", async () => {
     expect(await t.fail(createItem({ title: "   " }))).toBeInstanceOf(InvalidRequest);
     expect(await t.fail(createItem({ title: "x", id: "../escape" }))).toBeInstanceOf(

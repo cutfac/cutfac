@@ -236,7 +236,7 @@ const GetItem = tool("get_item", {
 
 const CreateItem = tool("create_item", {
   description:
-    "Create a content item folder with item.yaml. Returns its id and absolute folder for writing media.",
+    "Create a content item folder with item.yaml, or bring in a folder that already holds content by passing its `id`. Returns its id and absolute folder for writing media.",
   parameters: Schema.Struct({
     title: Schema.String,
     format: Schema.optional(Schema.String),
@@ -250,7 +250,11 @@ const CreateItem = tool("create_item", {
       ),
     ),
     id: Schema.optional(
-      Schema.String.annotate(describe("explicit folder id; defaults to <format>/<slug>")),
+      Schema.String.annotate(
+        describe(
+          "explicit folder id; defaults to <format>/<slug>. An existing folder without item.yaml becomes the item as is",
+        ),
+      ),
     ),
   }),
   success: Created,

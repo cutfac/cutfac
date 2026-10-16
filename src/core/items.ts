@@ -236,7 +236,21 @@ const itemInputs = Effect.fnUntraced(function* (input: NewItemInput) {
   return yield* resolveInputs(input.format, yield* inputFieldsOf(input.format), given);
 });
 
-/** Make a folder and item.yaml for a new piece of content. Ids get a `-2`, `-3`… suffix if taken. */
+/** A folder that has no item.yaml and holds no items, which an explicit id can bring in as is. */
+const isAdoptable = Effect.fnUntraced(function* (ws: WorkspaceService, id: string) {
+  const dir = itemDir(ws, id);
+
+  if (!(yield* ws.exists(dir)) || (yield* ws.exists(`${dir}/${ITEM_FILE}`))) return false;
+
+  const ids = yield* listItemIds();
+
+  return !ids.some((other) => other.startsWith(`${id}/`));
+});
+
+/**
+ * Make a folder and item.yaml for a new piece of content. Ids get a `-2`, `-3`… suffix if taken,
+ * except that an explicit id naming a folder without item.yaml makes that folder the item.
+ */
 export const createItem = Effect.fn("items.createItem")(function* (input: NewItemInput) {
   const ws = yield* Workspace;
   const title = input.title.trim();
@@ -249,7 +263,9 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
   yield* checkItemId(base);
   let id = base;
 
-  for (let n = 2; yield* ws.exists(itemDir(ws, id)); n++) id = `${base}-${n}`;
+  if (input.id === undefined || !(yield* isAdoptable(ws, id))) {
+    for (let n = 2; yield* ws.exists(itemDir(ws, id)); n++) id = `${base}-${n}`;
+  }
 
   const inputs = yield* itemInputs(input);
   const now = yield* nowIso;
