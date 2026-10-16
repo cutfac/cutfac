@@ -278,6 +278,12 @@ const itemSummary = (item: Item) => ({
   updatedAt: item.updatedAt,
 });
 
+/** Everything learned, newest first, with about.md as agents read it. */
+const learnedList = Effect.all(
+  { learned: listLearned(), about: readAbout() },
+  { concurrency: "unbounded" },
+);
+
 const workspaceInfo = Effect.gen(function* () {
   const ws = yield* Workspace;
 
@@ -822,11 +828,7 @@ const apiRoutes = (options: ServerOptions) =>
         return yield* addReference({ kind: "url", url: body.url }, { title: nonEmpty(body.title) });
       }),
     ),
-    json(
-      "GET",
-      "/api/learned",
-      Effect.all({ learned: listLearned(), about: readAbout() }, { concurrency: "unbounded" }),
-    ),
+    json("GET", "/api/learned", learnedList),
     json(
       "POST",
       "/api/learn",
@@ -844,7 +846,7 @@ const apiRoutes = (options: ServerOptions) =>
         return yield* learn(learnInputOf(body.source));
       }),
     ),
-    json("POST", "/api/learned/forget", withId(forget)),
+    json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),
     json("GET", "/api/formats", listFormats()),
     json("GET", "/api/formats/status", formatStatuses()),
     json("GET", "/api/format", withId(getFormat)),

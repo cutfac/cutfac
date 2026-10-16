@@ -18,9 +18,8 @@ export const ko: Messages = {
     newVideo: "새 영상",
     main: "메인",
     board: "보드",
-    references: "레퍼런스",
+    learn: "학습",
     templates: "템플릿",
-    product: "제품",
     setup: "설정",
     sendFeedback: "피드백 보내기",
     videos: "영상",
@@ -52,34 +51,53 @@ export const ko: Messages = {
     openFeedback: (count) => `${count}개 남음`,
     legacy: "이전 형식",
     legacyHint: "item.yaml이 없는 폴더예요. 상태는 STATUS.md에서 읽었어요",
+    learnHint: {
+      title: "에이전트에게 제품을 알려 주세요",
+      body: "앱이나 사이트 링크를 붙여 넣거나 프로젝트 폴더를 가리키면, 다음 영상부터 제품에 더 잘 맞춰 만들어요.",
+      action: "학습하기",
+      dismiss: "나중에",
+    },
   },
-  product: {
-    title: "제품",
-    loadError: "제품 정보를 불러오지 못했어요",
-    about: "소개",
-    audience: "대상 고객",
-    cta: "기본 CTA",
-    rules: "규칙",
-    missingTitle: "아직 제품 정보가 없어요",
-    missingBody: (file) => (
-      <>
-        아래에서 링크로 가져오거나 {file}을 직접 채워 주세요. 에이전트는 실행할 때마다 이 파일을
-        읽어요.
-      </>
-    ),
-    importTitle: "링크로 가져오기",
-    importBody:
-      "빈 항목을 채우고 스토어 스크린샷을 새로 받아요. product.yaml에서 고친 내용은 그대로 둬요.",
-    store: "스토어 등록 정보",
-    captures: "앱 캡처",
-    capturesEmpty: (folder) => (
-      <>검토를 마친 스크린샷이나 화면 녹화를 {folder}에 넣어 주세요. 에이전트가 영상에 사용해요.</>
-    ),
+  learn: {
+    title: "학습",
+    description:
+      "제품, 시청자, 마음에 드는 영상을 에이전트에게 알려 주세요. 모두 about.md에 모이고, 에이전트는 영상을 만들기 전에 이 파일을 읽어요.",
+    loadError: "학습한 내용을 불러오지 못했어요",
+    input: "링크 또는 경로",
+    placeholder: "링크나 이 컴퓨터의 폴더 경로를 붙여 넣으세요",
+    submit: "학습",
+    drop: "또는 파일을 여기에 끌어 놓거나 클릭해서 고르세요",
+    choose: "폴더나 파일 고르기…",
+    reading: (source) => `${source} 읽는 중…`,
+    learned: (title) => `"${title}"을(를) 학습했어요`,
+    error: "학습하지 못했어요",
+    warnings: "학습했지만 확인할 점이 있어요",
+    emptyTitle: "아직 학습한 게 없어요",
+    emptyBody:
+      "앱의 스토어 페이지나 웹사이트로 시작해 보세요. 프로젝트 폴더나 마음에 드는 영상도 돼요.",
+    unread: "아직 안 읽음",
+    unreadHint: "에이전트가 이 내용이 필요한 작업 전에 읽어요.",
+    kinds: {
+      page: "웹 페이지",
+      app: "앱",
+      video: "영상",
+      folder: "폴더",
+      file: "파일",
+    },
+    uploaded: "업로드한 파일",
+    forget: "지우기",
+    forgetTitle: (title) => `"${title}"을(를) 지울까요?`,
+    forgetBody: "저장한 파일과 about.md의 해당 부분이 지워져요.",
+    forgotten: (title) => `"${title}"을(를) 지웠어요`,
+    forgetError: "지우지 못했어요",
+    aboutTitle: "에이전트가 아는 것",
+    aboutBody: "에이전트가 읽는 about.md 그대로예요. 에이전트가 채우고, 직접 고쳐도 돼요.",
+    showFile: "파일 보기",
   },
   templates: {
     title: "템플릿",
     description:
-      "에이전트가 영상을 만들 때 따르는 레시피예요. 어떤 링크에서든 가져오거나 레퍼런스에서 뽑아낼 수 있어요.",
+      "에이전트가 영상을 만들 때 따르는 레시피예요. 어떤 링크에서든 가져오거나, 학습한 영상에서 뽑아낼 수 있어요.",
     loadError: "템플릿을 불러오지 못했어요",
     add: "링크로 추가",
     addTitle: "링크로 템플릿 추가",
@@ -93,8 +111,8 @@ export const ko: Messages = {
     emptyTitle: "아직 템플릿이 없어요",
     emptyBody: (link) => (
       <>
-        링크로 추가하거나, {link("레퍼런스를 분석")}한 뒤 에이전트에게 템플릿으로 저장해 달라고
-        하세요.
+        링크로 추가하거나, 마음에 드는 {link("영상을 학습")}시킨 뒤 에이전트에게 템플릿으로 저장해
+        달라고 하세요.
       </>
     ),
     missingTitle: "템플릿을 찾을 수 없어요",
@@ -195,8 +213,7 @@ export const ko: Messages = {
   },
   setup: {
     title: "설정",
-    description: "두 단계만 마치면 에이전트가 앱 홍보 영상을 만들기 시작할 수 있어요.",
-    done: "(완료)",
+    description: "에이전트를 연결하면 바로 영상을 만들기 시작할 수 있어요.",
     agents: {
       claude: "Claude Code",
       codex: "Codex",
@@ -206,14 +223,11 @@ export const ko: Messages = {
     connectBody:
       "제작과 편집은 에이전트가 해요. 팩토리는 에이전트에게 도구와 파일, 그리고 여러분의 피드백을 전달해요.",
     agentsError: "설치된 에이전트를 확인하지 못했어요",
-    productTitle: "앱 소개하기",
-    productBody:
-      "App Store, Google Play 또는 웹사이트 링크를 붙여넣으세요. 웹사이트에 있는 스토어 링크도 따라가서 읽어요.",
-    review: "검토하기",
     readyTitle: "준비됐어요",
-    readyBody: (board) => (
+    readyBody: (board, learn) => (
       <>
-        에이전트에게 레퍼런스를 찾아 첫 영상을 만들어 달라고 하고, {board("보드")}에서 검토하세요.
+        {board("보드")}에서 첫 영상을 만들어 보세요. 원할 때 {learn("제품을 알려 주면")} 영상이
+        제품에 더 잘 맞아요.
       </>
     ),
     workspaceTitle: "워크스페이스",
@@ -232,51 +246,6 @@ export const ko: Messages = {
     connecting: "연결하는 중…",
     connect: "연결",
     notInstalled: "설치 안 됨",
-  },
-  importForm: {
-    imported: "앱 정보를 가져왔어요",
-    link: "앱 링크",
-    placeholder: "https://apps.apple.com/… 또는 https://yourapp.com",
-    reading: "읽는 중…",
-    submit: "가져오기",
-    error: "이 링크에서 가져오지 못했어요",
-    warnings: "가져왔지만 확인할 점이 있어요",
-  },
-  references: {
-    title: "레퍼런스",
-    description: (count) =>
-      count === undefined
-        ? "마음에 드는 숏폼 영상이에요. 에이전트가 이 영상들을 보고 무엇이 통하는지 배워요."
-        : `${count}개 저장됨. 에이전트가 이 영상들을 보고 무엇이 통하는지 배워요.`,
-    loadError: "레퍼런스를 불러오지 못했어요",
-    added: (title) => `"${title}"을(를) 추가했어요`,
-    notVideo: "영상 파일을 골라 주세요.",
-    processing: (file) => `${file} 처리하는 중…`,
-    downloading: "내려받아서 처리하는 중…",
-    link: "레퍼런스 링크",
-    linkPlaceholder: "TikTok, 릴스, 쇼츠 링크를 붙여넣으세요",
-    add: "추가",
-    drop: "또는 영상 파일을 여기에 놓거나 클릭해서 고르세요",
-    addError: "이 레퍼런스를 추가하지 못했어요",
-    emptyTitle: "아직 레퍼런스가 없어요",
-    emptyBody:
-      "내가 만들었으면 좋았겠다 싶은 영상을 추가하세요. 에이전트가 뜯어보고 왜 눈길을 붙잡는지 분석해요.",
-    missingTitle: "레퍼런스를 찾을 수 없어요",
-    missingBody: "삭제됐을 수 있어요. 목록에서 다른 레퍼런스를 고르세요.",
-    pickTitle: "레퍼런스를 고르세요",
-    pickBody: "목록에서 하나를 고르면 영상과 분석을 볼 수 있어요.",
-    analyzed: "분석됨",
-    notAnalyzed: "아직 분석 안 됨",
-    promptCopied: "프롬프트를 복사했어요. 에이전트에게 붙여넣으세요.",
-    copyReanalysis: "재분석 프롬프트 복사",
-    copyAnalysis: "분석 프롬프트 복사",
-    contactSheet: "영상에서 뽑은 프레임 모음",
-    withAudio: "소리 있음",
-    noAudio: "소리 없음",
-    cuts: (count) => `컷 ${count}개`,
-    frames: (count) => `프레임 ${count}개`,
-    notAnalyzedBody:
-      "분석 프롬프트를 복사해서 에이전트에게 주세요. 영상을 보고 어떻게 구성됐는지 정리해 줘요.",
   },
   item: {
     openError: "이 아이템을 열 수 없어요",

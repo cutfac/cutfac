@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { AgentChoice, DetailField, Status } from "../api.ts";
+import type { AgentChoice, DetailField, LearnedKind, Status } from "../api.ts";
 import type { ImportState } from "../lib/imports.ts";
 import type { TemplateState } from "../lib/templates.ts";
 
@@ -28,9 +28,8 @@ export const en = {
     newVideo: "New video",
     main: "Main",
     board: "Board",
-    references: "References",
+    learn: "Learn",
     templates: "Templates",
-    product: "Product",
     setup: "Setup",
     sendFeedback: "Send feedback",
     videos: "Videos",
@@ -63,31 +62,53 @@ export const en = {
     openFeedback: (count: number) => `${count} open`,
     legacy: "legacy",
     legacyHint: "Folder without item.yaml; status derived from STATUS.md",
+    learnHint: {
+      title: "Teach your agent about your product",
+      body: "Paste a link to your app or site, or point at a project folder. The next videos will fit it better.",
+      action: "Learn",
+      dismiss: "Not now",
+    },
   },
-  product: {
-    title: "Product",
-    loadError: "Could not load the product",
-    about: "About",
-    audience: "Audience",
-    cta: "Default CTA",
-    rules: "Rules",
-    missingTitle: "No product details yet",
-    missingBody: (file: ReactNode) => (
-      <>Import them from a link below, or fill in {file}. Every agent run reads it.</>
-    ),
-    importTitle: "Import from a link",
-    importBody:
-      "Fills empty fields and refreshes store screenshots. Your edits to product.yaml are kept.",
-    store: "Store listing",
-    captures: "App captures",
-    capturesEmpty: (folder: ReactNode) => (
-      <>Add reviewed screenshots or screen recordings to {folder}. Agents use them in the videos.</>
-    ),
+  learn: {
+    title: "Learn",
+    description:
+      "Teach your agent about your product, your audience, and videos you like. It all goes into about.md, which your agent reads before it makes a video.",
+    loadError: "Could not load what your agent has learned",
+    input: "Link or path",
+    placeholder: "Paste a link, or a folder path on this computer",
+    submit: "Learn",
+    drop: "Or drop a file here, or click to browse",
+    choose: "Choose a folder or file…",
+    reading: (source: string) => `Reading ${source}…`,
+    learned: (title: string) => `Learned "${title}"`,
+    error: "Could not learn that",
+    warnings: "Learned, with notes",
+    emptyTitle: "Nothing learned yet",
+    emptyBody:
+      "Start with your app's store page or website. A project folder or a video you like works too.",
+    unread: "Not read yet",
+    unreadHint: "Your agent reads it before work that depends on it.",
+    kinds: {
+      page: "Web page",
+      app: "App",
+      video: "Video",
+      folder: "Folder",
+      file: "File",
+    } satisfies Record<LearnedKind, string>,
+    uploaded: "Uploaded file",
+    forget: "Forget",
+    forgetTitle: (title: string) => `Forget "${title}"?`,
+    forgetBody: "Its saved files and its section of about.md are removed.",
+    forgotten: (title: string) => `Forgot "${title}"`,
+    forgetError: "Could not forget it",
+    aboutTitle: "What your agent knows",
+    aboutBody: "about.md, as your agent reads it. Your agent fills it in, and you can edit it too.",
+    showFile: "Show file",
   },
   templates: {
     title: "Templates",
     description:
-      "The recipes your agent makes videos from. Bring one in from any link, or distill one from references.",
+      "The recipes your agent makes videos from. Bring one in from any link, or have your agent distill one from a video it learned.",
     loadError: "Could not load the templates",
     add: "Add from link",
     addTitle: "Add a template from a link",
@@ -100,7 +121,10 @@ export const en = {
     copyFix: "Copy fix prompt",
     emptyTitle: "No templates yet",
     emptyBody: (link: Link) => (
-      <>Add one from a link, or {link("analyze a reference")} and ask your agent to save one.</>
+      <>
+        Add one from a link, or {link("learn a video you like")} and ask your agent to save a
+        template from it.
+      </>
     ),
     missingTitle: "Template not found",
     missingBody: "It may have been renamed or removed.",
@@ -198,8 +222,7 @@ export const en = {
   },
   setup: {
     title: "Set up",
-    description: "Two quick steps, then your agent can start making videos for your app.",
-    done: "(done)",
+    description: "Connect your agent and it can start making videos.",
     agents: {
       claude: "Claude Code",
       codex: "Codex",
@@ -209,15 +232,11 @@ export const en = {
     connectBody:
       "Your agent does the production and editing. The factory gives it tools, files, and your feedback.",
     agentsError: "Could not check for installed agents",
-    productTitle: "Tell it about your app",
-    productBody:
-      "Paste an App Store, Google Play, or website link. Store links on your site are followed.",
-    review: "Review",
     readyTitle: "You're set",
-    readyBody: (board: Link) => (
+    readyBody: (board: Link, learn: Link) => (
       <>
-        Ask your agent to find a reference and make the first video, then review it on the{" "}
-        {board("board")}.
+        Make your first video on the {board("board")}. Whenever you like,{" "}
+        {learn("teach it about your product")} so the videos fit it.
       </>
     ),
     workspaceTitle: "Your workspace",
@@ -236,51 +255,6 @@ export const en = {
     connecting: "Connecting…",
     connect: "Connect",
     notInstalled: "Not installed",
-  },
-  importForm: {
-    imported: "Imported your app's details",
-    link: "App link",
-    placeholder: "https://apps.apple.com/… or https://yourapp.com",
-    reading: "Reading…",
-    submit: "Import",
-    error: "Could not import that link",
-    warnings: "Imported, with notes",
-  },
-  references: {
-    title: "References",
-    description: (count: number | undefined) =>
-      count === undefined
-        ? "Short videos you like. Your agent studies these to learn what works."
-        : `${count} saved. Your agent studies these to learn what works.`,
-    loadError: "Could not load references",
-    added: (title: string) => `Added "${title}"`,
-    notVideo: "Choose a video file.",
-    processing: (file: string) => `Processing ${file}…`,
-    downloading: "Downloading and processing…",
-    link: "Reference link",
-    linkPlaceholder: "Paste a TikTok, Reels, or Shorts link",
-    add: "Add",
-    drop: "Or drop a video file here, or click to browse",
-    addError: "Could not add that reference",
-    emptyTitle: "No references yet",
-    emptyBody:
-      "Add a video you wish you had made. Your agent will take it apart and work out why it holds attention.",
-    missingTitle: "Reference not found",
-    missingBody: "It may have been removed. Choose another one from the list.",
-    pickTitle: "Pick a reference",
-    pickBody: "Choose one from the list to watch it and read the analysis.",
-    analyzed: "Analyzed",
-    notAnalyzed: "Not analyzed yet",
-    promptCopied: "Prompt copied. Paste it to your agent.",
-    copyReanalysis: "Copy re-analysis prompt",
-    copyAnalysis: "Copy analysis prompt",
-    contactSheet: "Contact sheet of frames from the video",
-    withAudio: "With audio",
-    noAudio: "No audio",
-    cuts: (count: number) => (count === 1 ? "1 cut" : `${count} cuts`),
-    frames: (count: number) => (count === 1 ? "1 frame" : `${count} frames`),
-    notAnalyzedBody:
-      "Copy the analysis prompt and give it to your agent. It will watch the video and write up how it works.",
   },
   item: {
     openError: "Cannot open this item",

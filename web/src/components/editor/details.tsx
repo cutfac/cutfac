@@ -184,11 +184,7 @@ export function Details({
             </Fact>
           ))}
           {doc.reference === undefined ? null : (
-            <Fact label={t.item.reference}>
-              <a href={href("references", doc.reference)} className="underline underline-offset-4">
-                {doc.reference}
-              </a>
-            </Fact>
+            <Fact label={t.item.reference}>{doc.reference}</Fact>
           )}
         </dl>
       )}

@@ -1,9 +1,11 @@
-import { ArchiveIcon, ClapperboardIcon, MessageSquareIcon } from "lucide-react";
+import { ArchiveIcon, BookOpenIcon, ClapperboardIcon, MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
 
 import { NewItemDialog } from "@/components/new-item-dialog";
 import { ErrorAlert } from "@/components/page";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Empty,
@@ -26,6 +28,61 @@ import { Toggle } from "@/components/ui/toggle";
 import { api, fileUrl, STATUSES, type ItemSummary } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+
+const LEARN_HINT_KEY = "factory.learnHint.dismissed";
+
+function readHintDismissed(): boolean {
+  try {
+    return localStorage.getItem(LEARN_HINT_KEY) === "true";
+  } catch {
+    // Storage can be blocked; offer the hint, it is easy to wave away.
+    return false;
+  }
+}
+
+function writeHintDismissed() {
+  try {
+    localStorage.setItem(LEARN_HINT_KEY, "true");
+  } catch {
+    // The hint may come back after a reload.
+  }
+}
+
+/** Once there is a video, suggest teaching the agent about the product, until learned or waved away. */
+function LearnHint() {
+  const t = useMessages();
+  const [dismissed, setDismissed] = useState(readHintDismissed);
+  const { data } = useLive("learned", api.learned);
+
+  if (dismissed || data === undefined || data.learned.length > 0) return null;
+
+  const dismiss = () => {
+    writeHintDismissed();
+    setDismissed(true);
+  };
+
+  return (
+    <Alert>
+      <BookOpenIcon />
+      <AlertTitle>{t.board.learnHint.title}</AlertTitle>
+      <AlertDescription>{t.board.learnHint.body}</AlertDescription>
+      <AlertAction>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={dismiss}>
+            {t.board.learnHint.dismiss}
+          </Button>
+          <a
+            href={href("learn")}
+            onClick={dismiss}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            {t.board.learnHint.action}
+          </a>
+        </div>
+      </AlertAction>
+    </Alert>
+  );
+}
 
 export function Board() {
   const t = useMessages();
@@ -86,6 +143,7 @@ export function Board() {
           </div>
         ) : null}
       </div>
+      {items?.length ? <LearnHint /> : null}
       {items === undefined ? (
         <BoardSkeleton />
       ) : items.length === 0 ? (

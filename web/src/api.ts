@@ -347,27 +347,40 @@ export interface Probe {
   hasAudio: boolean;
 }
 
-export interface Reference {
+export type LearnedKind = "page" | "app" | "video" | "folder" | "file";
+
+/** Something the user taught the workspace about, with what a first look found. */
+export interface Learned {
   id: string;
+  /** Workspace-relative folder; the doc's files are relative to it. */
   dir: string;
   doc: {
+    kind: LearnedKind;
     title: string;
-    source?: string;
+    description: string;
+    /** None for an uploaded file. */
+    source?: ItemSource;
+    site?: string;
+    icon?: string;
+    images: string[];
     video?: string;
-    addedAt: string;
-    tags: string[];
     probe?: Probe;
-    preprocessed: boolean;
+    links: string[];
+    addedAt: string;
   };
-  analysis?: string;
-  preprocess?: {
-    cuts: number[];
-    frames: { file: string; t: number }[];
-    contactSheet?: string;
-    audio?: string;
-    transcript?: string;
-    notes: string[];
-  };
+  /** Whether no agent has read it into about.md yet. */
+  unread: boolean;
+}
+
+export interface LearnedList {
+  learned: Learned[];
+  /** about.md, once anything is learned or written there. */
+  about?: { path: string; text: string };
+}
+
+export interface LearnResult {
+  learned: Learned;
+  warnings: string[];
 }
 
 export interface InputChoice {
@@ -432,28 +445,11 @@ export interface FormatStatus {
   };
 }
 
-export interface ProductDoc {
-  name: string;
-  oneLiner: string;
-  audience: string;
-  stores: { appStore?: string; googlePlay?: string; web?: string };
-  cta: { default: string; firstComment?: string };
-  brand: { colors: Partial<Record<string, string>>; fonts: string[]; voice: string };
-  rules: string[];
-}
-
 export interface WorkspaceInfo {
   name: string;
   root: string;
   config: {
-    paths: { product: string; references: string; formats: string; items: string };
     agent: { default: AgentChoice };
-  };
-  product: {
-    doc?: ProductDoc;
-    captures: Media[];
-    store: Media[];
-    notes?: string;
   };
   formats: Format[];
   openFeedback: number;
@@ -487,11 +483,6 @@ export interface OpenFeedback {
   item: string;
   title: string;
   feedback: Feedback;
-}
-
-export interface ImportResult {
-  warnings: string[];
-  files: string[];
 }
 
 /** The user's side of a template import: the link, a reply, or Allow with an optional note. */
@@ -615,19 +606,19 @@ export const api = {
   agents: () => request<AgentStatus[]>("/api/agents"),
   connectAgent: (agent: AgentName) =>
     send<AgentConnection, { agent: AgentName }>("POST", "/api/agents/connect", { agent }),
-  importProduct: (url: string) =>
-    send<ImportResult, { url: string }>("POST", "/api/product/import", { url }),
   feedback: () => request<OpenFeedback[]>("/api/feedback"),
-  references: () => request<Reference[]>("/api/references"),
-  reference: (id: string) => request<Reference>(`/api/reference${q(id)}`),
-  addReferenceUrl: (url: string) =>
-    send<Reference, { url: string }>("POST", "/api/references", { url }),
-  addReferenceFile: (file: File) => {
+  learned: () => request<LearnedList>("/api/learned"),
+  /** Learn a link, or a folder or file on this computer. */
+  learn: (source: string) =>
+    send<LearnResult, { source: string }>("POST", "/api/learn", { source }),
+  learnFile: (file: File) => {
     const form = new FormData();
     form.set("file", file);
 
-    return request<Reference>("/api/references", { method: "POST", body: form });
+    return request<LearnResult>("/api/learn", { method: "POST", body: form });
   },
+  /** Remove an entry and its section of about.md; answers with what is left. */
+  forgetLearned: (id: string) => send<LearnedList, {}>("POST", `/api/learned/forget${q(id)}`, {}),
   formats: () => request<Format[]>("/api/formats"),
   formatStatuses: () => request<FormatStatus[]>("/api/formats/status"),
   imports: () => request<ImportDetail[]>("/api/imports"),

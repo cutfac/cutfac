@@ -5,12 +5,11 @@ import { ErrorAlert } from "@/components/page";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 import { api } from "./api.ts";
-import { href, useHashRoute, useLive, useSidebarOpen } from "./hooks.ts";
+import { href, useAgentStatuses, useHashRoute, useLive, useSidebarOpen } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
 import { Board } from "./views/Board.tsx";
 import { ItemView } from "./views/ItemView.tsx";
-import { ProductView } from "./views/ProductView.tsx";
-import { References } from "./views/References.tsx";
+import { Learn } from "./views/Learn.tsx";
 import { Setup } from "./views/Setup.tsx";
 import { Templates } from "./views/Templates.tsx";
 
@@ -18,11 +17,12 @@ export function App() {
   const t = useMessages();
   const [view, id] = useHashRoute();
   const { data: ws, error } = useLive("workspace", api.workspace);
-  const needsSetup = ws !== undefined && (!ws.product.doc || ws.product.doc.name === "My App");
+  const agents = useAgentStatuses();
+  const needsSetup = agents !== undefined && !agents.some((agent) => agent.connected);
   const editing = view === "item" && id ? id : undefined;
   const [sidebarOpen, setSidebarOpen] = useSidebarOpen(editing !== undefined);
 
-  // Send a fresh workspace to onboarding once; after that the user may roam freely.
+  // Without a connected agent, send the user to connect one once; after that they may roam freely.
   useEffect(() => {
     if (needsSetup && !location.hash) location.hash = href("setup");
   }, [needsSetup]);
@@ -55,11 +55,9 @@ export function App() {
 }
 
 function renderView(view: string, id: string | undefined) {
-  if (view === "references") return <References selected={id} />;
+  if (view === "learn") return <Learn />;
 
   if (view === "templates") return <Templates selected={id} />;
-
-  if (view === "product") return <ProductView />;
 
   if (view === "setup") return <Setup />;
 

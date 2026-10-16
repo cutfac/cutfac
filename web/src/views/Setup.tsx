@@ -1,14 +1,12 @@
-import { cva } from "class-variance-authority";
-import { CheckCircle2Icon, CheckIcon, FolderOpenIcon, TriangleAlertIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { CheckCircle2Icon, CheckIcon, FolderOpenIcon } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert, Page } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Item,
   ItemActions,
@@ -25,126 +23,55 @@ import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 
-const markerVariants = cva(
-  "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
-  {
-    variants: {
-      state: {
-        done: "bg-primary text-primary-foreground",
-        current: "border-2 border-primary text-foreground",
-        todo: "border text-muted-foreground",
-      },
-    },
-    defaultVariants: { state: "todo" },
-  },
-);
-
-type StepState = "done" | "current" | "todo";
-
-function Step({
-  n,
-  state,
-  title,
-  description,
-  children,
-}: {
-  n: number;
-  state: StepState;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  const t = useMessages();
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <span className="flex items-center gap-3">
-            <span className={markerVariants({ state })} aria-hidden="true">
-              {state === "done" ? <CheckIcon className="size-3.5" /> : n}
-            </span>
-            {title}
-            {state === "done" ? <span className="sr-only">{t.setup.done}</span> : null}
-          </span>
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-4">{children}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** First-run onboarding: connect an agent, then point the factory at the app. */
+/** First-run onboarding: connect an agent. Learning about the product waits until the user wants it. */
 export function Setup() {
   const t = useMessages();
   const { data: agents, error: agentsError, reload } = useLive("agents", api.agents);
   const { data: ws } = useLive("workspace", api.workspace);
   const connected = agents?.some((a) => a.connected) ?? false;
-  const product = ws?.product.doc;
-  const hasProduct = Boolean(product && product.name !== "My App");
 
   return (
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
-      <Step
-        n={1}
-        state={connected ? "done" : "current"}
-        title={t.setup.connectTitle}
-        description={t.setup.connectBody}
-      >
-        {agentsError ? (
-          <ErrorAlert title={t.setup.agentsError} message={agentsError} />
-        ) : agents === undefined ? (
-          <div className="flex flex-col gap-2" aria-busy="true">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : (
-          <ItemGroup>
-            {agents.map((a) => (
-              <AgentRow key={a.agent} status={a} onChange={reload} />
-            ))}
-          </ItemGroup>
-        )}
-      </Step>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.setup.connectTitle}</CardTitle>
+          <CardDescription>{t.setup.connectBody}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {agentsError ? (
+            <ErrorAlert title={t.setup.agentsError} message={agentsError} />
+          ) : agents === undefined ? (
+            <div className="flex flex-col gap-2" aria-busy="true">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : (
+            <ItemGroup>
+              {agents.map((a) => (
+                <AgentRow key={a.agent} status={a} onChange={reload} />
+              ))}
+            </ItemGroup>
+          )}
+        </CardContent>
+      </Card>
 
-      <Step
-        n={2}
-        state={hasProduct ? "done" : connected ? "current" : "todo"}
-        title={t.setup.productTitle}
-        description={t.setup.productBody}
-      >
-        <ImportForm />
-        {hasProduct && product ? (
-          <Item variant="muted">
-            <ItemContent>
-              <ItemTitle>{product.name}</ItemTitle>
-              {product.oneLiner ? <ItemDescription>{product.oneLiner}</ItemDescription> : null}
-            </ItemContent>
-            <ItemActions>
-              <a
-                href={href("product")}
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                {t.setup.review}
-              </a>
-            </ItemActions>
-          </Item>
-        ) : null}
-      </Step>
-
-      {connected && hasProduct ? (
+      {connected ? (
         <Alert>
           <CheckCircle2Icon />
           <AlertTitle>{t.setup.readyTitle}</AlertTitle>
           <AlertDescription>
-            {t.setup.readyBody((text) => (
-              <a href={href("board")} className="underline underline-offset-4">
-                {text}
-              </a>
-            ))}
+            {t.setup.readyBody(
+              (text) => (
+                <a href={href("board")} className="underline underline-offset-4">
+                  {text}
+                </a>
+              ),
+              (text) => (
+                <a href={href("learn")} className="underline underline-offset-4">
+                  {text}
+                </a>
+              ),
+            )}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -249,70 +176,5 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
         )}
       </ItemActions>
     </Item>
-  );
-}
-
-export function ImportForm() {
-  const t = useMessages();
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [error, setError] = useState<string>();
-
-  const submit = () => {
-    const link = url.trim();
-
-    if (!link) return;
-    setBusy(true);
-    setError(undefined);
-    setWarnings([]);
-    api
-      .importProduct(link)
-      .then((result) => {
-        setWarnings(result.warnings);
-        setUrl("");
-        toast.success(t.importForm.imported);
-      })
-      .catch((cause: Error) => setError(cause.message))
-      .finally(() => setBusy(false));
-  };
-
-  return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-    >
-      <div className="flex gap-2">
-        <Input
-          type="url"
-          value={url}
-          disabled={busy}
-          aria-label={t.importForm.link}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder={t.importForm.placeholder}
-        />
-        <Button type="submit" disabled={busy || !url.trim()}>
-          {busy ? <Spinner data-icon="inline-start" /> : null}
-          {busy ? t.importForm.reading : t.importForm.submit}
-        </Button>
-      </div>
-      {error ? <ErrorAlert title={t.importForm.error} message={error} /> : null}
-      {warnings.length > 0 ? (
-        <Alert>
-          <TriangleAlertIcon />
-          <AlertTitle>{t.importForm.warnings}</AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc pl-4">
-              {warnings.map((w) => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-    </form>
   );
 }

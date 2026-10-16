@@ -1,14 +1,13 @@
 import {
   ArrowRightIcon,
+  BookOpenIcon,
   ChevronsUpDownIcon,
   ClapperboardIcon,
   FactoryIcon,
   FolderOpenIcon,
   LanguagesIcon,
   LayoutTemplateIcon,
-  LibraryIcon,
   MessageSquareIcon,
-  PackageIcon,
   PlugZapIcon,
   PlusIcon,
   type LucideIcon,
@@ -55,15 +54,14 @@ import {
 import { feedbackUrl } from "../lib/feedback.ts";
 
 interface MainNavItem {
-  view: "board" | "references" | "templates" | "product";
+  view: "board" | "learn" | "templates";
   icon: LucideIcon;
 }
 
 const MAIN_NAV: ReadonlyArray<MainNavItem> = [
   { view: "board", icon: ClapperboardIcon },
-  { view: "references", icon: LibraryIcon },
+  { view: "learn", icon: BookOpenIcon },
   { view: "templates", icon: LayoutTemplateIcon },
-  { view: "product", icon: PackageIcon },
 ];
 
 /** How many videos the sidebar lists before pointing at the board. */
@@ -237,7 +235,7 @@ function LanguageMenu() {
 interface AppSidebarProps {
   ws: WorkspaceInfo | undefined;
   view: string;
-  /** The open item or reference, from the second part of the route. */
+  /** The open item or template, from the second part of the route. */
   id: string | undefined;
 }
 

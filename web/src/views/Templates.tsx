@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { ImportChat } from "@/components/import-chat";
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge, badgeVariants } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -308,7 +308,7 @@ export function Templates({ selected }: { selected: string | undefined }) {
               <EmptyTitle>{t.templates.emptyTitle}</EmptyTitle>
               <EmptyDescription>
                 {t.templates.emptyBody((text) => (
-                  <a href={href("references")}>{text}</a>
+                  <a href={href("learn")}>{text}</a>
                 ))}
               </EmptyDescription>
             </EmptyHeader>
@@ -525,9 +525,9 @@ function FormatBody({ format, status }: { format: Format; status: FormatStatus }
         )}
         {doc.requireAudio ? <Badge variant="secondary">{t.templates.needsAudio}</Badge> : null}
         {doc.references.map((r) => (
-          <a key={r} href={href("references", r)} className={badgeVariants({ variant: "outline" })}>
+          <Badge key={r} variant="outline">
             {r}
-          </a>
+          </Badge>
         ))}
       </div>
 
