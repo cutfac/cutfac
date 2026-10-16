@@ -25,28 +25,28 @@ import {
 import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
 
 const LANDING = `<html><head>
-<title>Pawnly | Learn chess openings</title>
-<meta content="Pawnly — Learn openings one move at a time" property="og:title"/>
-<meta name="description" content="Drill chess openings in five minutes a day &amp; remember them.">
+<title>Fernly | Plant care reminders</title>
+<meta content="Fernly — Plant care one reminder at a time" property="og:title"/>
+<meta name="description" content="Care for your plants in two minutes a day &amp; never miss a watering.">
 <link rel="icon" href="/favicon.png">
 <meta property="og:image" content="/og.png">
-</head><body><a href="https://apps.apple.com/us/app/pawnly/id123456">App Store</a></body></html>`;
+</head><body><a href="https://apps.apple.com/us/app/fernly/id123456">App Store</a></body></html>`;
 
 const LOOKUP = {
   results: [
     {
-      trackName: "Pawnly: Chess Openings",
-      trackViewUrl: "https://apps.apple.com/us/app/pawnly/id123456?uo=4",
-      description: "Learn openings by playing them. Spaced repetition keeps lines fresh.",
-      sellerName: "Pawnly Labs",
+      trackName: "Fernly: Plant Care",
+      trackViewUrl: "https://apps.apple.com/us/app/fernly/id123456?uo=4",
+      description: "Learn what each plant needs. Reminders keep watering on time.",
+      sellerName: "Fernly Labs",
       artworkUrl512: "https://is1.mzstatic.com/icon/512x512bb.jpg",
       screenshotUrls: ["https://is1.mzstatic.com/a/shot1.jpg/392x696bb.jpg"],
     },
   ],
 };
 
-const SHORT = `<title>Kings Gambit in 30s - YouTube</title>
-<meta property="og:title" content="Kings Gambit in 30s">
+const SHORT = `<title>Repotting in 30s - YouTube</title>
+<meta property="og:title" content="Repotting in 30s">
 <meta property="og:image" content="https://i.ytimg.com/vi/abc/hq.jpg">`;
 
 const PICTURE = () =>
@@ -56,7 +56,7 @@ const PICTURE = () =>
 function respond(url: string): Response {
   if (url.startsWith("https://itunes.apple.com/lookup")) return Response.json(LOOKUP);
 
-  if (url === "https://pawnly.app/") return new Response(LANDING);
+  if (url === "https://fernly.app/") return new Response(LANDING);
 
   if (url === "https://www.youtube.com/shorts/abc") return new Response(SHORT);
 
@@ -86,10 +86,10 @@ const fakeHttp = (requested: string[], answer: (url: string) => Response = respo
 
 describe("reading what was given", () => {
   test("a link is anything with a scheme or a www. prefix; the rest is a path", () => {
-    expect(learnInputOf(" https://pawnly.app ")).toEqual({ url: "https://pawnly.app" });
-    expect(learnInputOf("www.pawnly.app")).toEqual({ url: "https://www.pawnly.app" });
-    expect(learnInputOf("~/code/pawnly")).toEqual({ path: "~/code/pawnly" });
-    expect(learnInputOf("pawnly.app")).toEqual({ path: "pawnly.app" });
+    expect(learnInputOf(" https://fernly.app ")).toEqual({ url: "https://fernly.app" });
+    expect(learnInputOf("www.fernly.app")).toEqual({ url: "https://www.fernly.app" });
+    expect(learnInputOf("~/code/fernly")).toEqual({ path: "~/code/fernly" });
+    expect(learnInputOf("fernly.app")).toEqual({ path: "fernly.app" });
   });
 
   test("video links are posts on video sites or video files", () => {
@@ -98,7 +98,7 @@ describe("reading what was given", () => {
       "https://youtube.com/shorts/abc",
       "https://m.youtube.com/live/abc",
       "https://youtu.be/abc",
-      "https://www.tiktok.com/@chess/video/123",
+      "https://www.tiktok.com/@fernly/video/123",
       "https://vm.tiktok.com/ZM123/",
       "https://www.instagram.com/reel/abc/",
       "https://vimeo.com/12345",
@@ -110,13 +110,13 @@ describe("reading what was given", () => {
     }
 
     for (const link of [
-      "https://www.youtube.com/@chess",
+      "https://www.youtube.com/@fernly",
       "https://youtu.be/",
-      "https://www.tiktok.com/@chess",
-      "https://www.instagram.com/chess/",
+      "https://www.tiktok.com/@fernly",
+      "https://www.instagram.com/fernly/",
       "https://vimeo.com/channels",
       "https://x.com/someone",
-      "https://pawnly.app/",
+      "https://fernly.app/",
       "not a link",
     ]) {
       expect(isVideoLink(link)).toBe(false);
@@ -131,29 +131,29 @@ describe("reading what was given", () => {
       "<!-- comment -->",
       '<p align="center"><img src="logo.png"></p>',
       "",
-      "# **Pawnly**",
+      "# **Fernly**",
       "",
       "[![CI](https://ci/badge.svg)](https://ci)",
       "",
-      "Learn chess openings with [spaced repetition](https://x).",
-      "One move at a time.",
+      "Care for your plants with [smart reminders](https://x).",
+      "One plant at a time.",
       "",
       "## Install",
     ].join("\n");
 
     expect(summarize(readme)).toEqual({
-      title: "Pawnly",
-      description: "Learn chess openings with spaced repetition. One move at a time.",
+      title: "Fernly",
+      description: "Care for your plants with smart reminders. One plant at a time.",
     });
     expect(summarize("")).toEqual({ description: "" });
     expect(summarize("x".repeat(600)).description).toHaveLength(500);
   });
 
   test("a heading inside a description does not split its section", () => {
-    const section = aboutSection("pawnly", "learned/pawnly", {
+    const section = aboutSection("fernly", "learned/fernly", {
       kind: "app",
-      title: "Pawnly",
-      description: "What it does\n# Features\nOpenings",
+      title: "Fernly",
+      description: "What it does\n# Features\nReminders",
       images: [],
       links: [],
       addedAt: "2026-10-16T00:00:00.000Z",
@@ -162,7 +162,7 @@ describe("reading what was given", () => {
     expect(section).toContain("What it does\n\\# Features\n");
     expect(aboutSections(`# About\n\n${section}\n`).map((found) => found.id)).toEqual([
       undefined,
-      "pawnly",
+      "fernly",
     ]);
   });
 });
@@ -195,28 +195,28 @@ describe("learn", () => {
   test("a landing page keeps its icon and picture and starts a section in about.md", async () => {
     const { learned, warnings } = await t.runWith(
       offline(),
-      learn(learnInputOf("https://pawnly.app")),
+      learn(learnInputOf("https://fernly.app")),
     );
 
     expect(warnings).toEqual([]);
-    expect(learned.id).toBe("pawnly");
-    expect(learned.dir).toBe("learned/pawnly");
+    expect(learned.id).toBe("fernly");
+    expect(learned.dir).toBe("learned/fernly");
     expect(learned.unread).toBe(true);
     expect(learned.doc).toMatchObject({
       kind: "page",
-      title: "Pawnly — Learn openings one move at a time",
-      description: "Drill chess openings in five minutes a day & remember them.",
-      source: { url: "https://pawnly.app/" },
-      site: "Pawnly",
+      title: "Fernly — Plant care one reminder at a time",
+      description: "Care for your plants in two minutes a day & never miss a watering.",
+      source: { url: "https://fernly.app/" },
+      site: "Fernly",
       icon: "icon.png",
       images: ["image.png"],
-      links: ["https://apps.apple.com/us/app/pawnly/id123456"],
+      links: ["https://apps.apple.com/us/app/fernly/id123456"],
     });
     // Store links on the page are noted, not followed.
     expect(requested.toSorted()).toEqual([
-      "https://pawnly.app/",
-      "https://pawnly.app/favicon.png",
-      "https://pawnly.app/og.png",
+      "https://fernly.app/",
+      "https://fernly.app/favicon.png",
+      "https://fernly.app/og.png",
     ]);
     expect((await readdir(join(t.root, learned.dir))).toSorted()).toEqual([
       "icon.png",
@@ -228,24 +228,24 @@ describe("learn", () => {
 
     expect(text).toStartWith("# About\n");
     expect(text).toContain(
-      "## Pawnly — Learn openings one move at a time\n<!-- learned:pawnly -->\n",
+      "## Fernly — Plant care one reminder at a time\n<!-- learned:fernly -->\n",
     );
     expect(text).toContain(`${UNREAD}: `);
-    expect(text).toContain("- Link: https://pawnly.app/\n- By: Pawnly\n");
-    expect(text).toContain("- Saved: learned/pawnly/\n\nDrill chess openings");
+    expect(text).toContain("- Link: https://fernly.app/\n- By: Fernly\n");
+    expect(text).toContain("- Saved: learned/fernly/\n\nCare for your plants");
   });
 
   test("an app keeps its full description, icon, and screenshots", async () => {
     const { learned } = await t.runWith(
       offline(),
-      learn({ url: "https://apps.apple.com/us/app/pawnly/id123456" }),
+      learn({ url: "https://apps.apple.com/us/app/fernly/id123456" }),
     );
 
     expect(learned.doc).toMatchObject({
       kind: "app",
-      title: "Pawnly: Chess Openings",
-      description: "Learn openings by playing them. Spaced repetition keeps lines fresh.",
-      site: "Pawnly Labs",
+      title: "Fernly: Plant Care",
+      description: "Learn what each plant needs. Reminders keep watering on time.",
+      site: "Fernly Labs",
       icon: "icon.png",
       images: ["shot-01.png"],
     });
@@ -254,13 +254,13 @@ describe("learn", () => {
   test("a picture the board cannot show safely is left out with a warning", async () => {
     const { learned, warnings } = await t.runWith(
       offline(svgIcon),
-      learn({ url: "https://pawnly.app" }),
+      learn({ url: "https://fernly.app" }),
     );
 
     expect(learned.doc.icon).toBeUndefined();
     expect(learned.doc.images).toEqual(["image.png"]);
     expect(warnings).toEqual([
-      "Could not download https://pawnly.app/favicon.png: https://pawnly.app/favicon.png: not a picture the board can show (image/svg+xml)",
+      "Could not download https://fernly.app/favicon.png: https://fernly.app/favicon.png: not a picture the board can show (image/svg+xml)",
     ]);
   });
 
@@ -272,7 +272,7 @@ describe("learn", () => {
 
     expect(learned.doc).toMatchObject({
       kind: "page",
-      title: "Kings Gambit in 30s",
+      title: "Repotting in 30s",
       images: ["image.png"],
     });
     expect(learned.doc.video).toBeUndefined();
@@ -295,7 +295,7 @@ describe("learn", () => {
   test("a link with a login in it is refused before anything is fetched", async () => {
     const error = await t.runWith(
       offline(),
-      Effect.flip(learn({ url: "https://me:pass@pawnly.app/" })),
+      Effect.flip(learn({ url: "https://me:pass@fernly.app/" })),
     );
 
     expect(error).toBeInstanceOf(InvalidRequest);
@@ -303,17 +303,17 @@ describe("learn", () => {
   });
 
   test("a folder is summarized from its README and stays where it is", async () => {
-    const folder = join(outside, "pawnly-app");
+    const folder = join(outside, "fernly-app");
     await mkdir(folder);
-    await writeFile(join(folder, "README.md"), "# Pawnly\n\nA chess openings trainer.\n");
+    await writeFile(join(folder, "README.md"), "# Fernly\n\nA plant care tracker.\n");
     await writeFile(join(folder, "main.ts"), "export {};\n");
 
     const { learned } = await t.runWith(offline(), learn(learnInputOf(folder)));
 
     expect(learned.doc).toMatchObject({
       kind: "folder",
-      title: "Pawnly",
-      description: "A chess openings trainer.",
+      title: "Fernly",
+      description: "A plant care tracker.",
       source: { path: folder },
     });
     expect(await readdir(join(t.root, learned.dir))).toEqual(["learned.yaml"]);
@@ -328,14 +328,14 @@ describe("learn", () => {
 
   test("an uploaded note is copied in, since its temporary file goes away", async () => {
     const upload = join(outside, "upload-123");
-    await writeFile(upload, "# Launch plan\n\nShip the openings pack in May.\n");
+    await writeFile(upload, "# Launch plan\n\nShip the spring update in May.\n");
 
     const { learned } = await t.runWith(offline(), learn({ file: upload, name: "plan.md" }));
 
     expect(learned.doc).toMatchObject({
       kind: "file",
       title: "Launch plan",
-      description: "Ship the openings pack in May.",
+      description: "Ship the spring update in May.",
     });
     expect(learned.doc.source).toBeUndefined();
     expect((await readdir(join(t.root, learned.dir))).toSorted()).toEqual([
@@ -347,7 +347,7 @@ describe("learn", () => {
 
   test("the same title gets its own folder", async () => {
     const note = join(outside, "a.md");
-    await writeFile(note, "# Pawnly\n");
+    await writeFile(note, "# Fernly\n");
 
     const ids = await t.runWith(
       offline(),
@@ -359,7 +359,7 @@ describe("learn", () => {
       }),
     );
 
-    expect(ids).toEqual(["pawnly", "pawnly-2"]);
+    expect(ids).toEqual(["fernly", "fernly-2"]);
   });
 
   test("a section stops being unread once an agent rewrites it, and forget removes it", async () => {

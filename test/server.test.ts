@@ -160,7 +160,7 @@ describe("routes", () => {
     ]);
 
     const created = await sendJson("POST", "/api/items", {
-      title: "Openings",
+      title: "Morning routine",
       format: "art",
       inputs: { style: "neon" },
     });
@@ -168,7 +168,7 @@ describe("routes", () => {
     expect(await created.json()).toMatchObject({ doc: { inputs: { style: "neon" } } });
 
     const wrong = await sendJson("POST", "/api/items", {
-      title: "Endgames",
+      title: "Evening routine",
       format: "art",
       inputs: { style: "pastel" },
     });

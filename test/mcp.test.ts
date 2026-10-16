@@ -266,7 +266,7 @@ test("agents can check a template and fill its inputs", async () => {
 
   const created = await server.call(
     "create_item",
-    { title: "Openings", format: "art", inputs: { style: "neon" } },
+    { title: "Morning routine", format: "art", inputs: { style: "neon" } },
     Created,
   );
 

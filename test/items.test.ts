@@ -60,7 +60,9 @@ describe("upgradeItemDoc", () => {
   const doc = { title: "Clip", status: "review", sources: [], feedback: [], sessions: {} } as const;
 
   test("starts the notes with a caption when there were none, and drops a blank one", () => {
-    expect(upgradeItemDoc({ ...doc, caption: " Win fast " }).notes).toBe("Caption: Win fast");
+    expect(upgradeItemDoc({ ...doc, caption: " Start strong " }).notes).toBe(
+      "Caption: Start strong",
+    );
     expect(upgradeItemDoc({ ...doc, caption: "  " })).toEqual(doc);
     expect(upgradeItemDoc(doc)).toEqual(doc);
   });
@@ -95,19 +97,19 @@ describe("items in a workspace", () => {
   test("creates, updates, and dedupes ids", async () => {
     const [a, b, updated, merged] = await t.run(
       Effect.gen(function* () {
-        const first = yield* createItem({ title: "Fried Liver Trap", format: "trap" });
-        const second = yield* createItem({ title: "Fried Liver Trap", format: "trap" });
+        const first = yield* createItem({ title: "Monstera Repot", format: "howto" });
+        const second = yield* createItem({ title: "Monstera Repot", format: "howto" });
 
-        const reviewed = yield* updateItem(first.id, { status: "review", hook: "One move" });
-        const noted = yield* updateItem(first.id, { notes: "Film it on a wooden board" });
+        const reviewed = yield* updateItem(first.id, { status: "review", hook: "One step" });
+        const noted = yield* updateItem(first.id, { notes: "Film it on a wooden table" });
 
         return [first, second, reviewed, noted] as const;
       }),
     );
 
-    expect([a.id, b.id]).toEqual(["trap/fried-liver-trap", "trap/fried-liver-trap-2"]);
+    expect([a.id, b.id]).toEqual(["howto/monstera-repot", "howto/monstera-repot-2"]);
     expect(updated.doc.status).toBe("review");
-    expect([merged.doc.hook, merged.doc.notes]).toEqual(["One move", "Film it on a wooden board"]);
+    expect([merged.doc.hook, merged.doc.notes]).toEqual(["One step", "Film it on a wooden table"]);
   });
 
   test("rejects a blank title and an id that climbs out of the items folder", async () => {
@@ -150,36 +152,36 @@ describe("items in a workspace", () => {
   });
 
   test("a caption from an earlier version moves into the notes and stays there", async () => {
-    const dir = join(t.root, "items/posts/opening");
+    const dir = join(t.root, "items/posts/intro");
     await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, "item.yaml"),
-      "title: Opening\nstatus: review\nnotes: Keep it short\ncaption: Three moves to win\n",
+      "title: Intro\nstatus: review\nnotes: Keep it short\ncaption: Three tips in 30 seconds\n",
     );
 
     const { read, written } = await t.run(
       Effect.gen(function* () {
-        const before = yield* getItem("posts/opening");
-        yield* updateItem(before.id, { hook: "Win fast" });
+        const before = yield* getItem("posts/intro");
+        yield* updateItem(before.id, { hook: "Start strong" });
 
         return { read: before, written: yield* getItem(before.id) };
       }),
     );
 
-    expect(read.doc.notes).toBe("Keep it short\n\nCaption: Three moves to win");
-    expect(written.doc.notes).toBe("Keep it short\n\nCaption: Three moves to win");
+    expect(read.doc.notes).toBe("Keep it short\n\nCaption: Three tips in 30 seconds");
+    expect(written.doc.notes).toBe("Keep it short\n\nCaption: Three tips in 30 seconds");
     expect(await Bun.file(join(dir, "item.yaml")).text()).not.toContain("caption:");
   });
 
   test("a status from an earlier version reads as its successor and is written as one", async () => {
-    const dir = join(t.root, "items/posts/opening");
+    const dir = join(t.root, "items/posts/intro");
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, "item.yaml"), "title: Opening\nstatus: published\n");
+    await writeFile(join(dir, "item.yaml"), "title: Intro\nstatus: published\n");
 
     const read = await t.run(
       Effect.gen(function* () {
-        const before = yield* getItem("posts/opening");
-        yield* updateItem(before.id, { hook: "Win fast" });
+        const before = yield* getItem("posts/intro");
+        yield* updateItem(before.id, { hook: "Start strong" });
 
         return before;
       }),
@@ -190,31 +192,31 @@ describe("items in a workspace", () => {
   });
 
   test("discovers legacy folders and upgrades them on write", async () => {
-    const dir = join(t.root, "items/lessons/caro-kann");
+    const dir = join(t.root, "items/lessons/repotting");
     await mkdir(join(dir, "frames"), { recursive: true });
-    await writeFile(join(dir, "POSTING.md"), "# Caro-Kann Posting\n");
+    await writeFile(join(dir, "POSTING.md"), "# Repotting Posting\n");
     await writeFile(join(dir, "STATUS.md"), "- status: ready-to-post\n");
     await writeFile(join(dir, "[1x1] 01-hook.jpg"), "");
 
     const { ids, legacy, upgraded } = await t.run(
       Effect.gen(function* () {
         const found = yield* listItemIds();
-        const before = yield* getItem("lessons/caro-kann");
-        const added = yield* addFeedback(before.id, { body: "Bigger board" });
+        const before = yield* getItem("lessons/repotting");
+        const added = yield* addFeedback(before.id, { body: "Bigger text" });
 
         return { ids: found, legacy: before, upgraded: added.item };
       }),
     );
 
-    expect(ids).toEqual(["lessons/caro-kann"]);
+    expect(ids).toEqual(["lessons/repotting"]);
     expect([legacy.legacy, legacy.doc.title, legacy.doc.status]).toEqual([
       true,
-      "Caro-Kann",
+      "Repotting",
       "done",
     ]);
     expect(legacy.media.map((m) => [m.name, m.aspect])).toEqual([["[1x1] 01-hook.jpg", "1x1"]]);
     expect(upgraded.legacy).toBe(false);
-    expect(upgraded.doc.title).toBe("Caro-Kann");
+    expect(upgraded.doc.title).toBe("Repotting");
   });
 
   test("refuses paths that escape the workspace", async () => {

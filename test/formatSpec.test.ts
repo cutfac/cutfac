@@ -201,10 +201,10 @@ describe("formats in a workspace", () => {
   test("a new item keeps its format's inputs", async () => {
     await t.run(saveFormat({ ...decode({ title: "Art", inputs: [STYLE] }), id: "art" }));
 
-    const item = await t.run(createItem({ title: "Openings", format: "art", inputs: {} }));
+    const item = await t.run(createItem({ title: "Morning routine", format: "art", inputs: {} }));
 
     const picked = await t.run(
-      createItem({ title: "Endgames", format: "art", inputs: { style: "neon" } }),
+      createItem({ title: "Evening routine", format: "art", inputs: { style: "neon" } }),
     );
 
     expect(item.doc.inputs).toEqual({ style: "swiss" });
@@ -221,7 +221,7 @@ describe("formats in a workspace", () => {
   });
 
   test("an item may name a format that has no folder, as before", async () => {
-    const item = await t.run(createItem({ title: "Trap", format: "trap" }));
+    const item = await t.run(createItem({ title: "Tips", format: "tips" }));
 
     expect(item.doc.inputs).toBeUndefined();
   });
