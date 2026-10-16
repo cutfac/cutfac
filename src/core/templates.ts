@@ -1,4 +1,4 @@
-import skill from "../../skills/content-factory/SKILL.md" with { type: "text" };
+import skill from "../../skills/cutfac/SKILL.md" with { type: "text" };
 
 /**
  * The agent skill installed into each workspace for Claude Code and Codex. It is imported as text

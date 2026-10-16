@@ -129,8 +129,8 @@ export function useHashRoute(): Route {
 export const href = (view: string, id?: string) =>
   id === undefined ? `#/${view}` : `#/${view}/${encodeURIComponent(id)}`;
 
-/** Where this browser keeps one part of an agent's pick, such as `factory.model.claude`. */
-const pickKey = (agent: AgentName, part: keyof ModelSettings) => `factory.${part}.${agent}`;
+/** Where this browser keeps one part of an agent's pick, such as `cutfac.model.claude`. */
+const pickKey = (agent: AgentName, part: keyof ModelSettings) => `cutfac.${part}.${agent}`;
 
 function readPick(agent: AgentName): ModelSettings {
   const settings: ModelSettings = {};
@@ -176,7 +176,7 @@ export function useModelPicks() {
   return [picks, pick] as const;
 }
 
-const SIDEBAR_OPEN_KEY = "factory.sidebar.open";
+const SIDEBAR_OPEN_KEY = "cutfac.sidebar.open";
 
 function readSidebarOpen(): boolean {
   try {

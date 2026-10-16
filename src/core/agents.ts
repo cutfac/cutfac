@@ -30,7 +30,13 @@ export interface AgentStatus extends AgentModels {
   readonly connected: boolean;
 }
 
-export const SERVER_NAME = "content-factory";
+export const SERVER_NAME = "cutfac";
+
+/** What agents knew the server as before Content Factory was renamed to Cutfac. */
+const LEGACY_SERVER_NAME = "content-factory";
+
+/** Claude Code's `--allowedTools` entry for every tool this server offers. */
+export const CLAUDE_MCP_TOOLS = `mcp__${SERVER_NAME}`;
 
 /** The MCP tools that only read the workspace: all an agent may call before the user allows more. */
 export const MCP_READ_TOOLS = [
@@ -93,7 +99,8 @@ const serversOf = (file: Schema.JsonObject) =>
 
 /**
  * Claude Code reads project-scoped servers from .mcp.json at the workspace root, so connecting
- * never touches global config. Other servers and keys in the file are kept.
+ * never touches global config. Other servers and keys in the file are kept, except the entry this
+ * server had under its name from before the rename.
  */
 export const connectClaude = Effect.fn("agents.connectClaude")(function* (launch: McpLaunch) {
   const ws = yield* Workspace;
@@ -102,7 +109,9 @@ export const connectClaude = Effect.fn("agents.connectClaude")(function* (launch
   const next = {
     ...current,
     mcpServers: {
-      ...serversOf(current),
+      ...Object.fromEntries(
+        Object.entries(serversOf(current)).filter(([name]) => name !== LEGACY_SERVER_NAME),
+      ),
       [SERVER_NAME]: { command: launch.command, args: launch.args },
     },
   };
@@ -125,12 +134,16 @@ export const connectClaude = Effect.fn("agents.connectClaude")(function* (launch
 });
 
 /** Codex keeps MCP servers in one user config, so each workspace registers under its own name. */
+const codexNameUnder = (server: string, workspaceName: string) =>
+  `${server}-${slugify(workspaceName) || "workspace"}`;
+
 export const codexServerName = (workspaceName: string) =>
-  `${SERVER_NAME}-${slugify(workspaceName) || "workspace"}`;
+  codexNameUnder(SERVER_NAME, workspaceName);
 
 /**
  * Codex only reads MCP servers from its user config, so register through its own CLI instead of
- * editing ~/.codex/config.toml by hand. Re-registering replaces a stale launch command.
+ * editing ~/.codex/config.toml by hand. Re-registering replaces a stale launch command, and the
+ * registration from before the rename.
  */
 export const connectCodex = Effect.fn("agents.connectCodex")(function* (launch: McpLaunch) {
   const ws = yield* Workspace;
@@ -147,9 +160,13 @@ export const connectCodex = Effect.fn("agents.connectCodex")(function* (launch: 
   }
 
   const name = codexServerName(ws.config.name);
-  const existing = yield* run(codex.value, ["mcp", "get", name]);
 
-  if (existing.code === 0) yield* run(codex.value, ["mcp", "remove", name]);
+  for (const stale of [codexNameUnder(LEGACY_SERVER_NAME, ws.config.name), name]) {
+    const existing = yield* run(codex.value, ["mcp", "get", stale]);
+
+    if (existing.code === 0) yield* run(codex.value, ["mcp", "remove", stale]);
+  }
+
   const added = yield* run(codex.value, ["mcp", "add", name, "--", launch.command, ...launch.args]);
 
   const connection: AgentConnection =

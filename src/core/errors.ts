@@ -30,7 +30,7 @@ export class FetchFailed extends Schema.TaggedError<FetchFailed>()("FetchFailed"
   message: Schema.String,
 }) {}
 
-export type FactoryError =
+export type CutfacError =
   | WorkspaceError
   | NotFound
   | InvalidRequest

@@ -123,7 +123,7 @@ describe("formats in a workspace", () => {
         ...decode({
           title: "Art motion",
           skills: [{ name: "art-motion", source: "https://github.com/example/art-motion" }],
-          requires: ["sh", "surely-not-installed-cf"],
+          requires: ["sh", "surely-not-installed-cutfac"],
           inputs: [STYLE],
         }),
         id: "art",
@@ -135,7 +135,7 @@ describe("formats in a workspace", () => {
     expect(before.ready).toBe(false);
     expect(before.problems.map((p) => [p.kind, p.subject])).toEqual([
       ["skill", "art-motion"],
-      ["program", "surely-not-installed-cf"],
+      ["program", "surely-not-installed-cutfac"],
       ["file", "previews/swiss.png"],
       ["file", "styles/swiss.md"],
     ]);
@@ -147,7 +147,7 @@ describe("formats in a workspace", () => {
 
     const after = await t.run(checkFormat("art"));
 
-    expect(after.problems.map((p) => p.subject)).toEqual(["surely-not-installed-cf"]);
+    expect(after.problems.map((p) => p.subject)).toEqual(["surely-not-installed-cutfac"]);
     expect(after.skills).toEqual({ "art-motion": ".claude/skills/art-motion/SKILL.md" });
   });
 

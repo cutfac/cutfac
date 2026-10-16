@@ -10,10 +10,10 @@ export const ko: Messages = {
     couldNotCopy: (message) => `복사하지 못했어요: ${message}`,
   },
   app: {
-    unreachable: "팩토리 서버에 연결할 수 없어요",
+    unreachable: "컷팩 서버에 연결할 수 없어요",
   },
   nav: {
-    appName: "Content Factory",
+    appName: "컷팩",
     openWorkspace: "워크스페이스 열기…",
     newVideo: "새 영상",
     main: "메인",
@@ -221,7 +221,7 @@ export const ko: Messages = {
     },
     connectTitle: "에이전트 연결",
     connectBody:
-      "제작과 편집은 에이전트가 해요. 팩토리는 에이전트에게 도구와 파일, 그리고 여러분의 피드백을 전달해요.",
+      "제작과 편집은 에이전트가 해요. 컷팩은 에이전트에게 도구와 파일, 그리고 여러분의 피드백을 전달해요.",
     agentsError: "설치된 에이전트를 확인하지 못했어요",
     readyTitle: "준비됐어요",
     readyBody: (board, learn) => (
@@ -232,15 +232,15 @@ export const ko: Messages = {
     ),
     workspaceTitle: "워크스페이스",
     workspaceBody:
-      "팩토리가 만드는 모든 것은 이 폴더의 일반 파일이에요. 백업하거나 git에 올려도 돼요.",
+      "컷팩이 만드는 모든 것은 이 폴더의 일반 파일이에요. 백업하거나 git에 올려도 돼요.",
     name: "이름",
     folder: "폴더",
     defaultAgent: "기본 에이전트",
     showFolder: "폴더 보기",
     connected: (agent) => `${agent}을(를) 연결했어요`,
     connectFailed: (agent) => `${agent}을(를) 연결하지 못했어요`,
-    agentReady: "준비됐어요. 팩토리의 도구를 쓸 수 있어요.",
-    agentFound: "이 컴퓨터에 설치되어 있어요. 연결하면 팩토리의 도구를 쓸 수 있어요.",
+    agentReady: "준비됐어요. 컷팩의 도구를 쓸 수 있어요.",
+    agentFound: "이 컴퓨터에 설치되어 있어요. 연결하면 컷팩의 도구를 쓸 수 있어요.",
     agentMissing: "이 컴퓨터에 설치되어 있지 않아요.",
     connectedBadge: "연결됨",
     connecting: "연결하는 중…",

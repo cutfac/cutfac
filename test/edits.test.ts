@@ -487,7 +487,7 @@ describe("edit requests in a workspace", () => {
       aspects: ["16x9"],
       requireAudio: false,
       skills: [{ name: "art-motion" }],
-      requires: ["surely-not-installed-cf"],
+      requires: ["surely-not-installed-cutfac"],
       inputs: [
         {
           id: "style",
@@ -522,7 +522,7 @@ describe("edit requests in a workspace", () => {
     );
     expect(prompt).toContain(`- Style: Swiss grid (swiss); read ${art}/styles/swiss.md`);
     expect(prompt).toContain("- Topic: Knight forks");
-    expect(prompt).toContain("- surely-not-installed-cf is not installed or not on PATH");
+    expect(prompt).toContain("- surely-not-installed-cutfac is not installed or not on PATH");
     expect(prompt).toContain("`[16x9] forks.mp4`");
     expect(prompt).toContain("Render an H.264 mp4 that fits");
   });

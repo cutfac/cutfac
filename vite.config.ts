@@ -7,7 +7,7 @@ import { defineConfig } from "vite";
 
 import { version } from "./package.json" with { type: "json" };
 
-const server = `http://localhost:${process.env["FACTORY_PORT"] ?? 4317}`;
+const server = `http://localhost:${process.env["CUTFAC_PORT"] ?? 4317}`;
 
 export default defineConfig({
   root: "web",

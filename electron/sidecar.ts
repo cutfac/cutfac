@@ -11,7 +11,7 @@ import { app } from "electron";
 
 import { HOST } from "./ports.ts";
 
-const PATH_MARKER = "__FACTORY_PATH__";
+const PATH_MARKER = "__CUTFAC_PATH__";
 
 const limits = {
   healthTimeoutMs: 20_000,
@@ -108,18 +108,18 @@ function findExecutable(name: string, searchPath: string): string {
 }
 
 /**
- * FACTORY_SIDECAR points at any executable that speaks the sidecar CLI (used to test the shell
+ * CUTFAC_SIDECAR points at any executable that speaks the sidecar CLI (used to test the shell
  * without the real server). Otherwise: the compiled binary in the packaged app, `bun src/cli.ts`
  * from a checkout.
  */
 function resolveLaunch(searchPath: string): Launch {
-  const override = process.env.FACTORY_SIDECAR;
+  const override = process.env.CUTFAC_SIDECAR;
 
   if (app.isPackaged) {
     const resources = process.resourcesPath;
 
     return {
-      command: override || path.join(resources, "bin", "factory"),
+      command: override || path.join(resources, "bin", "cutfac"),
       args: [],
       webDir: path.join(resources, "web"),
       watchFlags: [],
@@ -248,7 +248,10 @@ export async function startSidecar({
   const searchPath = await resolveLoginPath();
   const launch = resolveLaunch(searchPath);
 
-  if (!existsSync(path.join(workspace, "factory.yaml"))) {
+  // factory.yaml is what a workspace made before the rename to Cutfac calls it; serving renames it.
+  const configs = ["cutfac.yaml", "factory.yaml"].map((name) => path.join(workspace, name));
+
+  if (!configs.some((file) => existsSync(file))) {
     const init = run(launch, ["init", workspace, "--no-connect"], workspace, searchPath);
 
     await init.ended;

@@ -140,7 +140,7 @@ describe("routes", () => {
     await mkdir(join(t.root, "formats/art"), { recursive: true });
     await writeFile(
       join(t.root, "formats/art/format.yaml"),
-      "title: Art\nrequires: [surely-not-installed-cf]\ninputs:\n  - id: style\n    title: Style\n    choices: [{ id: swiss, title: Swiss }, { id: neon, title: Neon }]\n    default: swiss\n",
+      "title: Art\nrequires: [surely-not-installed-cutfac]\ninputs:\n  - id: style\n    title: Style\n    choices: [{ id: swiss, title: Swiss }, { id: neon, title: Neon }]\n    default: swiss\n",
     );
     await mkdir(join(t.root, "formats/broken"), { recursive: true });
     await writeFile(join(t.root, "formats/broken/format.yaml"), "summary: no title\n");
@@ -153,7 +153,7 @@ describe("routes", () => {
         format: { doc: { title: "Art" } },
         check: {
           ready: false,
-          problems: [{ kind: "program", subject: "surely-not-installed-cf" }],
+          problems: [{ kind: "program", subject: "surely-not-installed-cutfac" }],
         },
       },
       { id: "broken", check: { ready: false, problems: [{ kind: "spec" }] } },
@@ -300,7 +300,7 @@ describe("routes", () => {
     expect(past.status).toBe(416);
     expect(past.headers.get("content-range")).toBe("bytes */10");
 
-    expect((await send("/files/factory.yaml")).status).toBe(403);
+    expect((await send("/files/cutfac.yaml")).status).toBe(403);
     expect((await send(`/files/${encodeURIComponent("../outside.mp4")}`)).status).toBe(403);
     expect((await send("/files/items/clip/missing.mp4")).status).toBe(404);
   });

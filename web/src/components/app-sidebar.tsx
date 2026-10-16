@@ -3,7 +3,6 @@ import {
   BookOpenIcon,
   ChevronsUpDownIcon,
   ClapperboardIcon,
-  FactoryIcon,
   FolderOpenIcon,
   LanguagesIcon,
   LayoutTemplateIcon,
@@ -150,6 +149,17 @@ function LinkRow({ to, active, tooltip, title, badge, children }: LinkRowProps) 
   );
 }
 
+/** The app icon's play button over a timeline, drawn in the current color. */
+function CutfacMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="5 6 22 22" aria-hidden="true" className={className}>
+      <path d="M12 8.5v11l9-5.5z" fill="currentColor" />
+      <rect x="6" y="23" width="20" height="2.5" rx="1.25" fill="currentColor" fillOpacity="0.3" />
+      <rect x="11" y="23" width="9" height="2.5" rx="1.25" className="fill-selection" />
+    </svg>
+  );
+}
+
 function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
   const t = useMessages();
   const name = ws?.name ?? t.nav.appName;
@@ -157,7 +167,7 @@ function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
   const content = (
     <>
       <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
-        <FactoryIcon className="size-4" />
+        <CutfacMark className="size-5" />
       </div>
       <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
         <span title={ws?.root} className="truncate font-semibold">

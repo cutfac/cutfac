@@ -14,6 +14,7 @@ import {
   runsLayer,
 } from "./agentRun.ts";
 import {
+  CLAUDE_MCP_TOOLS,
   MCP_READ_TOOLS,
   MCP_WRITE_TOOLS,
   type McpLaunch,
@@ -76,7 +77,7 @@ const CLAUDE_INSTALL_ALLOWED = [
   "Bash(tar:*)",
 ];
 
-const claudeMcpTool = (name: string) => `mcp__${SERVER_NAME}__${name}`;
+const claudeMcpTool = (name: string) => `${CLAUDE_MCP_TOOLS}__${name}`;
 
 /**
  * What an import may never read, in either phase: credentials in the home folder and the
@@ -175,7 +176,7 @@ export function claudeImportFlags(phase: ImportPhase, server: McpLaunch, link: s
     "--tools",
     [...CLAUDE_READ_TOOLS, "Write", "Edit", "Bash"].join(","),
     "--allowedTools",
-    [...CLAUDE_INSTALL_ALLOWED, `mcp__${SERVER_NAME}`].join(","),
+    [...CLAUDE_INSTALL_ALLOWED, CLAUDE_MCP_TOOLS].join(","),
     "--disallowedTools",
     CLAUDE_READ_DENIED.join(","),
     ...shared,
@@ -345,7 +346,7 @@ export const importRuns = <R>(runner: Runner<ImportInput, R>): RunSpec<ImportInp
 });
 
 export class ImportRuns extends Context.Service<ImportRuns, Runs<ImportInput>>()(
-  "content-factory/ImportRuns",
+  "cutfac/ImportRuns",
 ) {
   static readonly layer = runsLayer(ImportRuns, importRuns(runImportTurn));
 }

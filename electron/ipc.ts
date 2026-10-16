@@ -1,11 +1,11 @@
-export const OPEN_WORKSPACE_CHANNEL = "factory:open-workspace";
+export const OPEN_WORKSPACE_CHANNEL = "cutfac:open-workspace";
 
-export const REVEAL_PATH_CHANNEL = "factory:reveal-path";
+export const REVEAL_PATH_CHANNEL = "cutfac:reveal-path";
 
-export const SET_LOCALE_CHANNEL = "factory:set-locale";
+export const SET_LOCALE_CHANNEL = "cutfac:set-locale";
 
 /** Ask for a folder or file for agents to read, from an item's chat. */
-export const PICK_PATH_CHANNEL = "factory:pick-path";
+export const PICK_PATH_CHANNEL = "cutfac:pick-path";
 
 /** Undo and Redo from the app menu, for the board to route to a text field or the open item. */
-export const EDIT_COMMAND_CHANNEL = "factory:edit-command";
+export const EDIT_COMMAND_CHANNEL = "cutfac:edit-command";

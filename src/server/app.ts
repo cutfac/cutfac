@@ -634,7 +634,7 @@ const apiRoutes = (options: ServerOptions) =>
       "/api/agents/connect",
       Effect.gen(function* () {
         const { agent } = yield* HttpServerRequest.schemaBodyJson(ConnectBody);
-        const server = yield* ownLaunch(options, "run `factory agent-setup --connect` instead");
+        const server = yield* ownLaunch(options, "run `cutfac agent-setup --connect` instead");
 
         return yield* connectAgent(agent, server);
       }),

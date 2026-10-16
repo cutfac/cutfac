@@ -17,9 +17,9 @@ describe("desktop release checks", () => {
     const feed = [
       "version: 0.2.0",
       "files:",
-      "  - url: content-factory-0.2.0-arm64.zip",
+      "  - url: cutfac-0.2.0-arm64.zip",
       "    sha512: abc",
-      "path: content-factory-0.2.0-arm64.zip",
+      "path: cutfac-0.2.0-arm64.zip",
       "releaseDate: '2026-10-16T00:00:00.000Z'",
     ].join("\n");
 

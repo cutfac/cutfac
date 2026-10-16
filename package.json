@@ -1,13 +1,13 @@
 {
-  "name": "content-factory",
+  "name": "cutfac",
   "version": "0.1.0",
-  "description": "Local-first short-form content factory for solo developers. Bring your own agent.",
+  "description": "Local-first short-form video studio for solo developers. Bring your own agent.",
   "license": "AGPL-3.0-only",
+  "bin": {
+    "cutfac": "./src/cli.ts"
+  },
   "type": "module",
   "main": "dist/electron/main.js",
-  "bin": {
-    "factory": "./src/cli.ts"
-  },
   "scripts": {
     "dev": "bun --watch src/cli.ts serve",
     "dev:web": "vite",
@@ -17,7 +17,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:electron": "bun build ./electron/main.ts --target node --format esm --external electron --outfile dist/electron/main.js && bun build ./electron/preload.ts --target node --format cjs --external electron --outfile dist/electron/preload.cjs",
-    "build:sidecar": "bun build --compile src/cli.ts --outfile dist/sidecar/factory",
+    "build:sidecar": "bun build --compile src/cli.ts --outfile dist/sidecar/cutfac",
     "desktop": "bun run build && bun run build:electron && electron .",
     "desktop:dev": "bun electron/dev.ts",
     "dist:desktop": "bun run build && bun run build:sidecar && bun run build:electron && electron-builder --mac dir -c.mac.identity=null",

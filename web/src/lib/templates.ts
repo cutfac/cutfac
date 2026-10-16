@@ -48,8 +48,8 @@ export function sortTemplates(statuses: ReadonlyArray<FormatStatus>): FormatStat
 /** What the user's agent needs to turn a link into a template here. Agent prompts stay in English. */
 export function importPrompt(link: string, root: string): string {
   return [
-    `Read ${link.trim()} and turn it into a Content Factory template (a format) in the workspace at ${root}.`,
-    'Follow "Import a template from a link" in the content-factory skill:',
+    `Read ${link.trim()} and turn it into a Cutfac template (a format) in the workspace at ${root}.`,
+    'Follow "Import a template from a link" in the cutfac skill:',
     "- ask me before installing any skill, package, or program, and say what each one is for;",
     "- write formats/<id>/format.yaml with its README, previews, and choice files, and record where it came from and its license;",
     "- call check_format and fix what it lists until the template is ready.",
@@ -59,8 +59,8 @@ export function importPrompt(link: string, root: string): string {
 /** What the user's agent needs to finish a template that is not ready. */
 export function fixPrompt(id: string, root: string): string {
   return (
-    `Call check_format on the "${id}" template in the Content Factory workspace at ${root} and fix what it lists, ` +
-    'following "Import a template from a link" in the content-factory skill. Ask me before installing anything.'
+    `Call check_format on the "${id}" template in the Cutfac workspace at ${root} and fix what it lists, ` +
+    'following "Import a template from a link" in the cutfac skill. Ask me before installing anything.'
   );
 }
 

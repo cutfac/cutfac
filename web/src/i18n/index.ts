@@ -11,7 +11,7 @@ export type { Messages } from "./en.tsx";
 
 const DICTIONARIES: Record<Locale, Messages> = { en, ko };
 
-const STORAGE_KEY = "factory.locale";
+const STORAGE_KEY = "cutfac.locale";
 
 function readStored(): string | null {
   try {

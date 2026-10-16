@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import type { FactoryDesktop } from "../web/src/desktop.ts";
+import type { CutfacDesktop } from "../web/src/desktop.ts";
 import {
   EDIT_COMMAND_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
@@ -33,6 +33,6 @@ const bridge = {
     };
   },
   platform: `${SYSTEM_NAMES[process.platform] ?? process.platform} ${process.getSystemVersion()}`,
-} satisfies FactoryDesktop;
+} satisfies CutfacDesktop;
 
-contextBridge.exposeInMainWorld("factoryDesktop", bridge);
+contextBridge.exposeInMainWorld("cutfacDesktop", bridge);

@@ -512,7 +512,7 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   const folder = yield* ws.abs(item.dir);
 
   const lines = [
-    `Edit request ${f.id} on content item "${item.id}" (${item.doc.title}) in the Content Factory workspace at ${ws.root}. Follow the content-factory skill.`,
+    `Edit request ${f.id} on content item "${item.id}" (${item.doc.title}) in the Cutfac workspace at ${ws.root}. Follow the cutfac skill.`,
     "",
     `Request: ${f.body}`,
     "",

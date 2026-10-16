@@ -17,6 +17,7 @@ import {
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import { CLAUDE_MCP_TOOLS } from "./agents.ts";
 import {
   baselineMillis,
   beginEdit,
@@ -26,7 +27,7 @@ import {
   waitingLine,
   waitingPick,
 } from "./edits.ts";
-import { CommandFailed, Conflict, type FactoryError } from "./errors.ts";
+import { CommandFailed, Conflict, type CutfacError } from "./errors.ts";
 import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { commandOptions, spawnFailure, tail, which } from "./process.ts";
@@ -423,9 +424,7 @@ interface Attempt extends Progress {
 }
 
 /** Where a conversation keeps its session; `undefined` forgets it. */
-export type SaveSession<R> = (
-  sessionId: string | undefined,
-) => Effect.Effect<void, FactoryError, R>;
+export type SaveSession<R> = (sessionId: string | undefined) => Effect.Effect<void, CutfacError, R>;
 
 /**
  * Spawn the agent, stream its stdout through `parse`, and save its session the moment it is known
@@ -509,7 +508,7 @@ export interface Conversation<R> {
   /** The session to resume, if there is one. */
   readonly stored: string | undefined;
   /** The command line for the turn; with no session to resume, the prompt must stand alone. */
-  readonly invocation: (session: SessionArgs) => Effect.Effect<AgentInvocation, FactoryError, R>;
+  readonly invocation: (session: SessionArgs) => Effect.Effect<AgentInvocation, CutfacError, R>;
   readonly save: SaveSession<R>;
   readonly emit: Emit;
 }
@@ -587,7 +586,10 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
           ...session,
           bin,
           prompt,
-          allowedTools: toolsFor(ws.config.agent.claudeAllowedTools, formatTools),
+          allowedTools: toolsFor(
+            [...ws.config.agent.claudeAllowedTools, CLAUDE_MCP_TOOLS],
+            formatTools,
+          ),
           mcpConfig,
           image,
           hosts: sourceHosts(item.doc.sources),
@@ -629,7 +631,7 @@ export const runEdit = Effect.fn("agentRun.runEdit")(function* (input: RunInput,
   const pick: AgentPick = { agent, model, effort };
   const startedAt = yield* nowIso;
 
-  const recordFailure = (error: FactoryError) =>
+  const recordFailure = (error: CutfacError) =>
     Effect.gen(function* () {
       const finishedAt = yield* nowIso;
       yield* setRun(itemId, feedbackId, {
@@ -894,7 +896,7 @@ export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R | 
 });
 
 export class RunRegistry extends Context.Service<RunRegistry, Runs<RunInput>>()(
-  "content-factory/RunRegistry",
+  "cutfac/RunRegistry",
 ) {
   static readonly layer = runsLayer(RunRegistry, editRuns(runEdit));
 }

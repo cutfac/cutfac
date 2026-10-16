@@ -62,7 +62,7 @@ const ItemInputs = Schema.Struct({
   doc: Schema.Struct({ inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)) }),
 });
 
-/** A newline-delimited JSON-RPC client for `factory mcp`, the way Claude Code talks to it. */
+/** A newline-delimited JSON-RPC client for `cutfac mcp`, the way Claude Code talks to it. */
 function startServer(root: string) {
   const child = Bun.spawn(["bun", CLI, "mcp", "--workspace", root], {
     stdin: "pipe",
@@ -177,12 +177,9 @@ test("lists the workspace tools", async () => {
 }, 20_000);
 
 test("keeps the workspace skill current and tells the agent about an edited copy", async () => {
-  const bundled = await readFile(
-    join(import.meta.dir, "../skills/content-factory/SKILL.md"),
-    "utf8",
-  );
+  const bundled = await readFile(join(import.meta.dir, "../skills/cutfac/SKILL.md"), "utf8");
 
-  const copy = join(t.root, ".claude/skills/content-factory/SKILL.md");
+  const copy = join(t.root, ".claude/skills/cutfac/SKILL.md");
 
   // The server installed it on start.
   expect(await readFile(copy, "utf8")).toBe(bundled);
@@ -193,7 +190,7 @@ test("keeps the workspace skill current and tells the agent about an edited copy
   const { notices } = await server.call("workspace_overview", {}, Overview);
 
   expect(notices).toHaveLength(1);
-  expect(notices[0]).toContain(".claude/skills/content-factory/SKILL.md");
+  expect(notices[0]).toContain(".claude/skills/cutfac/SKILL.md");
 
   const skill = await server.call("get_skill", {}, Skill);
 

@@ -1,5 +1,5 @@
 /**
- * The SPA talks to the local factory server. Same-origin by default; a hosted UI can point
+ * The SPA talks to the local Cutfac server. Same-origin by default; a hosted UI can point
  * at a local daemon with ?api=http://localhost:4317 (stored per browser).
  */
 const API_BASE = readApiBase();
@@ -8,9 +8,9 @@ function readApiBase(): string {
   const fromQuery = new URLSearchParams(location.search).get("api");
 
   try {
-    if (fromQuery !== null) localStorage.setItem("factory.api", fromQuery);
+    if (fromQuery !== null) localStorage.setItem("cutfac.api", fromQuery);
 
-    return fromQuery ?? localStorage.getItem("factory.api") ?? "";
+    return fromQuery ?? localStorage.getItem("cutfac.api") ?? "";
   } catch {
     return fromQuery ?? "";
   }

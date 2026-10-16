@@ -177,7 +177,7 @@ describe("learn", () => {
     t = await makeWorkspace();
     // A PATH of only fakes: yt-dlp and whisper are never found, so nothing is downloaded or run.
     fakes = await makeFakeAgents();
-    outside = await mkdtemp(join(tmpdir(), "factory-learn-"));
+    outside = await mkdtemp(join(tmpdir(), "cutfac-learn-"));
     requested.length = 0;
   });
 
@@ -413,7 +413,7 @@ describe.skipIf(!hasFfmpeg)("learning a video file", () => {
   beforeEach(async () => {
     t = await makeWorkspace();
     fakes = await makeFakeAgents();
-    outside = await mkdtemp(join(tmpdir(), "factory-learn-"));
+    outside = await mkdtemp(join(tmpdir(), "cutfac-learn-"));
   });
 
   afterEach(async () => {

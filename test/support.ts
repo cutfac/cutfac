@@ -28,10 +28,10 @@ export interface TestWorkspace {
   readonly remove: () => Promise<void>;
 }
 
-/** A fresh folder with a factory.yaml, removed by `remove`. */
+/** A fresh folder with a cutfac.yaml, removed by `remove`. */
 export async function makeWorkspace(name = "test"): Promise<TestWorkspace> {
-  const root = await mkdtemp(join(tmpdir(), "factory-test-"));
-  await writeFile(join(root, "factory.yaml"), `name: ${name}\n`);
+  const root = await mkdtemp(join(tmpdir(), "cutfac-test-"));
+  await writeFile(join(root, "cutfac.yaml"), `name: ${name}\n`);
 
   const layer = Workspace.layer(root).pipe(Layer.provideMerge(BunServices.layer), Layer.orDie);
 
@@ -62,7 +62,7 @@ export interface FakeAgents {
  * machine is never found or run. Throws if one still is.
  */
 export async function makeFakeAgents(): Promise<FakeAgents> {
-  const dir = await mkdtemp(join(tmpdir(), "factory-fake-agent-"));
+  const dir = await mkdtemp(join(tmpdir(), "cutfac-fake-agent-"));
   const calls = join(dir, "calls");
   await mkdir(join(dir, "bin"));
   await mkdir(calls);

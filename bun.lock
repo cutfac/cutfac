@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "content-factory",
+      "name": "cutfac",
       "dependencies": {
         "@effect/platform-bun": "4.0.3",
         "effect": "4.0.3",

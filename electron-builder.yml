@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=node_modules/app-builder-lib/scheme.json
-appId: dev.contentfactory.app
-productName: Content Factory
-copyright: Copyright © Content Factory contributors
+appId: dev.cutfac.app
+productName: Cutfac
+copyright: Copyright © Cutfac contributors
 directories:
   output: release
 
@@ -15,8 +15,8 @@ files:
 npmRebuild: false
 
 extraResources:
-  - from: dist/sidecar/factory
-    to: bin/factory
+  - from: dist/sidecar/cutfac
+    to: bin/cutfac
   - from: dist/web
     to: web
 
@@ -30,7 +30,7 @@ mac:
       arch: arm64
     - target: zip
       arch: arm64
-  artifactName: content-factory-${version}-${arch}.${ext}
+  artifactName: cutfac-${version}-${arch}.${ext}
   # Signed with the Developer ID certificate in the keychain, under the hardened runtime with
   # build/entitlements.mac*.plist. Notarized when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and
   # APPLE_TEAM_ID are set; `bun run release:desktop` requires them.
@@ -39,9 +39,9 @@ mac:
 # second, the bucket that CDN serves. Objects stay private: the CDN reads them, not the public.
 publish:
   - provider: generic
-    url: https://d29h6uqmny45z2.cloudfront.net/content-factory/mac
+    url: https://d29h6uqmny45z2.cloudfront.net/cutfac/mac
   - provider: s3
     bucket: shotomatic
     region: us-east-2
-    path: content-factory/mac
+    path: cutfac/mac
     acl: null

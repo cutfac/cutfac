@@ -12,10 +12,10 @@ import {
   IMPORT_TURN_KINDS,
 } from "./schema.ts";
 import { installedSkills, mirrorSkills } from "./skill.ts";
-import { Workspace, foldersWith, nowIso } from "./workspace.ts";
+import { STATE_DIR, Workspace, foldersWith, nowIso } from "./workspace.ts";
 
 /** Imports are the board's own records, so they live in a dot folder the file watcher skips. */
-export const IMPORTS_DIR = ".factory/imports";
+export const IMPORTS_DIR = `${STATE_DIR}/imports`;
 
 export interface Import {
   readonly id: string;
@@ -251,14 +251,14 @@ export function languageName(locale: string): string | undefined {
   }
 }
 
-const SKILL_SECTION = '"Import a template from a link" in the content-factory skill';
+const SKILL_SECTION = '"Import a template from a link" in the cutfac skill';
 
 /** The first message: read the link, report what it needs, and wait for the user to allow it. */
 export function startPrompt(doc: ImportDoc): string {
   const language = doc.locale === undefined ? undefined : languageName(doc.locale);
 
   return [
-    `The user wants to bring in a template from ${doc.link}. You are running from the Content Factory board, which shows the user your replies and sends you theirs.`,
+    `The user wants to bring in a template from ${doc.link}. You are running from the Cutfac board, which shows the user your replies and sends you theirs.`,
     `Follow ${SKILL_SECTION}; call get_skill if you do not have it.`,
     "",
     "For now you can only read: the link, the web, and the workspace. Installing, downloading, and writing stay blocked until the user presses Allow on the board.",

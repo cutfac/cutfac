@@ -17,7 +17,7 @@ import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.t
 
 export const ITEM_FILE = "item.yaml";
 
-/** Folders that already hold one of these are items even without item.yaml (pre-factory layouts). */
+/** Folders that already hold one of these are items even without item.yaml (pre-Cutfac layouts). */
 const LEGACY_MARKERS = ["POSTING.md", "STATUS.md"];
 
 const SKIP_DIRS = new Set(["node_modules", "review", "frames", "raw", "edits", "history"]);

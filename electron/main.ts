@@ -37,9 +37,9 @@ import { startSidecar, type Sidecar } from "./sidecar.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to.
-const devUrl = process.env.FACTORY_DEV_URL || undefined;
+const devUrl = process.env.CUTFAC_DEV_URL || undefined;
 
-const devPort = Number.parseInt(process.env.FACTORY_PORT ?? "4317", 10);
+const devPort = Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10);
 
 const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 
@@ -60,7 +60,7 @@ let quitting = false;
 let locale: Locale = "en";
 
 // Keeps the same userData folder whether packaged or not, so the saved workspace is shared.
-app.setName("Content Factory");
+app.setName("Cutfac");
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

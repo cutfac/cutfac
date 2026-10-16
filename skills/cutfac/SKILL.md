@@ -1,13 +1,13 @@
 ---
-name: content-factory
-description: Work inside a Content Factory workspace — learn the user's product and the short-form videos they like, turn them into reusable formats, produce short-form items (9:16 video, carousels) that market the user's app, handle review feedback from the web board, and verify uploads. Use whenever the user mentions learning, references, formats, items, the board, feedback, or short-form content for their app.
+name: cutfac
+description: Work inside a Cutfac workspace — learn the user's product and the short-form videos they like, turn them into reusable formats, produce short-form items (9:16 video, carousels) that market the user's app, handle review feedback from the web board, and verify uploads. Use whenever the user mentions learning, references, formats, items, the board, feedback, or short-form content for their app.
 ---
 
-# Content Factory
+# Cutfac
 
 The workspace is the source of truth. Everything lives on the user's machine as folders and YAML;
-the `content-factory` MCP tools read and write the same files, and the user watches results in the
-local web board (`factory serve`). Use the MCP tools for structured fields; write media directly
+the `cutfac` MCP tools read and write the same files, and the user watches results in the
+local web board (`cutfac serve`). Use the MCP tools for structured fields; write media directly
 into folders.
 
 ## Start of every task

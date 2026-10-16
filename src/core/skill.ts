@@ -8,8 +8,8 @@ import { Workspace, foldersWith } from "./workspace.ts";
 /** Where Claude Code and Codex look for a workspace's Agent Skills. */
 export const SKILL_FOLDERS = [".agents/skills", ".claude/skills"] as const;
 
-/** The workspace's copies of the content-factory skill, one per agent. */
-export const SKILL_PATHS = SKILL_FOLDERS.map((folder) => `${folder}/content-factory/SKILL.md`);
+/** The workspace's copies of the cutfac skill, one per agent. */
+export const SKILL_PATHS = SKILL_FOLDERS.map((folder) => `${folder}/cutfac/SKILL.md`);
 
 /** The skill this build ships, and every version an earlier build may have installed. */
 export interface BundledSkill {
@@ -19,7 +19,7 @@ export interface BundledSkill {
 }
 
 /**
- * Add the new hash here whenever skills/content-factory/SKILL.md changes; a test fails until you
+ * Add the new hash here whenever skills/cutfac/SKILL.md changes; a test fails until you
  * do. Without it, workspaces holding the version before would keep it as if it had been edited.
  */
 export const BUNDLED_SKILL: BundledSkill = {
@@ -40,6 +40,7 @@ export const BUNDLED_SKILL: BundledSkill = {
     "b9e13649e8cb4ee6a345bcf97c17ab602b058ae203b5800fd60dcfa07d3b98f0",
     "f002b87b5b209d35de0d8d338f68dbb824dd430e53f03a7f7ea70b054efda8a4",
     "adb83db1c490598ab2487c79767ce6258bbadacdaaa22bf72063f3a100147a6a",
+    "5eff001b33097e031fa699ad332a2fa01be91e023271ef5143844afa235e2178",
   ]),
 };
 
@@ -163,7 +164,7 @@ export function skillNotices(copies: ReadonlyArray<SkillCopy>): string[] {
         return [];
       case "edited":
         return [
-          `${path} differs from the content-factory skill this version of Content Factory ships, ` +
+          `${path} differs from the cutfac skill this version of Cutfac ships, ` +
             "so it was left as it is. Call get_skill, tell the user what is new, and with their " +
             "consent merge it into that file, keeping their own changes.",
         ];

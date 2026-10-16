@@ -3,6 +3,7 @@ import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
 import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 
+import { SERVER_NAME } from "../core/agents.ts";
 import { resolveEdit } from "../core/edits.ts";
 import {
   CommandFailed,
@@ -42,15 +43,13 @@ import {
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
 
-export const MCP_NAME = "content-factory";
-
 export const MCP_VERSION = "0.1.0";
 
 const INSTRUCTIONS =
-  "Content Factory workspace tools. Start with workspace_overview and act on its notices first. Items, learned sources, and formats are folders on disk; " +
+  "Cutfac workspace tools. Start with workspace_overview and act on its notices first. Items, learned sources, and formats are folders on disk; " +
   "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item and review_media. " +
   "Read about.md (its path is in workspace_overview) before writing copy. Resolve each open feedback entry after addressing it. " +
-  "Formats are templates: to turn a link into one, follow the content-factory skill's import steps, then call check_format until it is ready.";
+  "Formats are templates: to turn a link into one, follow the cutfac skill's import steps, then call check_format until it is ready.";
 
 /** How long a markdown doc in get_item may be before it is cut. */
 const DOC_PREVIEW_CHARS = 8000;
@@ -58,7 +57,7 @@ const DOC_PREVIEW_CHARS = 8000;
 const describe = (description: string) => ({ description });
 
 /** Every error the core raises. Each carries a message, which the agent sees as the tool error. */
-const FactoryFailure = Schema.Union([
+const CutfacFailure = Schema.Union([
   WorkspaceError,
   NotFound,
   InvalidRequest,
@@ -158,7 +157,7 @@ const tool = <
     description: options.description,
     parameters: options.parameters,
     success: options.success,
-    failure: FactoryFailure,
+    failure: CutfacFailure,
   })
     .annotate(Tool.Readonly, options.readonly === true)
     .annotate(Tool.Destructive, options.overwrites === true)
@@ -372,7 +371,7 @@ const SaveFormat = tool("save_format", {
 
 const GetSkill = tool("get_skill", {
   description:
-    "The content-factory skill this version of Content Factory ships, and the workspace's copies of it. " +
+    "The cutfac skill this version of Cutfac ships, and the workspace's copies of it. " +
     "Missing and outdated copies are replaced on their own; an edited copy is the user's, so change it only with their consent.",
   success: Schema.Struct({
     markdown: Schema.String.annotate(describe("the bundled SKILL.md")),
@@ -401,7 +400,7 @@ const CheckFormat = tool("check_format", {
   readonly: true,
 });
 
-export const FactoryToolkit = Toolkit.make(
+export const CutfacToolkit = Toolkit.make(
   WorkspaceOverview,
   Learn,
   ListItems,
@@ -442,7 +441,7 @@ const countBy = <A>(values: ReadonlyArray<A>, key: (value: A) => string) => {
  */
 const asJson = <A>(value: A): A => JSON.parse(JSON.stringify(value));
 
-const handlers = FactoryToolkit.toLayer(
+const handlers = CutfacToolkit.toLayer(
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolServices>();
     const ws = yield* Workspace;
@@ -458,7 +457,7 @@ const handlers = FactoryToolkit.toLayer(
         Effect.map(ws.abs(copy.path), (path) => ({ ...copy, path })),
       );
 
-    return FactoryToolkit.of({
+    return CutfacToolkit.of({
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
@@ -658,7 +657,7 @@ const SkillSync = Layer.effectDiscard(
     Effect.flatMap((copies) =>
       Effect.forEach(
         copies.filter(isStale),
-        (copy) => Effect.logInfo(`Wrote the content-factory skill to ${copy.path}`),
+        (copy) => Effect.logInfo(`Wrote the cutfac skill to ${copy.path}`),
         { discard: true },
       ),
     ),
@@ -670,11 +669,11 @@ const SkillSync = Layer.effectDiscard(
  * The workspace tools over stdio. Stdout carries the protocol, so logs go to stderr.
  * Needs the workspace, Stdio, and the platform services the core uses.
  */
-export const mcpLayer = McpServer.toolkit(FactoryToolkit).pipe(
+export const mcpLayer = McpServer.toolkit(CutfacToolkit).pipe(
   Layer.provide(handlers),
   Layer.provide(
     McpServer.layerStdio({
-      name: MCP_NAME,
+      name: SERVER_NAME,
       version: MCP_VERSION,
       instructions: INSTRUCTIONS,
       protocols: [

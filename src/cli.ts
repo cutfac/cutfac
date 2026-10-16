@@ -6,7 +6,13 @@ import { Cause, Console, Effect, FileSystem, Layer, Option, Path } from "effect"
 import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
-import { type CliEntry, codexServerName, connectAgent, mcpLaunch } from "./core/agents.ts";
+import {
+  type CliEntry,
+  SERVER_NAME,
+  codexServerName,
+  connectAgent,
+  mcpLaunch,
+} from "./core/agents.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { syncSkill } from "./core/skill.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
@@ -70,7 +76,7 @@ const printAgentSetup = Effect.fn("cli.printAgentSetup")(function* () {
 Connect your agent (run inside ${ws.root}):
 
   Claude Code:
-    claude mcp add --scope project content-factory -- ${[launch.command, ...launch.args].join(" ")}
+    claude mcp add --scope project ${SERVER_NAME} -- ${[launch.command, ...launch.args].join(" ")}
 
   Codex (~/.codex/config.toml):
     [mcp_servers.${codexServerName(ws.config.name)}]
@@ -97,7 +103,7 @@ const syncSkillCopies = Effect.fn("cli.syncSkillCopies")(function* () {
   }
 });
 
-/** Everything a workspace needs besides factory.yaml: its folders and the skill. */
+/** Everything a workspace needs besides cutfac.yaml: its folders and the skill. */
 const scaffold = Effect.fn("cli.scaffold")(function* () {
   const ws = yield* Workspace;
   const { paths } = ws.config;
@@ -135,9 +141,7 @@ const init = Command.make(
     });
 
     yield* Console.log(
-      created
-        ? `Created ${path.join(root, CONFIG_FILE)}`
-        : `${CONFIG_FILE} already exists in ${root}`,
+      created ? `Created ${path.join(root, CONFIG_FILE)}` : `${root} is already a workspace`,
     );
 
     yield* Effect.gen(function* () {
@@ -193,7 +197,7 @@ const serve = Command.make(
         ? ""
         : "  (API only — run `bun run build` or `bun run dev:web`)";
 
-      yield* Console.log(`Content Factory · ${ws.config.name}`);
+      yield* Console.log(`Cutfac · ${ws.config.name}`);
       yield* Console.log(`  workspace  ${ws.root}`);
       yield* Console.log(
         `  web        http://${host === "0.0.0.0" ? "localhost" : host}:${port}${note}`,
@@ -252,8 +256,8 @@ const agentSetup = Command.make(
   Command.withDescription("Connect Claude Code and Codex, or print the commands to do it yourself"),
 );
 
-const factory = Command.make("factory").pipe(
-  Command.withDescription("Content Factory — a local short-form content factory"),
+const cutfac = Command.make("cutfac").pipe(
+  Command.withDescription("Cutfac — make short-form videos with your own agent"),
   Command.withSubcommands([init, serve, mcp, learnCommand, agentSetup]),
 );
 
@@ -273,7 +277,7 @@ const report = (cause: Cause.Cause<unknown>) => {
   return Console.error(message);
 };
 
-Command.run(factory, { version: MCP_VERSION }).pipe(
+Command.run(cutfac, { version: MCP_VERSION }).pipe(
   Effect.tapCause(report),
   Effect.provide([FetchHttpClient.layer, BunServices.layer]),
   BunRuntime.runMain({ disableErrorReporting: true }),

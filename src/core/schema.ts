@@ -113,10 +113,9 @@ export const DEFAULT_CLAUDE_TOOLS = [
   "Bash(mkdir:*)",
   "Bash(cp:*)",
   "Bash(mv:*)",
-  "mcp__content-factory",
 ];
 
-/** factory.yaml at the workspace root. Paths are workspace-relative. */
+/** cutfac.yaml at the workspace root. Paths are workspace-relative. */
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
   paths: Schema.Struct({
@@ -260,7 +259,7 @@ export const ImportBaseline = Schema.Struct({
 
 export type ImportBaseline = typeof ImportBaseline.Type;
 
-/** .factory/imports/<id>.yaml: a template brought in from a link by the user's agent. */
+/** .cutfac/imports/<id>.yaml: a template brought in from a link by the user's agent. */
 export const ImportDoc = Schema.Struct({
   link: Url,
   agent: AgentName,
@@ -558,7 +557,7 @@ export const FormatDoc = Schema.Struct({
   inputs: Schema.Array(InputField).pipe(withDefault([])),
   metadata: Schema.optional(
     Schema.Record(Schema.String, Schema.Unknown).annotate(
-      describe("anything else the format's own tools keep; content-factory leaves it alone"),
+      describe("anything else the format's own tools keep; Cutfac leaves it alone"),
     ),
   ),
 });

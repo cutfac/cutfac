@@ -15,7 +15,7 @@ import {
 } from "../src/core/skill.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
-const SKILL_FILE = join(import.meta.dir, "../skills/content-factory/SKILL.md");
+const SKILL_FILE = join(import.meta.dir, "../skills/cutfac/SKILL.md");
 
 const [AGENTS_COPY = "", CLAUDE_COPY = ""] = SKILL_PATHS;
 

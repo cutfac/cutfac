@@ -96,7 +96,7 @@ async function release(): Promise<void> {
 
   if (problem) throw new Error(problem);
 
-  console.log(`[release] Building Content Factory ${version}.`);
+  console.log(`[release] Building Cutfac ${version}.`);
   await run(["bun", "run", "build"]);
   await run(["bun", "run", "build:sidecar"]);
   await run(["bun", "run", "build:electron"]);

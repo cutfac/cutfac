@@ -29,7 +29,7 @@ import { api, fileUrl, STATUSES, type ItemSummary } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 
-const LEARN_HINT_KEY = "factory.learnHint.dismissed";
+const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
 function readHintDismissed(): boolean {
   try {

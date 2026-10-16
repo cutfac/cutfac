@@ -31,7 +31,7 @@ import {
   turnMessage,
 } from "../src/core/imports.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
-import { FactoryToolkit } from "../src/mcp/server.ts";
+import { CutfacToolkit } from "../src/mcp/server.ts";
 import {
   type FakeAgents,
   type TestServices,
@@ -40,7 +40,7 @@ import {
   type TestWorkspace,
 } from "./support.ts";
 
-const SERVER: McpLaunch = { command: "factory", args: ["mcp", "--workspace", "/w"] };
+const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"] };
 
 let t: TestWorkspace;
 
@@ -69,7 +69,7 @@ const READ_TOOLS: ReadonlySet<string> = new Set(MCP_READ_TOOLS);
 const WRITE_TOOLS: ReadonlySet<string> = new Set(MCP_WRITE_TOOLS);
 
 test("every MCP tool is either a read tool or a write tool, matching its readonly annotation", () => {
-  const tools = Object.values(FactoryToolkit.tools);
+  const tools = Object.values(CutfacToolkit.tools);
 
   expect(tools.length).toBe(MCP_READ_TOOLS.length + MCP_WRITE_TOOLS.length);
 
@@ -94,14 +94,14 @@ test("Claude reads only, with only this workspace's server, until the user allow
   expect(tools).not.toContain("Edit");
   expect(tools.some((tool) => tool.startsWith("Bash"))).toBe(false);
   expect(allowed.some((tool) => tool.startsWith("Bash"))).toBe(false);
-  expect(allowed).toContain("mcp__content-factory__get_skill");
-  expect(allowed).not.toContain("mcp__content-factory__save_format");
-  expect(denied).toContain("mcp__content-factory__save_format");
-  expect(denied).toContain("mcp__content-factory__create_item");
+  expect(allowed).toContain("mcp__cutfac__get_skill");
+  expect(allowed).not.toContain("mcp__cutfac__save_format");
+  expect(denied).toContain("mcp__cutfac__save_format");
+  expect(denied).toContain("mcp__cutfac__create_item");
   expect(args).toContain("--strict-mcp-config");
 
   expect(JSON.parse(valueOf(args, "--mcp-config"))).toEqual({
-    mcpServers: { "content-factory": SERVER },
+    mcpServers: { cutfac: SERVER },
   });
 });
 
@@ -150,7 +150,7 @@ test("after Allow, Claude may fetch and write in the workspace, but not run what
   expect(allowed).toContain("Bash(git clone:*)");
   expect(allowed).not.toContain("Bash(npx:*)");
   expect(allowed.some((tool) => tool.startsWith("Bash(git -C"))).toBe(false);
-  expect(allowed).toContain("mcp__content-factory");
+  expect(allowed).toContain("mcp__cutfac");
   expect(args).toContain("--strict-mcp-config");
 });
 
@@ -158,25 +158,23 @@ test("after Allow, Claude may fetch and write in the workspace, but not run what
 const entries = (args: ReadonlyArray<string>) => args.filter((_, i) => args[i - 1] === "-c");
 
 test("Codex reads only, with every other MCP server off, until the user allows", () => {
-  const config = entries(codexImportConfig("read", SERVER, "content-factory-x", ["github", "a.b"]));
+  const config = entries(codexImportConfig("read", SERVER, "cutfac-x", ["github", "a.b"]));
 
   expect(config).toContain('sandbox_mode="read-only"');
   expect(config).toContain("features.plugins=false");
   expect(config).toContain("features.apps=false");
   expect(config).toContain("mcp_servers.github.enabled=false");
   expect(config).toContain('mcp_servers."a.b".enabled=false');
-  expect(config).toContain('mcp_servers.content-factory-x.command="factory"');
+  expect(config).toContain('mcp_servers.cutfac-x.command="cutfac"');
 
-  expect(config).toContain(
-    `mcp_servers.content-factory-x.enabled_tools=${JSON.stringify(MCP_READ_TOOLS)}`,
-  );
+  expect(config).toContain(`mcp_servers.cutfac-x.enabled_tools=${JSON.stringify(MCP_READ_TOOLS)}`);
 
   expect(config).toContain('approval_policy="never"');
   expect(config.some((entry) => entry.includes("network_access"))).toBe(false);
 });
 
 test("after Allow, Codex may write in the workspace and reach the network", () => {
-  const config = entries(codexImportConfig("install", SERVER, "content-factory-x", ["github"]));
+  const config = entries(codexImportConfig("install", SERVER, "cutfac-x", ["github"]));
 
   expect(config).toContain('sandbox_mode="workspace-write"');
   expect(config).toContain("sandbox_workspace_write.network_access=true");
@@ -206,7 +204,7 @@ test("an import refuses a link that carries a password or token", async () => {
 });
 
 test("an import id cannot name a file outside the imports folder", async () => {
-  const error = await t.fail(getImport("../factory"));
+  const error = await t.fail(getImport("../cutfac"));
 
   expect(error._tag).toBe("NotFound");
 });
@@ -275,7 +273,7 @@ test("imports list newest first and skip a file that does not read", async () =>
   const first = await t.run(createImport({ link: "https://example.com/a", agent: "claude" }));
   await Bun.sleep(5);
   const second = await t.run(createImport({ link: "https://example.com/b", agent: "claude" }));
-  await write(".factory/imports/0badf00d.yaml", "link: [not a doc");
+  await write(".cutfac/imports/0badf00d.yaml", "link: [not a doc");
 
   const listed = await t.run(listImports());
 
@@ -614,8 +612,8 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
   });
 
   test("Codex's other MCP servers are listed, and the run fails closed without them", async () => {
-    const ours = "content-factory-imports";
-    const listed = '[{"name":"content-factory-imports"},{"name":"github"},{"name":"a.b"}]';
+    const ours = "cutfac-imports";
+    const listed = '[{"name":"cutfac-imports"},{"name":"github"},{"name":"a.b"}]';
     const codex = await fakeBin("codex", `echo '${listed}'\n`);
 
     expect(await t.run(codexOtherServers(codex, ours))).toEqual(["github", "a.b"]);

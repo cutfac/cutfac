@@ -3,7 +3,7 @@ import type { Locale } from "./i18n/locale.ts";
 export type EditCommand = "undo" | "redo";
 
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
-export interface FactoryDesktop {
+export interface CutfacDesktop {
   /** Ask for a workspace folder and restart the local server on it. Resolves false if cancelled. */
   openWorkspace: () => Promise<boolean>;
   /** Show a workspace file or folder in Finder / Explorer. `path` is absolute. */
@@ -23,8 +23,8 @@ export interface FactoryDesktop {
 
 declare global {
   interface Window {
-    factoryDesktop?: FactoryDesktop;
+    cutfacDesktop?: CutfacDesktop;
   }
 }
 
-export const desktop: FactoryDesktop | undefined = window.factoryDesktop;
+export const desktop: CutfacDesktop | undefined = window.cutfacDesktop;

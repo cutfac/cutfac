@@ -19,9 +19,9 @@ const bin = (name: string) => path.join(root, "node_modules", ".bin", name);
 
 const log = (message: string) => console.log(`[desktop:dev] ${message}`);
 
-// Never a fixed default: 4317 is what `factory serve` uses, and it may be someone's real board.
-const serverPort = process.env.FACTORY_PORT
-  ? Number.parseInt(process.env.FACTORY_PORT, 10)
+// Never a fixed default: 4317 is what `cutfac serve` uses, and it may be someone's real board.
+const serverPort = process.env.CUTFAC_PORT
+  ? Number.parseInt(process.env.CUTFAC_PORT, 10)
   : await probePort(0);
 
 let vitePort = await probePort(0);
@@ -30,7 +30,7 @@ while (vitePort === serverPort) vitePort = await probePort(0);
 
 const devUrl = `http://localhost:${vitePort}`;
 
-const env = { ...process.env, FACTORY_PORT: String(serverPort), FACTORY_DEV_URL: devUrl };
+const env = { ...process.env, CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
 
 const spawnLogged = (command: string[]) =>
   Bun.spawn(command, { cwd: root, env, stdio: ["ignore", "inherit", "inherit"] });

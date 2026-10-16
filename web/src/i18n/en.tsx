@@ -20,10 +20,10 @@ export const en = {
     couldNotCopy: (message: string) => `Could not copy: ${message}`,
   },
   app: {
-    unreachable: "Cannot reach the factory server",
+    unreachable: "Cannot reach the Cutfac server",
   },
   nav: {
-    appName: "Content Factory",
+    appName: "Cutfac",
     openWorkspace: "Open workspace…",
     newVideo: "New video",
     main: "Main",
@@ -230,7 +230,7 @@ export const en = {
     } satisfies Record<AgentChoice, string>,
     connectTitle: "Connect your agent",
     connectBody:
-      "Your agent does the production and editing. The factory gives it tools, files, and your feedback.",
+      "Your agent does the production and editing. Cutfac gives it tools, files, and your feedback.",
     agentsError: "Could not check for installed agents",
     readyTitle: "You're set",
     readyBody: (board: Link, learn: Link) => (
@@ -241,15 +241,15 @@ export const en = {
     ),
     workspaceTitle: "Your workspace",
     workspaceBody:
-      "Everything the factory makes is a plain file in this folder. You can back it up or put it in git.",
+      "Everything Cutfac makes is a plain file in this folder. You can back it up or put it in git.",
     name: "Name",
     folder: "Folder",
     defaultAgent: "Default agent",
     showFolder: "Show folder",
     connected: (agent: string) => `${agent} is connected`,
     connectFailed: (agent: string) => `Could not connect ${agent}`,
-    agentReady: "Ready. It can use the factory's tools.",
-    agentFound: "Found on this computer. Connect it so it can use the factory's tools.",
+    agentReady: "Ready. It can use Cutfac's tools.",
+    agentFound: "Found on this computer. Connect it so it can use Cutfac's tools.",
     agentMissing: "Not installed on this computer.",
     connectedBadge: "Connected",
     connecting: "Connecting…",
