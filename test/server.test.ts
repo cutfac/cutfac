@@ -125,7 +125,7 @@ describe("routes", () => {
 
     const listed = await send("/api/items");
 
-    expect(await listed.json()).toMatchObject([{ id: "first-cut", status: "idea" }]);
+    expect(await listed.json()).toMatchObject([{ id: "first-cut", status: "drafting" }]);
 
     const patched = await sendJson("PATCH", "/api/item?id=first-cut", { status: "review" });
 

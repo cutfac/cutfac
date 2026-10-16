@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import { InvalidRequest, NotFound, WorkspaceError } from "../src/core/errors.ts";
 import {
@@ -16,18 +16,43 @@ import {
   updateItem,
   upgradeItemDoc,
 } from "../src/core/items.ts";
+import { currentStatus, DetailValues } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("legacyStatus", () => {
   test("maps free-form status lines", () => {
-    expect(legacyStatus("- status: published on TikTok", true)).toBe("published");
-    expect(legacyStatus("- status: scheduled 2026-05-01", true)).toBe("scheduled");
-    expect(legacyStatus("- Status: ready-to-schedule", true)).toBe("approved");
+    expect(legacyStatus("- status: published on TikTok", true)).toBe("done");
+    expect(legacyStatus("- status: scheduled 2026-05-01", true)).toBe("done");
+    expect(legacyStatus("- Status: ready-to-schedule", true)).toBe("done");
+    expect(legacyStatus("- status: approved, archived", true)).toBe("archived");
     expect(legacyStatus("* status: in review", true)).toBe("review");
     expect(legacyStatus("- status: draft", false)).toBe("drafting");
     expect(legacyStatus("# Notes", true)).toBe("review");
-    expect(legacyStatus("", false)).toBe("idea");
+    expect(legacyStatus("", false)).toBe("drafting");
+  });
+});
+
+describe("currentStatus", () => {
+  test("reads earlier versions' statuses as the ones that replaced them", () => {
+    expect((["idea", "approved", "scheduled", "published"] as const).map(currentStatus)).toEqual([
+      "drafting",
+      "done",
+      "done",
+      "done",
+    ]);
+    expect((["drafting", "review", "done", "archived"] as const).map(currentStatus)).toEqual([
+      "drafting",
+      "review",
+      "done",
+      "archived",
+    ]);
+  });
+
+  test("history entries from earlier versions still decode", () => {
+    expect(Schema.decodeSync(DetailValues)({ status: "approved" })).toEqual({
+      status: "done",
+    });
   });
 });
 
@@ -93,11 +118,11 @@ describe("items in a workspace", () => {
     expect(await t.fail(getItem("missing/item"))).toBeInstanceOf(NotFound);
   });
 
-  test("feedback reopens approved items and resolves", async () => {
+  test("feedback reopens done items and resolves", async () => {
     const { reopened, open, after } = await t.run(
       Effect.gen(function* () {
         const item = yield* createItem({ title: "Hook test" });
-        yield* updateItem(item.id, { status: "approved" });
+        yield* updateItem(item.id, { status: "done" });
 
         const added = yield* addFeedback(item.id, {
           body: "Hook is too slow",
@@ -146,6 +171,24 @@ describe("items in a workspace", () => {
     expect(await Bun.file(join(dir, "item.yaml")).text()).not.toContain("caption:");
   });
 
+  test("a status from an earlier version reads as its successor and is written as one", async () => {
+    const dir = join(t.root, "items/posts/opening");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "item.yaml"), "title: Opening\nstatus: published\n");
+
+    const read = await t.run(
+      Effect.gen(function* () {
+        const before = yield* getItem("posts/opening");
+        yield* updateItem(before.id, { hook: "Win fast" });
+
+        return before;
+      }),
+    );
+
+    expect(read.doc.status).toBe("done");
+    expect(await Bun.file(join(dir, "item.yaml")).text()).toContain("status: done");
+  });
+
   test("discovers legacy folders and upgrades them on write", async () => {
     const dir = join(t.root, "items/lessons/caro-kann");
     await mkdir(join(dir, "frames"), { recursive: true });
@@ -167,7 +210,7 @@ describe("items in a workspace", () => {
     expect([legacy.legacy, legacy.doc.title, legacy.doc.status]).toEqual([
       true,
       "Caro-Kann",
-      "approved",
+      "done",
     ]);
     expect(legacy.media.map((m) => [m.name, m.aspect])).toEqual([["[1x1] 01-hook.jpg", "1x1"]]);
     expect(upgraded.legacy).toBe(false);

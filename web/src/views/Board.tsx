@@ -114,7 +114,7 @@ export function Board() {
               <section
                 key={status}
                 aria-label={t.status[status]}
-                className="flex w-72 shrink-0 flex-col gap-3 rounded-3xl bg-muted/40 p-3"
+                className="flex max-w-96 min-w-72 flex-1 flex-col gap-3 rounded-3xl bg-muted/40 p-3"
               >
                 <h2 className="flex items-center justify-between px-1 text-sm font-medium">
                   {t.status[status]}
@@ -143,7 +143,10 @@ function BoardSkeleton() {
   return (
     <div className="flex min-h-0 flex-1 gap-4 overflow-hidden pb-6" aria-busy="true">
       {[3, 2, 1].map((count) => (
-        <div key={count} className="flex w-72 shrink-0 flex-col gap-3 rounded-3xl bg-muted/40 p-3">
+        <div
+          key={count}
+          className="flex max-w-96 min-w-72 flex-1 flex-col gap-3 rounded-3xl bg-muted/40 p-3"
+        >
           <Skeleton className="h-5 w-24" />
           {Array.from({ length: count }, (_, n) => (
             <Skeleton key={n} className="h-32 w-full" />

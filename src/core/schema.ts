@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Schema, SchemaTransformation } from "effect";
 
 /** A field that is filled in with `value` when a file leaves it out. */
 const withDefault = <S extends Schema.Constraint>(value: S["Encoded"]) =>
@@ -20,19 +20,45 @@ const Url = Schema.String.check(
   Schema.makeFilter((s: string) => URL.canParse(s) || "Expected a URL", { title: "url" }),
 );
 
-export const ITEM_STATUSES = [
-  "idea",
-  "drafting",
-  "review",
-  "approved",
-  "scheduled",
-  "published",
-  "archived",
-] as const;
+/**
+ * An agent works on an item while it is drafting and hands it over in review; the user decides
+ * whether it is done or archived.
+ */
+export const ITEM_STATUSES = ["drafting", "review", "done", "archived"] as const;
 
 export const ItemStatus = Schema.Literals(ITEM_STATUSES);
 
 export type ItemStatus = typeof ItemStatus.Type;
+
+/** Statuses earlier versions wrote. */
+const RETIRED_STATUSES = ["idea", "approved", "scheduled", "published"] as const;
+
+type RetiredStatus = (typeof RETIRED_STATUSES)[number];
+
+/** The status a status from an earlier version reads as now. */
+export function currentStatus(status: ItemStatus | RetiredStatus): ItemStatus {
+  switch (status) {
+    case "idea":
+      return "drafting";
+    case "approved":
+    case "scheduled":
+    case "published":
+      return "done";
+    default:
+      return status;
+  }
+}
+
+/** A status as item.yaml and history.yaml hold it, where earlier versions' statuses may remain. */
+export const StoredItemStatus = Schema.Literals([...ITEM_STATUSES, ...RETIRED_STATUSES]).pipe(
+  Schema.decodeTo(
+    ItemStatus,
+    SchemaTransformation.transform<ItemStatus, ItemStatus | RetiredStatus>({
+      decode: currentStatus,
+      encode: (status) => status,
+    }),
+  ),
+);
 
 export const ASPECTS = ["9x16", "4x5", "3x4", "1x1", "16x9"] as const;
 
@@ -300,7 +326,7 @@ export type ItemSource = typeof ItemSource.Type;
 /** items/<id>/item.yaml */
 export const ItemDoc = Schema.Struct({
   title: Schema.String,
-  status: ItemStatus.pipe(withDefault("idea")),
+  status: ItemStatus.pipe(withDefault("drafting")),
   format: Schema.optional(Schema.String),
   reference: Schema.optional(Schema.String),
   sources: Schema.Array(ItemSource)
@@ -389,7 +415,7 @@ export type DetailField = (typeof DETAIL_FIELDS)[number];
 /** Item fields an undo can put back. `null` is a field that was not set. */
 export const DetailValues = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
-  status: Schema.optionalKey(ItemStatus),
+  status: Schema.optionalKey(StoredItemStatus),
   hook: Schema.optionalKey(Schema.NullOr(Schema.String)),
   notes: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });

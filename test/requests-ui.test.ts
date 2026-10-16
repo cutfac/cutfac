@@ -32,7 +32,7 @@ function itemWith(feedback: Feedback[], extra: Partial<ItemDetail> = {}): ItemDe
     docs: {},
     doc: {
       title: "Item",
-      status: "idea",
+      status: "drafting",
       sources: [],
       feedback,
     },

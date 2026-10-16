@@ -10,6 +10,7 @@ import {
   ItemDoc,
   type ItemPatch,
   type ItemStatus,
+  StoredItemStatus,
 } from "./schema.ts";
 import { cleanSources } from "./sources.ts";
 import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.ts";
@@ -38,8 +39,12 @@ export interface Item {
 
 const itemDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.items}/${id}`;
 
-/** item.yaml as earlier versions also wrote it, with a caption apart from the notes. */
-const StoredItemDoc = Schema.Struct({ ...ItemDoc.fields, caption: Schema.optional(Schema.String) });
+/** item.yaml as earlier versions also wrote it, with their statuses and a separate caption. */
+const StoredItemDoc = Schema.Struct({
+  ...ItemDoc.fields,
+  status: StoredItemStatus.pipe(Schema.withDecodingDefault(Effect.succeed("drafting"))),
+  caption: Schema.optional(Schema.String),
+});
 
 /** Moves what earlier versions kept in fields of their own to where it lives now. */
 export function upgradeItemDoc({ caption, ...doc }: typeof StoredItemDoc.Type): ItemDoc {
@@ -195,25 +200,17 @@ function cleanTitle(title: string | undefined): string | undefined {
 export function legacyStatus(statusMd: string, hasMedia: boolean): ItemStatus {
   const raw = /^[-*]\s*status:\s*(.+)$/im.exec(statusMd)?.[1]?.toLowerCase() ?? "";
 
-  if (raw.includes("publish")) return "published";
-
-  if (raw.includes("schedul") && !raw.includes("ready")) return "scheduled";
+  if (raw.includes("publish") || raw.includes("schedul")) return "done";
 
   if (raw.includes("archiv") || raw.includes("retired")) return "archived";
 
-  if (
-    raw.includes("ready-to-schedule") ||
-    raw.includes("ready-to-post") ||
-    raw.includes("approved")
-  ) {
-    return "approved";
-  }
+  if (raw.includes("ready-to-post") || raw.includes("approved")) return "done";
 
   if (raw.includes("review")) return "review";
 
   if (raw.includes("draft") || raw.includes("progress")) return "drafting";
 
-  return hasMedia ? "review" : "idea";
+  return hasMedia ? "review" : "drafting";
 }
 
 export interface NewItemInput {
@@ -259,7 +256,7 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
   const now = yield* nowIso;
 
   const doc: ItemDoc = {
-    ...emptyItemDoc(title, "idea"),
+    ...emptyItemDoc(title, "drafting"),
     format: input.format,
     reference: input.reference,
     hook: input.hook,
@@ -377,7 +374,7 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
     Effect.succeed({
       ...doc,
       feedback: [...doc.feedback, entry],
-      status: doc.status === "approved" ? "review" : doc.status,
+      status: doc.status === "done" ? "review" : doc.status,
     }),
   );
 
@@ -443,8 +440,6 @@ export const importMedia = Effect.fn("items.importMedia")(function* (
   for (let n = 2; item.media.some((m) => m.name === name); n++) name = `${tag}${stem}-${n}.${ext}`;
 
   yield* ws.importFile(source, `${item.dir}/${name}`);
-
-  if (item.doc.status === "idea") yield* updateItem(id, { status: "drafting" });
 
   return { item: yield* getItem(id), name };
 });

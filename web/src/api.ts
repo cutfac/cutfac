@@ -63,15 +63,7 @@ function send<T, Body>(method: "POST" | "PATCH", path: string, body: Body): Prom
 
 const q = (id: string) => `?id=${encodeURIComponent(id)}`;
 
-export const STATUSES = [
-  "idea",
-  "drafting",
-  "review",
-  "approved",
-  "scheduled",
-  "published",
-  "archived",
-] as const;
+export const STATUSES = ["drafting", "review", "done", "archived"] as const;
 
 export type Status = (typeof STATUSES)[number];
 

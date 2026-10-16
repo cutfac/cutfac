@@ -61,8 +61,8 @@
 - **Point at what to change.** Drag across the timeline to pick a part, draw a box on the video, and
   say what should change. Your agent edits the file, then you compare before and after and keep it
   or restore the old one.
-- **One board for every post.** Each video moves from idea to drafting, review, approved, scheduled
-  and published, with timecoded feedback and upload checks along the way.
+- **One board for every post.** Each video moves from drafting to review to done, with timecoded
+  feedback and upload checks along the way.
 - **References in, formats out.** Drop a video or paste a URL. The factory pulls scene cuts, hook
   frames, a contact sheet and the audio, your agent writes the analysis, and the patterns that work
   become reusable formats.
@@ -85,7 +85,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/board-dark.png">
-    <img alt="The board: videos in idea, drafting, review and approved columns, each with a cover and its format" src=".github/assets/board-light.png">
+    <img alt="The board: videos in drafting, review and done columns, each with a cover and its format" src=".github/assets/board-light.png">
   </picture>
 </p>
 

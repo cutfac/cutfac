@@ -34,13 +34,10 @@ export const ko: Messages = {
     label: "언어",
   },
   status: {
-    idea: "아이디어",
     drafting: "제작 중",
     review: "검토",
-    approved: "승인됨",
-    scheduled: "예약됨",
-    published: "게시됨",
-    archived: "보관됨",
+    done: "완료",
+    archived: "보관",
   },
   board: {
     title: "보드",

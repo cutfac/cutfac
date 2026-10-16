@@ -44,12 +44,9 @@ export const en = {
     label: "Language",
   },
   status: {
-    idea: "Idea",
     drafting: "Drafting",
     review: "Review",
-    approved: "Approved",
-    scheduled: "Scheduled",
-    published: "Published",
+    done: "Done",
     archived: "Archived",
   } satisfies Record<Status, string>,
   board: {

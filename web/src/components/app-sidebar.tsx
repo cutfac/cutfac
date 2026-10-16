@@ -70,7 +70,7 @@ const MAIN_NAV: ReadonlyArray<MainNavItem> = [
 const MAX_VIDEOS = 8;
 
 /** Finished work never asks for attention, so it stays on the board. */
-const isFinished = (item: ItemSummary) => item.status === "published" || item.status === "archived";
+const isFinished = (item: ItemSummary) => item.status === "done" || item.status === "archived";
 
 /** A video waits on the user when it carries open feedback or sits in review. */
 const needsAttention = (item: ItemSummary) => item.openFeedback > 0 || item.status === "review";
@@ -88,16 +88,11 @@ function sidebarVideos(items: ReadonlyArray<ItemSummary>): ItemSummary[] {
 /** Fill and stroke for each status. The theme has one color, amber, and it is kept for review. */
 function statusDot(status: Status): string {
   switch (status) {
-    case "idea":
-      return "fill-none stroke-muted-foreground";
     case "drafting":
       return "fill-muted-foreground";
     case "review":
       return "fill-selection";
-    case "approved":
-      return "fill-primary/60";
-    case "scheduled":
-    case "published":
+    case "done":
       return "fill-primary";
     case "archived":
       return "fill-none stroke-muted-foreground/50";

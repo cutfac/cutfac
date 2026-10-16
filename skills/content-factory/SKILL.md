@@ -31,7 +31,7 @@ into folders.
   the inputs decided per item (such as a style), and an optional `render` command plus `template/`
   code. It is distilled from references or brought in from a link.
 - **Item** (`items/<id>/item.yaml` + media): one publishable post. Status flows
-  `idea → drafting → review → approved → scheduled → published` (or `archived`). Its `sources` are
+  `drafting → review → done` (or `archived`). Its `sources` are
   folders, files, and web pages the user wants you to read whenever you work on it: read what helps
   before you write or change anything, and never change them. When the user points you at one to
   build on, add it with `update_item` (`sources` replaces the whole list).
@@ -137,7 +137,7 @@ Never write API keys or tokens into the format; they stay in the user's environm
 
 `list_open_feedback` → fix each comment (timecodes are seconds into the named media file) →
 `verify_item` and `review_media` again → `resolve_feedback` with a one-line description of what changed. Do not mark
-an item `approved`; only the user approves. Requests with `waiting` set, or a `run` still running,
+an item `done` or `archived`; only the user does. Requests with `waiting` set, or a `run` still running,
 belong to the board's agent, which takes them in turn; leave them unless the user asks.
 
 Edit requests from the board's chat point at a part of one media file: a range (`timecode` to
