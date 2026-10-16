@@ -22,6 +22,8 @@ extraResources:
 
 mac:
   category: public.app-category.productivity
+  # An Icon Composer bundle: Liquid Glass on macOS 26, with flat fallbacks for older systems.
+  icon: build/icon.icon
   # The zip is what the app downloads to update itself; people install from the dmg.
   target:
     - target: dmg
