@@ -14,8 +14,8 @@
    checks). Agents do interpretation and production.
 4. **Pull-based feedback.** Comments left on the board are stored in `item.yaml`. The agent reads
    them with `list_open_feedback`, or the user pastes the board's "copy agent prompt".
-5. **Domain-agnostic core.** What was learned, formats, and renderers are workspace data; chess is one
-   workspace, not part of the core.
+5. **Domain-agnostic core.** What was learned, formats, and renderers are workspace data; a niche or product
+   belongs to a workspace, never to the core.
 
 ## Components
 
