@@ -37,7 +37,7 @@ Only `title` is required.
 | --- | --- | --- |
 | `title` | | Name shown on the board |
 | `summary` | `""` | One line on what the template makes |
-| `references` | `[]` | Ids of the references it was distilled from |
+| `references` | `[]` | Ids of the learned videos it was distilled from |
 | `aspects` | `[9x16]` | Any of `9x16`, `4x5`, `3x4`, `1x1`, `16x9` |
 | `duration` | | `{ min, max }` in seconds |
 | `fps` | | Frame rate the media should have |

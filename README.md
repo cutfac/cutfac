@@ -63,9 +63,10 @@
   or restore the old one.
 - **One board for every post.** Each video moves from drafting to review to done, with timecoded
   feedback and upload checks along the way.
-- **References in, formats out.** Drop a video or paste a URL. The factory pulls scene cuts, hook
-  frames, a contact sheet and the audio, your agent writes the analysis, and the patterns that work
-  become reusable formats.
+- **Teach it what you make.** Paste a link to your site, your store page or a video you like, or
+  pick the folder you work in. The factory saves a first look into `about.md` (for a video, its
+  scene cuts, hook frames, contact sheet and audio), your agent reads the rest, and every run after
+  that knows your product. The patterns that work become reusable formats.
 - **Agents check their own work.** Your agent writes a brief and shot list for you to okay before
   it renders, then looks at the frames it made, every cut included, and fixes the biggest problems
   first.
@@ -73,8 +74,6 @@
   on it, turning it into a template with its own inputs and previews. The agent can only read until
   you press Allow, and the board shows what each template still needs. See
   [docs/templates.md](docs/templates.md).
-- **Your product in every run.** Import positioning and screenshots from an App Store, Google Play
-  or landing page URL. Every agent run reads it, so hooks and CTAs stay on message.
 - **Bring your own agent.** Claude Code and Codex connect through the built-in MCP server and run
   on your machine, with the model and reasoning effort you pick in the chat. Without one, "Copy
   prompt" hands the request to any agent you like.
@@ -107,7 +106,7 @@ plus content we prepare for you.
 | **Cost**                                           | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
 | **Setup**                                          | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
 | **Updates**                                        | Install themselves                                | Pull and rebuild                               |
-| **Board, editor, references, formats, MCP server** | Included                                          | Included                                       |
+| **Board, editor, learning, formats, MCP server**   | Included                                          | Included                                       |
 | **Agents**                                         | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
 | **Reference feed and format packs**                | Included once they ship                           | Not included                                   |
 | **Data**                                           | Plain folders on your Mac                         | Plain folders on your machine                  |
@@ -123,9 +122,9 @@ plus content we prepare for you.
 - Agents run on your machine with your own Claude Code or Codex login. Content Factory never asks
   for, stores or forwards your API keys.
 - The server listens on `127.0.0.1` unless you pass `--host`.
-- It only goes online when you ask it to: importing a product page, fetching a URL reference with
-  your own `yt-dlp`, or opening the feedback form.
-- Study references you're allowed to download, and don't repost other people's videos.
+- It only goes online when you ask it to: learning from a link (videos through your own `yt-dlp`)
+  or opening the feedback form.
+- Learn from videos you're allowed to download, and don't repost other people's videos.
 
 ## Tech stack
 
@@ -138,22 +137,21 @@ plus content we prepare for you.
 
 ## Requirements
 
-Bun 1.3+, ffmpeg/ffprobe. Optional: `yt-dlp` (URL references), `whisper` (transcripts).
+Bun 1.3+, ffmpeg/ffprobe. Optional: `yt-dlp` (video links), `whisper` (transcripts).
 
 ## Quick start
 
 ```sh
 bun install && bun run build
-bun src/cli.ts init ~/my-app-content --from https://yourapp.com
+bun src/cli.ts init ~/my-app-content
 bun src/cli.ts serve --workspace ~/my-app-content       # http://localhost:4317
 ```
 
-`init` connects your agents first, then fills the product. Claude Code gets a project-scoped
-`.mcp.json` in the workspace, and Codex is registered through `codex mcp add` as
-`content-factory-<workspace>`. `--from` accepts an App Store, Google Play, or landing page URL; store
-links on a landing page are followed, and store screenshots land in `product/store/`. Without
-`--from`, the web UI opens on a Setup page with the same two steps. Use `--no-connect` to only print
-the agent commands, and `factory product import <url>` to refresh the product later. To adopt an existing folder of posts,
+`init` connects your agents. Claude Code gets a project-scoped `.mcp.json` in the workspace, and
+Codex is registered through `codex mcp add` as `content-factory-<workspace>`. Until an agent is
+connected, the web UI opens on a Setup page that connects one. Use `--no-connect` to only print the
+agent commands. To teach it about your product, use the board's Learn page, ask your agent, or run
+`factory learn <link or path>`; store links on a landing page are followed. To adopt an existing folder of posts,
 add a `factory.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
 `STATUS.md` appear on the board, and an `item.yaml` is written on their first edit.
 
@@ -242,10 +240,8 @@ with those names. Nothing is sent until the form is submitted.
 
 ```
 factory.yaml            name, paths, default agent
-product/product.yaml    positioning, audience, stores, CTA, brand, rules
-product/captures/       reviewed app screenshots and recordings
-product/store/          imported store icon, screenshots, and listing.md
-references/<id>/        source video, frames/, contact.jpg, audio.wav, preprocess.json, analysis.md
+about.md                what agents read about the product, audience, and voice, one section per source
+learned/<id>/           learned.yaml and a first look: pictures, or a video with frames/, contact.jpg, audio.wav
 formats/<id>/           format.yaml, README.md, previews and choice files, optional template/
 items/<id>/             item.yaml, brief.md, shotlist.md, [9x16] video.mp4, [9x16] cover.jpg, …
 items/<id>/review/      frames, a contact sheet and cut strips of each video, from review_media

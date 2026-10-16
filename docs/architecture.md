@@ -14,17 +14,17 @@
    checks). Agents do interpretation and production.
 4. **Pull-based feedback.** Comments left on the board are stored in `item.yaml`. The agent reads
    them with `list_open_feedback`, or the user pastes the board's "copy agent prompt".
-5. **Domain-agnostic core.** Product, formats, and renderers are workspace data; chess is one
+5. **Domain-agnostic core.** What was learned, formats, and renderers are workspace data; chess is one
    workspace, not part of the core.
 
 ## Components
 
 | Path | Role |
 | --- | --- |
-| `src/core/` | Schemas, `Workspace` (every filesystem access, root-escape guarded), items, references, formats, verification |
+| `src/core/` | Schemas, `Workspace` (every filesystem access, root-escape guarded), items, learning, formats, verification |
 | `src/mcp/` | MCP tools over the core. Transport-agnostic, stdio today |
 | `src/server/` | HTTP API on Effect, `/files/*` with byte ranges, SSE change feed from `fs.watch` and agent run streams |
-| `web/` | React SPA (board, item editor, references, product) |
+| `web/` | React SPA (board, item editor, templates, learn) |
 | `electron/` | Desktop shell: starts the server as a sidecar and opens the SPA in a window |
 | `skills/` | Agent skill copied into each workspace and kept current on `init`, `serve` and MCP start. A copy the user edited is left alone, and `workspace_overview` tells the agent to offer the new one |
 
