@@ -22,8 +22,24 @@ extraResources:
 
 mac:
   category: public.app-category.productivity
+  # The zip is what the app downloads to update itself; people install from the dmg.
   target:
-    - dir
-    - dmg
-  # Unsigned build for local use.
-  identity: null
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  artifactName: content-factory-${version}-${arch}.${ext}
+  # Signed with the Developer ID certificate in the keychain, under the hardened runtime with
+  # build/entitlements.mac*.plist. Notarized when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and
+  # APPLE_TEAM_ID are set; `bun run release:desktop` requires them.
+
+# The app checks the first entry for updates (it goes into app-update.yml). Releases upload to the
+# second, the bucket that CDN serves. Objects stay private: the CDN reads them, not the public.
+publish:
+  - provider: generic
+    url: https://d29h6uqmny45z2.cloudfront.net/content-factory/mac
+  - provider: s3
+    bucket: shotomatic
+    region: us-east-2
+    path: content-factory/mac
+    acl: null

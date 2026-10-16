@@ -200,12 +200,30 @@ item (`Ctrl+Z`/`Ctrl+Y` elsewhere), and `?` shows them all.
 ## Desktop app
 
 ```sh
-bun run desktop        # build the web UI and Electron shell, then open it
-bun run dist:desktop   # self-contained macOS app in release/, with the server compiled as a sidecar
+bun run desktop           # build the web UI and Electron shell, then open it
+bun run dist:desktop      # unsigned macOS app in release/, with the server compiled as a sidecar
+bun run release:desktop   # signed and notarized release, published to the update feed
 ```
 
 The app runs the same server as `factory serve` as a sidecar on `127.0.0.1` and opens the board in
 its window.
+
+### Releasing the app
+
+`release:desktop` reads its credentials from `.env.release`, which git ignores:
+
+- `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` to notarize
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` to upload to the bucket
+- `CLOUDFRONT_DISTRIBUTION_ID` to clear the CDN's copy of the feed
+
+It also needs a Developer ID Application certificate in the keychain and the AWS CLI. Bump `version`
+in `package.json` first: the script refuses a version that is not newer than the published one. It
+builds, signs under the hardened runtime, notarizes, uploads the dmg, the zip and `latest-mac.yml`,
+then clears `latest-mac.yml` from the CDN so running apps see the release right away.
+
+The feed is the first `publish` entry in `electron-builder.yml`, and every build keeps the URL it
+was built with. To move the feed, publish one release that points to the new place while the old one
+keeps serving.
 
 ### Feedback form
 
