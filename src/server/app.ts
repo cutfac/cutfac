@@ -250,7 +250,6 @@ const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
 const itemSummary = (item: Item) => ({
   id: item.id,
   dir: item.dir,
-  legacy: item.legacy,
   title: item.doc.title,
   status: item.doc.status,
   format: item.doc.format,

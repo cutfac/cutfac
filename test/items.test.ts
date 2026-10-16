@@ -9,7 +9,6 @@ import {
   addFeedback,
   createItem,
   getItem,
-  legacyStatus,
   listItemIds,
   openFeedback,
   resolveFeedback,
@@ -19,19 +18,6 @@ import {
 import { currentStatus, DetailValues } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
-
-describe("legacyStatus", () => {
-  test("maps free-form status lines", () => {
-    expect(legacyStatus("- status: published on TikTok", true)).toBe("done");
-    expect(legacyStatus("- status: scheduled 2026-05-01", true)).toBe("done");
-    expect(legacyStatus("- Status: ready-to-schedule", true)).toBe("done");
-    expect(legacyStatus("- status: approved, archived", true)).toBe("archived");
-    expect(legacyStatus("* status: in review", true)).toBe("review");
-    expect(legacyStatus("- status: draft", false)).toBe("drafting");
-    expect(legacyStatus("# Notes", true)).toBe("review");
-    expect(legacyStatus("", false)).toBe("drafting");
-  });
-});
 
 describe("currentStatus", () => {
   test("reads earlier versions' statuses as the ones that replaced them", () => {
@@ -216,58 +202,23 @@ describe("items in a workspace", () => {
     expect(await Bun.file(join(dir, "item.yaml")).text()).toContain("status: done");
   });
 
-  test("discovers legacy folders and upgrades them on write", async () => {
-    const dir = join(t.root, "items/lessons/repotting");
-    await mkdir(join(dir, "frames"), { recursive: true });
-    await writeFile(join(dir, "POSTING.md"), "# Repotting Posting\n");
-    await writeFile(join(dir, "STATUS.md"), "- status: ready-to-post\n");
-    await writeFile(join(dir, "[1x1] 01-hook.jpg"), "");
-
-    const { ids, legacy, upgraded } = await t.run(
-      Effect.gen(function* () {
-        const found = yield* listItemIds();
-        const before = yield* getItem("lessons/repotting");
-        const added = yield* addFeedback(before.id, { body: "Bigger text" });
-
-        return { ids: found, legacy: before, upgraded: added.item };
-      }),
-    );
-
-    expect(ids).toEqual(["lessons/repotting"]);
-    expect([legacy.legacy, legacy.doc.title, legacy.doc.status]).toEqual([
-      true,
-      "Repotting",
-      "done",
-    ]);
-    expect(legacy.media.map((m) => [m.name, m.aspect])).toEqual([["[1x1] 01-hook.jpg", "1x1"]]);
-    expect(upgraded.legacy).toBe(false);
-    expect(upgraded.doc.title).toBe("Repotting");
-  });
-
   test("refuses paths that escape the workspace", async () => {
     const escape = Workspace.use((ws) => ws.abs("../outside"));
 
     expect(await t.fail(escape)).toBeInstanceOf(WorkspaceError);
   });
 
-  test("a marked folder with child items is a series, not an item", async () => {
-    await mkdir(join(t.root, "items/guides/indexes/by-style"), { recursive: true });
-    await writeFile(join(t.root, "items/guides/indexes/STATUS.md"), "# Indexes status\n");
-    await writeFile(
-      join(t.root, "items/guides/indexes/by-style/STATUS.md"),
-      "# By style — status\n- status: published\n",
-    );
+  test("only folders with item.yaml are items; other folders group them", async () => {
+    const dir = join(t.root, "items/lessons/repotting");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "notes.md"), "# Repotting\n");
+    await mkdir(join(t.root, "items/guides/by-style"), { recursive: true });
+    await writeFile(join(t.root, "items/guides/notes.md"), "# Guides\n");
+    await writeFile(join(t.root, "items/guides/by-style/item.yaml"), "title: By style\n");
 
-    const { ids, title } = await t.run(
-      Effect.gen(function* () {
-        const found = yield* listItemIds();
-        const item = yield* getItem("guides/indexes/by-style");
+    const ids = await t.run(listItemIds());
 
-        return { ids: found, title: item.doc.title };
-      }),
-    );
-
-    expect(ids).toEqual(["guides/indexes/by-style"]);
-    expect(title).toBe("By style");
+    expect(ids).toEqual(["guides/by-style"]);
+    expect(await t.fail(getItem("lessons/repotting"))).toBeInstanceOf(NotFound);
   });
 });

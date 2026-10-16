@@ -154,8 +154,8 @@ Codex is registered through `codex mcp add` as `cutfac-<workspace>`. Until an ag
 connected, the web UI opens on a Setup page that connects one. Use `--no-connect` to only print the
 agent commands. To teach it about your product, use the board's Learn page, ask your agent, or run
 `cutfac learn <link or path>`; store links on a landing page are followed. To adopt an existing folder of posts,
-add a `cutfac.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
-`STATUS.md` appear on the board, and an `item.yaml` is written on their first edit.
+add a `cutfac.yaml` with `paths.items` pointing at it and ask your agent to bring each post in; it
+calls `create_item` with the post's folder as the id, which writes an `item.yaml` there.
 
 The workspace gets the `cutfac` skill in `.agents/skills/` and `.claude/skills/`. `serve`
 and the MCP server bring it up to date when Cutfac changes it. A copy you edited is kept,

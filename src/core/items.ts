@@ -17,9 +17,6 @@ import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.t
 
 export const ITEM_FILE = "item.yaml";
 
-/** Folders that already hold one of these are items even without item.yaml (pre-Cutfac layouts). */
-const LEGACY_MARKERS = ["POSTING.md", "STATUS.md"];
-
 const SKIP_DIRS = new Set(["node_modules", "review", "frames", "raw", "edits", "history"]);
 
 const MAX_DEPTH = 4;
@@ -28,7 +25,6 @@ export interface Item {
   readonly id: string;
   /** Workspace-relative folder. */
   readonly dir: string;
-  readonly legacy: boolean;
   readonly doc: ItemDoc;
   readonly media: ReadonlyArray<MediaFile>;
   /** Markdown files in the item folder, by name. */
@@ -75,10 +71,7 @@ export const shortId = Effect.gen(function* () {
   return uuid.replaceAll("-", "").slice(0, 8);
 });
 
-/**
- * Walk the items root; an item is any folder with item.yaml or a legacy marker file.
- * A legacy-marked folder that contains other items is a series (group), not an item.
- */
+/** Walk the items root; an item is any folder with item.yaml, and other folders group items. */
 export const listItemIds = Effect.fn("items.listItemIds")(function* () {
   const ws = yield* Workspace;
   const root = ws.config.paths.items;
@@ -87,28 +80,17 @@ export const listItemIds = Effect.fn("items.listItemIds")(function* () {
   const walk = (rel: string, depth: number): Effect.Effect<void, WorkspaceError> =>
     Effect.gen(function* () {
       const entries = yield* ws.list(rel);
-      const names = new Set(entries.map((entry) => entry.name));
-      const isRoot = rel === root;
 
-      if (!isRoot && names.has(ITEM_FILE)) {
+      if (rel !== root && entries.some((entry) => entry.name === ITEM_FILE)) {
         ids.push(rel.slice(root.length + 1));
 
         return;
       }
 
-      const before = ids.length;
+      if (depth > MAX_DEPTH) return;
 
-      if (depth <= MAX_DEPTH) {
-        for (const entry of entries) {
-          if (entry.dir && !SKIP_DIRS.has(entry.name))
-            yield* walk(`${rel}/${entry.name}`, depth + 1);
-        }
-      }
-
-      const hasChildItems = ids.length > before;
-
-      if (!isRoot && !hasChildItems && LEGACY_MARKERS.some((marker) => names.has(marker))) {
-        ids.push(rel.slice(root.length + 1));
+      for (const entry of entries) {
+        if (entry.dir && !SKIP_DIRS.has(entry.name)) yield* walk(`${rel}/${entry.name}`, depth + 1);
       }
     });
 
@@ -122,7 +104,9 @@ export const getItem = Effect.fn("items.getItem")(function* (id: string) {
   yield* checkItemId(id);
   const dir = itemDir(ws, id);
 
-  if (!(yield* ws.exists(dir))) return yield* new NotFound({ message: `Item not found: ${id}` });
+  if (!(yield* ws.exists(`${dir}/${ITEM_FILE}`))) {
+    return yield* new NotFound({ message: `Item not found: ${id}` });
+  }
 
   const entries = yield* ws.list(dir);
   const media = toMediaFiles(entries);
@@ -132,13 +116,8 @@ export const getItem = Effect.fn("items.getItem")(function* (id: string) {
   );
 
   const updatedAt = Math.max(0, ...entries.map((entry) => entry.mtime));
-  const legacy = !entries.some((entry) => entry.name === ITEM_FILE);
-
-  const doc = legacy
-    ? yield* deriveLegacyDoc(dir, id, docs, media)
-    : upgradeItemDoc(yield* ws.readYaml(`${dir}/${ITEM_FILE}`, StoredItemDoc));
-
-  const item: Item = { id, dir, legacy, doc, media, docs, updatedAt };
+  const doc = upgradeItemDoc(yield* ws.readYaml(`${dir}/${ITEM_FILE}`, StoredItemDoc));
+  const item: Item = { id, dir, doc, media, docs, updatedAt };
 
   return item;
 });
@@ -158,59 +137,6 @@ export function emptyItemDoc(title: string, status: ItemStatus): ItemDoc {
     feedback: [],
     sessions: {},
   };
-}
-
-const deriveLegacyDoc = Effect.fnUntraced(function* (
-  dir: string,
-  id: string,
-  docs: ReadonlyArray<string>,
-  media: ReadonlyArray<MediaFile>,
-) {
-  const ws = yield* Workspace;
-
-  const readDoc = (name: string) =>
-    docs.includes(name) ? ws.readText(`${dir}/${name}`) : Effect.succeed("");
-
-  const statusText = yield* readDoc("STATUS.md");
-  const postingText = yield* readDoc("POSTING.md");
-
-  const title =
-    cleanTitle(firstHeading(postingText)) ??
-    cleanTitle(firstHeading(statusText)) ??
-    id.split("/").at(-1) ??
-    id;
-
-  return emptyItemDoc(title, legacyStatus(statusText, media.length > 0));
-});
-
-function firstHeading(md: string): string | undefined {
-  return /^#\s+(.+)$/m.exec(md)?.[1]?.trim();
-}
-
-function cleanTitle(title: string | undefined): string | undefined {
-  if (title === undefined || title === "") return undefined;
-
-  return title
-    .replace(/\s+(posting guide|posting copy|posting|publication status|test status|status)$/i, "")
-    .replace(/\s*[—–-]\s*$/, "")
-    .trim();
-}
-
-/** Map free-form `- status: …` lines from older STATUS.md files onto the board. */
-export function legacyStatus(statusMd: string, hasMedia: boolean): ItemStatus {
-  const raw = /^[-*]\s*status:\s*(.+)$/im.exec(statusMd)?.[1]?.toLowerCase() ?? "";
-
-  if (raw.includes("publish") || raw.includes("schedul")) return "done";
-
-  if (raw.includes("archiv") || raw.includes("retired")) return "archived";
-
-  if (raw.includes("ready-to-post") || raw.includes("approved")) return "done";
-
-  if (raw.includes("review")) return "review";
-
-  if (raw.includes("draft") || raw.includes("progress")) return "drafting";
-
-  return hasMedia ? "review" : "drafting";
 }
 
 export interface NewItemInput {
@@ -288,8 +214,7 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
 /**
  * Read-modify-write an item, one at a time per item, so an agent run and the board writing the
  * same item.yaml do not drop each other's changes. `change` returns the next doc, or fails to
- * leave the file as it is; it must not write the item itself. Legacy items get an item.yaml on
- * first write.
+ * leave the file as it is; it must not write the item itself.
  */
 export const mutateItem = Effect.fn("items.mutateItem")(function* <E, R>(
   id: string,

@@ -60,8 +60,6 @@ export const en = {
       "Give it a title and pick a template. You review the result here and ask for changes.",
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
-    legacy: "legacy",
-    legacyHint: "Folder without item.yaml; status derived from STATUS.md",
     learnHint: {
       title: "Teach your agent about your product",
       body: "Paste a link to your app or site, or point at a project folder. The next videos will fit it better.",

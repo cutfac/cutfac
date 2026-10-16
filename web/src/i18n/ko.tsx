@@ -49,8 +49,6 @@ export const ko: Messages = {
     emptyBody: "제목을 정하고 템플릿을 고르세요. 결과는 여기서 검토하고 수정을 요청하면 돼요.",
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,
-    legacy: "이전 형식",
-    legacyHint: "item.yaml이 없는 폴더예요. 상태는 STATUS.md에서 읽었어요",
     learnHint: {
       title: "에이전트에게 제품을 알려 주세요",
       body: "앱이나 사이트 링크를 붙여 넣거나 프로젝트 폴더를 가리키면, 다음 영상부터 제품에 더 잘 맞춰 만들어요.",

@@ -181,7 +181,6 @@ export interface EditReceipt {
 export interface ItemSummary {
   id: string;
   dir: string;
-  legacy: boolean;
   title: string;
   status: Status;
   format?: string;
@@ -275,7 +274,6 @@ export interface HistoryDoc {
 export interface ItemDetail {
   id: string;
   dir: string;
-  legacy: boolean;
   /** An agent process is working on this item right now. */
   running: boolean;
   media: Media[];

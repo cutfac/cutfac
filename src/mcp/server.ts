@@ -95,7 +95,6 @@ const ItemDetail = Schema.Struct({
   id: Schema.String,
   dir: Schema.String,
   absDir: AbsDir,
-  legacy: Schema.Boolean,
   doc: ItemDoc,
   media: Schema.Array(MediaFile),
   docs: Schema.Record(Schema.String, Schema.String).annotate(

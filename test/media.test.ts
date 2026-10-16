@@ -29,7 +29,7 @@ describe("media names", () => {
   test("keeps only media files", () => {
     const files = toMediaFiles([
       { name: "[9x16] video.mp4", dir: false, size: 1, mtime: 1 },
-      { name: "POSTING.md", dir: false, size: 1, mtime: 1 },
+      { name: "notes.md", dir: false, size: 1, mtime: 1 },
       { name: "frames", dir: true, size: 0, mtime: 1 },
       { name: "cover.PNG", dir: false, size: 1, mtime: 1 },
     ]);

@@ -285,11 +285,6 @@ function ItemCard({
                     {t.board.openFeedback(item.openFeedback)}
                   </Badge>
                 ) : null}
-                {item.legacy ? (
-                  <Badge variant="outline" title={t.board.legacyHint}>
-                    {t.board.legacy}
-                  </Badge>
-                ) : null}
               </div>
             </div>
           </div>

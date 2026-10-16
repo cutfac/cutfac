@@ -26,7 +26,6 @@ function itemWith(feedback: Feedback[], extra: Partial<ItemDetail> = {}): ItemDe
   return {
     id: "item",
     dir: "items/item",
-    legacy: false,
     running: false,
     media: [{ name: "clip.mp4", kind: "video", size: 1, mtime: Date.parse(at(0)) }],
     docs: {},
