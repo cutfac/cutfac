@@ -26,6 +26,8 @@
   <br />
   <a href="#quick-start"><strong>Quick start »</strong></a>
   <br /><br />
+  <a href="https://cutfac.com">Website</a>
+  ·
   <a href="docs/architecture.md">Architecture</a>
   ·
   <a href="https://github.com/w00ing/cutfac/issues">Issues</a>
