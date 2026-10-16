@@ -15,6 +15,7 @@ import {
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { createItem, getItem, listItems, openFeedback } from "../core/items.ts";
+import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
 import { getFormat, getProduct, listFormats, saveFormat } from "../core/library.ts";
 import { importProduct } from "../core/productImport.ts";
 import {
@@ -33,6 +34,8 @@ import {
   ItemDoc,
   ItemPatch,
   ItemStatus,
+  LearnedDoc,
+  LearnedKind,
   PreprocessResult,
   Product,
   ReferenceDoc,
@@ -184,7 +187,7 @@ const tool = <
 
 const WorkspaceOverview = tool("workspace_overview", {
   description:
-    "Workspace config, product summary, item counts by status, formats, and open feedback count.",
+    "Workspace config, product summary, about.md and what was learned for it, item counts by status, formats, and open feedback count.",
   success: Schema.Struct({
     root: Schema.String,
     config: WorkspaceConfig,
@@ -193,6 +196,22 @@ const WorkspaceOverview = tool("workspace_overview", {
     ),
     items: Schema.Record(Schema.String, Schema.Finite).annotate(describe("item count by status")),
     formats: Schema.Array(Schema.Struct({ id: Schema.String, title: Schema.String })),
+    about: Schema.String.annotate(
+      describe(
+        "absolute path of about.md, what this workspace makes videos about; it may not exist yet",
+      ),
+    ),
+    learned: Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        kind: LearnedKind,
+        title: Schema.String,
+        absDir: AbsDir,
+        unread: Schema.Boolean.annotate(
+          describe("its section of about.md still waits for an agent to read it"),
+        ),
+      }),
+    ),
     references: Schema.Finite,
     openFeedback: Schema.Finite,
     notices: Schema.Array(Schema.String).annotate(
@@ -235,6 +254,26 @@ const ImportProduct = tool("import_product", {
     ),
   }),
   overwrites: true,
+  network: true,
+});
+
+const Learn = tool("learn", {
+  description:
+    "Learn what the videos are about from a link (a landing page, an App Store or Google Play listing, a video post) " +
+    "or a file or folder on this computer. Saves a first look into the returned folder (pictures, the video with its frames " +
+    "and contact sheet) and adds a section for it to about.md. Then read the source more deeply and rewrite that section " +
+    "with what matters for the videos.",
+  parameters: Schema.Struct({
+    source: Schema.String.annotate(describe("a link, or an absolute path to a file or folder")),
+  }),
+  success: Schema.Struct({
+    id: Schema.String,
+    absDir: AbsDir,
+    doc: LearnedDoc,
+    preprocess: Schema.optional(PreprocessResult),
+    about: Schema.String.annotate(describe("absolute path of about.md")),
+    warnings: Schema.Array(Schema.String),
+  }),
   network: true,
 });
 
@@ -484,6 +523,7 @@ export const FactoryToolkit = Toolkit.make(
   WorkspaceOverview,
   GetProduct,
   ImportProduct,
+  Learn,
   ListItems,
   GetItem,
   CreateItem,
@@ -547,17 +587,21 @@ const handlers = FactoryToolkit.toLayer(
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
-            const [items, formats, product, feedback, references, copies] = yield* Effect.all(
-              [
-                listItems(),
-                listFormats(),
-                getProduct(),
-                openFeedback(),
-                listReferences(),
-                skillCopies(),
-              ],
-              { concurrency: "unbounded" },
-            );
+            const [items, formats, product, feedback, references, copies, learned] =
+              yield* Effect.all(
+                [
+                  listItems(),
+                  listFormats(),
+                  getProduct(),
+                  openFeedback(),
+                  listReferences(),
+                  skillCopies(),
+                  listLearned(),
+                ],
+                { concurrency: "unbounded" },
+              );
+
+            const about = yield* ws.abs(ABOUT_FILE);
 
             return {
               root: ws.root,
@@ -565,9 +609,19 @@ const handlers = FactoryToolkit.toLayer(
               product: product.doc ?? null,
               items: countBy(items, (item) => item.doc.status),
               formats: formats.map((format) => ({ id: format.id, title: format.doc.title })),
+              about,
+              learned: yield* Effect.forEach(learned, (entry) =>
+                Effect.map(ws.abs(entry.dir), (absDir) => ({
+                  id: entry.id,
+                  kind: entry.doc.kind,
+                  title: entry.doc.title,
+                  absDir,
+                  unread: entry.unread,
+                })),
+              ),
               references: references.length,
               openFeedback: feedback.length,
-              notices: skillNotices(yield* absCopies(copies)),
+              notices: [...skillNotices(yield* absCopies(copies)), ...learnNotices(learned, about)],
             };
           }),
         ),
@@ -593,6 +647,22 @@ const handlers = FactoryToolkit.toLayer(
             warnings: result.warnings,
             sources: result.listings.map((l) => ({ source: l.source, url: l.url, name: l.name })),
           })),
+        ),
+
+      learn: ({ source }) =>
+        run(
+          Effect.gen(function* () {
+            const { learned, warnings } = yield* learn(learnInputOf(source));
+
+            return {
+              id: learned.id,
+              absDir: yield* ws.abs(learned.dir),
+              doc: learned.doc,
+              preprocess: learned.preprocess,
+              about: yield* ws.abs(ABOUT_FILE),
+              warnings,
+            };
+          }),
         ),
 
       list_items: ({ status, format }) =>

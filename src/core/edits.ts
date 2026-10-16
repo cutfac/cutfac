@@ -13,6 +13,7 @@ import {
   updateFeedback,
   withDecision,
 } from "./items.ts";
+import { ABOUT_FILE } from "./learn.ts";
 import type { Format } from "./library.ts";
 import { extension, ffmpeg, type MediaKind } from "./media.ts";
 import { refDir } from "./references.ts";
@@ -544,6 +545,13 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
     lines.push(
       "Sources the user pointed this item at. Read what helps with the request, and never change them:",
       ...sources,
+      "",
+    );
+  }
+
+  if (yield* ws.exists(ABOUT_FILE)) {
+    lines.push(
+      `What this workspace makes videos about: ${yield* ws.abs(ABOUT_FILE)}. Read it when the request touches the product, the audience, or the voice.`,
       "",
     );
   }

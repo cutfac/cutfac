@@ -124,6 +124,7 @@ export const WorkspaceConfig = Schema.Struct({
     references: Schema.String.pipe(withDefault("references")),
     formats: Schema.String.pipe(withDefault("formats")),
     items: Schema.String.pipe(withDefault("items")),
+    learned: Schema.String.pipe(withDefault("learned")),
   }).pipe(withDefault({})),
   agent: Schema.Struct({
     default: AgentChoice.pipe(withDefault("claude")),
@@ -481,6 +482,32 @@ export const PreprocessResult = Schema.Struct({
 });
 
 export type PreprocessResult = typeof PreprocessResult.Type;
+
+/** What the user taught the workspace about: a web page, an app's store page, a video, or a local folder or file. */
+export const LEARNED_KINDS = ["page", "app", "video", "folder", "file"] as const;
+
+export const LearnedKind = Schema.Literals(LEARNED_KINDS);
+
+export type LearnedKind = typeof LearnedKind.Type;
+
+/** learned/<id>/learned.yaml: what a first look at the source found. Files are entry-relative. */
+export const LearnedDoc = Schema.Struct({
+  kind: LearnedKind,
+  title: Schema.String,
+  description: Schema.String.pipe(withDefault("")),
+  source: Schema.optional(ItemSource.annotate(describe("where it came from; none for an upload"))),
+  site: Schema.optional(Schema.String.annotate(describe("the site, developer, or channel"))),
+  icon: Schema.optional(Schema.String),
+  images: Schema.Array(Schema.String).pipe(withDefault([])),
+  video: Schema.optional(Schema.String),
+  probe: Schema.optional(Probe),
+  links: Schema.Array(Schema.String)
+    .annotate(describe("related links the page points at, such as its store pages"))
+    .pipe(withDefault([])),
+  addedAt: Schema.String,
+});
+
+export type LearnedDoc = typeof LearnedDoc.Type;
 
 /** A frame or a strip of frames at `t` seconds; `file` is relative to the review folder. */
 export const ReviewShot = Schema.Struct({ t: Schema.Finite, file: Schema.String });

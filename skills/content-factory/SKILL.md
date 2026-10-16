@@ -16,14 +16,19 @@ into folders.
 2. `get_product` — what the app is, who it is for, store links, CTA rules, brand, and reviewed app
    captures. Never invent app features or UI; only show captures from `product/captures/` or what
    the user provides.
-3. If there is open feedback, ask whether to handle it first (`list_open_feedback`).
-4. If the product is missing or still says "My App", ask for an App Store, Google Play, or website
+3. Read `about.md` (its path is in `workspace_overview`) when it exists: what the user taught the
+   workspace about their product, audience, and voice. A section marked `> Not read yet` was only
+   scraped; read its source and rewrite it before you rely on it (see Learn).
+4. If there is open feedback, ask whether to handle it first (`list_open_feedback`).
+5. If the product is missing or still says "My App", ask for an App Store, Google Play, or website
    link and call `import_product`. Then read `product/store/listing.md` and agree on `audience` and
    `voice` with the user. Store screenshots in `product/store/` are marketing images, not reviewed
    captures.
 
 ## Model
 
+- **Learned** (`learned/<id>/`): a link, file, or folder the user taught the workspace, with what a
+  first look saved from it. Its section in `about.md` is what agents read.
 - **Reference** (`references/<id>/`): a video the user wants to learn from. Preprocessing produces
   `preprocess.json` (scene cuts, sampled frames, contact sheet, audio, optional transcript).
 - **Format** (`formats/<id>/format.yaml`, a "template" on the board): a reusable recipe — aspects,
@@ -35,6 +40,20 @@ into folders.
   folders, files, and web pages the user wants you to read whenever you work on it: read what helps
   before you write or change anything, and never change them. When the user points you at one to
   build on, add it with `update_item` (`sources` replaces the whole list).
+
+## Learn
+
+When the user shares something to learn from (a landing page, a store listing, a video they like,
+or a file or folder on their computer), call `learn` with it. It saves a first look into
+`learned/<id>/` (title, description, icon, and pictures; for a video also the video, frames, and a
+contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
+
+1. Read the source more deeply: the page, the folder's README and code, or the video's contact
+   sheet, hook frames, and transcript.
+2. Rewrite its section with what matters for the videos: what it is, who it is for, the words they
+   use, and proof points; for a video, what to borrow (hook, pacing, style) and what must not be
+   copied. Keep it short and factual, since the user edits this file too.
+3. Keep the `<!-- learned:<id> -->` line and delete the `> Not read yet` line.
 
 ## Analyze a reference
 

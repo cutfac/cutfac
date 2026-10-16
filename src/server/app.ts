@@ -46,6 +46,7 @@ import {
   openFeedback,
   shortId,
 } from "../core/items.ts";
+import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/learn.ts";
 import { getFormat, getProduct, listFormats } from "../core/library.ts";
 import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
@@ -212,6 +213,8 @@ const UrlBody = Schema.Struct({
 });
 
 const MediaForm = Schema.Struct({ file: Multipart.SingleFileSchema });
+
+const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
 
 const ReferenceForm = Schema.Struct({
   file: Multipart.SingleFileSchema,
@@ -819,6 +822,29 @@ const apiRoutes = (options: ServerOptions) =>
         return yield* addReference({ kind: "url", url: body.url }, { title: nonEmpty(body.title) });
       }),
     ),
+    json(
+      "GET",
+      "/api/learned",
+      Effect.all({ learned: listLearned(), about: readAbout() }, { concurrency: "unbounded" }),
+    ),
+    json(
+      "POST",
+      "/api/learn",
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+
+        if (isMultipart(request)) {
+          const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
+
+          return yield* learn({ file: file.path, name: file.name });
+        }
+
+        const body = yield* HttpServerRequest.schemaBodyJson(LearnBody);
+
+        return yield* learn(learnInputOf(body.source));
+      }),
+    ),
+    json("POST", "/api/learned/forget", withId(forget)),
     json("GET", "/api/formats", listFormats()),
     json("GET", "/api/formats/status", formatStatuses()),
     json("GET", "/api/format", withId(getFormat)),

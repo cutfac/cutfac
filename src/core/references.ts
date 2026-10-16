@@ -1,17 +1,15 @@
-import { Effect, Match, Option, Schema } from "effect";
+import { Effect, Match } from "effect";
 
-import { CommandFailed, InvalidRequest, NotFound } from "./errors.ts";
+import { InvalidRequest, NotFound } from "./errors.ts";
 import { isSimpleId, readOptionalText } from "./library.ts";
-import { extension, mediaKind, probe, sceneCuts } from "./media.ts";
-import { run, tail, which } from "./process.ts";
-import { PreprocessResult, ReferenceDoc } from "./schema.ts";
+import { extension, mediaKind, probe } from "./media.ts";
+import { type Downloaded, downloadVideo, preprocessVideo, readPreprocess } from "./preprocess.ts";
+import { type PreprocessResult, ReferenceDoc } from "./schema.ts";
 import { Workspace, type WorkspaceService, foldersWith, nowIso, slugify } from "./workspace.ts";
 
 export const REFERENCE_FILE = "reference.yaml";
 
 export const ANALYSIS_FILE = "analysis.md";
-
-export const PREPROCESS_FILE = "preprocess.json";
 
 export interface Reference {
   readonly id: string;
@@ -40,12 +38,6 @@ export interface AddReferenceOptions {
   readonly preprocess?: boolean | undefined;
 }
 
-const PreprocessJson = Schema.fromJsonString(PreprocessResult, { space: 2 });
-
-const decodePreprocess = Schema.decodeUnknownOption(PreprocessJson);
-
-const encodePreprocess = Schema.encodeEffect(PreprocessJson);
-
 export const refDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.references}/${id}`;
 
 export const getReference = Effect.fn("references.getReference")(function* (id: string) {
@@ -58,13 +50,7 @@ export const getReference = Effect.fn("references.getReference")(function* (id: 
 
   const doc = yield* ws.readYaml(`${dir}/${REFERENCE_FILE}`, ReferenceDoc);
   const analysis = yield* readOptionalText(`${dir}/${ANALYSIS_FILE}`);
-  const preprocessText = yield* readOptionalText(`${dir}/${PREPROCESS_FILE}`);
-
-  // preprocess.json is derived data; a damaged copy reads as "not preprocessed" so it can be redone.
-  const preprocess =
-    preprocessText === undefined
-      ? undefined
-      : Option.getOrUndefined(decodePreprocess(preprocessText));
+  const preprocess = yield* readPreprocess(dir);
 
   const reference: Reference = { id, dir, doc, analysis, preprocess };
 
@@ -98,56 +84,6 @@ const sourceLabel = Match.type<ReferenceSource>().pipe(
   }),
 );
 
-interface Fetched {
-  readonly video: string;
-  readonly title?: string | undefined;
-}
-
-/** Download with yt-dlp into `dir` as source.<ext>; resolves to the file name and the page's title. */
-const downloadVideo = Effect.fn("references.downloadVideo")(function* (url: string, dir: string) {
-  const ws = yield* Workspace;
-  const ytDlp = yield* which("yt-dlp");
-
-  if (Option.isNone(ytDlp)) {
-    return yield* new CommandFailed({
-      message: "yt-dlp is required to add references by URL (brew install yt-dlp).",
-    });
-  }
-
-  const result = yield* run(
-    ytDlp.value,
-    [
-      "--no-playlist",
-      "-f",
-      "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
-      "--merge-output-format",
-      "mp4",
-      "-o",
-      "source.%(ext)s",
-      "--print",
-      "after_move:title",
-      url,
-    ],
-    { cwd: yield* ws.abs(dir) },
-  );
-
-  if (result.code !== 0)
-    return yield* new CommandFailed({ message: `yt-dlp failed: ${tail(result.stderr, 2)}` });
-  // The fallback formats are not always mp4, so look for whatever yt-dlp wrote.
-  const entries = yield* ws.list(dir);
-
-  const video = entries.find(
-    (entry) => entry.name.startsWith("source.") && mediaKind(entry.name) === "video",
-  );
-
-  if (video === undefined)
-    return yield* new CommandFailed({ message: `yt-dlp saved no video for ${url}` });
-  const title = result.stdout.trim().split("\n").pop()?.trim();
-  const fetched: Fetched = { video: video.name, title: title === "" ? undefined : title };
-
-  return fetched;
-});
-
 const importVideo = Effect.fn("references.importVideo")(function* (
   source: ReferenceSource,
   dir: string,
@@ -161,9 +97,9 @@ const importVideo = Effect.fn("references.importVideo")(function* (
     return yield* new InvalidRequest({ message: `Not a video file: ${name}` });
   const video = `source.${extension(name)}`;
   yield* ws.importFile(source.path, `${dir}/${video}`);
-  const fetched: Fetched = { video };
+  const imported: Downloaded = { video };
 
-  return fetched;
+  return imported;
 });
 
 /** Store a reference video in the workspace, then run deterministic preprocessing. */
@@ -208,35 +144,7 @@ export const addReference = Effect.fn("references.addReference")(function* (
   return yield* getReference(id);
 });
 
-/** Hook frames every 0.5s for the first 3s, then one frame per second; none at or past the end. */
-export function frameTimes(duration: number): number[] {
-  const times = new Set<number>();
-
-  for (let t = 0; t <= 3 && t < duration; t += 0.5) times.add(t);
-
-  for (let t = 4; t < duration; t += 1) times.add(t);
-
-  return [...times].toSorted((a, b) => a - b);
-}
-
-const frameFile = (t: number) => `frames/t${t.toFixed(1).padStart(5, "0")}.jpg`;
-
-const CONTACT_COLUMNS = 6;
-
-/** Transcribe with a local Whisper when one is installed; resolves to the reference-relative .srt. */
-const transcribe = Effect.fn("references.transcribe")(function* (wav: string, absDir: string) {
-  const whisper = yield* which("whisper");
-
-  if (Option.isNone(whisper)) return undefined;
-  const result = yield* run(whisper.value, [wav, "--output_format", "srt", "--output_dir", absDir]);
-
-  return result.code === 0 ? "audio.srt" : undefined;
-});
-
-/**
- * Deterministic, key-free preprocessing an agent can build on: scene cuts, sampled frames, a
- * contact sheet, and (when a local Whisper is installed) a transcript.
- */
+/** Run deterministic preprocessing on a reference's video and mark it preprocessed. */
 export const preprocessReference = Effect.fn("references.preprocessReference")(function* (
   id: string,
 ) {
@@ -247,107 +155,7 @@ export const preprocessReference = Effect.fn("references.preprocessReference")(f
     return yield* new InvalidRequest({ message: `Reference ${id} has no video` });
   }
 
-  const dir = yield* ws.abs(reference.dir);
-  const input = `${dir}/${reference.doc.video}`;
-  const duration = reference.doc.probe?.duration ?? (yield* probe(input)).duration;
-  const notes: Array<string> = [];
-
-  const cuts = yield* sceneCuts(input).pipe(
-    Effect.catchTag("CommandFailed", (error) =>
-      Effect.sync((): number[] => {
-        notes.push(error.message);
-
-        return [];
-      }),
-    ),
-  );
-
-  yield* ws.mkdir(`${reference.dir}/frames`);
-
-  const frames = yield* Effect.forEach(
-    frameTimes(duration),
-    (t) =>
-      run("ffmpeg", [
-        "-y",
-        "-v",
-        "error",
-        "-ss",
-        String(t),
-        "-i",
-        input,
-        "-frames:v",
-        "1",
-        "-vf",
-        "scale=360:-2",
-        "-q:v",
-        "4",
-        `${dir}/${frameFile(t)}`,
-      ]).pipe(Effect.map((result) => (result.code === 0 ? [{ file: frameFile(t), t }] : []))),
-    { concurrency: 4 },
-  );
-
-  const rows = Math.max(1, Math.ceil(Math.min(duration, 60) / CONTACT_COLUMNS));
-
-  const sheet = yield* run("ffmpeg", [
-    "-y",
-    "-v",
-    "error",
-    "-i",
-    input,
-    "-vf",
-    `fps=1,scale=240:-2,tile=${CONTACT_COLUMNS}x${rows}:padding=4:margin=4`,
-    "-frames:v",
-    "1",
-    "-q:v",
-    "4",
-    `${dir}/contact.jpg`,
-  ]);
-
-  if (sheet.code !== 0) notes.push(`Contact sheet failed: ${tail(sheet.stderr, 2)}`);
-
-  const audioRun =
-    reference.doc.probe?.hasAudio === false
-      ? undefined
-      : yield* run("ffmpeg", [
-          "-y",
-          "-v",
-          "error",
-          "-i",
-          input,
-          "-vn",
-          "-ac",
-          "1",
-          "-ar",
-          "16000",
-          `${dir}/audio.wav`,
-        ]);
-
-  const audio = audioRun?.code === 0 ? "audio.wav" : undefined;
-  const transcript = audio === undefined ? undefined : yield* transcribe(`${dir}/${audio}`, dir);
-
-  if (audio !== undefined && transcript === undefined) {
-    notes.push(
-      "No local Whisper found (the `whisper` CLI); transcript skipped. The agent can transcribe audio.wav itself.",
-    );
-  }
-
-  const result: PreprocessResult = {
-    cuts,
-    frames: frames.flat(),
-    contactSheet: sheet.code === 0 ? "contact.jpg" : undefined,
-    audio,
-    transcript,
-    notes,
-  };
-
-  const json = yield* encodePreprocess(result).pipe(
-    Effect.mapError(
-      (error) =>
-        new CommandFailed({ message: `Could not encode ${PREPROCESS_FILE}: ${error.message}` }),
-    ),
-  );
-
-  yield* ws.writeText(`${reference.dir}/${PREPROCESS_FILE}`, `${json}\n`);
+  const result = yield* preprocessVideo(reference.dir, reference.doc.video, reference.doc.probe);
   yield* ws.writeYaml(`${reference.dir}/${REFERENCE_FILE}`, ReferenceDoc, {
     ...reference.doc,
     preprocessed: true,

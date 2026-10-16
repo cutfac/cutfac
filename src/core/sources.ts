@@ -19,7 +19,7 @@ export const sourceHosts = (sources: ReadonlyArray<ItemSource>) => [
 ];
 
 /** An http(s) link with no login or token in it, in its canonical form. */
-function cleanUrl(text: string) {
+export function cleanUrl(text: string) {
   const url = URL.parse(text.trim());
 
   if (url === null || (url.protocol !== "http:" && url.protocol !== "https:")) {
@@ -40,7 +40,7 @@ function cleanUrl(text: string) {
  * workspace is kept relative so the workspace can move. Nothing is read: whatever is there may
  * change, and the agent says when it is gone.
  */
-const cleanPath = Effect.fnUntraced(function* (text: string) {
+export const cleanPath = Effect.fnUntraced(function* (text: string) {
   const ws = yield* Workspace;
   const path = yield* Path.Path;
   let given = text.trim();

@@ -30,6 +30,11 @@ export interface Entry extends FileStat {
   readonly dir: boolean;
 }
 
+/** What a look at a path the user named finds: a folder and its visible names, or a file. */
+export type Peek =
+  | { readonly dir: true; readonly names: ReadonlyArray<string> }
+  | { readonly dir: false };
+
 /**
  * Every filesystem read and write for a workspace goes through this service, so callers only
  * ever see workspace-relative paths and nothing can leave the root.
@@ -66,6 +71,13 @@ export class Workspace extends Context.Service<
     /** Direct children, without dotfiles, sorted by name. Empty when the folder is missing. */
     readonly list: (rel: string) => Effect.Effect<ReadonlyArray<Entry>, WorkspaceError>;
     readonly remove: (rel: string) => Effect.Effect<void, WorkspaceError>;
+    /**
+     * Look at an absolute path the user named, inside the workspace or not, without changing it.
+     * Folder names come without dotfiles, sorted.
+     */
+    readonly peek: (full: string) => Effect.Effect<Peek, WorkspaceError>;
+    /** Up to `maxBytes` from the start of a file the user named, inside the workspace or not. */
+    readonly peekText: (full: string, maxBytes: number) => Effect.Effect<string, WorkspaceError>;
     /**
      * Run `effect` while no other effect holding `key` runs, such as two read-modify-writes of one
      * file. Not reentrant: `effect` must not take the same key.
@@ -325,6 +337,35 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
       .pipe(Effect.mapError(fail("remove", relPath)));
   });
 
+  const peek = Effect.fn("Workspace.peek")(function* (full: string) {
+    const info = yield* fs.stat(full).pipe(Effect.mapError(fail("read", full)));
+
+    if (info.type !== "Directory") {
+      const file: Peek = { dir: false };
+
+      return file;
+    }
+
+    const names = yield* fs.readDirectory(full).pipe(Effect.mapError(fail("list", full)));
+
+    const folder: Peek = {
+      dir: true,
+      names: names.filter((name) => !name.startsWith(".")).toSorted((a, b) => a.localeCompare(b)),
+    };
+
+    return folder;
+  });
+
+  const peekText = (full: string, maxBytes: number) =>
+    fs
+      .stream(full, { bytesToRead: maxBytes })
+      .pipe(
+        Stream.decodeText,
+        Stream.mkString,
+        Effect.mapError(fail("read", full)),
+        Effect.withSpan("Workspace.peekText"),
+      );
+
   const changes = fs.watch(root, { recursive: true }).pipe(
     Stream.map((event) => event.path.split(path.sep).join("/")),
     Stream.filter((changed) => !ignoredChange(changed)),
@@ -365,6 +406,8 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     stat,
     list,
     remove,
+    peek,
+    peekText,
     exclusive,
     changes,
   });

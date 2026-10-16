@@ -24,12 +24,16 @@ export interface Listing {
   readonly source: ListingSource;
   readonly url: string;
   readonly name: string;
+  /** A landing page's own title (og:title or <title>); store listings have only `name`. */
+  readonly title?: string | undefined;
   readonly summary: string;
   readonly description: string;
   readonly developer?: string | undefined;
   readonly category?: string | undefined;
   readonly themeColor?: string | undefined;
   readonly icon?: string | undefined;
+  /** The picture a page shares itself with (og:image). */
+  readonly image?: string | undefined;
   readonly screenshots: ReadonlyArray<string>;
   readonly links: StoreLinks;
 }
@@ -76,7 +80,7 @@ type PlayApp = typeof PlayApp.Type;
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
 
-const MAX_SCREENSHOTS = 8;
+export const MAX_SCREENSHOTS = 8;
 
 export const STORE_DIR = "store";
 
@@ -205,15 +209,18 @@ export function parseWebHtml(html: string, url: string): Listing {
   );
 
   const image = meta(html, "og:image");
+  const icon = linkHref(html, "apple-touch-icon") ?? linkHref(html, "icon");
 
   return {
     source: "web",
     url,
     name: meta(html, "og:site_name") ?? (title.split(/\s[-–—|:]\s/)[0] ?? title).trim(),
+    title: title.trim() === "" ? undefined : title.trim(),
     summary,
     description: summary,
     themeColor: meta(html, "theme-color"),
-    icon: image === undefined ? undefined : URL.parse(image, url)?.href,
+    icon: icon === undefined ? undefined : URL.parse(icon, url)?.href,
+    image: image === undefined ? undefined : URL.parse(image, url)?.href,
     screenshots: [],
     links: {
       appStore: storeLinks.find((link) => detectSource(link) === "appStore" && /id\d+/.test(link)),
@@ -229,20 +236,35 @@ const templateProduct = decodeYaml("templates/product.yaml", PRODUCT_TEMPLATE, P
   Effect.orDie,
 );
 
-const imageExtension = (contentType: string) => {
-  if (contentType.includes("png")) return "png";
+const IMAGE_EXTENSIONS = new Map([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/jpg", "jpg"],
+  ["image/webp", "webp"],
+  ["image/gif", "gif"],
+  // Some CDNs label every file this way.
+  ["application/octet-stream", "jpg"],
+  ["", "jpg"],
+]);
 
-  if (contentType.includes("webp")) return "webp";
-
-  return "jpg";
-};
-
-/** Save one image under `stem` with the extension its content type calls for. */
-const download = Effect.fn("productImport.download")(function* (url: string, stem: string) {
+/**
+ * Save one picture under workspace path `stem` with the extension its content type calls for.
+ * Anything the board can't show is refused, an SVG above all: opened on its own it can run scripts.
+ */
+export const download = Effect.fn("productImport.download")(function* (url: string, stem: string) {
   const ws = yield* Workspace;
   const response = yield* get(url);
+  const type = (response.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const extension = IMAGE_EXTENSIONS.get(type);
+
+  if (extension === undefined) {
+    return yield* new FetchFailed({
+      message: `${url}: not a picture the board can show (${type})`,
+    });
+  }
+
   const bytes = yield* Effect.mapError(response.arrayBuffer, fetchFailed(url));
-  const file = `${stem}.${imageExtension(response.headers["content-type"] ?? "")}`;
+  const file = `${stem}.${extension}`;
   yield* ws.writeBytes(file, new Uint8Array(bytes));
 
   return file;
@@ -253,13 +275,17 @@ interface Asset {
   readonly name: string;
 }
 
-const assetsOf = (listing: Listing): ReadonlyArray<Asset> => [
-  ...(listing.icon === undefined ? [] : [{ url: listing.icon, name: `${listing.source}-icon` }]),
-  ...listing.screenshots.slice(0, MAX_SCREENSHOTS).map((url, index) => ({
-    url,
-    name: `${listing.source}-${String(index + 1).padStart(2, "0")}`,
-  })),
-];
+const assetsOf = (listing: Listing): ReadonlyArray<Asset> => {
+  const icon = listing.icon ?? listing.image;
+
+  return [
+    ...(icon === undefined ? [] : [{ url: icon, name: `${listing.source}-icon` }]),
+    ...listing.screenshots.slice(0, MAX_SCREENSHOTS).map((url, index) => ({
+      url,
+      name: `${listing.source}-${String(index + 1).padStart(2, "0")}`,
+    })),
+  ];
+};
 
 /**
  * Fill product/product.yaml from a store or landing page URL and download store screenshots into
@@ -438,6 +464,19 @@ function meta(html: string, key: string): string | undefined {
     const content = attr(tag, "content");
 
     if (filled(content)) return content.trim();
+  }
+
+  return undefined;
+}
+
+/** The href of the first `<link>` whose rel includes `rel`. */
+function linkHref(html: string, rel: string): string | undefined {
+  for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = match[0];
+    const rels = attr(tag, "rel")?.toLowerCase().split(/\s+/) ?? [];
+    const href = attr(tag, "href");
+
+    if (rels.includes(rel) && filled(href)) return href.trim();
   }
 
   return undefined;

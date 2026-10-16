@@ -115,7 +115,7 @@ describe("listing parsers", () => {
     expect(listing.name).toBe("Pawnly");
     expect(listing.summary).toBe("Drill chess openings in five minutes a day & remember them.");
     expect(listing.themeColor).toBe("#357a4d");
-    expect(listing.icon).toBe("https://pawnly.app/og.png");
+    expect(listing.image).toBe("https://pawnly.app/og.png");
     expect(listing.links).toEqual({
       appStore: "https://apps.apple.com/us/app/pawnly/id123456",
       googlePlay: "https://play.google.com/store/apps/details?id=app.pawnly&hl=en",

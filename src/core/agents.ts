@@ -51,6 +51,7 @@ export const MCP_READ_TOOLS = [
 /** The MCP tools that write to the workspace or reach the network. */
 export const MCP_WRITE_TOOLS = [
   "import_product",
+  "learn",
   "create_item",
   "update_item",
   "review_media",

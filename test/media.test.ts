@@ -13,9 +13,9 @@ import {
   parseShowinfoTimes,
   toMediaFiles,
 } from "../src/core/media.ts";
+import { frameTimes } from "../src/core/preprocess.ts";
 import {
   addReference,
-  frameTimes,
   getReference,
   listReferences,
   referenceSourceOf,
