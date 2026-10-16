@@ -1,6 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { createServer, type AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -10,7 +9,7 @@ import { promisify } from "node:util";
 
 import { app } from "electron";
 
-const HOST = "127.0.0.1";
+import { HOST } from "./ports.ts";
 
 const PATH_MARKER = "__FACTORY_PATH__";
 
@@ -37,12 +36,16 @@ export interface SidecarOptions {
   port: number;
   /** Called with an explanation and the output tail if the server dies without `stop()`. */
   onCrash: (message: string) => void;
+  /** Restart the server in place when its source changes, if it runs from source. */
+  watch: boolean;
 }
 
 interface Launch {
   command: string;
   args: string[];
   webDir: string;
+  /** Flags that make the server restart itself when its source changes; empty for a binary. */
+  watchFlags: string[];
 }
 
 interface Running {
@@ -94,24 +97,6 @@ async function readLoginPath(): Promise<string> {
   }
 }
 
-/**
- * Checks that `port` is free by binding and releasing it; port 0 picks any free one. Rejects with
- * EADDRINUSE, so a fixed port held by something else is not mistaken for our own server.
- */
-export function probePort(port: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-
-    server.once("error", reject);
-    server.listen(port, HOST, () => {
-      // SAFETY: the server listens on a TCP host and port, so address() is an AddressInfo.
-      const bound = server.address() as AddressInfo;
-
-      server.close(() => resolve(bound.port));
-    });
-  });
-}
-
 function findExecutable(name: string, searchPath: string): string {
   for (const dir of searchPath.split(path.delimiter)) {
     const candidate = path.join(dir, name);
@@ -137,18 +122,21 @@ function resolveLaunch(searchPath: string): Launch {
       command: override || path.join(resources, "bin", "factory"),
       args: [],
       webDir: path.join(resources, "web"),
+      watchFlags: [],
     };
   }
 
   const root = app.getAppPath();
   const webDir = path.join(root, "dist", "web");
 
-  if (override) return { command: override, args: [], webDir };
+  if (override) return { command: override, args: [], webDir, watchFlags: [] };
 
   return {
     command: findExecutable("bun", searchPath),
     args: [path.join(root, "src", "cli.ts")],
     webDir,
+    // Bun re-executes in place, so the process (and the app's handle on it) survives a reload.
+    watchFlags: ["--watch"],
   };
 }
 
@@ -251,7 +239,12 @@ async function terminate(running: Running): Promise<void> {
 }
 
 /** Initialises the workspace if needed, starts the server on it and resolves once it is healthy. */
-export async function startSidecar({ workspace, port, onCrash }: SidecarOptions): Promise<Sidecar> {
+export async function startSidecar({
+  workspace,
+  port,
+  onCrash,
+  watch,
+}: SidecarOptions): Promise<Sidecar> {
   const searchPath = await resolveLoginPath();
   const launch = resolveLaunch(searchPath);
 
@@ -266,7 +259,7 @@ export async function startSidecar({ workspace, port, onCrash }: SidecarOptions)
   }
 
   const serve = run(
-    launch,
+    watch ? { ...launch, args: [...launch.watchFlags, ...launch.args] } : launch,
     [
       "serve",
       "--workspace",

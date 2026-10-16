@@ -234,8 +234,13 @@ items/<id>/history/     history.yaml: the undo stack and every saved version of 
 ```sh
 bun run serve -- --workspace <dir>   # API on :4317
 bun run dev:web                      # Vite on :5173, proxies /api and /files
+bun run desktop:dev                  # the desktop app on live code
 bun test && bun run typecheck && bun run lint
 ```
+
+`desktop:dev` opens the desktop app on free ports. The board hot-reloads, the server restarts
+itself when `src/` changes, and the app restarts when `electron/` changes. A server restart cuts
+off any agent run in progress. Closing the app or Ctrl+C stops everything.
 
 See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap, and
 [docs/templates.md](docs/templates.md) for the template spec.

@@ -24,6 +24,7 @@ import {
   SET_LOCALE_CHANNEL,
 } from "./ipc.ts";
 import { MESSAGES } from "./messages.ts";
+import { probePort } from "./ports.ts";
 import {
   loadLocale,
   loadPort,
@@ -32,7 +33,7 @@ import {
   savePort,
   saveWorkspace,
 } from "./settings.ts";
-import { probePort, startSidecar, type Sidecar } from "./sidecar.ts";
+import { startSidecar, type Sidecar } from "./sidecar.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to.
 const devUrl = process.env.FACTORY_DEV_URL || undefined;
@@ -284,7 +285,13 @@ async function activate(workspace: string): Promise<boolean> {
 
     // A fixed dev port held by a stale server fails here instead of passing the health check.
     const port = devUrl ? await probePort(devPort) : await freePort();
-    const started = await startSidecar({ workspace, port, onCrash: handleCrash });
+
+    const started = await startSidecar({
+      workspace,
+      port,
+      onCrash: handleCrash,
+      watch: devUrl !== undefined,
+    });
 
     if (quitting) {
       await started.stop();
