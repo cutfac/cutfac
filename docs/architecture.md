@@ -4,13 +4,13 @@
 
 1. **Agent-first, naturally.** The user's agent is the main user. What it needs (the skill, the
    state of the workspace, what is broken and how to fix it) reaches it through the tools it
-   already calls, without the user running setup steps or relaying messages. When the factory
+   already calls, without the user running setup steps or relaying messages. When Cutfac
    cannot do something itself, it tells the agent what to do and why, in words the agent can act
    on, and the agent asks the user only for decisions and consent.
 2. **Local first.** The workspace is a folder on the user's machine and the files are the source of
    truth. Agents edit the same files directly; the server indexes on demand (no database).
 3. **Bring your own agent.** Claude Code and Codex connect through the stdio MCP server and the
-   bundled `content-factory` skill. The factory does deterministic work (probe, cuts, frames,
+   bundled `cutfac` skill. Cutfac does deterministic work (probe, cuts, frames,
    checks). Agents do interpretation and production.
 4. **Pull-based feedback.** Comments left on the board are stored in `item.yaml`. The agent reads
    them with `list_open_feedback`, or the user pastes the board's "copy agent prompt".
@@ -84,14 +84,14 @@ A template (a format in the core) is a folder with a `format.yaml` that declares
 with it takes: Agent Skills, programs on `PATH`, extra agent tools, and inputs chosen per item. The
 spec is in [templates.md](templates.md).
 
-The factory has no importers. The user's agent reads a link and writes the folder; the core only
+Cutfac has no importers. The user's agent reads a link and writes the folder; the core only
 decodes it and reports what is missing (`check_format`, `/api/formats/status`), so any source that
 an agent can read works without code here. Installing skills or programs is the agent's job, with
 the user's consent; the core never downloads or installs anything. Edit requests point the agent at
 the template's README, skills and the files of the item's chosen inputs.
 
 The board can run that agent for the user (`src/core/imports.ts`, `src/core/importRun.ts`). An
-import is a conversation stored in `.factory/imports/<id>.yaml`; each turn resumes the same agent
+import is a conversation stored in `.cutfac/imports/<id>.yaml`; each turn resumes the same agent
 session, or replays the conversation when the session is gone. Consent is enforced by what the CLI
 may run, not by asking the agent. Until the user presses Allow, Claude Code gets read tools only and
 Codex its read-only sandbox, and the workspace's MCP write tools are off. After Allow, Claude Code
@@ -109,12 +109,12 @@ since Allow.
 All options share one local process (API + MCP), because agents, ffmpeg, yt-dlp, and renderers
 need the machine. Only the origin that serves the SPA differs:
 
-- **Now: localhost.** `factory serve` serves the SPA and API on `localhost:4317`.
+- **Now: localhost.** `cutfac serve` serves the SPA and API on `localhost:4317`.
 - **Later: hosted UI + local daemon.** The same SPA served from a public origin talks to the local
   daemon (`?api=http://localhost:4317`). This needs CORS for that origin, a pairing token, and
   validation of Chrome's local network access prompt and Safari's localhost policy.
 - **Desktop shell.** `electron/` wraps the same server and SPA. The server runs as a sidecar
-  (`factory serve --host 127.0.0.1 --web-dir <bundled web>`), compiled with `bun build --compile`
+  (`cutfac serve --host 127.0.0.1 --web-dir <bundled web>`), compiled with `bun build --compile`
   for the packaged app, and the window loads it. The packaged app updates itself with
   electron-updater from a feed on a CDN (`latest-mac.yml` plus the signed zip), which
   `bun run release:desktop` publishes.
@@ -132,7 +132,7 @@ so they cannot be bypassed and do not lock local data:
 - Phone review links through a relay.
 - Cloud render bursts, backup and sync, and team reviewers.
 
-Mechanics: `factory login` (device-code flow) stores a token locally; the daemon attaches it only
+Mechanics: `cutfac login` (device-code flow) stores a token locally; the daemon attaches it only
 to cloud calls; entitlements are always checked server-side; the SPA reads entitlements from the
 daemon to show upgrade prompts. Use a merchant of record (Polar or Lemon Squeezy) for billing.
 For hosted execution, use per-job isolated runners (for example Firecracker microVMs) with the

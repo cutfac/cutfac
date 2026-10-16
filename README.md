@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
-    <img alt="Content Factory logo" src=".github/assets/logo-light.svg" width="88">
+    <img alt="Cutfac logo" src=".github/assets/logo-light.svg" width="88">
   </picture>
 </p>
 
-<h1 align="center">Content Factory</h1>
+<h1 align="center">Cutfac</h1>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL%203.0-blue.svg" alt="License: AGPL-3.0"></a>
@@ -16,7 +16,7 @@
 
 <div align="center">
   <strong>
-    Content Factory is a local-first studio for short-form marketing videos, made for solo developers who market their own app. Your own coding agent does the work, and you review it on a board.
+    Cutfac is a local-first studio for short-form marketing videos, made for solo developers who market their own app. Your own coding agent does the work, and you review it on a board.
     <br /><br />
     Get the signed Mac app, or build the open-source edition yourself.
   </strong>
@@ -28,7 +28,7 @@
   <br /><br />
   <a href="docs/architecture.md">Architecture</a>
   ·
-  <a href="https://github.com/w00ing/content-factory/issues">Issues</a>
+  <a href="https://github.com/w00ing/cutfac/issues">Issues</a>
   ·
   <a href="https://wyverselabs.com">Wyverse Labs</a>
 </p>
@@ -64,7 +64,7 @@
 - **One board for every post.** Each video moves from drafting to review to done, with timecoded
   feedback and upload checks along the way.
 - **Teach it what you make.** Paste a link to your site, your store page or a video you like, or
-  pick the folder you work in. The factory saves a first look into `about.md` (for a video, its
+  pick the folder you work in. Cutfac saves a first look into `about.md` (for a video, its
   scene cuts, hook frames, contact sheet and audio), your agent reads the rest, and every run after
   that knows your product. The patterns that work become reusable formats.
 - **Agents check their own work.** Your agent writes a brief and shot list for you to okay before
@@ -97,7 +97,7 @@
 
 ## Mac app vs. open source
 
-The Mac app, Content Factory Solo, is built from this repository. Both have the same features, and
+The Mac app, Cutfac Solo, is built from this repository. Both have the same features, and
 we don't lock any of them behind a license key. Paying gets you a signed build that updates itself,
 plus content we prepare for you.
 
@@ -115,11 +115,11 @@ plus content we prepare for you.
 
 ## Privacy
 
-- This repository is the open-source edition of Content Factory. The Mac app is built from the same
+- This repository is the open-source edition of Cutfac. The Mac app is built from the same
   code.
 - Your workspace stays on your disk. There's no account and no telemetry, and your videos and files
   are never uploaded.
-- Agents run on your machine with your own Claude Code or Codex login. Content Factory never asks
+- Agents run on your machine with your own Claude Code or Codex login. Cutfac never asks
   for, stores or forwards your API keys.
 - The server listens on `127.0.0.1` unless you pass `--host`.
 - It only goes online when you ask it to: learning from a link (videos through your own `yt-dlp`)
@@ -148,15 +148,15 @@ bun src/cli.ts serve --workspace ~/my-app-content       # http://localhost:4317
 ```
 
 `init` connects your agents. Claude Code gets a project-scoped `.mcp.json` in the workspace, and
-Codex is registered through `codex mcp add` as `content-factory-<workspace>`. Until an agent is
+Codex is registered through `codex mcp add` as `cutfac-<workspace>`. Until an agent is
 connected, the web UI opens on a Setup page that connects one. Use `--no-connect` to only print the
 agent commands. To teach it about your product, use the board's Learn page, ask your agent, or run
-`factory learn <link or path>`; store links on a landing page are followed. To adopt an existing folder of posts,
-add a `factory.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
+`cutfac learn <link or path>`; store links on a landing page are followed. To adopt an existing folder of posts,
+add a `cutfac.yaml` with `paths.items` pointing at it. Folders containing `POSTING.md` or
 `STATUS.md` appear on the board, and an `item.yaml` is written on their first edit.
 
-The workspace gets the `content-factory` skill in `.agents/skills/` and `.claude/skills/`. `serve`
-and the MCP server bring it up to date when Content Factory changes it. A copy you edited is kept,
+The workspace gets the `cutfac` skill in `.agents/skills/` and `.claude/skills/`. `serve`
+and the MCP server bring it up to date when Cutfac changes it. A copy you edited is kept,
 and your agent offers you the new version instead.
 
 `serve` takes `--port` (default 4317), `--host` (default `127.0.0.1`), and `--web-dir` to serve a
@@ -201,7 +201,7 @@ bun run dist:desktop      # unsigned macOS app in release/, with the server comp
 bun run release:desktop   # signed and notarized release, published to the update feed
 ```
 
-The app runs the same server as `factory serve` as a sidecar on `127.0.0.1` and opens the board in
+The app runs the same server as `cutfac serve` as a sidecar on `127.0.0.1` and opens the board in
 its window.
 
 ### Updates
@@ -239,7 +239,7 @@ with those names. Nothing is sent until the form is submitted.
 ## Workspace layout
 
 ```
-factory.yaml            name, paths, default agent
+cutfac.yaml             name, paths, default agent
 about.md                what agents read about the product, audience, and voice, one section per source
 learned/<id>/           learned.yaml and a first look: pictures, or a video with frames/, contact.jpg, audio.wav
 formats/<id>/           format.yaml, README.md, previews and choice files, optional template/
@@ -266,4 +266,4 @@ See [docs/architecture.md](docs/architecture.md) for the design and the hosted r
 
 ## License
 
-Content Factory is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+Cutfac is licensed under the [GNU Affero General Public License v3.0](LICENSE).

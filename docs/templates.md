@@ -4,11 +4,11 @@ A template is a reusable way of making posts: a talking-head hook, a carousel la
 generated art clip that comes with its own Agent Skill. The board calls them templates; the files,
 the CLI and the MCP tools call them formats.
 
-Content Factory does not import templates itself. It defines the folder a template lives in, and
+Cutfac does not import templates itself. It defines the folder a template lives in, and
 `check_format` says what a template still lacks. Your agent does the rest: given a post, a repo or a
 skill ("read this link and make it usable here"), it writes the folder, installs what it needs once
 you allow it, and runs `check_format` until the template is ready. The board can run your agent on
-a link for you, but the factory itself never downloads or installs anything.
+a link for you, but Cutfac itself never downloads or installs anything.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/templates-dark.png">
@@ -51,7 +51,7 @@ Only `title` is required.
 | `requires` | `[]` | Programs that must be on `PATH`, by name only, such as `ffmpeg` |
 | `tools` | `[]` | Extra tools Claude Code may use in board edits, such as `Bash(uv:*)` |
 | `inputs` | `[]` | What to decide when an item is made (below) |
-| `metadata` | | Anything else; Content Factory keeps it and never reads it |
+| `metadata` | | Anything else; Cutfac keeps it and never reads it |
 
 ### Inputs
 
@@ -214,10 +214,10 @@ The board holds the line on consent, not the agent:
 A link that carries a login or a token (`user:pass@`, `?token=`, an API key) is turned away before
 any agent sees it, and `save_format` refuses to keep one in a template's `source` or `skills`: share
 the public link instead. Only the workspace's own MCP server is loaded for an import, so your other
-servers cannot act for it. Each import is saved in `.factory/imports/<id>.yaml`. A run cut off by a
+servers cannot act for it. Each import is saved in `.cutfac/imports/<id>.yaml`. A run cut off by a
 restart shows as stopped, and "Try again" picks it up.
 
-The steps the agent follows are in the workspace's `content-factory` skill under "Import a template
+The steps the agent follows are in the workspace's `cutfac` skill under "Import a template
 from a link". In short:
 
 1. Read the link and decide what kind of template it is.

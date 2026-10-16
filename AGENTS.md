@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Content Factory: a local-first short-form content factory with an MCP server, local API, and web board.
+Cutfac: a local-first short-form video studio with an MCP server, local API, and web board.
 
 Product:
 
