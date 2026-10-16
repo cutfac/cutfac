@@ -16,7 +16,6 @@ import {
 import { ABOUT_FILE } from "./learn.ts";
 import type { Format } from "./library.ts";
 import { extension, ffmpeg, type MediaKind } from "./media.ts";
-import { refDir } from "./references.ts";
 import type {
   AgentName,
   AgentPick,
@@ -491,23 +490,16 @@ const formatLines = Effect.fnUntraced(function* (format: Format) {
   return { lines, missing };
 });
 
-/** What the user pointed the item at: folders and files on this computer, pages, a reference. */
+/** What the user pointed the item at: folders and files on this computer, and pages. */
 const sourceLines = Effect.fnUntraced(function* (item: Item) {
   const ws = yield* Workspace;
   const path = yield* Path.Path;
 
-  const lines = item.doc.sources.map((source) =>
+  return item.doc.sources.map((source) =>
     "url" in source
       ? `- ${source.url} (a web page)`
       : `- ${path.resolve(ws.root, source.path)} (on this computer)`,
   );
-
-  if (item.doc.reference !== undefined) {
-    const dir = path.resolve(ws.root, refDir(ws, item.doc.reference));
-    lines.push(`- ${dir} (a saved reference video; get_reference has its analysis)`);
-  }
-
-  return lines;
 });
 
 /** The message an agent receives for one request, headless or pasted by the user. */

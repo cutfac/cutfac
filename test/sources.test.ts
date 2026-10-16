@@ -78,10 +78,10 @@ describe("item sources", () => {
     expect((await t.run(getItem(id))).doc.sources).toEqual([{ path: "/b" }]);
   });
 
-  test("the edit prompt lists the sources and the item's reference as absolute paths", async () => {
+  test("the edit prompt lists the sources, local ones as absolute paths", async () => {
     const prompt = await t.run(
       Effect.gen(function* () {
-        const item = yield* createItem({ title: "Scandi", reference: "italian" });
+        const item = yield* createItem({ title: "Scandi" });
         yield* updateItem(item.id, {
           sources: [{ path: "items/old-explainer" }, { url: "https://lichess.org/opening" }],
         });
@@ -94,7 +94,6 @@ describe("item sources", () => {
     expect(prompt).toContain("Sources the user pointed this item at.");
     expect(prompt).toContain(`- ${join(t.root, "items/old-explainer")} (on this computer)`);
     expect(prompt).toContain("- https://lichess.org/opening (a web page)");
-    expect(prompt).toContain(`- ${join(t.root, "references/italian")} (a saved reference video;`);
   });
 
   test("an item without sources adds no section", async () => {

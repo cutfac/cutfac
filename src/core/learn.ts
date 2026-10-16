@@ -2,8 +2,6 @@ import { Effect, Path } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { isSimpleId, readOptionalText } from "./library.ts";
-import { extension, mediaKind, probe } from "./media.ts";
-import { downloadVideo, preprocessVideo, readPreprocess } from "./preprocess.ts";
 import {
   detectSource,
   download,
@@ -11,7 +9,9 @@ import {
   type Listing,
   MAX_SCREENSHOTS,
   shortName,
-} from "./productImport.ts";
+} from "./listings.ts";
+import { extension, mediaKind, probe } from "./media.ts";
+import { downloadVideo, preprocessVideo, readPreprocess } from "./preprocess.ts";
 import { type ItemSource, LearnedDoc, type PreprocessResult } from "./schema.ts";
 import { cleanPath, cleanUrl } from "./sources.ts";
 import { Workspace, type WorkspaceService, foldersWith, nowIso, slugify } from "./workspace.ts";

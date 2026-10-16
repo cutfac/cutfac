@@ -7,10 +7,8 @@ import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
 import { type CliEntry, codexServerName, connectAgent, mcpLaunch } from "./core/agents.ts";
-import { importProduct } from "./core/productImport.ts";
-import { addReference, referenceSourceOf } from "./core/references.ts";
+import { learn, learnInputOf } from "./core/learn.ts";
 import { syncSkill } from "./core/skill.ts";
-import { PRODUCT_TEMPLATE } from "./core/templates.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
 import { MCP_VERSION, mcpLayer } from "./mcp/server.ts";
 import { serverLayer } from "./server/app.ts";
@@ -50,20 +48,6 @@ const defaultWebDir = Effect.fn("cli.defaultWebDir")(function* () {
     .pipe(Effect.orElseSucceed(() => false));
 
   return built ? Option.some(dir) : Option.none<string>();
-});
-
-const runImport = Effect.fn("cli.runImport")(function* (url: string) {
-  const ws = yield* Workspace;
-  yield* Console.log(`Reading ${url} …`);
-  const result = yield* importProduct(url);
-
-  for (const listing of result.listings)
-    yield* Console.log(`  ${listing.source.padEnd(10)} ${listing.name}`);
-  yield* Console.log(`  product    ${result.product.name} — ${result.product.oneLiner}`);
-  yield* Console.log(`  wrote      ${result.files.length} files under ${ws.config.paths.product}/`);
-
-  for (const warning of result.warnings) yield* Console.error(`  warning    ${warning}`);
-  yield* Console.log("  Review product.yaml: audience and voice still need your words.");
 });
 
 const connectAgents = Effect.fn("cli.connectAgents")(function* () {
@@ -113,21 +97,11 @@ const syncSkillCopies = Effect.fn("cli.syncSkillCopies")(function* () {
   }
 });
 
-/** Everything a workspace needs besides factory.yaml: the product template, folders, and skill. */
+/** Everything a workspace needs besides factory.yaml: its folders and the skill. */
 const scaffold = Effect.fn("cli.scaffold")(function* () {
   const ws = yield* Workspace;
   const { paths } = ws.config;
-  const productFile = `${paths.product}/product.yaml`;
-
-  if (!(yield* ws.exists(productFile))) {
-    yield* ws.writeText(productFile, PRODUCT_TEMPLATE);
-    yield* ws.mkdir(`${paths.product}/captures`);
-    yield* Console.log(`Created ${productFile} — fill this in first; every agent run reads it.`);
-  }
-
-  yield* Effect.forEach([paths.references, paths.formats, paths.items], ws.mkdir, {
-    discard: true,
-  });
+  yield* Effect.forEach([paths.formats, paths.items], ws.mkdir, { discard: true });
   yield* syncSkillCopies();
 });
 
@@ -137,10 +111,6 @@ const init = Command.make(
     dir: Argument.String("dir").pipe(
       Argument.withDescription("Folder to make into a workspace"),
       Argument.withDefault("."),
-    ),
-    from: Flag.String("from").pipe(
-      Flag.withDescription("App Store, Google Play, or landing page URL to fill the product from"),
-      Flag.optional,
     ),
     name: Flag.String("name").pipe(
       Flag.withDescription("Workspace name (default: the folder name)"),
@@ -155,7 +125,7 @@ const init = Command.make(
       Flag.withDefault(true),
     ),
   },
-  Effect.fn("cli.init")(function* ({ dir, from, name, items, connect }) {
+  Effect.fn("cli.init")(function* ({ dir, name, items, connect }) {
     const path = yield* Path.Path;
     const root = path.resolve(dir);
 
@@ -172,25 +142,13 @@ const init = Command.make(
 
     yield* Effect.gen(function* () {
       yield* scaffold();
-      // Agents come first: everything after this is done through them, the product included.
+      // Agents come first: everything after this is done through them.
       yield* connect ? connectAgents() : printAgentSetup();
-
-      if (Option.isSome(from)) yield* runImport(from.value);
 
       if (connect) yield* Console.log(`\nOpen the board:  ${cliLine} serve --workspace ${root}`);
     }).pipe(Effect.provide(Workspace.layer(root)));
   }),
-).pipe(
-  Command.withDescription(
-    "Create a workspace, connect your agents, and optionally import the product",
-  ),
-  Command.withExamples([
-    {
-      command: "factory init my-app --from https://apps.apple.com/app/id123",
-      description: "Start from a store listing",
-    },
-  ]),
-);
+).pipe(Command.withDescription("Create a workspace and connect your agents"));
 
 const serve = Command.make(
   "serve",
@@ -251,58 +209,31 @@ const mcp = Command.make("mcp", { workspace: workspaceFlag }, ({ workspace }) =>
   Layer.launch(mcpLayer.pipe(Layer.provide(Workspace.layer(workspace)))),
 ).pipe(Command.withDescription("Run the MCP server over stdio for Claude Code and Codex"));
 
-const refAdd = Command.make(
-  "add",
+const learnCommand = Command.make(
+  "learn",
   {
     workspace: workspaceFlag,
     source: Argument.String("source").pipe(
-      Argument.withDescription("Video file, or a URL yt-dlp can download"),
-    ),
-    title: Flag.String("title").pipe(
-      Flag.withDescription("What to call the reference"),
-      Flag.optional,
+      Argument.withDescription("A link, or a file or folder on this computer"),
     ),
   },
-  Effect.fn("cli.refAdd")(function* ({ workspace, source, title }) {
+  Effect.fn("cli.learn")(function* ({ workspace, source }) {
     const path = yield* Path.Path;
-    const parsed = referenceSourceOf(source);
+    const input = learnInputOf(source);
 
-    const resolved =
-      parsed.kind === "file" ? { ...parsed, path: path.resolve(parsed.path) } : parsed;
+    // A path is typed relative to where the command runs, not to the workspace.
+    const resolved = "path" in input ? { path: path.resolve(input.path) } : input;
 
     yield* Effect.gen(function* () {
-      const ws = yield* Workspace;
+      yield* Console.log(`Reading ${source} …`);
+      const { learned, warnings } = yield* learn(resolved);
 
-      const reference = yield* addReference(
-        resolved,
-        Option.isSome(title) ? { title: title.value } : {},
-      );
+      yield* Console.log(`Learned ${learned.doc.title} → ${learned.dir}`);
 
-      yield* Console.log(`Added reference ${reference.id} → ${yield* ws.abs(reference.dir)}`);
+      for (const warning of warnings) yield* Console.error(`  warning  ${warning}`);
     }).pipe(Effect.provide(Workspace.layer(workspace)));
   }),
-).pipe(Command.withDescription("Add a reference video and preprocess it"));
-
-const ref = Command.make("ref").pipe(
-  Command.withDescription("Manage reference videos"),
-  Command.withSubcommands([refAdd]),
-);
-
-const productImport = Command.make(
-  "import",
-  {
-    workspace: workspaceFlag,
-    url: Argument.String("url").pipe(
-      Argument.withDescription("App Store, Google Play, or landing page URL"),
-    ),
-  },
-  ({ workspace, url }) => runImport(url).pipe(Effect.provide(Workspace.layer(workspace))),
-).pipe(Command.withDescription("Fill product.yaml and store screenshots from a URL"));
-
-const product = Command.make("product").pipe(
-  Command.withDescription("Manage the product every agent run reads"),
-  Command.withSubcommands([productImport]),
-);
+).pipe(Command.withDescription("Learn a link, file, or folder into about.md for agents to read"));
 
 const agentSetup = Command.make(
   "agent-setup",
@@ -323,7 +254,7 @@ const agentSetup = Command.make(
 
 const factory = Command.make("factory").pipe(
   Command.withDescription("Content Factory — a local short-form content factory"),
-  Command.withSubcommands([init, serve, mcp, ref, product, agentSetup]),
+  Command.withSubcommands([init, serve, mcp, learnCommand, agentSetup]),
 );
 
 /**

@@ -1,6 +1,6 @@
 ---
 name: content-factory
-description: Work inside a Content Factory workspace — turn reference short-form videos into reusable formats, produce short-form items (9:16 video, carousels) that market the user's app, handle review feedback from the web board, and verify uploads. Use whenever the user mentions references, formats, items, the board, feedback, or short-form content for their app.
+description: Work inside a Content Factory workspace — learn the user's product and the short-form videos they like, turn them into reusable formats, produce short-form items (9:16 video, carousels) that market the user's app, handle review feedback from the web board, and verify uploads. Use whenever the user mentions learning, references, formats, items, the board, feedback, or short-form content for their app.
 ---
 
 # Content Factory
@@ -12,29 +12,26 @@ into folders.
 
 ## Start of every task
 
-1. `workspace_overview` — config, item counts, formats, open feedback.
-2. `get_product` — what the app is, who it is for, store links, CTA rules, brand, and reviewed app
-   captures. Never invent app features or UI; only show captures from `product/captures/` or what
-   the user provides.
-3. Read `about.md` (its path is in `workspace_overview`) when it exists: what the user taught the
+1. `workspace_overview` — config, what was learned, item counts, formats, open feedback.
+2. Read `about.md` (its path is in `workspace_overview`) when it exists: what the user taught the
    workspace about their product, audience, and voice. A section marked `> Not read yet` was only
-   scraped; read its source and rewrite it before you rely on it (see Learn).
-4. If there is open feedback, ask whether to handle it first (`list_open_feedback`).
-5. If the product is missing or still says "My App", ask for an App Store, Google Play, or website
-   link and call `import_product`. Then read `product/store/listing.md` and agree on `audience` and
-   `voice` with the user. Store screenshots in `product/store/` are marketing images, not reviewed
-   captures.
+   scraped; read its source and rewrite it before you rely on it (see Learn). Never invent product
+   features or UI; only show screens and footage the user provided or pointed you at.
+3. If there is open feedback, ask whether to handle it first (`list_open_feedback`).
+4. If nothing was learned about the product yet, ask for a website, App Store, or Google Play link,
+   or the folder they work in, and `learn` it. Then agree on the audience and voice with the user
+   and write them into `about.md`. Store screenshots are marketing images, not screens to show as
+   the app.
 
 ## Model
 
 - **Learned** (`learned/<id>/`): a link, file, or folder the user taught the workspace, with what a
-  first look saved from it. Its section in `about.md` is what agents read.
-- **Reference** (`references/<id>/`): a video the user wants to learn from. Preprocessing produces
+  first look saved from it. Its section in `about.md` is what agents read. A video also gets
   `preprocess.json` (scene cuts, sampled frames, contact sheet, audio, optional transcript).
 - **Format** (`formats/<id>/format.yaml`, a "template" on the board): a reusable recipe — aspects,
   duration range, hook rules, beat structure, checklist, the skills and programs it is made with,
   the inputs decided per item (such as a style), and an optional `render` command plus `template/`
-  code. It is distilled from references or brought in from a link.
+  code. It is distilled from videos the user likes or brought in from a link.
 - **Item** (`items/<id>/item.yaml` + media): one publishable post. Status flows
   `drafting → review → done` (or `archived`). Its `sources` are
   folders, files, and web pages the user wants you to read whenever you work on it: read what helps
@@ -55,11 +52,12 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    copied. Keep it short and factual, since the user edits this file too.
 3. Keep the `<!-- learned:<id> -->` line and delete the `> Not read yet` line.
 
-## Analyze a reference
+## Study a video
 
-1. `get_reference`; open `contact.jpg` and the hook frames (`frames/t000.0.jpg` … `t003.0.jpg`).
-   Read the transcript if present, or transcribe `audio.wav` yourself if you can.
-2. Write the analysis with `save_reference_analysis`, using these sections:
+1. In its `learned/<id>/` folder, open `contact.jpg` and the hook frames (`frames/t000.0.jpg` …
+   `t003.0.jpg`). Read the transcript if present, or transcribe `audio.wav` yourself if you can.
+2. Write `analysis.md` in that folder, using these sections, and keep its section in `about.md` to
+   a few lines that point to it:
    - **Hook (0–3s)** — what is on screen, the text, and why someone stops scrolling.
    - **Beats** — timestamped structure, using `cuts` for pacing (cuts per 10s).
    - **On-screen text** — size, position, how long each line stays readable.
@@ -76,8 +74,8 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
 
 1. `get_format`, then read its `README.md`, the `SKILL.md` of each skill it names, and the files of
    the choices you pick. If `check_format` says it is not ready, fix that first or tell the user.
-2. `create_item` with `format`, `reference`, and `inputs`; ask the user for required inputs that have
-   no default.
+2. `create_item` with `format` and `inputs`; ask the user for required inputs that have no default.
+   Add the learned folders it builds on, such as a video it follows, to the item's `sources`.
 3. Write `brief.md` in the item folder: the one sentence a viewer should remember, who it is for,
    duration and aspects, the real assets you will use with their paths (captures, logo, footage),
    and what to keep or avoid. Never invent screens, numbers, reviews, or quotes. If an asset you
@@ -106,8 +104,8 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    those, render, and review again. Stop when nothing above fails or after three rounds, and tell
    the user what is left.
 
-9. Put the post copy, the caption and the CTA where the product rules say, in the item's `notes`
-   with `update_item`. Product claims must be accurate.
+9. Put the post copy, the caption and the CTA in the item's `notes` with `update_item`, following
+   what `about.md` says about the voice and the call to action. Product claims must be accurate.
 10. Set status to `review`. The user reviews on the board, where the brief and shot list show next
     to the media.
 

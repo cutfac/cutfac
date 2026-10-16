@@ -5,7 +5,7 @@ export class WorkspaceError extends Schema.TaggedError<WorkspaceError>()("Worksp
   message: Schema.String,
 }) {}
 
-/** An item, reference, format, or feedback entry that does not exist. */
+/** An item, learned entry, format, or feedback entry that does not exist. */
 export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", {
   message: Schema.String,
 }) {}

@@ -217,7 +217,6 @@ export interface NewItemInput {
   readonly title: string;
   readonly id?: string | undefined;
   readonly format?: string | undefined;
-  readonly reference?: string | undefined;
   readonly hook?: string | undefined;
   readonly notes?: string | undefined;
   /** Values for the format's inputs, by input id; defaults fill in the rest. */
@@ -258,7 +257,6 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
   const doc: ItemDoc = {
     ...emptyItemDoc(title, "drafting"),
     format: input.format,
-    reference: input.reference,
     hook: input.hook,
     notes: input.notes,
     inputs: Object.keys(inputs).length === 0 ? undefined : inputs,

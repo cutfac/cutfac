@@ -1,17 +1,10 @@
-import { Effect, Option, Predicate, Result, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import { FetchFailed, InvalidRequest } from "./errors.ts";
-import { getProduct, PRODUCT_FILE } from "./library.ts";
-import { Product } from "./schema.ts";
-import { PRODUCT_TEMPLATE } from "./templates.ts";
-import { Workspace, decodeYaml, nowIso } from "./workspace.ts";
+import { Workspace } from "./workspace.ts";
 
 export type ListingSource = "appStore" | "googlePlay" | "web";
-
-export type StoreSource = Exclude<ListingSource, "web">;
-
-const STORE_SOURCES: ReadonlyArray<StoreSource> = ["appStore", "googlePlay"];
 
 /** Store links found on a landing page. */
 export interface StoreLinks {
@@ -29,8 +22,6 @@ export interface Listing {
   readonly summary: string;
   readonly description: string;
   readonly developer?: string | undefined;
-  readonly category?: string | undefined;
-  readonly themeColor?: string | undefined;
   readonly icon?: string | undefined;
   /** The picture a page shares itself with (og:image). */
   readonly image?: string | undefined;
@@ -38,16 +29,7 @@ export interface Listing {
   readonly links: StoreLinks;
 }
 
-export type Listings = readonly [Listing, ...Array<Listing>];
-
-export interface ImportResult {
-  readonly product: Product;
-  readonly listings: Listings;
-  readonly files: ReadonlyArray<string>;
-  readonly warnings: ReadonlyArray<string>;
-}
-
-/** The fields of an iTunes lookup result the import reads. */
+/** The fields of an iTunes lookup result that a listing reads. */
 export const AppStoreLookup = Schema.Struct({
   results: Schema.Array(
     Schema.Struct({
@@ -56,7 +38,6 @@ export const AppStoreLookup = Schema.Struct({
       description: Schema.optional(Schema.String),
       sellerName: Schema.optional(Schema.String),
       artistName: Schema.optional(Schema.String),
-      primaryGenreName: Schema.optional(Schema.String),
       artworkUrl512: Schema.optional(Schema.String),
       screenshotUrls: Schema.optional(Schema.Array(Schema.String)),
     }),
@@ -70,7 +51,6 @@ const PlayApp = Schema.Struct({
   "@type": Schema.Literal("SoftwareApplication"),
   name: Schema.optional(Schema.String),
   description: Schema.optional(Schema.String),
-  applicationCategory: Schema.optional(Schema.String),
   image: Schema.optional(Schema.String),
   author: Schema.optional(Schema.Struct({ name: Schema.optional(Schema.String) })),
 });
@@ -81,10 +61,6 @@ const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
 
 export const MAX_SCREENSHOTS = 8;
-
-export const STORE_DIR = "store";
-
-const TEMPLATE_NAME = "My App";
 
 export function detectSource(url: string): ListingSource {
   const host = URL.parse(url)?.hostname;
@@ -109,7 +85,7 @@ const getText = (url: string) =>
   get(url).pipe(Effect.flatMap((response) => Effect.mapError(response.text, fetchFailed(url))));
 
 /** Read one App Store, Google Play, or landing page. */
-export const fetchListing = Effect.fn("productImport.fetchListing")(function* (url: string) {
+export const fetchListing = Effect.fn("listings.fetchListing")(function* (url: string) {
   if (!URL.canParse(url)) return yield* new InvalidRequest({ message: `Not a URL: ${url}` });
   const source = detectSource(url);
 
@@ -160,7 +136,6 @@ export function parseAppStoreLookup(lookup: AppStoreLookup, url: string): Option
     summary: firstSentence(description),
     description,
     developer: app.sellerName ?? app.artistName,
-    category: app.primaryGenreName,
     icon: app.artworkUrl512,
     // mzstatic thumbnails accept any size suffix; ask for full-width originals.
     screenshots: (app.screenshotUrls ?? []).map((shot) =>
@@ -190,7 +165,6 @@ export function parsePlayHtml(html: string, url: string): Listing {
     summary: app.description ?? firstSentence(description),
     description,
     developer: app.author?.name,
-    category: app.applicationCategory?.toLowerCase().replace(/_/g, " "),
     icon: app.image === undefined ? undefined : `${app.image}=s512`,
     screenshots: [...new Set(shots)],
     links: {},
@@ -218,7 +192,6 @@ export function parseWebHtml(html: string, url: string): Listing {
     title: title.trim() === "" ? undefined : title.trim(),
     summary,
     description: summary,
-    themeColor: meta(html, "theme-color"),
     icon: icon === undefined ? undefined : URL.parse(icon, url)?.href,
     image: image === undefined ? undefined : URL.parse(image, url)?.href,
     screenshots: [],
@@ -230,11 +203,6 @@ export function parseWebHtml(html: string, url: string): Listing {
     },
   };
 }
-
-/** The template's product, used until the user has named their app. */
-const templateProduct = decodeYaml("templates/product.yaml", PRODUCT_TEMPLATE, Product).pipe(
-  Effect.orDie,
-);
 
 const IMAGE_EXTENSIONS = new Map([
   ["image/png", "png"],
@@ -251,7 +219,7 @@ const IMAGE_EXTENSIONS = new Map([
  * Save one picture under workspace path `stem` with the extension its content type calls for.
  * Anything the board can't show is refused, an SVG above all: opened on its own it can run scripts.
  */
-export const download = Effect.fn("productImport.download")(function* (url: string, stem: string) {
+export const download = Effect.fn("listings.download")(function* (url: string, stem: string) {
   const ws = yield* Workspace;
   const response = yield* get(url);
   const type = (response.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
@@ -269,166 +237,6 @@ export const download = Effect.fn("productImport.download")(function* (url: stri
 
   return file;
 });
-
-interface Asset {
-  readonly url: string;
-  readonly name: string;
-}
-
-const assetsOf = (listing: Listing): ReadonlyArray<Asset> => {
-  const icon = listing.icon ?? listing.image;
-
-  return [
-    ...(icon === undefined ? [] : [{ url: icon, name: `${listing.source}-icon` }]),
-    ...listing.screenshots.slice(0, MAX_SCREENSHOTS).map((url, index) => ({
-      url,
-      name: `${listing.source}-${String(index + 1).padStart(2, "0")}`,
-    })),
-  ];
-};
-
-/**
- * Fill product/product.yaml from a store or landing page URL and download store screenshots into
- * product/store/. A landing page's store links are followed too. Hand-edited product fields are
- * kept; only template or empty fields are filled.
- */
-export const importProduct = Effect.fn("productImport.importProduct")(function* (url: string) {
-  const ws = yield* Workspace;
-  const first = yield* fetchListing(url);
-
-  const followed = yield* Effect.forEach(
-    STORE_SOURCES.flatMap((source) => {
-      const link = first.links[source];
-
-      return link === undefined ? [] : [{ source, link }];
-    }),
-    ({ source, link }) =>
-      fetchListing(link).pipe(
-        Effect.mapError((error) => `Could not read ${source} listing ${link}: ${error.message}`),
-        Effect.result,
-      ),
-    { concurrency: "unbounded" },
-  );
-
-  const listings: Listings = [
-    first,
-    ...followed.flatMap((result) => Option.toArray(Result.getSuccess(result))),
-  ];
-
-  const readWarnings = followed.flatMap((result) => Option.toArray(Result.getFailure(result)));
-
-  const productDir = ws.config.paths.product;
-  const existing = (yield* getProduct()).doc;
-  const edited = existing !== undefined && existing.name !== TEMPLATE_NAME ? existing : undefined;
-  const product = mergeListings(edited ?? (yield* templateProduct), listings, edited !== undefined);
-  const productFile = `${productDir}/${PRODUCT_FILE}`;
-  yield* ws.writeYaml(productFile, Product, product);
-
-  const listingFile = `${productDir}/${STORE_DIR}/listing.md`;
-  yield* ws.writeText(listingFile, renderListing(listings, yield* nowIso));
-
-  const downloads = yield* Effect.forEach(
-    listings.flatMap(assetsOf),
-    (asset) =>
-      download(asset.url, `${productDir}/${STORE_DIR}/${asset.name}`).pipe(
-        Effect.mapError((error) => `Could not download ${asset.url}: ${error.message}`),
-        Effect.result,
-      ),
-    { concurrency: 4 },
-  );
-
-  const result: ImportResult = {
-    product,
-    listings,
-    files: [
-      productFile,
-      listingFile,
-      ...downloads.flatMap((saved) => Option.toArray(Result.getSuccess(saved))),
-    ],
-    warnings: [
-      ...readWarnings,
-      ...downloads.flatMap((saved) => Option.toArray(Result.getFailure(saved))),
-    ],
-  };
-
-  return result;
-});
-
-const filled = (value: string | undefined): value is string =>
-  value !== undefined && value.trim() !== "";
-
-const firstFilled = (...values: ReadonlyArray<string | undefined>) => values.find(filled);
-
-export function mergeListings(base: Product, listings: Listings, keepEdits: boolean): Product {
-  const bySource = (source: ListingSource) => listings.find((listing) => listing.source === source);
-  const primary = bySource("appStore") ?? bySource("googlePlay") ?? listings[0];
-  const name = shortName(primary.name);
-
-  const fill = (current: string, next: string | undefined) =>
-    keepEdits && current.trim() !== "" ? current : (next ?? current);
-
-  const linkTo = (source: StoreSource) =>
-    firstFilled(
-      base.stores[source],
-      bySource(source)?.url,
-      ...listings.map((listing) => listing.links[source]),
-    ) ?? base.stores[source];
-
-  const stores = {
-    appStore: linkTo("appStore"),
-    googlePlay: linkTo("googlePlay"),
-    web: firstFilled(base.stores.web, bySource("web")?.url) ?? base.stores.web,
-  };
-
-  const storeNames = [
-    ...(filled(stores.appStore) ? ["the App Store"] : []),
-    ...(filled(stores.googlePlay) ? ["Google Play"] : []),
-  ].join(" or ");
-
-  const cta =
-    storeNames === ""
-      ? `Find ${name} at ${stores.web ?? primary.url}.`
-      : `Search "${name}" on ${storeNames}.`;
-
-  const summary =
-    firstFilled(bySource("web")?.summary, bySource("googlePlay")?.summary) ?? primary.summary;
-
-  const themeColor = firstFilled(...listings.map((listing) => listing.themeColor));
-
-  return {
-    ...base,
-    name: keepEdits ? base.name : name,
-    oneLiner: fill(base.oneLiner, summary),
-    stores,
-    cta: {
-      ...base.cta,
-      default: keepEdits && base.cta.default.trim() !== "" ? base.cta.default : cta,
-    },
-    brand: {
-      ...base.brand,
-      colors:
-        themeColor !== undefined && !keepEdits
-          ? { ...base.brand.colors, accent: themeColor }
-          : base.brand.colors,
-    },
-  };
-}
-
-function renderListing(listings: Listings, importedAt: string): string {
-  const sections = listings.map((listing) =>
-    [
-      `## ${listing.name} (${listing.source})`,
-      "",
-      `- URL: ${listing.url}`,
-      ...(listing.developer === undefined ? [] : [`- Developer: ${listing.developer}`]),
-      ...(listing.category === undefined ? [] : [`- Category: ${listing.category}`]),
-      "",
-      listing.description,
-    ].join("\n"),
-  );
-
-  return `# Store listing snapshot\n\nImported ${importedAt}. Store screenshots are the developer's marketing images, not reviewed app captures. Use them to learn positioning and visual style; put reviewed in-app captures in captures/.\n\n${sections.join("\n\n")}\n`;
-}
 
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json));
 
@@ -455,6 +263,9 @@ function playApp(html: string): Option.Option<PlayApp> {
 
   return Option.none();
 }
+
+const filled = (value: string | undefined): value is string =>
+  value !== undefined && value.trim() !== "";
 
 function meta(html: string, key: string): string | undefined {
   for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
@@ -525,7 +336,3 @@ export function shortName(name: string): string {
 
   return short === "" ? name : short;
 }
-
-/** Whether `value` is a usable listing source name. */
-export const isStoreSource = (value: string): value is StoreSource =>
-  Predicate.isNotUndefined(STORE_SOURCES.find((source) => source === value));

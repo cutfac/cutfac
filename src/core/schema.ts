@@ -120,8 +120,6 @@ export const DEFAULT_CLAUDE_TOOLS = [
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
   paths: Schema.Struct({
-    product: Schema.String.pipe(withDefault("product")),
-    references: Schema.String.pipe(withDefault("references")),
     formats: Schema.String.pipe(withDefault("formats")),
     items: Schema.String.pipe(withDefault("items")),
     learned: Schema.String.pipe(withDefault("learned")),
@@ -133,30 +131,6 @@ export const WorkspaceConfig = Schema.Struct({
 });
 
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
-
-/** product/product.yaml — the solo developer's app, used by every agent run. */
-export const Product = Schema.Struct({
-  name: Schema.String,
-  oneLiner: Schema.String.pipe(withDefault("")),
-  audience: Schema.String.pipe(withDefault("")),
-  stores: Schema.Struct({
-    appStore: Schema.optional(Schema.String),
-    googlePlay: Schema.optional(Schema.String),
-    web: Schema.optional(Schema.String),
-  }).pipe(withDefault({})),
-  cta: Schema.Struct({
-    default: Schema.String.pipe(withDefault("")),
-    firstComment: Schema.optional(Schema.String),
-  }).pipe(withDefault({})),
-  brand: Schema.Struct({
-    colors: Schema.Record(Schema.String, Schema.String).pipe(withDefault({})),
-    fonts: Schema.Array(Schema.String).pipe(withDefault([])),
-    voice: Schema.String.pipe(withDefault("")),
-  }).pipe(withDefault({})),
-  rules: Schema.Array(Schema.String).pipe(withDefault([])),
-});
-
-export type Product = typeof Product.Type;
 
 /** A box drawn on one frame. Coordinates are fractions (0–1) of the frame size. */
 export const Region = Schema.Struct({
@@ -329,7 +303,6 @@ export const ItemDoc = Schema.Struct({
   title: Schema.String,
   status: ItemStatus.pipe(withDefault("drafting")),
   format: Schema.optional(Schema.String),
-  reference: Schema.optional(Schema.String),
   sources: Schema.Array(ItemSource)
     .annotate(describe("what the user wants agents to read when they work on this item"))
     .pipe(withDefault([])),
@@ -357,7 +330,6 @@ export const ItemPatch = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
   status: Schema.optionalKey(ItemStatus),
   format: Schema.optionalKey(Schema.String),
-  reference: Schema.optionalKey(Schema.String),
   sources: Schema.optionalKey(
     Schema.Array(ItemSource).annotate(describe("replaces the item's whole list")),
   ),
@@ -458,20 +430,7 @@ export const Probe = Schema.Struct({
   hasAudio: Schema.Boolean,
 });
 
-/** references/<id>/reference.yaml */
-export const ReferenceDoc = Schema.Struct({
-  title: Schema.String,
-  source: Schema.optional(Schema.String.annotate(describe("original URL or file name"))),
-  video: Schema.optional(Schema.String.annotate(describe("reference-relative video file"))),
-  addedAt: Schema.String,
-  tags: Schema.Array(Schema.String).pipe(withDefault([])),
-  probe: Schema.optional(Probe),
-  preprocessed: Schema.Boolean.pipe(withDefault(false)),
-});
-
-export type ReferenceDoc = typeof ReferenceDoc.Type;
-
-/** references/<id>/preprocess.json: what deterministic preprocessing produced, reference-relative. */
+/** preprocess.json beside a video: what deterministic preprocessing produced, folder-relative. */
 export const PreprocessResult = Schema.Struct({
   cuts: Schema.Array(Schema.Finite),
   frames: Schema.Array(Schema.Struct({ file: Schema.String, t: Schema.Finite })),
@@ -573,7 +532,7 @@ export const FormatSource = Schema.Struct({
   license: Schema.optional(Schema.String),
 });
 
-/** formats/<id>/format.yaml — a reusable recipe distilled from references. */
+/** formats/<id>/format.yaml — a reusable recipe. */
 export const FormatDoc = Schema.Struct({
   title: Schema.String,
   summary: Schema.String.pipe(withDefault("")),

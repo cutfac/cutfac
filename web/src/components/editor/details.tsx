@@ -169,23 +169,18 @@ export function Details({
           onSave={(notes) => save({ notes })}
         />
       </FieldGroup>
-      {doc.format === undefined && doc.reference === undefined ? null : (
+      {doc.format === undefined ? null : (
         <dl className="flex flex-col gap-3">
-          {doc.format === undefined ? null : (
-            <Fact label={t.item.format}>
-              <a href={href("templates", doc.format)} className="underline underline-offset-4">
-                {format?.doc.title ?? doc.format}
-              </a>
-            </Fact>
-          )}
+          <Fact label={t.item.format}>
+            <a href={href("templates", doc.format)} className="underline underline-offset-4">
+              {format?.doc.title ?? doc.format}
+            </a>
+          </Fact>
           {inputs.map((input) => (
             <Fact key={input.id} label={input.label}>
               {input.value}
             </Fact>
           ))}
-          {doc.reference === undefined ? null : (
-            <Fact label={t.item.reference}>{doc.reference}</Fact>
-          )}
         </dl>
       )}
       {docs.map(([name, text]) =>

@@ -16,16 +16,7 @@ import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { createItem, getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
-import { getFormat, getProduct, listFormats, saveFormat } from "../core/library.ts";
-import { importProduct } from "../core/productImport.ts";
-import {
-  addReference,
-  getReference,
-  listReferences,
-  preprocessReference,
-  referenceSourceOf,
-  saveAnalysis,
-} from "../core/references.ts";
+import { getFormat, listFormats, saveFormat } from "../core/library.ts";
 import { DEFAULT_FRAMES, MAX_FRAMES, MAX_STRIPS, reviewMedia } from "../core/review.ts";
 import {
   Aspect,
@@ -37,8 +28,6 @@ import {
   LearnedDoc,
   LearnedKind,
   PreprocessResult,
-  Product,
-  ReferenceDoc,
   WorkspaceConfig,
 } from "../core/schema.ts";
 import {
@@ -58,9 +47,9 @@ export const MCP_NAME = "content-factory";
 export const MCP_VERSION = "0.1.0";
 
 const INSTRUCTIONS =
-  "Content Factory workspace tools. Start with workspace_overview and act on its notices first. Items, references, and formats are folders on disk; " +
+  "Content Factory workspace tools. Start with workspace_overview and act on its notices first. Items, learned sources, and formats are folders on disk; " +
   "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item and review_media. " +
-  "Always read the product (get_product) before writing copy. Resolve each open feedback entry after addressing it. " +
+  "Read about.md (its path is in workspace_overview) before writing copy. Resolve each open feedback entry after addressing it. " +
   "Formats are templates: to turn a link into one, follow the content-factory skill's import steps, then call check_format until it is ready.";
 
 /** How long a markdown doc in get_item may be before it is cut. */
@@ -125,15 +114,6 @@ const OpenFeedbackEntry = Schema.Struct({
 
 const Check = Schema.Struct({ name: Schema.String, ok: Schema.Boolean, detail: Schema.String });
 
-const ReferenceDetail = Schema.Struct({
-  id: Schema.String,
-  dir: Schema.String,
-  absDir: AbsDir,
-  doc: ReferenceDoc,
-  analysis: Schema.optional(Schema.String),
-  preprocess: Schema.optional(PreprocessResult),
-});
-
 const FormatDetail = Schema.Struct({
   id: Schema.String,
   dir: Schema.String,
@@ -187,13 +167,10 @@ const tool = <
 
 const WorkspaceOverview = tool("workspace_overview", {
   description:
-    "Workspace config, product summary, about.md and what was learned for it, item counts by status, formats, and open feedback count.",
+    "Workspace config, about.md and what was learned for it, item counts by status, formats, and open feedback count.",
   success: Schema.Struct({
     root: Schema.String,
     config: WorkspaceConfig,
-    product: Schema.NullOr(Product).annotate(
-      describe("null until product/product.yaml exists; fill it with import_product"),
-    ),
     items: Schema.Record(Schema.String, Schema.Finite).annotate(describe("item count by status")),
     formats: Schema.Array(Schema.Struct({ id: Schema.String, title: Schema.String })),
     about: Schema.String.annotate(
@@ -212,49 +189,12 @@ const WorkspaceOverview = tool("workspace_overview", {
         ),
       }),
     ),
-    references: Schema.Finite,
     openFeedback: Schema.Finite,
     notices: Schema.Array(Schema.String).annotate(
       describe("problems with the workspace to act on before the task, and how to fix each"),
     ),
   }),
   readonly: true,
-});
-
-const GetProduct = tool("get_product", {
-  description:
-    "The user's app: positioning, audience, store links, CTA rules, brand, and reviewed app captures.",
-  success: Schema.Struct({
-    doc: Schema.optional(Product),
-    captures: Schema.Array(MediaFile),
-    store: Schema.Array(MediaFile),
-    notes: Schema.optional(Schema.String),
-    capturesDir: AbsDir,
-    storeDir: AbsDir,
-  }),
-  readonly: true,
-});
-
-const ImportProduct = tool("import_product", {
-  description:
-    "Fill product.yaml from an App Store, Google Play, or landing page URL (store links on a landing page are followed) " +
-    "and download store screenshots into product/store/. Hand-edited fields are kept. Afterwards, read product/store/listing.md " +
-    "and refine oneLiner and audience with the user.",
-  parameters: Schema.Struct({ url: Schema.String.annotate(describe("http(s) URL")) }),
-  success: Schema.Struct({
-    product: Product,
-    files: Schema.Array(Schema.String),
-    warnings: Schema.Array(Schema.String),
-    sources: Schema.Array(
-      Schema.Struct({
-        source: Schema.Literals(["appStore", "googlePlay", "web"]),
-        url: Schema.String,
-        name: Schema.String,
-      }),
-    ),
-  }),
-  overwrites: true,
-  network: true,
 });
 
 const Learn = tool("learn", {
@@ -301,7 +241,6 @@ const CreateItem = tool("create_item", {
   parameters: Schema.Struct({
     title: Schema.String,
     format: Schema.optional(Schema.String),
-    reference: Schema.optional(Schema.String),
     hook: Schema.optional(Schema.String),
     notes: Schema.optional(Schema.String),
     inputs: Schema.optional(
@@ -405,63 +344,6 @@ const ResolveFeedback = tool("resolve_feedback", {
   success: Ok,
 });
 
-const ListReferences = tool("list_references", {
-  description: "Reference videos with title, source, probe, and whether an analysis exists.",
-  success: Schema.Struct({
-    references: Schema.Array(
-      Schema.Struct({
-        id: Schema.String,
-        title: Schema.String,
-        source: Schema.optional(Schema.String),
-        duration: Schema.optional(Schema.Finite),
-        analyzed: Schema.Boolean,
-      }),
-    ),
-  }),
-  readonly: true,
-});
-
-const AddReference = tool("add_reference", {
-  description:
-    "Add a reference video from a local file path or a URL (downloaded with yt-dlp), then extract cuts, frames, a contact sheet, and audio.",
-  parameters: Schema.Struct({
-    source: Schema.String.annotate(describe("absolute file path or http(s) URL")),
-    title: Schema.optional(Schema.String),
-    tags: Schema.optional(Schema.Array(Schema.String)),
-  }),
-  success: Schema.Struct({
-    id: Schema.String,
-    absDir: AbsDir,
-    preprocess: Schema.optional(PreprocessResult),
-  }),
-  network: true,
-});
-
-const GetReference = tool("get_reference", {
-  description:
-    "Reference metadata, preprocessing output (cut times, frame files, contact sheet), existing analysis, and absolute folder. Look at the contact sheet and hook frames before analyzing.",
-  parameters: ById,
-  success: ReferenceDetail,
-  readonly: true,
-});
-
-const PreprocessReference = tool("preprocess_reference", {
-  description: "Re-run deterministic preprocessing for a reference.",
-  parameters: ById,
-  success: PreprocessResult,
-  overwrites: true,
-  idempotent: true,
-});
-
-const SaveReferenceAnalysis = tool("save_reference_analysis", {
-  description:
-    "Save your markdown analysis of a reference: hook (first 3s), structure beats with timestamps, pacing, text overlays, audio, CTA, and what to reuse.",
-  parameters: Schema.Struct({ id: Schema.String, markdown: Schema.String }),
-  success: Ok,
-  overwrites: true,
-  idempotent: true,
-});
-
 const ListFormats = tool("list_formats", {
   description: "Reusable format recipes.",
   success: Schema.Struct({
@@ -481,7 +363,7 @@ const GetFormat = tool("get_format", {
 
 const SaveFormat = tool("save_format", {
   description:
-    "Create or replace a format's format.yaml, distilled from references or brought in from a link. " +
+    "Create or replace a format's format.yaml, written from scratch or brought in from a link. " +
     "Write its README, previews, and choice files into the returned folder, then call check_format.",
   parameters: Schema.Struct({ id: Schema.optional(Schema.String), ...FormatDoc.fields }),
   success: Created,
@@ -521,8 +403,6 @@ const CheckFormat = tool("check_format", {
 
 export const FactoryToolkit = Toolkit.make(
   WorkspaceOverview,
-  GetProduct,
-  ImportProduct,
   Learn,
   ListItems,
   GetItem,
@@ -532,11 +412,6 @@ export const FactoryToolkit = Toolkit.make(
   ReviewMedia,
   ListOpenFeedback,
   ResolveFeedback,
-  ListReferences,
-  AddReference,
-  GetReference,
-  PreprocessReference,
-  SaveReferenceAnalysis,
   ListFormats,
   GetFormat,
   SaveFormat,
@@ -587,26 +462,16 @@ const handlers = FactoryToolkit.toLayer(
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
-            const [items, formats, product, feedback, references, copies, learned] =
-              yield* Effect.all(
-                [
-                  listItems(),
-                  listFormats(),
-                  getProduct(),
-                  openFeedback(),
-                  listReferences(),
-                  skillCopies(),
-                  listLearned(),
-                ],
-                { concurrency: "unbounded" },
-              );
+            const [items, formats, feedback, copies, learned] = yield* Effect.all(
+              [listItems(), listFormats(), openFeedback(), skillCopies(), listLearned()],
+              { concurrency: "unbounded" },
+            );
 
             const about = yield* ws.abs(ABOUT_FILE);
 
             return {
               root: ws.root,
               config: ws.config,
-              product: product.doc ?? null,
               items: countBy(items, (item) => item.doc.status),
               formats: formats.map((format) => ({ id: format.id, title: format.doc.title })),
               about,
@@ -619,34 +484,10 @@ const handlers = FactoryToolkit.toLayer(
                   unread: entry.unread,
                 })),
               ),
-              references: references.length,
               openFeedback: feedback.length,
               notices: [...skillNotices(yield* absCopies(copies)), ...learnNotices(learned, about)],
             };
           }),
-        ),
-
-      get_product: () =>
-        run(
-          Effect.gen(function* () {
-            const product = yield* getProduct();
-
-            return {
-              ...product,
-              capturesDir: yield* ws.abs(`${ws.config.paths.product}/captures`),
-              storeDir: yield* ws.abs(`${ws.config.paths.product}/store`),
-            };
-          }),
-        ),
-
-      import_product: ({ url }) =>
-        run(
-          Effect.map(importProduct(url), (result) => ({
-            product: result.product,
-            files: result.files,
-            warnings: result.warnings,
-            sources: result.listings.map((l) => ({ source: l.source, url: l.url, name: l.name })),
-          })),
         ),
 
       learn: ({ source }) =>
@@ -755,46 +596,6 @@ const handlers = FactoryToolkit.toLayer(
 
       resolve_feedback: ({ item, feedbackId, resolution }) =>
         run(Effect.as(resolveEdit(item, feedbackId, resolution), { ok: true } as const)),
-
-      list_references: () =>
-        run(
-          Effect.map(listReferences(), (references) => ({
-            references: references.map((reference) => ({
-              id: reference.id,
-              title: reference.doc.title,
-              source: reference.doc.source,
-              duration: reference.doc.probe?.duration,
-              analyzed: reference.analysis !== undefined,
-            })),
-          })),
-        ),
-
-      add_reference: ({ source, title, tags }) =>
-        run(
-          Effect.gen(function* () {
-            const reference = yield* addReference(referenceSourceOf(source), { title, tags });
-
-            return {
-              id: reference.id,
-              absDir: yield* ws.abs(reference.dir),
-              preprocess: reference.preprocess,
-            };
-          }),
-        ),
-
-      get_reference: ({ id }) =>
-        run(
-          Effect.gen(function* () {
-            const reference = yield* getReference(id);
-
-            return { ...reference, absDir: yield* ws.abs(reference.dir) };
-          }),
-        ),
-
-      preprocess_reference: ({ id }) => run(preprocessReference(id)),
-
-      save_reference_analysis: ({ id, markdown }) =>
-        run(Effect.as(saveAnalysis(id, markdown), { ok: true } as const)),
 
       list_formats: () =>
         run(

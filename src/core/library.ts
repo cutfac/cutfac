@@ -2,13 +2,10 @@ import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { carriesSecret } from "./links.ts";
-import { type MediaFile, toMediaFiles } from "./media.ts";
-import { FormatDoc, Product } from "./schema.ts";
+import { FormatDoc } from "./schema.ts";
 import { Workspace, type WorkspaceService, foldersWith, slugify } from "./workspace.ts";
 
 export const FORMAT_FILE = "format.yaml";
-
-export const PRODUCT_FILE = "product.yaml";
 
 const README = "README.md";
 
@@ -95,28 +92,4 @@ export const saveFormat = Effect.fn("library.saveFormat")(function* (input: Form
   yield* ws.writeYaml(`${formatDir(ws, id)}/${FORMAT_FILE}`, FormatDoc, doc);
 
   return yield* getFormat(id);
-});
-
-export interface ProductInfo {
-  readonly doc?: Product | undefined;
-  readonly captures: ReadonlyArray<MediaFile>;
-  /** Store icon and screenshots imported from App Store / Google Play (product/store/). */
-  readonly store: ReadonlyArray<MediaFile>;
-  readonly notes?: string | undefined;
-}
-
-export const getProduct = Effect.fn("library.getProduct")(function* () {
-  const ws = yield* Workspace;
-  const dir = ws.config.paths.product;
-  const docFile = `${dir}/${PRODUCT_FILE}`;
-  const doc = (yield* ws.exists(docFile)) ? yield* ws.readYaml(docFile, Product) : undefined;
-
-  const info: ProductInfo = {
-    doc,
-    captures: toMediaFiles(yield* ws.list(`${dir}/captures`)),
-    store: toMediaFiles(yield* ws.list(`${dir}/store`)),
-    notes: yield* readOptionalText(`${dir}/${README}`),
-  };
-
-  return info;
 });

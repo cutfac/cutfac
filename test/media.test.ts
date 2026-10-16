@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { Effect, Schema } from "effect";
 
-import { InvalidRequest, NotFound } from "../src/core/errors.ts";
+import { InvalidRequest } from "../src/core/errors.ts";
 import { createItem, importMedia } from "../src/core/items.ts";
 import {
   aspectFromName,
@@ -14,12 +14,6 @@ import {
   toMediaFiles,
 } from "../src/core/media.ts";
 import { frameTimes } from "../src/core/preprocess.ts";
-import {
-  addReference,
-  getReference,
-  listReferences,
-  referenceSourceOf,
-} from "../src/core/references.ts";
 import { FormatDoc } from "../src/core/schema.ts";
 import { verifyItem } from "../src/core/verify.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
@@ -132,7 +126,7 @@ describe("probe checks", () => {
   });
 });
 
-describe("reference preprocessing", () => {
+describe("video preprocessing", () => {
   test("parses showinfo cut times", () => {
     const stderr =
       "[Parsed_showinfo_1 @ 0x1] n:0 pts:1 pts_time:1.234 duration\n[Parsed_showinfo_1] n:1 pts_time:5.5 ";
@@ -145,18 +139,6 @@ describe("reference preprocessing", () => {
     expect(frameTimes(1.2)).toEqual([0, 0.5, 1]);
     // ffmpeg has no frame to seek to at the very end.
     expect(frameTimes(2)).toEqual([0, 0.5, 1, 1.5]);
-  });
-
-  test("reads http(s) arguments as URLs and anything else as a file", () => {
-    expect(referenceSourceOf("https://www.tiktok.com/@a/video/1")).toEqual({
-      kind: "url",
-      url: "https://www.tiktok.com/@a/video/1",
-    });
-    expect(referenceSourceOf("./clips/hook.mp4")).toEqual({
-      kind: "file",
-      path: "./clips/hook.mp4",
-    });
-    expect(referenceSourceOf("ftp://host/x.mp4").kind).toBe("file");
   });
 });
 
@@ -211,12 +193,6 @@ describe("media in a workspace", () => {
     expect(error).toBeInstanceOf(InvalidRequest);
   });
 
-  test("an unknown reference is not found", async () => {
-    expect(await t.fail(getReference("nope"))).toBeInstanceOf(NotFound);
-    expect(await t.fail(getReference("../escape"))).toBeInstanceOf(NotFound);
-    expect(await t.run(listReferences())).toEqual([]);
-  });
-
   test.skipIf(!hasFfmpeg)(
     "imports uploads with a probed aspect tag and unique names, then verifies them",
     async () => {
@@ -243,29 +219,5 @@ describe("media in a workspace", () => {
       expect(reports[0]?.checks.find((check) => check.name === "resolution")?.ok).toBe(false);
     },
     20_000,
-  );
-
-  test.skipIf(!hasFfmpeg)(
-    "adds a reference from a file and preprocesses it",
-    async () => {
-      makeVideo(source);
-
-      const { reference, listed } = await t.run(
-        Effect.gen(function* () {
-          const added = yield* addReference(referenceSourceOf(source), { tags: ["hook"] });
-
-          return { reference: added, listed: yield* listReferences() };
-        }),
-      );
-
-      expect(reference.id).toMatch(/^\d{4}-\d{2}-\d{2}-upload$/);
-      expect(reference.doc.video).toBe("source.mp4");
-      expect(reference.doc.tags).toEqual(["hook"]);
-      expect(reference.doc.probe?.hasAudio).toBe(true);
-      expect(reference.doc.preprocessed).toBe(true);
-      expect(reference.preprocess?.frames.map((frame) => frame.t)).toEqual([0, 0.5, 1, 1.5]);
-      expect(listed.map((entry) => entry.id)).toEqual([reference.id]);
-    },
-    30_000,
   );
 });

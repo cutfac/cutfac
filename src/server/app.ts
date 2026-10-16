@@ -47,16 +47,9 @@ import {
   shortId,
 } from "../core/items.ts";
 import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/learn.ts";
-import { getFormat, getProduct, listFormats } from "../core/library.ts";
+import { getFormat, listFormats } from "../core/library.ts";
 import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
-import { importProduct } from "../core/productImport.ts";
-import {
-  addReference,
-  getReference,
-  listReferences,
-  preprocessReference,
-} from "../core/references.ts";
 import { listReviews } from "../core/review.ts";
 import {
   AgentChoice,
@@ -161,7 +154,6 @@ const FeedbackQuery = Schema.Struct({
 const NewItemBody = Schema.Struct({
   title: Schema.String,
   format: Schema.optional(Schema.NonEmptyString),
-  reference: Schema.optional(Schema.NonEmptyString),
   hook: Schema.optional(Schema.String),
   notes: Schema.optional(Schema.String),
   inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -207,19 +199,9 @@ const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString)
 
 const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
 
-const UrlBody = Schema.Struct({
-  url: Schema.NonEmptyString,
-  title: Schema.optional(Schema.String),
-});
-
 const MediaForm = Schema.Struct({ file: Multipart.SingleFileSchema });
 
 const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
-
-const ReferenceForm = Schema.Struct({
-  file: Multipart.SingleFileSchema,
-  title: Schema.optional(Schema.String),
-});
 
 const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
 
@@ -229,7 +211,7 @@ const encodeRunEvent = Schema.encodeEffect(Schema.fromJsonString(RunEvent));
 
 const queryId = Effect.map(HttpServerRequest.schemaSearchParams(IdQuery), (query) => query.id);
 
-/** A route about the item, import, or reference named by `?id=`. */
+/** A route about the item or import named by `?id=`. */
 const withId = <A, E, R>(f: (id: string) => Effect.Effect<A, E, R>) => Effect.flatMap(queryId, f);
 
 const nonEmpty = (text: string | undefined) =>
@@ -287,18 +269,14 @@ const learnedList = Effect.all(
 const workspaceInfo = Effect.gen(function* () {
   const ws = yield* Workspace;
 
-  const [product, formats, feedback] = yield* Effect.all(
-    [getProduct(), listFormats(), openFeedback()],
-    {
-      concurrency: "unbounded",
-    },
-  );
+  const [formats, feedback] = yield* Effect.all([listFormats(), openFeedback()], {
+    concurrency: "unbounded",
+  });
 
   return {
     name: ws.config.name,
     root: ws.root,
     config: ws.config,
-    product,
     formats,
     openFeedback: feedback.length,
   };
@@ -661,11 +639,6 @@ const apiRoutes = (options: ServerOptions) =>
         return yield* connectAgent(agent, server);
       }),
     ),
-    json(
-      "POST",
-      "/api/product/import",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(UrlBody), (body) => importProduct(body.url)),
-    ),
 
     json(
       "GET",
@@ -805,29 +778,6 @@ const apiRoutes = (options: ServerOptions) =>
     ),
 
     json("GET", "/api/feedback", openFeedback()),
-    json("GET", "/api/references", listReferences()),
-    json("GET", "/api/reference", withId(getReference)),
-    json("POST", "/api/reference/preprocess", withId(preprocessReference)),
-    json(
-      "POST",
-      "/api/references",
-      Effect.gen(function* () {
-        const request = yield* HttpServerRequest.HttpServerRequest;
-
-        if (isMultipart(request)) {
-          const form = yield* HttpServerRequest.schemaBodyMultipart(ReferenceForm);
-
-          return yield* addReference(
-            { kind: "file", path: form.file.path, name: form.file.name },
-            { title: nonEmpty(form.title) },
-          );
-        }
-
-        const body = yield* HttpServerRequest.schemaBodyJson(UrlBody);
-
-        return yield* addReference({ kind: "url", url: body.url }, { title: nonEmpty(body.title) });
-      }),
-    ),
     json("GET", "/api/learned", learnedList),
     json(
       "POST",

@@ -198,7 +198,6 @@ export interface ItemDoc {
   title: string;
   status: Status;
   format?: string;
-  reference?: string;
   /** What the user wants agents to read when they work on this item. */
   sources: ItemSource[];
   hook?: string;

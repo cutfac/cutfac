@@ -271,7 +271,6 @@ export const en = {
     addMedia: "Add a video or image",
     add: "Add",
     format: "Template",
-    reference: "Reference",
     title: "Title",
     hook: "Hook",
     notes: "Notes",
@@ -436,8 +435,8 @@ export const en = {
         "Make the first second grab attention",
       ],
       new: [
-        "Make a 15-second vertical video from the product captures",
-        "Make a short teaser from the reference",
+        "Make a 15-second vertical video about my product",
+        "Make a short teaser in the style of a video I taught you",
       ],
     },
     placeholder: {
