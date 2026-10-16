@@ -34,6 +34,7 @@ import {
   saveWorkspace,
 } from "./settings.ts";
 import { startSidecar, type Sidecar } from "./sidecar.ts";
+import { startUpdates, type Updates } from "./updates.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to.
 const devUrl = process.env.FACTORY_DEV_URL || undefined;
@@ -45,6 +46,8 @@ const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 let window: BrowserWindow | undefined;
 
 let sidecar: Sidecar | undefined;
+
+let updates: Updates | undefined;
 
 let workspaceRoot: string | undefined;
 
@@ -131,6 +134,7 @@ function assertFromApp(event: IpcMainInvokeEvent): void {
 
 async function boot(): Promise<void> {
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
+  updates = startUpdates({ messages: () => MESSAGES[locale], window: () => window });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
 
   let workspace = (await loadWorkspace()) ?? (await pickWorkspace());
@@ -160,6 +164,9 @@ function menuTemplate(): MenuItemConstructorOptions[] {
       role: "appMenu",
       submenu: [
         { role: "about", label: t.about },
+        ...(updates?.enabled
+          ? [{ label: t.checkForUpdates, click: () => void updates?.checkNow() }]
+          : []),
         separator,
         { role: "services", label: t.services },
         separator,

@@ -208,6 +208,13 @@ bun run release:desktop   # signed and notarized release, published to the updat
 The app runs the same server as `factory serve` as a sidecar on `127.0.0.1` and opens the board in
 its window.
 
+### Updates
+
+The released app checks its feed at launch and every four hours, downloads a newer version in the
+background, and offers to restart once it is ready. Choosing Later installs it the next time the app
+quits. The app menu also has Check for Updates…. Runs from source (`desktop`, `desktop:dev`) never
+update.
+
 ### Releasing the app
 
 `release:desktop` reads its credentials from `.env.release`, which git ignores:

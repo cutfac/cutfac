@@ -35,10 +35,23 @@ const en = {
   chooseSource: "Choose a folder or file for your agent to read",
   couldNotStart: "Content Factory could not start",
   serverStopped: "The local server stopped",
+  checkForUpdates: "Check for Updates…",
+  updateReady: (version: string) => `Content Factory ${version} is ready to install`,
+  updateReadyDetail:
+    "Restart now to finish, or it installs the next time you quit. Restarting stops any agent run in progress.",
+  restartNow: "Restart Now",
+  later: "Later",
+  updateDownloading: (version: string) => `Downloading Content Factory ${version}`,
+  updateDownloadingDetail: "You'll be asked to restart when it's ready.",
+  upToDate: "You're up to date",
+  upToDateDetail: (version: string) => `Content Factory ${version} is the newest version.`,
+  updateCheckFailed: "Couldn't check for updates",
 };
 
+export type Messages = typeof en;
+
 /** The menu bar and native dialogs, in the language the board is showing. */
-export const MESSAGES: Record<Locale, typeof en> = {
+export const MESSAGES: Record<Locale, Messages> = {
   en,
   ko: {
     about: "Content Factory에 관하여",
@@ -75,5 +88,16 @@ export const MESSAGES: Record<Locale, typeof en> = {
     chooseSource: "에이전트가 읽을 폴더나 파일을 고르세요",
     couldNotStart: "Content Factory를 시작하지 못했어요",
     serverStopped: "로컬 서버가 멈췄어요",
+    checkForUpdates: "업데이트 확인…",
+    updateReady: (version) => `Content Factory ${version} 버전을 설치할 준비가 됐어요`,
+    updateReadyDetail:
+      "지금 다시 시작하면 바로 설치돼요. 나중에를 고르면 앱을 종료할 때 설치돼요. 다시 시작하면 진행 중인 에이전트 작업이 멈춰요.",
+    restartNow: "지금 다시 시작",
+    later: "나중에",
+    updateDownloading: (version) => `Content Factory ${version} 버전을 내려받고 있어요`,
+    updateDownloadingDetail: "다 받으면 다시 시작할지 물어볼게요.",
+    upToDate: "최신 버전이에요",
+    upToDateDetail: (version) => `Content Factory ${version} 버전이 가장 최신이에요.`,
+    updateCheckFailed: "업데이트를 확인하지 못했어요",
   },
 };

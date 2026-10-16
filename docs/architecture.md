@@ -115,7 +115,9 @@ need the machine. Only the origin that serves the SPA differs:
   validation of Chrome's local network access prompt and Safari's localhost policy.
 - **Desktop shell.** `electron/` wraps the same server and SPA. The server runs as a sidecar
   (`factory serve --host 127.0.0.1 --web-dir <bundled web>`), compiled with `bun build --compile`
-  for the packaged app, and the window loads it.
+  for the packaged app, and the window loads it. The packaged app updates itself with
+  electron-updater from a feed on a CDN (`latest-mac.yml` plus the signed zip), which
+  `bun run release:desktop` publishes.
 
 A pure in-browser version (File System Access API, ffmpeg.wasm) is out of scope: agents cannot
 reach a browser tab, which breaks bring-your-own-agent.
