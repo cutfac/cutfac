@@ -3,9 +3,11 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { CutfacDesktop } from "../web/src/desktop.ts";
 import {
   EDIT_COMMAND_CHANNEL,
+  LICENSE_KEY_REQUEST_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
   REVEAL_PATH_CHANNEL,
+  SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
 } from "./ipc.ts";
 
@@ -30,6 +32,16 @@ const bridge = {
 
     return () => {
       ipcRenderer.removeListener(EDIT_COMMAND_CHANNEL, forward);
+    };
+  },
+  setLicenseKey: (key) => ipcRenderer.invoke(SET_LICENSE_KEY_CHANNEL, key),
+  onLicenseKeyRequest: (listener) => {
+    const forward = (_event: IpcRendererEvent, saved: boolean) => listener(saved === true);
+
+    ipcRenderer.on(LICENSE_KEY_REQUEST_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(LICENSE_KEY_REQUEST_CHANNEL, forward);
     };
   },
   platform: `${SYSTEM_NAMES[process.platform] ?? process.platform} ${process.getSystemVersion()}`,

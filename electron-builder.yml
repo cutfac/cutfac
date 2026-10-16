@@ -35,13 +35,9 @@ mac:
   # build/entitlements.mac*.plist. Notarized when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and
   # APPLE_TEAM_ID are set; `bun run release:desktop` requires them.
 
-# The app checks the first entry for updates (it goes into app-update.yml). Releases upload to the
-# second, the bucket that CDN serves. Objects stay private: the CDN reads them, not the public.
+# Where the app checks for updates (it goes into app-update.yml). The site checks the license key the
+# app sends and redirects to a short-lived link into the private release bucket.
+# `bun run release:desktop` uploads the builds; electron-builder publishes nothing itself.
 publish:
-  - provider: generic
-    url: https://d29h6uqmny45z2.cloudfront.net/cutfac/mac
-  - provider: s3
-    bucket: shotomatic
-    region: us-east-2
-    path: cutfac/mac
-    acl: null
+  provider: generic
+  url: https://cutfac.com/api/updates/mac

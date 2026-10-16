@@ -218,6 +218,25 @@ export const en = {
     creating: "Creating…",
     create: "Create item",
   },
+  license: {
+    title: "License key",
+    description: (portal: Link) => (
+      <>
+        Cutfac sends it to cutfac.com when it checks for updates. Find it in the email Polar sent
+        after checkout, or in the {portal("customer portal")}.
+      </>
+    ),
+    label: "License key",
+    placeholder: "Paste your license key",
+    replace: "A key is saved already. A new one replaces it.",
+    invalid: "That key isn't valid. Copy it again from your purchase email or the customer portal.",
+    checking: "Checking…",
+    save: "Save",
+    granted: "License key saved. Updates are on.",
+    ended:
+      "License key saved, but its plan has ended. Renew in the customer portal to get updates.",
+    unavailable: "License key saved. Couldn't reach cutfac.com, so the next update check tries it.",
+  },
   setup: {
     title: "Set up",
     description: "Connect your agent and it can start making videos.",

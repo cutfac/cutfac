@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { LicenseKeyDialog } from "@/components/license-key-dialog";
 import { ErrorAlert } from "@/components/page";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 import { api } from "./api.ts";
+import { desktop } from "./desktop.ts";
 import { href, useAgentStatuses, useHashRoute, useLive, useSidebarOpen } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
 import { Board } from "./views/Board.tsx";
@@ -50,6 +52,7 @@ export function App() {
           </div>
         )}
       </SidebarInset>
+      {desktop ? <LicenseKeyDialog desktop={desktop} /> : null}
     </SidebarProvider>
   );
 }

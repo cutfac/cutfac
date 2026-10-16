@@ -1,13 +1,17 @@
 /**
- * `bun run release:desktop`: builds the mac app, signs and notarizes it, uploads it to the update
- * feed, and clears the CDN's copy of the feed so running apps see it right away. Credentials come
- * from .env.release; nothing here prints their values.
+ * `bun run release:desktop`: builds the mac app, signs and notarizes it, and uploads it to the
+ * private release bucket. Apps and the download page reach it through cutfac.com, which checks the
+ * license key and hands out short-lived links. Credentials come from .env.release; nothing here
+ * prints their values.
  */
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { Option, Schema } from "effect";
 
 const root = path.resolve(import.meta.dir, "..");
+
+const outputDir = path.join(root, "release");
 
 export const REQUIRED_ENV = [
   "APPLE_ID",
@@ -15,18 +19,24 @@ export const REQUIRED_ENV = [
   "APPLE_TEAM_ID",
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",
-  "CLOUDFRONT_DISTRIBUTION_ID",
+  "CUTFAC_RELEASES_BUCKET",
+  "CUTFAC_RELEASES_REGION",
 ] as const;
 
+/** The bucket folder the site serves builds from. */
+const FOLDER = "mac";
+
 const FEED_FILE = "latest-mac.yml";
+
+const CONTENT_TYPES = new Map([
+  [".dmg", "application/x-apple-diskimage"],
+  [".zip", "application/zip"],
+  [".blockmap", "application/octet-stream"],
+]);
 
 const decodeFeed = Schema.decodeUnknownOption(Schema.Struct({ version: Schema.NonEmptyString }));
 
 const decodePackage = Schema.decodeUnknownSync(Schema.Struct({ version: Schema.NonEmptyString }));
-
-const decodeBuilderConfig = Schema.decodeUnknownSync(
-  Schema.Struct({ publish: Schema.Array(Schema.Struct({ url: Schema.String })) }),
-);
 
 /** The names in `REQUIRED_ENV` that are unset or empty. */
 export function missingEnv(env: Record<string, string | undefined>): string[] {
@@ -45,32 +55,62 @@ export function versionProblem(version: string, published: string | undefined): 
   return `package.json is at ${version}, but ${published} is already published. Bump the version first.`;
 }
 
-interface Feed {
-  /** Where apps read the feed from. */
-  url: string;
-  /** The CDN path of the feed file, for clearing its cached copy. */
-  cdnPath: string;
+/** A build to upload and the type the bucket serves it with. */
+export interface BuildFile {
+  name: string;
+  type: string;
 }
 
-/** The feed is the first `publish` entry in electron-builder.yml, the same one the app reads. */
-async function readFeed(): Promise<Feed> {
-  const config = Bun.YAML.parse(await Bun.file(path.join(root, "electron-builder.yml")).text());
-  const url = decodeBuilderConfig(config).publish[0]?.url;
+/**
+ * The builds of `version` among `files`, in upload order: the disk image people install, the zip
+ * apps update from, and their blockmaps. Throws when either build is missing.
+ */
+export function buildFiles(version: string, files: readonly string[]): BuildFile[] {
+  const prefix = `cutfac-${version}-arm64.`;
 
-  if (url === undefined) throw new Error("electron-builder.yml has no publish url.");
+  const builds = files.toSorted().flatMap((name) => {
+    const type = CONTENT_TYPES.get(path.extname(name));
 
-  return { url, cdnPath: `${new URL(url).pathname}/${FEED_FILE}` };
+    return name.startsWith(prefix) && type ? [{ name, type }] : [];
+  });
+
+  for (const needed of [`${prefix}dmg`, `${prefix}zip`]) {
+    if (!builds.some((build) => build.name === needed)) {
+      throw new Error(`The build did not produce ${needed}.`);
+    }
+  }
+
+  return builds;
 }
 
-async function publishedVersion(feedUrl: string): Promise<string | undefined> {
-  const response = await fetch(`${feedUrl}/${FEED_FILE}?noCache=${Date.now()}`);
+function setting(name: (typeof REQUIRED_ENV)[number]): string {
+  const value = process.env[name];
 
-  // The bucket is private, so a file that is not there yet reads as 403 through the CDN.
-  if (response.status === 403 || response.status === 404) return undefined;
+  if (!value) throw new Error(`Set ${name} in .env.release.`);
 
-  if (!response.ok) throw new Error(`Could not read the published feed (HTTP ${response.status}).`);
+  return value;
+}
 
-  return feedVersion(await response.text());
+function bucket(): Bun.S3Client {
+  return new Bun.S3Client({
+    bucket: setting("CUTFAC_RELEASES_BUCKET"),
+    region: setting("CUTFAC_RELEASES_REGION"),
+    accessKeyId: setting("AWS_ACCESS_KEY_ID"),
+    secretAccessKey: setting("AWS_SECRET_ACCESS_KEY"),
+  });
+}
+
+async function publishedVersion(releases: Bun.S3Client): Promise<string | undefined> {
+  const feed = releases.file(`${FOLDER}/${FEED_FILE}`);
+
+  if (!(await feed.exists())) return undefined;
+
+  return feedVersion(await feed.text());
+}
+
+async function upload(releases: Bun.S3Client, { name, type }: BuildFile): Promise<void> {
+  console.log(`[release] Uploading ${name}.`);
+  await releases.write(`${FOLDER}/${name}`, Bun.file(path.join(outputDir, name)), { type });
 }
 
 async function run(command: string[]): Promise<void> {
@@ -87,12 +127,10 @@ async function release(): Promise<void> {
     throw new Error(`Set ${missing.join(", ")} in .env.release (see README, Releasing the app).`);
   }
 
-  if (!Bun.which("aws")) throw new Error("The AWS CLI (`aws`) is needed to refresh the CDN.");
-
   const { version } = decodePackage(await Bun.file(path.join(root, "package.json")).json());
 
-  const feed = await readFeed();
-  const problem = versionProblem(version, await publishedVersion(feed.url));
+  const releases = bucket();
+  const problem = versionProblem(version, await publishedVersion(releases));
 
   if (problem) throw new Error(problem);
 
@@ -101,26 +139,31 @@ async function release(): Promise<void> {
   await run(["bun", "run", "build:sidecar"]);
   await run(["bun", "run", "build:electron"]);
 
-  // Fails instead of publishing an unsigned app when the Developer ID certificate is missing.
+  // Fails instead of building an unsigned app when the Developer ID certificate is missing. The
+  // feed file is still written; this script uploads it, since the bucket is not a builder target.
   await run([
     path.join(root, "node_modules", ".bin", "electron-builder"),
     "--mac",
     "--publish",
-    "always",
+    "never",
     "-c.mac.forceCodeSigning=true",
   ]);
 
-  await run([
-    "aws",
-    "cloudfront",
-    "create-invalidation",
-    "--distribution-id",
-    process.env.CLOUDFRONT_DISTRIBUTION_ID ?? "",
-    "--paths",
-    feed.cdnPath,
-  ]);
+  const feed = Bun.file(path.join(outputDir, FEED_FILE));
 
-  console.log(`[release] Published ${version} to ${feed.url}.`);
+  // The feed is what makes a version live, so a stale one must never go up.
+  if (!(await feed.exists()) || feedVersion(await feed.text()) !== version) {
+    throw new Error(`The build did not produce a ${FEED_FILE} for ${version}.`);
+  }
+
+  for (const build of buildFiles(version, await readdir(outputDir))) {
+    await upload(releases, build);
+  }
+
+  // Last, so no app or download page sees the version before its files are there.
+  await upload(releases, { name: FEED_FILE, type: "text/yaml" });
+
+  console.log(`[release] Published ${version}. cutfac.com/download now hands it out.`);
 }
 
 if (import.meta.main) {

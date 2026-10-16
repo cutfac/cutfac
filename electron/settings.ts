@@ -10,6 +10,7 @@ interface Settings {
   workspace: string;
   port: number;
   locale: Locale;
+  licenseKey: string;
 }
 
 function settingsFile(): string {
@@ -18,7 +19,7 @@ function settingsFile(): string {
 
 const decodeFile = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
-const decodeWorkspace = Schema.decodeUnknownOption(Schema.NonEmptyString);
+const decodeText = Schema.decodeUnknownOption(Schema.NonEmptyString);
 
 const decodePort = Schema.decodeUnknownOption(
   Schema.Finite.check(Schema.isInt(), Schema.isBetween({ minimum: 1025, maximum: 65535 })),
@@ -47,7 +48,7 @@ async function writeSettings(patch: Partial<Settings>): Promise<void> {
 
 /** The last workspace the user opened, or undefined if none is saved or its folder is gone. */
 export async function loadWorkspace(): Promise<string | undefined> {
-  const workspace = Option.getOrUndefined(decodeWorkspace((await readSettings()).workspace));
+  const workspace = Option.getOrUndefined(decodeText((await readSettings()).workspace));
 
   if (workspace === undefined) return undefined;
 
@@ -76,3 +77,10 @@ export async function loadLocale(): Promise<Locale | undefined> {
 }
 
 export const saveLocale = (locale: Locale) => writeSettings({ locale });
+
+/** The license key update checks send. It stays on this computer and goes only to cutfac.com. */
+export async function loadLicenseKey(): Promise<string | undefined> {
+  return Option.getOrUndefined(decodeText((await readSettings()).licenseKey));
+}
+
+export const saveLicenseKey = (licenseKey: string) => writeSettings({ licenseKey });

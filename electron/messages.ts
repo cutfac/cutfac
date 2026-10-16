@@ -46,6 +46,17 @@ const en = {
   upToDate: "You're up to date",
   upToDateDetail: (version: string) => `Cutfac ${version} is the newest version.`,
   updateCheckFailed: "Couldn't check for updates",
+  licenseKey: "License Key…",
+  licenseNeeded: "Enter your license key to get updates",
+  licenseNeededDetail:
+    "Polar emails it right after checkout. You can also find it in the customer portal.",
+  enterLicenseKey: "Enter License Key…",
+  licenseInvalid: "That license key isn't valid",
+  licenseInvalidDetail: "Copy it again from your purchase email or the customer portal.",
+  licenseEnded: "The plan for your license key has ended",
+  licenseEndedDetail:
+    "This version keeps working. Renew in the customer portal to get updates again.",
+  openPortal: "Open Customer Portal",
 };
 
 export type Messages = typeof en;
@@ -99,5 +110,16 @@ export const MESSAGES: Record<Locale, Messages> = {
     upToDate: "최신 버전이에요",
     upToDateDetail: (version) => `컷팩 ${version} 버전이 가장 최신이에요.`,
     updateCheckFailed: "업데이트를 확인하지 못했어요",
+    licenseKey: "라이선스 키…",
+    licenseNeeded: "업데이트를 받으려면 라이선스 키를 넣어 주세요",
+    licenseNeededDetail:
+      "결제를 마치면 Polar가 키를 메일로 보내요. 고객 포털에서도 찾을 수 있어요.",
+    enterLicenseKey: "라이선스 키 넣기…",
+    licenseInvalid: "유효하지 않은 라이선스 키예요",
+    licenseInvalidDetail: "구매 메일이나 고객 포털에서 다시 복사해 주세요.",
+    licenseEnded: "이 라이선스 키의 요금제가 끝났어요",
+    licenseEndedDetail:
+      "지금 버전은 계속 쓸 수 있어요. 고객 포털에서 갱신하면 다시 업데이트를 받아요.",
+    openPortal: "고객 포털 열기",
   },
 };

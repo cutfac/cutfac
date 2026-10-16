@@ -103,17 +103,17 @@ The Mac app, Cutfac Solo, is built from this repository. Both have the same feat
 we don't lock any of them behind a license key. Paying gets you a signed build that updates itself,
 plus content we prepare for you.
 
-| Area                                               | Solo (Mac app)                                    | Open source (this repository)                  |
-| -------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
-| **Cost**                                           | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
-| **Setup**                                          | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
-| **Updates**                                        | Install themselves                                | Pull and rebuild                               |
-| **Board, editor, learning, formats, MCP server**   | Included                                          | Included                                       |
-| **Agents**                                         | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
-| **Reference feed and format packs**                | Included once they ship                           | Not included                                   |
-| **Data**                                           | Plain folders on your Mac                         | Plain folders on your machine                  |
-| **If you stop paying**                             | The app keeps working at the last version you had | Not applicable                                 |
-| **Source and changes**                                       | Built from this repository                        | Fork and modify under the AGPL-3.0             |
+| Area                                             | Solo (Mac app)                                    | Open source (this repository)                  |
+| ------------------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
+| **Cost**                                         | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
+| **Setup**                                        | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
+| **Updates**                                      | Install themselves                                | Pull and rebuild                               |
+| **Board, editor, learning, formats, MCP server** | Included                                          | Included                                       |
+| **Agents**                                       | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
+| **Reference feed and format packs**              | Included once they ship                           | Not included                                   |
+| **Data**                                         | Plain folders on your Mac                         | Plain folders on your machine                  |
+| **If you stop paying**                           | The app keeps working at the last version you had | Not applicable                                 |
+| **Source and changes**                           | Built from this repository                        | Fork and modify under the AGPL-3.0             |
 
 ## Privacy
 
@@ -125,7 +125,8 @@ plus content we prepare for you.
   for, stores or forwards your API keys.
 - The server listens on `127.0.0.1` unless you pass `--host`.
 - It only goes online when you ask it to: learning from a link (videos through your own `yt-dlp`)
-  or opening the feedback form.
+  or opening the feedback form. The Mac app also checks cutfac.com for updates, sending your
+  license key and nothing about your workspace.
 - Learn from videos you're allowed to download, and don't repost other people's videos.
 
 ## Tech stack
@@ -200,7 +201,7 @@ item (`Ctrl+Z`/`Ctrl+Y` elsewhere), and `?` shows them all.
 ```sh
 bun run desktop           # build the web UI and Electron shell, then open it
 bun run dist:desktop      # unsigned macOS app in release/, with the server compiled as a sidecar
-bun run release:desktop   # signed and notarized release, published to the update feed
+bun run release:desktop   # signed and notarized release, uploaded to the private release bucket
 ```
 
 The app runs the same server as `cutfac serve` as a sidecar on `127.0.0.1` and opens the board in
@@ -210,25 +211,31 @@ its window.
 
 The released app checks its feed at launch and every four hours, downloads a newer version in the
 background, and offers to restart once it is ready. Choosing Later installs it the next time the app
-quits. The app menu also has Check for Updates…. Runs from source (`desktop`, `desktop:dev`) never
-update.
+quits. The app menu also has Check for Updates… and License Key….
+
+The feed is served by cutfac.com, which needs the license key from checkout with every request. The
+app keeps the key in its settings and sends it to cutfac.com only. Without a key, or with one whose
+plan has ended, the app keeps working at its version and stops updating. Runs from source (`desktop`,
+`desktop:dev`) never update.
 
 ### Releasing the app
 
 `release:desktop` reads its credentials from `.env.release`, which git ignores:
 
 - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` to notarize
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` to upload to the bucket
-- `CLOUDFRONT_DISTRIBUTION_ID` to clear the CDN's copy of the feed
+- `CUTFAC_RELEASES_BUCKET`, `CUTFAC_RELEASES_REGION` for the private S3 bucket the builds go to
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` for a user that can read and write `mac/` in it
 
-It also needs a Developer ID Application certificate in the keychain and the AWS CLI. Bump `version`
-in `package.json` first: the script refuses a version that is not newer than the published one. It
-builds, signs under the hardened runtime, notarizes, uploads the dmg, the zip and `latest-mac.yml`,
-then clears `latest-mac.yml` from the CDN so running apps see the release right away.
+It also needs a Developer ID Application certificate in the keychain. Bump `version` in
+`package.json` first: the script refuses a version that is not newer than the published one. It
+builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
+blockmaps to `mac/`, then `latest-mac.yml` last so no app sees the release before its files.
+cutfac.com hands out short-lived links into the bucket: the dmg from its download page and the rest
+to the app's update checks, each for a live license key.
 
-The feed is the first `publish` entry in `electron-builder.yml`, and every build keeps the URL it
-was built with. To move the feed, publish one release that points to the new place while the old one
-keeps serving.
+The feed is the `publish` url in `electron-builder.yml`, and every build keeps the URL it was built
+with. To move the feed, publish one release that points to the new place while the old one keeps
+serving.
 
 ### Feedback form
 

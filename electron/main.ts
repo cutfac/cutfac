@@ -18,17 +18,22 @@ import type { EditCommand } from "../web/src/desktop.ts";
 import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
 import {
   EDIT_COMMAND_CHANNEL,
+  LICENSE_KEY_REQUEST_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
   REVEAL_PATH_CHANNEL,
+  SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
 } from "./ipc.ts";
+import { licenseKeyFrom } from "./license.ts";
 import { MESSAGES } from "./messages.ts";
 import { probePort } from "./ports.ts";
 import {
+  loadLicenseKey,
   loadLocale,
   loadPort,
   loadWorkspace,
+  saveLicenseKey,
   saveLocale,
   savePort,
   saveWorkspace,
@@ -65,13 +70,7 @@ app.setName("Cutfac");
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (!window) return;
-
-    if (window.isMinimized()) window.restore();
-
-    window.focus();
-  });
+  app.on("second-instance", bringToFront);
 
   app.on("window-all-closed", () => app.quit());
   app.on("before-quit", (event) => {
@@ -107,6 +106,20 @@ if (!app.requestSingleInstanceLock()) {
 
     return pickSource();
   });
+  ipcMain.handle(SET_LICENSE_KEY_CHANNEL, async (event, input: string) => {
+    assertFromApp(event);
+
+    const key = licenseKeyFrom(input);
+
+    if (!key || !updates) return "invalid";
+
+    const check = await updates.tryLicenseKey(key);
+
+    // An ended plan or an unreachable site still leaves a real key, worth keeping for later checks.
+    if (check !== "invalid") await saveLicenseKey(key);
+
+    return check;
+  });
   ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
     if (!isFromApp(event) || !isLocale(next) || next === locale) return;
 
@@ -134,7 +147,13 @@ function assertFromApp(event: IpcMainInvokeEvent): void {
 
 async function boot(): Promise<void> {
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
-  updates = startUpdates({ messages: () => MESSAGES[locale], window: () => window });
+
+  updates = startUpdates({
+    messages: () => MESSAGES[locale],
+    window: () => window,
+    licenseKey: await loadLicenseKey(),
+    openLicense: requestLicenseKey,
+  });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
 
   let workspace = (await loadWorkspace()) ?? (await pickWorkspace());
@@ -152,6 +171,21 @@ function sendEditCommand(command: EditCommand): void {
   window?.webContents.send(EDIT_COMMAND_CHANNEL, command);
 }
 
+function bringToFront(): void {
+  if (!window) return;
+
+  if (window.isMinimized()) window.restore();
+
+  window.show();
+  window.focus();
+}
+
+/** Has the board ask for a license key; Electron has no text field dialog of its own. */
+function requestLicenseKey(): void {
+  bringToFront();
+  window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, updates?.hasKey() ?? false);
+}
+
 /** The standard menus, spelled out so every label can follow the board's language. */
 function menuTemplate(): MenuItemConstructorOptions[] {
   const isMac = process.platform === "darwin";
@@ -165,7 +199,10 @@ function menuTemplate(): MenuItemConstructorOptions[] {
       submenu: [
         { role: "about", label: t.about },
         ...(updates?.enabled
-          ? [{ label: t.checkForUpdates, click: () => void updates?.checkNow() }]
+          ? [
+              { label: t.checkForUpdates, click: () => void updates?.checkNow() },
+              { label: t.licenseKey, click: requestLicenseKey },
+            ]
           : []),
         separator,
         { role: "services", label: t.services },

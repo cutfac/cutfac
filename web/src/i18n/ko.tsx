@@ -209,6 +209,25 @@ export const ko: Messages = {
     creating: "만드는 중…",
     create: "아이템 만들기",
   },
+  license: {
+    title: "라이선스 키",
+    description: (portal) => (
+      <>
+        업데이트를 확인할 때 컷팩이 이 키를 cutfac.com에 보내요. 결제 후 Polar가 보낸 메일이나{" "}
+        {portal("고객 포털")}에서 찾을 수 있어요.
+      </>
+    ),
+    label: "라이선스 키",
+    placeholder: "라이선스 키를 붙여넣으세요",
+    replace: "저장된 키가 있어요. 새 키를 넣으면 바뀌어요.",
+    invalid: "유효하지 않은 키예요. 구매 메일이나 고객 포털에서 다시 복사해 주세요.",
+    checking: "확인하는 중…",
+    save: "저장",
+    granted: "라이선스 키를 저장했어요. 이제 업데이트를 받아요.",
+    ended: "라이선스 키를 저장했지만 요금제가 끝났어요. 고객 포털에서 갱신하면 업데이트를 받아요.",
+    unavailable:
+      "라이선스 키를 저장했어요. cutfac.com에 연결하지 못해서 다음 업데이트 확인 때 다시 확인해요.",
+  },
   setup: {
     title: "설정",
     description: "에이전트를 연결하면 바로 영상을 만들기 시작할 수 있어요.",
