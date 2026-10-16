@@ -2,9 +2,22 @@
 
 Content Factory: a local-first short-form content factory with an MCP server, local API, and web board.
 
+Product:
+
 - First principle: natural, agent-first UX. The user's agent should get what it needs (the skill,
   workspace state, problems and how to fix them) through the tools it already calls, with no manual
   setup steps for the user. Design every feature for that first, then for people on the board.
+- For people who want to make content with agents but find agent tools uncomfortable to use. It is
+  not a tool for professional video editors.
+- The core features are the video editor and file management. Weigh new work by how it serves them.
+- The core loop: point at a specific part of a video and have the agent change it, and make several
+  variations to compare and pick from. Both should feel effortless.
+- Agents make the video by writing code. Assume a capable agent and give it as much autonomy as
+  possible; the product's job is well-defined, sensible primitives and a fitting frame, not
+  step-by-step control.
+
+Engineering:
+
 - Runtime and packages: Bun only (`bun`, `bun run`). Lint with `oxlint`, format with `oxfmt`.
 - Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
 - All filesystem access goes through `Workspace` in `src/core/workspace.ts`; never bypass its root guard.
