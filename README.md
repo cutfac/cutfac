@@ -226,6 +226,11 @@ plan has ended, the app keeps working at its version and stops updating. Runs fr
 - `CUTFAC_RELEASES_BUCKET`, `CUTFAC_RELEASES_REGION` for the private S3 bucket the builds go to
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` for a user that can read and write `mac/` in it
 
+Give that user only `s3:PutObject`, `s3:GetObject` and `s3:AbortMultipartUpload` on the bucket's
+objects and `s3:ListBucket` on the bucket, which lets the first release see that no feed exists yet.
+It never deletes or changes bucket settings. The site's key needs only `s3:GetObject` and
+`s3:ListBucket`.
+
 It also needs a Developer ID Application certificate in the keychain. Bump `version` in
 `package.json` first: the script refuses a version that is not newer than the published one. It
 builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
@@ -236,6 +241,11 @@ to the app's update checks, each for a live license key.
 The feed is the `publish` url in `electron-builder.yml`, and every build keeps the URL it was built
 with. To move the feed, publish one release that points to the new place while the old one keeps
 serving.
+
+To sign and ship your own build, put your own Apple account, bucket and key in `.env.release` and
+point the `publish` url at a feed you serve. The app fetches `latest-mac.yml` from that url, with
+the files it names next to it, and sends a license key only when one is saved in the app.
+`dist:desktop` builds stay unsigned and need none of this.
 
 ### Feedback form
 
