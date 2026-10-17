@@ -228,15 +228,16 @@ plan has ended, the app keeps working at its version and stops updating. Runs fr
 
 Give that user only `s3:PutObject`, `s3:GetObject` and `s3:AbortMultipartUpload` on the bucket's
 objects and `s3:ListBucket` on the bucket, which lets the first release see that no feed exists yet.
-It never deletes or changes bucket settings. The site's key needs only `s3:GetObject` and
-`s3:ListBucket`.
+It never deletes or changes bucket settings. The site holds no AWS key: it signs CloudFront links,
+and only that distribution may read the bucket.
 
 It also needs a Developer ID Application certificate in the keychain. Bump `version` in
 `package.json` first: the script refuses a version that is not newer than the published one. It
 builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
 blockmaps to `mac/`, then `latest-mac.yml` last so no app sees the release before its files.
-cutfac.com hands out short-lived links into the bucket: the dmg from its download page and the rest
-to the app's update checks, each for a live license key.
+cutfac.com hands out short-lived CloudFront links to these files: the dmg from its download page and
+the rest to the app's update checks, each for a live license key. The feed is never cached and build
+files never change, so a release needs no cache invalidation.
 
 The feed is the `publish` url in `electron-builder.yml`, and every build keeps the URL it was built
 with. To move the feed, publish one release that points to the new place while the old one keeps
