@@ -12,14 +12,14 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 import type { AgentChoice } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { agentLabel } from "./chat.tsx";
-import { composing, sendFailed } from "./composer.tsx";
+import { composing, sendFailed, VersionsPicker } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */
 export interface BoxAsk {
   /** Where the request goes: the agent picked in the chat, or a prompt to copy. */
   readonly agent: AgentChoice;
-  /** Send the request about the box; rejects when it could not go. */
-  readonly onSend: (body: string) => Promise<void>;
+  /** Send the request about the box, asking for `versions` of it; rejects when it could not go. */
+  readonly onSend: (body: string, versions: number) => Promise<void>;
 }
 
 interface BoxPromptProps {
@@ -39,6 +39,7 @@ interface BoxPromptProps {
 export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [versions, setVersions] = useState(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const text = body.trim();
   const t = useMessages();
@@ -49,8 +50,12 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
     setSending(true);
 
     ask
-      .onSend(text)
-      .then(() => setBody(""), sendFailed)
+      .onSend(text, versions)
+      .then(() => {
+        setBody("");
+        // Versions cost a run each, so the next request is a single edit unless asked again.
+        setVersions(1);
+      }, sendFailed)
       .finally(() => setSending(false));
   }
 
@@ -66,6 +71,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
         side={side}
         align="start"
         sideOffset={8}
+        className="w-[26rem]"
         initialFocus={inputRef}
         finalFocus={false}
       >
@@ -87,7 +93,8 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
             }}
           />
           <InputGroupAddon align="block-end">
-            <span className="text-xs font-normal">
+            <VersionsPicker value={versions} onChange={setVersions} />
+            <span className="min-w-0 truncate text-xs font-normal">
               {t.boxPrompt.hint(ask.agent === "queue" ? undefined : agentLabel(ask.agent))}
             </span>
             <InputGroupButton

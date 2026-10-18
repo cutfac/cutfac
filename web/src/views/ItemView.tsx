@@ -313,10 +313,17 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               }}
               ask={{
                 agent,
-                onSend: (body) =>
+                onSend: (body, versions) =>
                   sendRequest(
                     item,
-                    editInput(body, agent, pickedSettings(statuses, picks, agent), media, target),
+                    editInput(
+                      body,
+                      agent,
+                      pickedSettings(statuses, picks, agent),
+                      media,
+                      target,
+                      versions,
+                    ),
                     setData,
                     setRun,
                   ).then(clear),

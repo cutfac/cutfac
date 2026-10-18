@@ -109,6 +109,47 @@ export function copyPrompt(prompt: string) {
   );
 }
 
+/** How many versions the agent should make of one request. */
+export function VersionsPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (versions: number) => void;
+}) {
+  const t = useMessages();
+
+  const counts = Array.from({ length: MAX_VARIANTS }, (_, index) => ({
+    value: index + 1,
+    label: t.composer.versions.count(index + 1),
+  }));
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(next) => {
+        if (next !== null) onChange(next);
+      }}
+    >
+      <SelectTrigger
+        size="sm"
+        title={t.composer.versions.label}
+        aria-label={`${t.composer.versions.label}: ${value}`}
+      >
+        <LayersIcon />
+        <span className="tabular-nums">{value}</span>
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}>
+        {counts.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 /** The request as the server takes it, with only the parts of the target that are set. */
 export function editInput(
   body: string,
@@ -407,11 +448,6 @@ export function Composer({
   const choices = agentItems(statuses, t);
   const status = statusOf(statuses, agent);
 
-  const counts = Array.from({ length: MAX_VARIANTS }, (_, index) => ({
-    value: index + 1,
-    label: t.composer.versions.count(index + 1),
-  }));
-
   return (
     <div className="flex flex-col gap-2 border-t p-3">
       <div className="flex flex-wrap gap-1.5">
@@ -486,28 +522,7 @@ export function Composer({
               onPick={(next) => onPick(agent, next)}
             />
           ) : null}
-          <Select
-            value={versions}
-            onValueChange={(value) => {
-              if (value !== null) setVersions(value);
-            }}
-          >
-            <SelectTrigger
-              size="sm"
-              title={t.composer.versions.label}
-              aria-label={`${t.composer.versions.label}: ${versions}`}
-            >
-              <LayersIcon />
-              <span className="tabular-nums">{versions}</span>
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              {counts.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <VersionsPicker value={versions} onChange={setVersions} />
           {running && text === "" ? (
             <InputGroupButton
               variant="secondary"
