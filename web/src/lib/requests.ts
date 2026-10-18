@@ -1,4 +1,4 @@
-import type { Feedback, ItemDetail } from "../api.ts";
+import type { Feedback, ItemDetail, Variant } from "../api.ts";
 import { liveFor, runView, type LiveRun } from "./run.ts";
 
 /** The item's requests in the order they were made, which is how the chat numbers them. */
@@ -21,14 +21,30 @@ export function linePaused(item: ItemDetail, live: LiveRun): boolean {
   return live.subject === undefined || live.status !== "done";
 }
 
+/** The most versions one request can ask for; the server holds the same limit. */
+export const MAX_VARIANTS = 4;
+
+/** The versions the agent saved for the user to pick from, until one is kept or none. */
+export const versionsOf = (feedback: Feedback): ReadonlyArray<Variant> =>
+  feedback.decision === undefined ? (feedback.variants?.saved ?? []) : [];
+
+/** The media a request's versions are of. */
+export const versionsMedia = (feedback: Feedback): string | undefined =>
+  feedback.variants?.media ?? feedback.media;
+
 /**
- * The media changed since the request's run began: the agent wrote a result that waits for a
- * decision. A request that waited counts from when its turn came, not from when it was made.
+ * The media changed since the request's run began, or versions of it were saved: the agent wrote a
+ * result that waits for a decision. A request that waited counts from when its turn came, not from
+ * when it was made.
  */
 export function hasResult(item: ItemDetail, feedback: Feedback, running: boolean): boolean {
   const context = feedback.context;
 
-  if (running || feedback.decision !== undefined || context?.before === undefined) return false;
+  if (running || feedback.decision !== undefined) return false;
+
+  if (versionsOf(feedback).length > 0) return true;
+
+  if (context?.before === undefined) return false;
 
   if (context.after !== undefined) return true;
 

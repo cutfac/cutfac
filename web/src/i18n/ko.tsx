@@ -406,6 +406,20 @@ export const ko: Messages = {
     askAgain: "다시 요청",
     kept: "유지함",
     rolledBackBadge: "되돌림",
+    versionsReady: (media, saved, wanted) =>
+      wanted !== undefined && wanted > saved ? (
+        <>
+          {media}의 버전 {wanted}개 중 {saved}개가 준비됐어요.
+        </>
+      ) : (
+        <>
+          {media}의 버전 {saved}개가 준비됐어요. 비교하고 하나를 골라 주세요.
+        </>
+      ),
+    keepNone: "모두 버리기",
+    keptNone: "모두 버림",
+    keptVersion: (label) => `“${label}” 유지`,
+    discarded: "버전을 모두 버렸어요. 미디어는 원래대로예요.",
     waiting: (agent, ahead) =>
       ahead === 0 ? `다음 차례 · ${agent}` : `${agent} 기다리는 중 · 앞에 ${ahead}개`,
     reword: "수정",
@@ -480,6 +494,10 @@ export const ko: Messages = {
       workspace: "이 워크스페이스",
       remove: (name) => `${name} 빼기`,
     },
+    versions: {
+      label: "만들 버전 수",
+      count: (count) => `버전 ${count}개`,
+    },
     stop: "에이전트 중지",
     send: "보내기 (Enter)",
   },
@@ -492,6 +510,12 @@ export const ko: Messages = {
     playBoth: (time) => `${time}부터 함께 재생`,
     restore: "이전으로 되돌리기",
     keep: "편집 유지",
+  },
+  versions: {
+    title: "버전 비교",
+    now: "지금",
+    use: "이걸로",
+    playAll: (time) => `${time}부터 모두 재생`,
   },
   transport: {
     play: "재생",

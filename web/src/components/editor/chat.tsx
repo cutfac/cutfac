@@ -49,6 +49,7 @@ import {
   type ItemDetail,
   type Media,
   type ModelSettings,
+  type Variant,
 } from "../../api.ts";
 import { agentInstalled, href } from "../../hooks.ts";
 import { useLocale, useMessages, type Messages } from "../../i18n/index.ts";
@@ -59,7 +60,14 @@ import {
   type ModelPicks,
   type NamedSettings,
 } from "../../lib/models.ts";
-import { hasResult, inOrder, linePaused, waitingLine } from "../../lib/requests.ts";
+import {
+  hasResult,
+  inOrder,
+  linePaused,
+  versionsMedia,
+  versionsOf,
+  waitingLine,
+} from "../../lib/requests.ts";
 import {
   closingReply,
   groupSteps,
@@ -73,7 +81,7 @@ import {
   type ToolStep,
 } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
-import { CompareDialog } from "./compare-dialog.tsx";
+import { CompareDialog, VersionsDialog } from "./compare-dialog.tsx";
 import { composing, Composer, copyPrompt } from "./composer.tsx";
 
 export const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
@@ -187,11 +195,22 @@ export function Chat({
       api.approveEdit(item.id, feedback.id).then(onItem, showError);
     },
     restore: (feedback) => {
+      const versions = versionsOf(feedback).length > 0;
+
       api
         .restoreEdit(item.id, feedback.id)
         .then((next) => {
           onItem(next);
-          toast.success(t.chat.rolledBack(feedback.media));
+          toast.success(versions ? t.chat.discarded : t.chat.rolledBack(feedback.media));
+        })
+        .catch(showError);
+    },
+    pick: (feedback, variant) => {
+      api
+        .pickVariant(item.id, feedback.id, variant.id)
+        .then((next) => {
+          onItem(next);
+          toast.success(t.chat.keptVersion(variant.label));
         })
         .catch(showError);
     },
@@ -291,6 +310,8 @@ interface RequestActions {
   stop: () => void;
   approve: (feedback: Feedback) => void;
   restore: (feedback: Feedback) => void;
+  /** Keep one of the versions the agent saved; the others are thrown away. */
+  pick: (feedback: Feedback, variant: Variant) => void;
   /** Change a waiting request; resolves once the change is saved. */
   reword: (feedback: Feedback, body: string) => Promise<void>;
   cancel: (feedback: Feedback) => void;
@@ -706,6 +727,38 @@ function Result({
   actions: RequestActions;
 }) {
   const t = useMessages();
+  const versions = versionsOf(feedback);
+
+  if (versions.length > 0) {
+    return (
+      <div className="flex flex-col gap-2 rounded-xl border p-3">
+        <p className="text-sm">
+          {t.chat.versionsReady(
+            <span className="font-medium">{versionsMedia(feedback)}</span>,
+            versions.length,
+            feedback.variants?.wanted,
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <VersionsDialog
+            item={item}
+            feedback={feedback}
+            onOpen={actions.compare}
+            onPick={(variant) => actions.pick(feedback, variant)}
+            onKeepNone={() => actions.restore(feedback)}
+          />
+          <Button variant="outline" size="xs" onClick={() => actions.restore(feedback)}>
+            <Undo2Icon data-icon="inline-start" />
+            {t.chat.keepNone}
+          </Button>
+          <Button variant="ghost" size="xs" onClick={() => actions.retarget(feedback)}>
+            <MessageSquareReplyIcon data-icon="inline-start" />
+            {t.chat.askAgain}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border p-3">
@@ -737,15 +790,16 @@ function Result({
   );
 }
 
-/** How the request ended: kept, rolled back, or resolved by an agent with a note. */
+/** How the request ended: kept, rolled back (or no version kept), or resolved with a note. */
 function Outcome({ feedback, replied }: { feedback: Feedback; replied: boolean }) {
   const t = useMessages();
+  const picked = feedback.variants?.picked;
 
   if (feedback.decision === "approved") {
     return (
       <Badge variant="secondary" className="self-start">
         <CheckIcon data-icon="inline-start" />
-        {t.chat.kept}
+        {picked === undefined ? t.chat.kept : t.chat.keptVersion(picked)}
       </Badge>
     );
   }
@@ -754,7 +808,7 @@ function Outcome({ feedback, replied }: { feedback: Feedback; replied: boolean }
     return (
       <Badge variant="outline" className="self-start">
         <Undo2Icon data-icon="inline-start" />
-        {t.chat.rolledBackBadge}
+        {feedback.variants === undefined ? t.chat.rolledBackBadge : t.chat.keptNone}
       </Badge>
     );
   }

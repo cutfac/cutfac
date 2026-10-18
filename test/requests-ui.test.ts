@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import { MAX_VARIANTS } from "../src/core/schema.ts";
 import type { AgentRun, EditReceipt, Feedback, ItemDetail } from "../web/src/api.ts";
-import { hasResult, inOrder, linePaused, pinsOn, waitingLine } from "../web/src/lib/requests.ts";
+import {
+  hasResult,
+  inOrder,
+  linePaused,
+  MAX_VARIANTS as BOARD_MAX_VARIANTS,
+  pinsOn,
+  versionsMedia,
+  versionsOf,
+  waitingLine,
+} from "../web/src/lib/requests.ts";
 import { liveFor, NO_RUN, sendingRun, sentRun, type LiveRun } from "../web/src/lib/run.ts";
 
 const at = (second: number) => new Date(Date.UTC(2026, 9, 14, 0, 0, second)).toISOString();
@@ -119,6 +129,30 @@ describe("hasResult", () => {
     expect(hasResult(item, request("b", 2, { context: before, baseline: at(4) }), false)).toBe(
       true,
     );
+  });
+
+  test("counts versions saved to compare until the user picks one", () => {
+    const version = { id: "v1", label: "Big captions", file: "edits/a/variants/v1.mp4", at: at(3) };
+    const variants = { wanted: 2, media: "clip.mp4", saved: [version] };
+    const open = request("a", 1, { context: before, variants });
+    const picked = { ...open, decision: "approved" as const };
+
+    expect(versionsOf(open)).toEqual([version]);
+    expect(hasResult(itemWith([]), open, false)).toBe(true);
+    expect(hasResult(itemWith([]), open, true)).toBe(false);
+    expect(versionsOf(picked)).toEqual([]);
+    expect(hasResult(itemWith([]), picked, false)).toBe(false);
+  });
+
+  test("shows the versions of the media they were saved from", () => {
+    const variants = { media: "cover.png", saved: [] };
+
+    expect(versionsMedia(request("a", 1, { variants }))).toBe("cover.png");
+    expect(versionsMedia(request("b", 1))).toBe("clip.mp4");
+  });
+
+  test("offers as many versions as the server holds", () => {
+    expect(BOARD_MAX_VARIANTS).toBe(MAX_VARIANTS);
   });
 });
 

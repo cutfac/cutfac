@@ -418,6 +418,22 @@ export const en = {
     askAgain: "Ask again",
     kept: "Kept",
     rolledBackBadge: "Rolled back",
+    /** Versions the agent saved of `media`; `wanted` is how many the request asked for. */
+    versionsReady: (media: ReactNode, saved: number, wanted: number | undefined) =>
+      wanted !== undefined && wanted > saved ? (
+        <>
+          {saved} of {wanted} versions of {media} are ready to compare.
+        </>
+      ) : (
+        <>
+          {saved === 1 ? "1 version" : `${saved} versions`} of {media} ready. Compare them and keep
+          one.
+        </>
+      ),
+    keepNone: "Keep none",
+    keptNone: "Kept none",
+    keptVersion: (label: string) => `Kept “${label}”`,
+    discarded: "Threw the versions away. The media stays as it was.",
     /** A request lined up behind others on the item; `ahead` is how many run before it. */
     waiting: (agent: string, ahead: number) =>
       ahead === 0
@@ -517,6 +533,11 @@ export const en = {
       workspace: "This workspace",
       remove: (name: string) => `Remove ${name}`,
     },
+    /** How many takes on the request the agent makes, to compare and pick from. */
+    versions: {
+      label: "Versions to make",
+      count: (count: number) => (count === 1 ? "1 version" : `${count} versions`),
+    },
     stop: "Stop the agent",
     send: "Send (Enter)",
   },
@@ -529,6 +550,14 @@ export const en = {
     playBoth: (time: string) => `Play both from ${time}`,
     restore: "Restore before",
     keep: "Keep the edit",
+  },
+  /** The agent's versions of one request side by side, to keep one or none. */
+  versions: {
+    title: "Compare versions",
+    /** The media as it is now, which is how it was before the request. */
+    now: "Now",
+    use: "Use this",
+    playAll: (time: string) => `Play all from ${time}`,
   },
   transport: {
     play: "Play",

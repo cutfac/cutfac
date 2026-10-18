@@ -4,6 +4,7 @@ import {
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
+  LayersIcon,
   LinkIcon,
   PlusIcon,
   SquareIcon,
@@ -53,6 +54,7 @@ import { desktop } from "../../desktop.ts";
 import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
+import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { sourceKey, sourceOf, sourceView } from "../../lib/sources.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
@@ -114,8 +116,11 @@ export function editInput(
   settings: ModelSettings,
   media: Media | undefined,
   target: Target,
+  versions = 1,
 ) {
   const input: EditInput = { body, agent, ...settings };
+
+  if (versions > 1) input.variants = versions;
 
   if (media !== undefined) input.media = media.name;
 
@@ -359,6 +364,7 @@ export function Composer({
 }: ComposerProps) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [versions, setVersions] = useState(1);
   const empty = isEmptyTarget(target);
   const text = body.trim();
   const t = useMessages();
@@ -370,8 +376,15 @@ export function Composer({
     setSending(true);
 
     try {
-      await sendRequest(item, editInput(text, agent, settings, media, target), onItem, onRun);
+      await sendRequest(
+        item,
+        editInput(text, agent, settings, media, target, versions),
+        onItem,
+        onRun,
+      );
       setBody("");
+      // Versions cost a run each, so the next request is a single edit unless asked again.
+      setVersions(1);
       onClearTarget();
     } catch (cause) {
       sendFailed(cause);
@@ -393,6 +406,11 @@ export function Composer({
 
   const choices = agentItems(statuses, t);
   const status = statusOf(statuses, agent);
+
+  const counts = Array.from({ length: MAX_VARIANTS }, (_, index) => ({
+    value: index + 1,
+    label: t.composer.versions.count(index + 1),
+  }));
 
   return (
     <div className="flex flex-col gap-2 border-t p-3">
@@ -468,6 +486,28 @@ export function Composer({
               onPick={(next) => onPick(agent, next)}
             />
           ) : null}
+          <Select
+            value={versions}
+            onValueChange={(value) => {
+              if (value !== null) setVersions(value);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              title={t.composer.versions.label}
+              aria-label={`${t.composer.versions.label}: ${versions}`}
+            >
+              <LayersIcon />
+              <span className="tabular-nums">{versions}</span>
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              {counts.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {running && text === "" ? (
             <InputGroupButton
               variant="secondary"

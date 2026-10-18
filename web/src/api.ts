@@ -104,6 +104,23 @@ export interface ModelSettings {
   effort?: string;
 }
 
+/** One version of an edit request, saved by the agent for the user to compare. */
+export interface Variant {
+  id: string;
+  label: string;
+  /** Item-relative copy of the media as this version. */
+  file: string;
+  at: string;
+}
+
+/** The versions an edit request asked for, saved so far, and the one the user kept. */
+export interface Variants {
+  wanted?: number;
+  media?: string;
+  saved: Variant[];
+  picked?: string;
+}
+
 export interface AgentRun extends ModelSettings {
   agent: AgentName;
   status: "running" | "done" | "failed" | "stopped";
@@ -123,6 +140,7 @@ export interface Feedback {
   end?: number;
   region?: Region;
   context?: EditContext;
+  variants?: Variants;
   run?: AgentRun;
   /** Lined up for this agent behind the item's run and the requests before it. */
   waiting?: AgentName;
@@ -160,6 +178,8 @@ export interface EditInput extends ModelSettings {
   timecode?: number;
   end?: number;
   region?: Region;
+  /** How many versions to make and compare; 1 is a single edit. */
+  variants?: number;
   agent: AgentChoice;
 }
 
@@ -582,6 +602,13 @@ export const api = {
     send<ItemDetail, { feedbackId: string }>("POST", `/api/item/edit/approve${q(id)}`, {
       feedbackId,
     }),
+  /** Keep one of a request's versions; the others are thrown away. */
+  pickVariant: (id: string, feedbackId: string, variantId: string) =>
+    send<ItemDetail, { feedbackId: string; variantId: string }>(
+      "POST",
+      `/api/item/edit/pick${q(id)}`,
+      { feedbackId, variantId },
+    ),
   restoreEdit: (id: string, feedbackId: string) =>
     send<ItemDetail, { feedbackId: string }>("POST", `/api/item/edit/restore${q(id)}`, {
       feedbackId,
