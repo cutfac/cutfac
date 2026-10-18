@@ -4,6 +4,14 @@
   "description": "Local-first short-form video studio for solo developers. Bring your own agent.",
   "license": "AGPL-3.0-only",
   "homepage": "https://cutfac.com",
+  "bugs": {
+    "url": "https://github.com/w00ing/cutfac/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w00ing/cutfac.git"
+  },
+  "author": "Wyverse Labs",
   "bin": {
     "cutfac": "./src/cli.ts"
   },
