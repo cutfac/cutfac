@@ -906,7 +906,7 @@ export const serverLayer = (options: ListenOptions) =>
   HttpRouter.serve(Layer.merge(routes(options), requestGuard(options.hostname)), {
     disableLogger: true,
   }).pipe(
-    Layer.provide(Layer.mergeAll(RunRegistry.layer, ImportRuns.layer)),
+    Layer.provide(Layer.mergeAll(RunRegistry.layer(options.cli), ImportRuns.layer)),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
       BunHttpServer.layer({

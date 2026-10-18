@@ -19,6 +19,8 @@ import {
   MCP_WRITE_TOOLS,
   type McpLaunch,
   SERVER_NAME,
+  codexServerKey,
+  codexServerLaunch,
   codexServerName,
 } from "./agents.ts";
 import { CommandFailed, Conflict, NotFound } from "./errors.ts";
@@ -183,9 +185,6 @@ export function claudeImportFlags(phase: ImportPhase, server: McpLaunch, link: s
   ];
 }
 
-/** A TOML key: bare when it can be, quoted otherwise. */
-const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name));
-
 /**
  * Codex's config for an import turn. Codex reads MCP servers only from its user config, so this
  * workspace's server is defined inline under `ours` and every other one (`others`) is switched
@@ -197,7 +196,7 @@ export function codexImportConfig(
   ours: string,
   others: ReadonlyArray<string>,
 ): string[] {
-  const key = `mcp_servers.${tomlKey(ours)}`;
+  const key = codexServerKey(ours);
 
   const sandbox =
     phase === "read"
@@ -207,9 +206,8 @@ export function codexImportConfig(
   return codexConfig([
     "features.plugins=false",
     "features.apps=false",
-    ...others.map((name) => `mcp_servers.${tomlKey(name)}.enabled=false`),
-    `${key}.command=${JSON.stringify(server.command)}`,
-    `${key}.args=${JSON.stringify(server.args)}`,
+    ...others.map((name) => `${codexServerKey(name)}.enabled=false`),
+    ...codexServerLaunch(ours, server),
     ...sandbox,
     'approval_policy="never"',
     'web_search="live"',

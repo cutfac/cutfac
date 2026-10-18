@@ -45,7 +45,7 @@ const makeServer = async (t: TestWorkspace, fakes: FakeAgents) => {
   // Route handlers read their services per request, as `serve` does from the server's context.
   const runtime = ManagedRuntime.make(
     Layer.mergeAll(
-      RunRegistry.layer,
+      RunRegistry.layer(undefined),
       ImportRuns.layer,
       FetchHttpClient.layer,
       BunHttpPlatform.layer,

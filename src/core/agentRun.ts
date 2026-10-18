@@ -17,7 +17,14 @@ import {
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { CLAUDE_MCP_TOOLS } from "./agents.ts";
+import {
+  CLAUDE_MCP_TOOLS,
+  type CliEntry,
+  codexServerLaunch,
+  codexServerName,
+  mcpLaunch,
+  runMcpConfig,
+} from "./agents.ts";
 import {
   baselineMillis,
   beginEdit,
@@ -80,7 +87,10 @@ export interface InvocationOptions extends SessionArgs {
   readonly bin: string;
   readonly prompt: string;
   readonly allowedTools: ReadonlyArray<string>;
+  /** Claude's `--mcp-config`: a file path or a JSON string. */
   readonly mcpConfig?: string | undefined;
+  /** Codex config entries that point its MCP server at this workspace. */
+  readonly codexServer?: ReadonlyArray<string> | undefined;
   readonly image?: string | undefined;
   /** Hosts of the web pages the user pointed the item at, which the agent may read. */
   readonly hosts?: ReadonlyArray<string> | undefined;
@@ -182,7 +192,7 @@ const flag = (name: string, value: string | undefined) =>
 
 /** The headless command line for one edit request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
-  const { bin, prompt, mcpConfig, image, hosts = [], model, effort } = options;
+  const { bin, prompt, mcpConfig, codexServer = [], image, hosts = [], model, effort } = options;
   const fetch = hosts.map((host) => `WebFetch(domain:${host})`);
   const search = hosts.length === 0 ? [] : ['web_search="live"'];
   // The schema keeps an effort to lowercase letters, so it is safe inside the TOML string.
@@ -203,6 +213,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
             'approval_policy="never"',
             ...search,
             ...reasoning,
+            ...codexServer,
           ]),
           ...flag("-m", model),
           ...flag("--image", image),
@@ -584,7 +595,34 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
   if (changed) yield* resolveEdit(itemId, feedbackId, firstLine(reply) || "Edited by agent");
 });
 
-const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, startedAt: string) {
+/**
+ * How the agent reaches this workspace's MCP server. With the CLI known, the server is always
+ * started for this root, so a copied or moved workspace never acts on the one it came from.
+ * Otherwise Claude gets the workspace's `.mcp.json` as it is.
+ */
+const runServers = Effect.fnUntraced(function* (cli: CliEntry | undefined) {
+  const ws = yield* Workspace;
+
+  if (cli === undefined) {
+    const mcpConfig = (yield* ws.exists(MCP_FILE)) ? yield* ws.abs(MCP_FILE) : undefined;
+
+    return { mcpConfig, codexServer: [] };
+  }
+
+  const launch = mcpLaunch(cli, ws.root);
+
+  return {
+    mcpConfig: yield* runMcpConfig(launch),
+    codexServer: codexServerLaunch(codexServerName(ws.config.name), launch),
+  };
+});
+
+const performEdit = Effect.fnUntraced(function* (
+  cli: CliEntry | undefined,
+  input: RunInput,
+  emit: Emit,
+  startedAt: string,
+) {
   const ws = yield* Workspace;
   const { itemId, feedbackId, agent, model, effort } = input;
   const pick: AgentPick = { agent, model, effort };
@@ -596,7 +634,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const prompt = yield* buildEditPrompt(item, f);
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
-  const mcpConfig = (yield* ws.exists(MCP_FILE)) ? yield* ws.abs(MCP_FILE) : undefined;
+  const servers = yield* runServers(cli);
   const frame = f.context?.frame;
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
 
@@ -615,7 +653,7 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
             [...ws.config.agent.claudeAllowedTools, CLAUDE_MCP_TOOLS],
             formatTools,
           ),
-          mcpConfig,
+          ...servers,
           image,
           hosts: sourceHosts(item.doc.sources),
           model,
@@ -651,35 +689,36 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
  * recorded on the request and reported as an `error` event; a stop keeps whatever the agent
  * already wrote as the "after" side.
  */
-export const runEdit = Effect.fn("agentRun.runEdit")(function* (input: RunInput, emit: Emit) {
-  const { itemId, feedbackId, agent, model, effort } = input;
-  const pick: AgentPick = { agent, model, effort };
-  const startedAt = yield* nowIso;
+export const runEdit = (cli: CliEntry | undefined) =>
+  Effect.fn("agentRun.runEdit")(function* (input: RunInput, emit: Emit) {
+    const { itemId, feedbackId, agent, model, effort } = input;
+    const pick: AgentPick = { agent, model, effort };
+    const startedAt = yield* nowIso;
 
-  const recordFailure = (error: CutfacError) =>
-    Effect.gen(function* () {
+    const recordFailure = (error: CutfacError) =>
+      Effect.gen(function* () {
+        const finishedAt = yield* nowIso;
+        yield* setRun(itemId, feedbackId, {
+          ...pick,
+          status: "failed",
+          startedAt,
+          finishedAt,
+          error: error.message,
+        }).pipe(Effect.ignore({ log: true }));
+        yield* emit({ type: "error", error: error.message });
+      });
+
+    const recordStop = Effect.gen(function* () {
+      yield* snapshotAfter(itemId, feedbackId);
       const finishedAt = yield* nowIso;
-      yield* setRun(itemId, feedbackId, {
-        ...pick,
-        status: "failed",
-        startedAt,
-        finishedAt,
-        error: error.message,
-      }).pipe(Effect.ignore({ log: true }));
-      yield* emit({ type: "error", error: error.message });
-    });
+      yield* setRun(itemId, feedbackId, { ...pick, status: "stopped", startedAt, finishedAt });
+    }).pipe(Effect.ignore({ log: true }));
 
-  const recordStop = Effect.gen(function* () {
-    yield* snapshotAfter(itemId, feedbackId);
-    const finishedAt = yield* nowIso;
-    yield* setRun(itemId, feedbackId, { ...pick, status: "stopped", startedAt, finishedAt });
-  }).pipe(Effect.ignore({ log: true }));
-
-  yield* performEdit(input, emit, startedAt).pipe(
-    Effect.catch(recordFailure),
-    Effect.onInterrupt(() => recordStop),
-  );
-});
+    yield* performEdit(cli, input, emit, startedAt).pipe(
+      Effect.catch(recordFailure),
+      Effect.onInterrupt(() => recordStop),
+    );
+  });
 
 export interface RunSubscription {
   /** What the latest run is about, if the key has had one since the server started. */
@@ -923,5 +962,7 @@ export const editRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R | 
 export class RunRegistry extends Context.Service<RunRegistry, Runs<RunInput>>()(
   "cutfac/RunRegistry",
 ) {
-  static readonly layer = runsLayer(RunRegistry, editRuns(runEdit));
+  /** `cli` is how agents start this CLI's MCP server, when the server knows it. */
+  static readonly layer = (cli: CliEntry | undefined) =>
+    runsLayer(RunRegistry, editRuns(runEdit(cli)));
 }

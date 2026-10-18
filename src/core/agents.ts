@@ -74,7 +74,12 @@ const McpFile = Schema.fromJsonString(Schema.JsonObject, { space: 2 });
 
 const decodeMcpFile = Schema.decodeUnknownEffect(McpFile);
 
-const encodeMcpFile = Schema.encodeEffect(McpFile);
+const encodeMcpFile = (file: Schema.JsonObject) =>
+  Schema.encodeEffect(McpFile)(file).pipe(
+    Effect.mapError(
+      (error) => new WorkspaceError({ message: `Could not encode ${MCP_FILE}: ${error.message}` }),
+    ),
+  );
 
 const decodeServers = Schema.decodeUnknownOption(Schema.JsonObject);
 
@@ -98,6 +103,38 @@ const readMcpFile = Effect.fn("agents.readMcpFile")(function* () {
 const serversOf = (file: Schema.JsonObject) =>
   Option.getOrElse(decodeServers(file["mcpServers"]), () => EMPTY);
 
+const LaunchArgs = Schema.Struct({ args: Schema.Array(Schema.String) });
+
+const decodeLaunchArgs = Schema.decodeUnknownOption(LaunchArgs);
+
+/**
+ * Whether a server's launch `args` start the MCP server for `root`. A workspace copied or moved
+ * elsewhere keeps an entry for its old root, which would act on the wrong files.
+ */
+export const targetsRoot = (args: ReadonlyArray<string>, root: string) =>
+  args.some((arg, i) => arg === "--workspace" && args[i + 1] === root);
+
+/** `file` with this server's entry set to `launch`, and the one from before the rename gone. */
+const withOurServer = (file: Schema.JsonObject, launch: McpLaunch): Schema.JsonObject => ({
+  ...file,
+  mcpServers: {
+    ...Object.fromEntries(
+      Object.entries(serversOf(file)).filter(([name]) => name !== LEGACY_SERVER_NAME),
+    ),
+    [SERVER_NAME]: { command: launch.command, args: launch.args },
+  },
+});
+
+/**
+ * The workspace's `.mcp.json` for a run, as a JSON string, with this server always started for
+ * `launch`'s root whatever the file says. The file's other servers are kept.
+ */
+export const runMcpConfig = Effect.fn("agents.runMcpConfig")(function* (launch: McpLaunch) {
+  const file = yield* readMcpFile().pipe(Effect.orElseSucceed(() => EMPTY));
+
+  return yield* encodeMcpFile(withOurServer(file, launch));
+});
+
 /**
  * Claude Code reads project-scoped servers from .mcp.json at the workspace root, so connecting
  * never touches global config. Other servers and keys in the file are kept, except the entry this
@@ -107,21 +144,7 @@ export const connectClaude = Effect.fn("agents.connectClaude")(function* (launch
   const ws = yield* Workspace;
   const current = yield* readMcpFile();
 
-  const next = {
-    ...current,
-    mcpServers: {
-      ...Object.fromEntries(
-        Object.entries(serversOf(current)).filter(([name]) => name !== LEGACY_SERVER_NAME),
-      ),
-      [SERVER_NAME]: { command: launch.command, args: launch.args },
-    },
-  };
-
-  const text = yield* encodeMcpFile(next).pipe(
-    Effect.mapError(
-      (error) => new WorkspaceError({ message: `Could not encode ${MCP_FILE}: ${error.message}` }),
-    ),
-  );
+  const text = yield* encodeMcpFile(withOurServer(current, launch));
 
   yield* ws.writeText(MCP_FILE, `${text}\n`);
 
@@ -140,6 +163,22 @@ const codexNameUnder = (server: string, workspaceName: string) =>
 
 export const codexServerName = (workspaceName: string) =>
   codexNameUnder(SERVER_NAME, workspaceName);
+
+/** A TOML key: bare when it can be, quoted otherwise. */
+const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.stringify(name));
+
+/** Where Codex's config keeps the MCP server `name`. */
+export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
+
+/** Codex config entries that start the server `name` with `launch`, whatever the user config says. */
+export const codexServerLaunch = (name: string, launch: McpLaunch) => [
+  `${codexServerKey(name)}.command=${JSON.stringify(launch.command)}`,
+  `${codexServerKey(name)}.args=${JSON.stringify(launch.args)}`,
+];
+
+const CodexServer = Schema.fromJsonString(Schema.Struct({ transport: LaunchArgs }));
+
+const decodeCodexServer = Schema.decodeUnknownOption(CodexServer);
 
 /**
  * Codex only reads MCP servers from its user config, so register through its own CLI instead of
@@ -183,13 +222,18 @@ export const connectAgent = (agent: AgentName, launch: McpLaunch) =>
 
 /**
  * Whether each supported agent CLI is installed and already pointed at this workspace, and the
- * models it can run.
+ * models it can run. An entry for another root, as in a copied workspace, is not connected, so
+ * connecting again fixes it.
  */
 export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
   const ws = yield* Workspace;
 
   const claudeConnected = yield* readMcpFile().pipe(
-    Effect.map((file) => serversOf(file)[SERVER_NAME] !== undefined),
+    Effect.map((file) =>
+      Option.exists(decodeLaunchArgs(serversOf(file)[SERVER_NAME]), ({ args }) =>
+        targetsRoot(args, ws.root),
+      ),
+    ),
     Effect.orElseSucceed(() => false),
   );
 
@@ -200,8 +244,14 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
     onSome: (bin) =>
       Effect.all(
         [
-          run(bin, ["mcp", "get", codexServerName(ws.config.name)]).pipe(
-            Effect.map((result) => result.code === 0),
+          run(bin, ["mcp", "get", codexServerName(ws.config.name), "--json"]).pipe(
+            Effect.map(
+              (result) =>
+                result.code === 0 &&
+                Option.exists(decodeCodexServer(result.stdout), (server) =>
+                  targetsRoot(server.transport.args, ws.root),
+                ),
+            ),
             Effect.orElseSucceed(() => false),
           ),
           codexModels(bin),

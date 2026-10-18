@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { connectClaude, connectCodex, mcpLaunch } from "../src/core/agents.ts";
+import { agentInvocation } from "../src/core/agentRun.ts";
+import {
+  agentStatus,
+  codexServerLaunch,
+  connectClaude,
+  connectCodex,
+  mcpLaunch,
+  runMcpConfig,
+  targetsRoot,
+} from "../src/core/agents.ts";
 import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
 
 describe("connectClaude", () => {
@@ -92,5 +101,106 @@ exit 0
       "mcp get cutfac-test",
       `mcp add cutfac-test -- /opt/cutfac mcp --workspace ${t.root}`,
     ]);
+  });
+});
+
+describe("targetsRoot", () => {
+  test("only args with --workspace followed by that root target it", () => {
+    expect(targetsRoot(["mcp", "--workspace", "/a"], "/a")).toBe(true);
+    expect(targetsRoot(["mcp", "--workspace", "/a"], "/b")).toBe(false);
+    expect(targetsRoot(["mcp", "/a"], "/a")).toBe(false);
+  });
+});
+
+const launch = (root: string) => mcpLaunch({ command: "/opt/cutfac", args: [] }, root);
+
+describe("a copied workspace", () => {
+  let t: TestWorkspace;
+  let fakes: FakeAgents;
+
+  beforeEach(async () => {
+    t = await makeWorkspace("Test");
+    fakes = await makeFakeAgents();
+  });
+
+  afterEach(async () => {
+    await fakes.remove();
+    await t.remove();
+  });
+
+  const writeMcp = (root: string) =>
+    writeFile(
+      join(t.root, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          cutfac: { command: "/opt/cutfac", args: launch(root).args },
+          "content-factory": { command: "old" },
+          other: { command: "x" },
+        },
+      }),
+    );
+
+  /** A fake codex whose registration starts the server for `root`. */
+  const codexRegisteredFor = (root: string) =>
+    fakes.bin(
+      "codex",
+      `if [ "$1 $2 $3 $4" = "mcp get cutfac-test --json" ]; then
+  echo '{"name":"cutfac-test","transport":{"type":"stdio","command":"/opt/cutfac","args":["mcp","--workspace","${root}"]}}'
+  exit 0
+fi
+exit 1
+`,
+    );
+
+  test("is not connected while its entries start the server for the old root", async () => {
+    await writeMcp("/elsewhere");
+    await codexRegisteredFor("/elsewhere");
+
+    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+
+    expect(claude?.connected).toBe(false);
+    expect(codex?.connected).toBe(false);
+  });
+
+  test("is connected when the entries start the server for its own root", async () => {
+    await writeMcp(t.root);
+    await codexRegisteredFor(t.root);
+
+    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+
+    expect(claude?.connected).toBe(true);
+    expect(codex?.connected).toBe(true);
+  });
+
+  test("runs claude with this root's server and keeps the other servers", async () => {
+    await writeMcp("/elsewhere");
+
+    const config = JSON.parse(await t.run(runMcpConfig(launch(t.root))));
+
+    expect(Object.keys(config.mcpServers).toSorted()).toEqual(["cutfac", "other"]);
+    expect(config.mcpServers["cutfac"]).toEqual({
+      command: "/opt/cutfac",
+      args: ["mcp", "--workspace", t.root],
+    });
+  });
+
+  test("runs codex with its server overridden for this root", () => {
+    const codexServer = codexServerLaunch("cutfac-test", launch("/here"));
+
+    const { args } = agentInvocation("codex", {
+      bin: "/bin/codex",
+      prompt: "do it",
+      sessionId: undefined,
+      newSessionId: "new",
+      allowedTools: [],
+      codexServer,
+    });
+
+    expect(codexServer).toEqual([
+      'mcp_servers.cutfac-test.command="/opt/cutfac"',
+      'mcp_servers.cutfac-test.args=["mcp","--workspace","/here"]',
+    ]);
+
+    for (const entry of codexServer) expect(args[args.indexOf(entry) - 1]).toBe("-c");
   });
 });
