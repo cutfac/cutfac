@@ -469,7 +469,8 @@ const sidebarMenuButtonVariants = cva(
       size: {
         default: "h-8 text-sm",
         sm: "h-7 text-xs",
-        lg: "h-12 px-3 text-sm group-data-[collapsible=icon]:p-0!",
+        // Collapsed, it shows only the app's mark, so it takes the mark's corners.
+        lg: "h-12 px-3 text-sm group-data-[collapsible=icon]:rounded-sm group-data-[collapsible=icon]:p-0!",
       },
     },
     defaultVariants: {

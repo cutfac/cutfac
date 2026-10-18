@@ -11,7 +11,7 @@ import {
   PlusIcon,
   type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { NewItemDialog } from "@/components/new-item-dialog";
@@ -149,13 +149,47 @@ function LinkRow({ to, active, tooltip, title, badge, children }: LinkRowProps) 
   );
 }
 
-/** The app icon's play button over a timeline, drawn in the current color. */
+/**
+ * The brand mark, as on the app icon and cutfac.com: takes of a clip fanned out on a dark tile, the
+ * chosen one in amber. Cards are listed back to front.
+ */
+const MARK = {
+  tile: ["#332f2b", "#0e0d0c"],
+  cards: [
+    { name: "variant", x: 6.5, y: 4, fill: ["#f6f4f1", "#f6f4f1"], opacity: 0.38 },
+    { name: "chosen", x: 10, y: 7, fill: ["#f4c022", "#e3a90f"], opacity: 1 },
+    { name: "front", x: 13.5, y: 10, fill: ["#fffefb", "#e6e1d8"], opacity: 1 },
+  ],
+} as const;
+
 function CutfacMark({ className }: { className?: string }) {
+  // Gradient ids are document-wide, so each drawing gets its own.
+  const id = useId();
+  const fills = [{ name: "tile", fill: MARK.tile }, ...MARK.cards];
+
   return (
-    <svg viewBox="5 6 22 22" aria-hidden="true" className={className}>
-      <path d="M12 8.5v11l9-5.5z" fill="currentColor" />
-      <rect x="6" y="23" width="20" height="2.5" rx="1.25" fill="currentColor" fillOpacity="0.3" />
-      <rect x="11" y="23" width="9" height="2.5" rx="1.25" className="fill-selection" />
+    <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+      <defs>
+        {fills.map(({ name, fill: [top, bottom] }) => (
+          <linearGradient key={name} id={`${id}-${name}`} x2="0" y2="1">
+            <stop stopColor={top} />
+            <stop offset="1" stopColor={bottom} />
+          </linearGradient>
+        ))}
+      </defs>
+      <rect width="32" height="32" rx="7" fill={`url(#${id}-tile)`} />
+      {MARK.cards.map(({ name, x, y, opacity }) => (
+        <rect
+          key={name}
+          x={x}
+          y={y}
+          width="12"
+          height="18"
+          rx="3.25"
+          fill={`url(#${id}-${name})`}
+          fillOpacity={opacity}
+        />
+      ))}
     </svg>
   );
 }
@@ -166,9 +200,8 @@ function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
 
   const content = (
     <>
-      <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
-        <CutfacMark className="size-5" />
-      </div>
+      {/* Important, since the menu button sizes every svg in it as a small icon. */}
+      <CutfacMark className="size-8!" />
       <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
         <span title={ws?.root} className="truncate font-semibold">
           {name}
