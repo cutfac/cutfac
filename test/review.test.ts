@@ -6,7 +6,16 @@ import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
 import { createItem, getItem, importMedia } from "../src/core/items.ts";
-import { listReviews, reviewMedia, sampleTimes, sheetArgs } from "../src/core/review.ts";
+import {
+  VERTICAL_SAFE_ZONE,
+  listReviews,
+  reviewChecklist,
+  reviewMedia,
+  safeZoneFilters,
+  safeZoneOf,
+  sampleTimes,
+  sheetArgs,
+} from "../src/core/review.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("review layout", () => {
@@ -29,6 +38,36 @@ describe("review layout", () => {
     expect(sheetArgs("/r", shots, true).join(" ")).toContain("tile=6x2");
     expect(sheetArgs("/r", shots, false).join(" ")).toContain("tile=4x2");
     expect(sheetArgs("/r", shots.slice(0, 3), true).join(" ")).toContain("tile=3x1");
+  });
+});
+
+describe("safe zones", () => {
+  test("only full-screen vertical video has bands under platform UI", () => {
+    expect(safeZoneOf(1080, 1920)).toEqual(VERTICAL_SAFE_ZONE);
+    expect(safeZoneOf(180, 320)).toEqual(VERTICAL_SAFE_ZONE);
+    expect(safeZoneOf(1080, 1350)).toBeUndefined();
+    expect(safeZoneOf(1080, 1080)).toBeUndefined();
+    expect(safeZoneOf(1920, 1080)).toBeUndefined();
+  });
+
+  test("dims the top and bottom bands and lines their inner edges", () => {
+    const filters = safeZoneFilters({ top: 0.12, bottom: 0.2 });
+
+    expect(filters).toHaveLength(4);
+    expect(filters[0]).toBe("drawbox=x=0:y=0:w=iw:h=ih*0.12:color=black@0.45:t=fill");
+    expect(filters[1]).toBe("drawbox=x=0:y=ih*0.8:w=iw:h=ih*0.2:color=black@0.45:t=fill");
+    expect(filters[2]).toContain("y=ih*0.12:");
+    expect(filters[3]).toContain("y=ih*0.8-2:");
+  });
+
+  test("the checklist names the bands only when the frames show them", () => {
+    const review = { file: "v.mp4", at: "", frames: [], strips: [], notes: [] };
+    const plain = reviewChecklist(review);
+    const shaded = reviewChecklist({ ...review, safeZone: VERTICAL_SAFE_ZONE });
+
+    expect(shaded).toHaveLength(plain.length + 1);
+    expect(shaded.join(" ")).toContain("top 12% and bottom 20%");
+    expect(plain.join(" ")).not.toContain("bands");
   });
 });
 
@@ -59,6 +98,31 @@ function makeCutVideo(path: string): void {
   );
 
   if (generated.exitCode !== 0) throw new Error(generated.stderr.toString());
+}
+
+/** The red channel at the horizontal middle of `file`, `y` of the way down. */
+function redAt(file: string, y: number): number {
+  const read = Bun.spawnSync(
+    [
+      "ffmpeg",
+      "-v",
+      "error",
+      "-i",
+      file,
+      "-vf",
+      `format=rgb24,crop=1:1:iw/2:(ih-1)*${y}`,
+      "-f",
+      "rawvideo",
+      "-pix_fmt",
+      "rgb24",
+      "-",
+    ],
+    { stderr: "pipe" },
+  );
+
+  if (read.exitCode !== 0) throw new Error(read.stderr.toString());
+
+  return read.stdout[0] ?? 0;
 }
 
 describe("reviewing an item's video", () => {
@@ -113,6 +177,31 @@ describe("reviewing an item's video", () => {
       ]);
       expect(await readdir(join(abs, "strips"))).toEqual([]);
       expect(await Bun.file(join(abs, "sheet.jpg")).exists()).toBe(true);
+    },
+    30_000,
+  );
+
+  test.skipIf(!hasFfmpeg)(
+    "dims the safe zone on vertical frames unless asked not to",
+    async () => {
+      const { id, file } = await t.run(addVideo());
+
+      const once = (safeZones?: boolean) =>
+        t.run(reviewMedia(id, file, { times: [2], transitions: [], safeZones }));
+
+      // At 2s the video is solid red, so the red channel shows where the frame was dimmed.
+      const shaded = await once();
+      const frame = join(t.root, shaded.dir, "frames/t002.00.jpg");
+      const middle = redAt(frame, 0.5);
+
+      expect(shaded.safeZone).toEqual(VERTICAL_SAFE_ZONE);
+      expect(redAt(frame, 0.05)).toBeLessThan(middle - 60);
+      expect(redAt(frame, 0.95)).toBeLessThan(middle - 60);
+
+      const clean = await once(false);
+
+      expect(clean.safeZone).toBeUndefined();
+      expect(Math.abs(redAt(frame, 0.05) - redAt(frame, 0.5))).toBeLessThan(20);
     },
     30_000,
   );

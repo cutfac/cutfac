@@ -188,6 +188,14 @@ function FrameReview({ review, video }: { review: MediaReview; video: Media }) {
       {review.sheet === undefined ? null : (
         <Zoomable src={url(review.sheet)} title={t.checks.sheet(video.name)} />
       )}
+      {review.safeZone === undefined ? null : (
+        <p className="text-xs text-muted-foreground">
+          {t.checks.safeZone(
+            Math.round(review.safeZone.top * 100),
+            Math.round(review.safeZone.bottom * 100),
+          )}
+        </p>
+      )}
       {review.strips.map((strip) => (
         <figure key={strip.file} className="flex flex-col gap-1">
           <Zoomable src={url(strip.file)} title={t.checks.strip(formatTime(strip.t))} />

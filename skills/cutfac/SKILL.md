@@ -92,10 +92,14 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    `[9x16] video.mp4`, `[9x16] cover.jpg`, `[3x4] 01-cover.jpg`. One message per slide or scene.
 7. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
    and duration match the video; pad with silence if needed.
-8. `verify_item`, then fix every failed check. Then call `review_media` for each video and open the
-   sheet and strips it returns; open images at phone size. Check that:
-   - every line of text is readable at phone size and inside the safe zone (roughly the top 12% and
-     bottom 20% of 9:16 frames are covered by platform UI);
+8. `verify_item`, then fix every failed check. Then call `review_media` for each video, open the
+   sheet and strips it returns, and go through the checklist it returns; open images at phone size.
+   For each frame, name what it is meant to show before you judge it. Check that:
+   - every line of text is readable at phone size and nothing covers it (a band, a box, another
+     layer);
+   - text and the subject stay out of the safe zone: on 9:16 frames `review_media` dims the top 12%
+     and bottom 20%, which platform UI covers;
+   - each line of text stays up long enough to read twice;
    - only real assets appear, and type and color stay consistent with the brief;
    - no frame catches a transition half done in a way that looks broken;
    - cuts land on the sound beats, and the hook reads in the first 2 seconds;
@@ -154,9 +158,10 @@ Never write API keys or tokens into the format; they stay in the user's environm
 ## Handle feedback
 
 `list_open_feedback` → fix each comment (timecodes are seconds into the named media file) →
-`verify_item` and `review_media` again → `resolve_feedback` with a one-line description of what changed. Do not mark
-an item `done` or `archived`; only the user does. Requests with `waiting` set, or a `run` still running,
-belong to the board's agent, which takes them in turn; leave them unless the user asks.
+`verify_item`, and `review_media` with `times` in the changed part → `resolve_feedback` with a
+one-line description of what changed. Do not mark an item `done` or `archived`; only the user does.
+Requests with `waiting` set, or a `run` still running, belong to the board's agent, which takes them
+in turn; leave them unless the user asks.
 
 Edit requests from the board's chat point at a part of one media file: a range (`timecode` to
 `end`, in seconds), a box on a frame (`region`, fractions of the frame), or both. Their `context`

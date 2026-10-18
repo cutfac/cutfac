@@ -319,6 +319,8 @@ export const en = {
     stale: "The video changed after this review.",
     sheet: (file: string) => `Frames of ${file}`,
     strip: (time: string) => `Motion around ${time}`,
+    safeZone: (top: number, bottom: number) =>
+      `The dimmed top ${top}% and bottom ${bottom}% are where Reels, Shorts, and TikTok put captions and buttons. Nothing important should sit there.`,
     rules: "Upload rules",
     rulesBody: "Check the videos against what the platforms accept.",
     run: "Run checks",

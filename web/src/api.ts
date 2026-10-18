@@ -304,6 +304,8 @@ export interface MediaReview {
   frames: ReviewShot[];
   /** Frames across each transition, where half-finished motion shows. */
   strips: ReviewShot[];
+  /** The bands dimmed on the frames, where platform UI covers the video, as fractions of its height. */
+  safeZone?: { top: number; bottom: number };
   /** What could not be made, and what was left out. */
   notes: string[];
 }

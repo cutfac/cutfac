@@ -2,8 +2,8 @@ import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { type Item, getItem } from "./items.ts";
-import { ffmpeg, probe, sceneCuts } from "./media.ts";
-import { ReviewDoc, type ReviewShot } from "./schema.ts";
+import { aspectOf, ffmpeg, probe, sceneCuts } from "./media.ts";
+import { ReviewDoc, type ReviewShot, type SafeZone } from "./schema.ts";
 import { Workspace, foldersWith, nowIso } from "./workspace.ts";
 
 /** Item subfolder with one review folder per video, named after the video. */
@@ -34,6 +34,37 @@ export interface ReviewOptions {
   readonly times?: ReadonlyArray<number> | undefined;
   /** Seconds to show the motion around; defaults to the detected cuts. */
   readonly transitions?: ReadonlyArray<number> | undefined;
+  /** Shade the bands platform UI covers, on video that has them; on unless false. */
+  readonly safeZones?: boolean | undefined;
+}
+
+/**
+ * Where Reels, Shorts, and TikTok lay their captions, buttons, and progress bar over full-screen
+ * vertical video, as fractions of its height. Wider frames show in a feed with nothing on top.
+ */
+export const VERTICAL_SAFE_ZONE: SafeZone = { top: 0.12, bottom: 0.2 };
+
+/** The bands platform UI covers on a `width`×`height` video, if it has any. */
+export const safeZoneOf = (width: number, height: number): SafeZone | undefined =>
+  aspectOf(width, height) === "9x16" ? VERTICAL_SAFE_ZONE : undefined;
+
+const band = (y: string, h: string) => `drawbox=x=0:y=${y}:w=iw:h=${h}:color=black@0.45:t=fill`;
+
+const edge = (y: string) => `drawbox=x=0:y=${y}:w=iw:h=2:color=yellow@0.9:t=fill`;
+
+/**
+ * ffmpeg filters that dim the bands and line their inner edges, so text or a subject inside them
+ * stands out without being hidden. Run after scaling, so the lines stay two pixels thick.
+ */
+export function safeZoneFilters(zone: SafeZone): string[] {
+  const bottom = 1 - zone.bottom;
+
+  return [
+    band("0", `ih*${zone.top}`),
+    band(`ih*${bottom}`, `ih*${zone.bottom}`),
+    edge(`ih*${zone.top}`),
+    edge(`ih*${bottom}-2`),
+  ];
 }
 
 export interface MediaReview extends ReviewDoc {
@@ -165,6 +196,11 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
   yield* ws.mkdir(`${dir}/strips`);
 
   const portrait = info.height > info.width;
+  const safeZone = options.safeZones === false ? undefined : safeZoneOf(info.width, info.height);
+
+  /** Scale to `width`, then shade the safe zone when there is one. */
+  const fit = (width: number) =>
+    [`scale=${width}:-2`, ...(safeZone === undefined ? [] : safeZoneFilters(safeZone))].join(",");
 
   const frames = yield* Effect.forEach(
     times,
@@ -181,7 +217,7 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
           "-frames:v",
           "1",
           "-vf",
-          `scale=${portrait ? 540 : 960}:-2`,
+          fit(portrait ? 540 : 960),
           "-q:v",
           "3",
           `${abs}/${shot.file}`,
@@ -207,7 +243,7 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
           "-i",
           input,
           "-vf",
-          `fps=${STRIP_FPS},scale=${portrait ? 200 : 320}:-2,` +
+          `fps=${STRIP_FPS},${fit(portrait ? 200 : 320)},` +
             `tile=${STRIP_FRAMES}x1:padding=2:margin=2`,
           "-frames:v",
           "1",
@@ -232,6 +268,7 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
     sheet,
     frames: made,
     strips: strips.flat(),
+    safeZone,
     notes,
   };
 
@@ -239,6 +276,27 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
 
   return { dir, ...doc } satisfies MediaReview;
 });
+
+const percent = (fraction: number) => `${Math.round(fraction * 100)}%`;
+
+/**
+ * What to check on a review's frames, for the agent that made it. Each point asks what a viewer
+ * with the sound off sees, since a frame can match the code that drew it and still fail them.
+ */
+export function reviewChecklist(review: ReviewDoc): string[] {
+  const { safeZone } = review;
+
+  return [
+    "For each frame, say what it is meant to show, then check that a viewer with the sound off sees it: nothing covers it (a band, a box, another layer), it reads at phone size, and nothing important is cut off at the edges.",
+    ...(safeZone === undefined
+      ? []
+      : [
+          `The dimmed bands, the top ${percent(safeZone.top)} and bottom ${percent(safeZone.bottom)} between the yellow lines, are where platform captions and buttons cover the video. Text, a face, or the thing a frame is about inside them is a defect, even when it looks fine here.`,
+        ]),
+    "In each strip, check that motion lands cleanly and that nothing shows for only a frame or two. A line of text has to stay up long enough to read twice; sample its first and last frames with `times` when unsure.",
+    "Never call a frame clean without naming what it shows. Report the three largest defects with their times, or say why there are none.",
+  ];
+}
 
 /** The last review of each of the item's videos that is still there; unreadable ones are skipped. */
 export const listReviews = Effect.fn("review.listReviews")(function* (item: Item) {

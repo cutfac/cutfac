@@ -608,7 +608,7 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   }
 
   lines.push(
-    "Use ffmpeg/ffprobe or the format's render command. Afterwards run verify_item, look at a frame from the changed part, then call resolve_feedback with this feedback id and one line on what changed.",
+    "Use ffmpeg/ffprobe or the format's render command. Afterwards run verify_item; for a video, call review_media with `times` in and around the changed part and go through its checklist; for an image, open it at phone size. Then call resolve_feedback with this feedback id and one line on what changed.",
     "Finish with a short, plain summary for someone who does not use video editors. If the request is unclear, ask instead of guessing and leave the feedback open.",
   );
 
