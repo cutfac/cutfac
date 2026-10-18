@@ -123,7 +123,8 @@ plus content we prepare for you.
   are never uploaded.
 - Agents run on your machine with your own Claude Code or Codex login. Cutfac never asks
   for, stores or forwards your API keys.
-- The server listens on `127.0.0.1` unless you pass `--host`.
+- The server listens on `127.0.0.1` unless you pass `--host`, and refuses requests that other
+  websites send it from your browser. [SECURITY.md](SECURITY.md) covers how to report a problem.
 - It only goes online when you ask it to: learning from a link (videos through your own `yt-dlp`)
   or opening the feedback form. The Mac app also checks cutfac.com for updates, sending your
   license key and nothing about your workspace.
