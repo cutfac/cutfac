@@ -1,7 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AgentRun, Feedback, RunMessage } from "../web/src/api.ts";
-import { closingReply, NO_RUN, reduceRun, runView, type LiveRun } from "../web/src/lib/run.ts";
+import { en } from "../web/src/i18n/en.tsx";
+import { ko } from "../web/src/i18n/ko.tsx";
+import {
+  closingReply,
+  groupSteps,
+  NO_RUN,
+  reduceRun,
+  runView,
+  toolCounts,
+  type LiveRun,
+  type RunStep,
+} from "../web/src/lib/run.ts";
 import {
   describeTarget,
   NO_TARGET,
@@ -189,5 +200,53 @@ describe("run transcript", () => {
       status: undefined,
       running: false,
     });
+  });
+});
+
+describe("tool calls in a row", () => {
+  const read = { kind: "tool", name: "Read", detail: "brief.md" } as const;
+  const shell = { kind: "tool", name: "shell", detail: "bun test" } as const;
+
+  test("gather into one segment until the agent says something", () => {
+    const steps: ReadonlyArray<RunStep> = [
+      read,
+      read,
+      { kind: "text", text: "Now the cut." },
+      shell,
+      { kind: "text", text: "  " },
+      read,
+    ];
+
+    expect(groupSteps(steps)).toEqual([
+      { kind: "tools", key: 0, tools: [read, read] },
+      { kind: "text", key: 2, text: "Now the cut." },
+      { kind: "tools", key: 3, tools: [shell, read] },
+    ]);
+  });
+
+  test("keep their key while more calls stream in", () => {
+    const looking = { kind: "text", text: "Looking." } as const;
+
+    expect(groupSteps([looking, read]).at(-1)?.key).toBe(1);
+    expect(groupSteps([looking, read, read, shell]).at(-1)?.key).toBe(1);
+  });
+
+  test("are counted by kind, in a fixed order", () => {
+    const steps = [shell, read, { kind: "tool", name: "mcp__cutfac__render" } as const, read];
+
+    expect(toolCounts([...steps, { kind: "tool", name: "Edit" }])).toEqual([
+      { kind: "read", count: 2 },
+      { kind: "edit", count: 1 },
+      { kind: "command", count: 1 },
+      { kind: "other", count: 1 },
+    ]);
+    expect(toolCounts([])).toEqual([]);
+  });
+
+  test("sum up in each language", () => {
+    const counts = toolCounts([read, read, read, shell, { kind: "tool", name: "Grep" }]);
+
+    expect(en.chat.toolSummary(counts)).toBe("Read 3 files, searched once, ran 1 command");
+    expect(ko.chat.toolSummary(counts)).toBe("파일 3개 읽음, 1번 검색함, 명령 1개 실행함");
   });
 });

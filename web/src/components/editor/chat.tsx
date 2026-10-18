@@ -1,5 +1,6 @@
 import {
   CheckIcon,
+  ChevronRightIcon,
   CircleStopIcon,
   ClipboardCopyIcon,
   CrosshairIcon,
@@ -19,6 +20,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Empty,
   EmptyDescription,
@@ -60,12 +62,15 @@ import {
 import { hasResult, inOrder, linePaused, waitingLine } from "../../lib/requests.ts";
 import {
   closingReply,
+  groupSteps,
   liveFor,
   runView,
+  toolCounts,
   type LiveRun,
   type OnRun,
   type RunStep,
   type RunView,
+  type ToolStep,
 } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
 import { CompareDialog } from "./compare-dialog.tsx";
@@ -96,7 +101,7 @@ const answerer = (
 export const clockTime = (at: string, locale: string) =>
   new Date(at).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 
-/** Past this many steps, a finished run folds them away behind its reply. */
+/** Past this many stretches of text and tool calls, a finished run folds them away behind its reply. */
 const FOLD_STEPS = 4;
 
 const errorText = (cause: Error | string) => (cause instanceof Error ? cause.message : cause);
@@ -404,9 +409,7 @@ export function RunReport({
   return (
     <>
       <MessageHeader>{answerer(run.agent, run, statuses, t)}</MessageHeader>
-      {steps.length > 0 ? (
-        <Steps steps={steps} folded={!run.running && steps.length > FOLD_STEPS} />
-      ) : null}
+      {steps.length > 0 ? <Steps steps={steps} running={run.running} /> : null}
       {reply === undefined ? null : <Reply text={reply} />}
       {run.running ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -432,12 +435,16 @@ export function RunReport({
   );
 }
 
-/** What the agent did on the way, folded once it is done if there were many steps. */
-function Steps({ steps, folded }: { steps: ReadonlyArray<RunStep>; folded: boolean }) {
+/**
+ * What the agent did on the way: what it said, with each run of tool calls summed up in a line
+ * that opens to list them. Once it is done, many of these fold away behind the reply.
+ */
+function Steps({ steps, running }: { steps: ReadonlyArray<RunStep>; running: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const t = useMessages();
+  const segments = groupSteps(steps);
 
-  if (folded && !expanded) {
+  if (!running && segments.length > FOLD_STEPS && !expanded) {
     return (
       <Button variant="ghost" size="xs" className="self-start" onClick={() => setExpanded(true)}>
         <WrenchIcon data-icon="inline-start" />
@@ -448,22 +455,63 @@ function Steps({ steps, folded }: { steps: ReadonlyArray<RunStep>; folded: boole
 
   return (
     <div className="flex flex-col gap-1.5">
-      {steps.map((step, index) =>
-        step.kind === "tool" ? (
-          // oxlint-disable-next-line react/no-array-index-key -- steps only ever append, so position is identity
-          <div
-            key={index}
-            className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground"
-          >
-            <WrenchIcon className="size-3 shrink-0" />
-            <span className="shrink-0 font-medium text-foreground">{step.name}</span>
-            {step.detail === undefined ? null : <span className="truncate">{step.detail}</span>}
-          </div>
-        ) : (
-          // oxlint-disable-next-line react/no-array-index-key -- steps only ever append, so position is identity
-          <Reply key={index} text={step.text} />
-        ),
-      )}
+      {segments.map((segment, index) => {
+        if (segment.kind === "text") return <Reply key={segment.key} text={segment.text} />;
+
+        const [only] = segment.tools;
+
+        // One call says no more than a summary of it would.
+        if (segment.tools.length === 1 && only !== undefined) {
+          return <ToolLine key={segment.key} tool={only} />;
+        }
+
+        const active = running && index === segments.length - 1;
+
+        return <ToolGroup key={segment.key} tools={segment.tools} active={active} />;
+      })}
+    </div>
+  );
+}
+
+/**
+ * Tool calls in a row, closed to a summary as Claude Code and Codex show them. While the agent is
+ * still on them, the call it made last shows under the summary.
+ */
+function ToolGroup({ tools, active }: { tools: ReadonlyArray<ToolStep>; active: boolean }) {
+  const [open, setOpen] = useState(false);
+  const t = useMessages();
+  const latest = tools.at(-1);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger render={<Button variant="ghost" size="xs" />}>
+        <WrenchIcon data-icon="inline-start" />
+        {t.chat.toolSummary(toolCounts(tools))}
+        <ChevronRightIcon data-icon="inline-end" className={open ? "rotate-90" : undefined} />
+      </CollapsibleTrigger>
+      {active && !open && latest !== undefined ? (
+        <div className="mt-1.5 ml-3.5 border-l pl-3">
+          <ToolLine tool={latest} />
+        </div>
+      ) : null}
+      <CollapsibleContent>
+        <div className="mt-1.5 ml-3.5 flex max-h-64 flex-col gap-1.5 overflow-y-auto border-l pl-3">
+          {tools.map((tool, index) => (
+            // oxlint-disable-next-line react/no-array-index-key -- calls only ever append, so position is identity
+            <ToolLine key={index} tool={tool} />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function ToolLine({ tool }: { tool: ToolStep }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+      <WrenchIcon className="size-3 shrink-0" />
+      <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
+      {tool.detail === undefined ? null : <span className="truncate">{tool.detail}</span>}
     </div>
   );
 }

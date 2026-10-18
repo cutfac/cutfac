@@ -1,4 +1,13 @@
+import type { ToolKind } from "../lib/run.ts";
 import type { Messages } from "./en.tsx";
+
+const TOOL_PHRASES: Record<ToolKind, (count: number) => string> = {
+  read: (count) => `파일 ${count}개 읽음`,
+  search: (count) => `${count}번 검색함`,
+  edit: (count) => `파일 ${count}개 수정함`,
+  command: (count) => `명령 ${count}개 실행함`,
+  other: (count) => `도구 ${count}번 사용함`,
+};
 
 /** Korean copy, in the polite 해요체 the rest of the product uses. */
 export const ko: Messages = {
@@ -384,6 +393,7 @@ export const ko: Messages = {
     notSent:
       "아직 에이전트에게 보내지 않았어요. 여기서 실행하거나 프롬프트를 복사해서 Claude Code나 Codex에 붙여넣으세요.",
     showSteps: (count) => `단계 ${count}개 보기`,
+    toolSummary: (counts) => counts.map(({ kind, count }) => TOOL_PHRASES[kind](count)).join(", "),
     runWith: (agent) => `${agent}로 실행`,
     retryWith: (agent) => `${agent}로 다시 시도`,
     copyPrompt: "프롬프트 복사",

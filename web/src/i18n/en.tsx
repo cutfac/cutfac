@@ -2,10 +2,21 @@ import type { ReactNode } from "react";
 
 import type { AgentChoice, DetailField, LearnedKind, Status } from "../api.ts";
 import type { ImportState } from "../lib/imports.ts";
+import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
+
+const TOOL_PHRASES: Record<ToolKind, (count: number) => string> = {
+  read: (count) => (count === 1 ? "read 1 file" : `read ${count} files`),
+  search: (count) => (count === 1 ? "searched once" : `searched ${count} times`),
+  edit: (count) => (count === 1 ? "edited 1 file" : `edited ${count} files`),
+  command: (count) => (count === 1 ? "ran 1 command" : `ran ${count} commands`),
+  other: (count) => (count === 1 ? "used 1 tool" : `used ${count} tools`),
+};
+
+const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * Every piece of copy in the board. Other languages are typed as `Messages`, so a missing or
@@ -392,6 +403,9 @@ export const en = {
     stopped: "Stopped before it finished.",
     notSent: "Not sent to an agent yet. Run it here, or copy the prompt into Claude Code or Codex.",
     showSteps: (count: number) => (count === 1 ? "Show 1 step" : `Show ${count} steps`),
+    /** Sums up tool calls in a row, as in "Read 3 files, ran 2 commands". */
+    toolSummary: (counts: ReadonlyArray<ToolCount>) =>
+      capitalized(counts.map(({ kind, count }) => TOOL_PHRASES[kind](count)).join(", ")),
     runWith: (agent: string) => `Run with ${agent}`,
     retryWith: (agent: string) => `Try again with ${agent}`,
     copyPrompt: "Copy prompt",

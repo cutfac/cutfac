@@ -162,6 +162,76 @@ export function closingReply(steps: ReadonlyArray<RunStep>, reply: string | unde
   return { steps: repeated ? steps.toSpliced(index, 1) : steps, reply: text };
 }
 
+export type ToolStep = Extract<RunStep, { kind: "tool" }>;
+
+/** A stretch of a run as the chat lays it out: something the agent said, or tool calls in a row. */
+export type StepSegment =
+  | { readonly kind: "text"; readonly key: number; readonly text: string }
+  | { readonly kind: "tools"; readonly key: number; readonly tools: ReadonlyArray<ToolStep> };
+
+/**
+ * Gather tool calls in a row, so a run reads as what the agent said with what it did in between.
+ * A segment is keyed by its first step's position, which stays put while the run streams.
+ */
+export function groupSteps(steps: ReadonlyArray<RunStep>): StepSegment[] {
+  // Built in place: each call joins the segment before it when that one holds calls too.
+  const segments: Array<
+    { kind: "text"; key: number; text: string } | { kind: "tools"; key: number; tools: ToolStep[] }
+  > = [];
+
+  for (const [key, step] of steps.entries()) {
+    const last = segments.at(-1);
+
+    // Blank text between two calls shows nothing, so it should not split them either.
+    if (step.kind === "text") {
+      if (step.text.trim() !== "") segments.push({ kind: "text", key, text: step.text });
+    } else if (last?.kind === "tools") last.tools.push(step);
+    else segments.push({ kind: "tools", key, tools: [step] });
+  }
+
+  return segments;
+}
+
+/** What tool calls can do, in the order a summary of several names them. */
+const TOOL_KIND_ORDER = ["read", "search", "edit", "command", "other"] as const;
+
+export type ToolKind = (typeof TOOL_KIND_ORDER)[number];
+
+/** Claude Code's tools, then the names Codex's events get; anything else is `other`. */
+const TOOL_KINDS = new Map<string, ToolKind>([
+  ["Read", "read"],
+  ["NotebookRead", "read"],
+  ["Glob", "search"],
+  ["Grep", "search"],
+  ["LS", "search"],
+  ["WebSearch", "search"],
+  ["WebFetch", "search"],
+  ["Edit", "edit"],
+  ["MultiEdit", "edit"],
+  ["Write", "edit"],
+  ["NotebookEdit", "edit"],
+  ["Bash", "command"],
+  ["BashOutput", "command"],
+  ["shell", "command"],
+  ["edit", "edit"],
+]);
+
+const toolKind = (name: string): ToolKind => TOOL_KINDS.get(name) ?? "other";
+
+export interface ToolCount {
+  readonly kind: ToolKind;
+  readonly count: number;
+}
+
+/** How many calls of each kind `tools` holds, in that order, leaving out the kinds it has none of. */
+export function toolCounts(tools: ReadonlyArray<ToolStep>): ToolCount[] {
+  return TOOL_KIND_ORDER.flatMap((kind) => {
+    const count = tools.filter((tool) => toolKind(tool.name) === kind).length;
+
+    return count === 0 ? [] : [{ kind, count }];
+  });
+}
+
 /** One run as a message shows it, streamed or saved. */
 export interface RunView {
   readonly agent: AgentName | undefined;
