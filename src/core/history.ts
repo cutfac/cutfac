@@ -189,6 +189,27 @@ const putVersion = Effect.fnUntraced(function* (item: Item, doc: HistoryDoc, ver
   return next;
 });
 
+/**
+ * Put a media file back to the version it last held, if it changed since. A file with no saved
+ * version did not exist before, so it is removed.
+ */
+export const putBack = Effect.fn("history.putBack")(function* (item: Item, media: string) {
+  const ws = yield* Workspace;
+  const doc = yield* readHistory(item);
+  const head = doc.heads[media];
+  const path = `${item.dir}/${media}`;
+
+  if (head === undefined) return yield* ws.remove(path);
+
+  if (yield* ws.exists(path)) {
+    const { size, mtime } = yield* ws.stat(path);
+
+    if (head.size === size && head.mtime === mtime) return;
+  }
+
+  yield* writeHistory(item, yield* putVersion(item, doc, head.version));
+});
+
 // ---------------------------------------------------------------------------------------------
 // Item fields
 

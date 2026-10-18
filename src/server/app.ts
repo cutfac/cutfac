@@ -17,6 +17,7 @@ import {
   approveEdit,
   buildEditPrompt,
   cancelWaiting,
+  pickVariant,
   requestEdit,
   resolveEdit,
   restoreBefore,
@@ -161,6 +162,11 @@ const NewItemBody = Schema.Struct({
 });
 
 const FeedbackRef = Schema.Struct({ feedbackId: Schema.NonEmptyString });
+
+const PickBody = Schema.Struct({
+  feedbackId: Schema.NonEmptyString,
+  variantId: Schema.NonEmptyString,
+});
 
 const ResolveBody = Schema.Struct({
   feedbackId: Schema.NonEmptyString,
@@ -738,6 +744,15 @@ const apiRoutes = (options: ServerOptions) =>
       withId((id) =>
         Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
           Effect.flatMap(approveEdit(id, body.feedbackId), itemDetail),
+        ),
+      ),
+    ),
+    json(
+      "POST",
+      "/api/item/edit/pick",
+      withId((id) =>
+        Effect.flatMap(HttpServerRequest.schemaBodyJson(PickBody), (body) =>
+          Effect.flatMap(pickVariant(id, body.feedbackId, body.variantId), itemDetail),
         ),
       ),
     ),

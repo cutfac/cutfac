@@ -171,6 +171,13 @@ change anything. Write the result over the same media file name and never touch 
 user compares the two and keeps or rolls back the edit. Change only the selected part unless the
 request says otherwise, and end with a plain summary for someone who does not use video editors.
 
+A request with `variants.wanted` asks for that many versions to compare side by side. Make clearly
+different takes, not small tweaks of one. For each, render it over the same media file name from the
+request (not from the last version), check it, then `save_variant` with a few words on how it
+differs; saving under a label already used replaces that version. Call `resolve_feedback` once,
+after the last. The board puts the media back as it was until the user picks a version or keeps
+none. You can also offer versions unasked when a request leaves a real choice of look or pacing.
+
 ## Rights
 
 Record the provenance of music, footage, and fonts in the item's `notes`. Audio that is cleared to

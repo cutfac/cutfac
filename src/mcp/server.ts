@@ -4,7 +4,7 @@ import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 
 import { SERVER_NAME } from "../core/agents.ts";
-import { resolveEdit } from "../core/edits.ts";
+import { resolveEdit, saveVariant } from "../core/edits.ts";
 import {
   CommandFailed,
   Conflict,
@@ -36,6 +36,7 @@ import {
   LearnedKind,
   PreprocessResult,
   SafeZone,
+  Variant,
   WorkspaceConfig,
 } from "../core/schema.ts";
 import {
@@ -355,6 +356,7 @@ const ListOpenFeedback = tool("list_open_feedback", {
     "All unresolved edit requests the user left on the board, across items. Each can target a time range " +
     "(timecode → end, seconds) and a region (x, y, w, h as fractions of the frame at `at` seconds). " +
     "context holds item-relative files prepared for you: clip (the range), frame (red box = region), before (saved copy). " +
+    "variants.wanted asks for that many versions to compare (see save_variant); variants.saved lists the ones saved so far. " +
     "Requests with `waiting` set, or a `run` still running, are the board's agent's; leave them unless the user asks.",
   success: Schema.Struct({ feedback: Schema.Array(OpenFeedbackEntry) }),
   readonly: true,
@@ -363,9 +365,34 @@ const ListOpenFeedback = tool("list_open_feedback", {
 const ResolveFeedback = tool("resolve_feedback", {
   description:
     "Mark an edit request as handled and describe what changed. Call it after writing the edited media; " +
-    "the edited file is saved as the 'after' version the user compares and approves.",
+    "the edited file is saved as the 'after' version the user compares and approves. " +
+    "With versions saved by save_variant, the media goes back to how it was until the user picks one on the board.",
   parameters: Schema.Struct({ item: Id, feedbackId: Schema.String, resolution: Schema.String }),
   success: Ok,
+});
+
+const SaveVariant = tool("save_variant", {
+  description:
+    "Save the media file as it is now as one version of an edit request, for the user to compare side by side and pick from on the board. " +
+    "Use it when the request asks for versions (variants.wanted), or when the user should choose between takes: render each version over the same file name, " +
+    "then save it with a few words on how it differs. Saving under a label already used replaces that version. Call resolve_feedback once, after the last.",
+  parameters: Schema.Struct({
+    item: Id,
+    feedbackId: Schema.String,
+    label: Schema.String.annotate(
+      describe("how this version differs, in a few words, such as 'big bold captions'"),
+    ),
+    media: Schema.optional(
+      Schema.String.annotate(
+        describe("the media file name; defaults to the request's file, or the item's only one"),
+      ),
+    ),
+  }),
+  success: Schema.Struct({
+    variant: Variant,
+    saved: Schema.Finite.annotate(describe("versions of the request saved so far")),
+    wanted: Schema.optional(Schema.Finite.annotate(describe("versions the user asked for"))),
+  }),
 });
 
 const ListFormats = tool("list_formats", {
@@ -436,6 +463,7 @@ export const CutfacToolkit = Toolkit.make(
   ReviewMedia,
   ListOpenFeedback,
   ResolveFeedback,
+  SaveVariant,
   ListFormats,
   GetFormat,
   SaveFormat,
@@ -624,6 +652,15 @@ const handlers = CutfacToolkit.toLayer(
 
       resolve_feedback: ({ item, feedbackId, resolution }) =>
         run(Effect.as(resolveEdit(item, feedbackId, resolution), { ok: true } as const)),
+
+      save_variant: ({ item, feedbackId, label, media }) =>
+        run(
+          Effect.map(saveVariant(item, feedbackId, label, media), ({ variant, saved, wanted }) => ({
+            variant,
+            saved,
+            wanted,
+          })),
+        ),
 
       list_formats: () =>
         run(

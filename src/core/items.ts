@@ -303,6 +303,10 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
     timecode: input.timecode,
     end: input.end,
     region: input.region,
+    variants:
+      input.variants === undefined || input.variants < 2
+        ? undefined
+        : { wanted: input.variants, media: input.media, saved: [] },
     waiting: waiting?.agent,
     model: waiting?.model,
     effort: waiting?.effort,

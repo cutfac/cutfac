@@ -2,28 +2,33 @@ import { DateTime, Effect, Option, Path } from "effect";
 
 import { InvalidRequest, type NotFound } from "./errors.ts";
 import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
-import { type MediaCapture, recordMedia } from "./history.ts";
+import { type MediaCapture, putBack, recordMedia } from "./history.ts";
 import {
+  type Decision,
   type Item,
   addFeedback,
   findFeedback,
   getItem,
   mutateItem,
   resolveFeedback,
+  shortId,
   updateFeedback,
   withDecision,
 } from "./items.ts";
 import { ABOUT_FILE } from "./learn.ts";
 import type { Format } from "./library.ts";
 import { extension, ffmpeg, type MediaKind } from "./media.ts";
-import type {
-  AgentName,
-  AgentPick,
-  EditContext,
-  Feedback,
-  FeedbackInput,
-  ItemDoc,
-  Region,
+import {
+  type AgentName,
+  type AgentPick,
+  type EditContext,
+  type Feedback,
+  type FeedbackInput,
+  type ItemDoc,
+  MAX_VARIANTS,
+  type Region,
+  type Variant,
+  type Variants,
 } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -31,6 +36,8 @@ import { Workspace, nowIso } from "./workspace.ts";
 const POINT_CLIP_SECONDS = 3;
 
 export const editDir = (item: Item, feedbackId: string) => `${item.dir}/edits/${feedbackId}`;
+
+const variantsDir = (item: Item, feedbackId: string) => `${editDir(item, feedbackId)}/variants`;
 
 /** Item-relative path (the form feedback.context stores) for a workspace-relative path. */
 const itemRel = (item: Item, rel: string) => rel.slice(item.dir.length + 1);
@@ -308,6 +315,7 @@ export const baselineMillis = (f: Feedback) => millis(f.baseline ?? f.at);
  * Save the media as it is now as the "after" side, if it changed since the request.
  * Agents edit the media file in place, so a later request would otherwise lose this result.
  * Files the request changed are also saved into the item's history, so they can be undone.
+ * While versions wait for the user's pick, the media is put back as it was instead.
  */
 export const snapshotAfter = Effect.fn("edits.snapshotAfter")(function* (
   id: string,
@@ -317,6 +325,14 @@ export const snapshotAfter = Effect.fn("edits.snapshotAfter")(function* (
   const f = yield* findFeedback(item, feedbackId);
 
   if (f.decision !== undefined) return item;
+
+  // The media stays as it was until the user picks one of the versions.
+  if (pendingVariants(f)) {
+    yield* putBack(item, f.variants.media);
+
+    return yield* getItem(id);
+  }
+
   const after = yield* saveAfter(item, f);
 
   const captures = item.media.map(({ name }): MediaCapture => {
@@ -339,6 +355,10 @@ export const snapshotAfter = Effect.fn("edits.snapshotAfter")(function* (
   );
 });
 
+/** Where a request keeps its result of `media`. */
+const afterFile = (item: Item, feedbackId: string, media: string) =>
+  `${editDir(item, feedbackId)}/after.${extension(media)}`;
+
 /** Copy the request's media to its "after" file once it changed. Returns the item-relative copy. */
 const saveAfter = Effect.fnUntraced(function* (item: Item, f: Feedback) {
   const ws = yield* Workspace;
@@ -354,7 +374,7 @@ const saveAfter = Effect.fnUntraced(function* (item: Item, f: Feedback) {
   const { mtime } = yield* ws.stat(source);
 
   if (mtime <= baselineMillis(f)) return undefined;
-  const after = `${editDir(item, f.id)}/after.${extension(mediaName)}`;
+  const after = afterFile(item, f.id, mediaName);
   yield* ws.copy(source, after);
 
   return itemRel(item, after);
@@ -376,7 +396,12 @@ export const approveEdit = Effect.fn("edits.approveEdit")(function* (
   id: string,
   feedbackId: string,
 ) {
-  yield* snapshotAfter(id, feedbackId);
+  const item = yield* snapshotAfter(id, feedbackId);
+
+  if (pendingVariants(yield* findFeedback(item, feedbackId))) {
+    return yield* new InvalidRequest({ message: "Pick one of the versions, or keep none" });
+  }
+
   const now = yield* nowIso;
 
   return yield* mutateItem(id, (doc) =>
@@ -390,10 +415,12 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   feedbackId: string,
 ) {
   const ws = yield* Workspace;
-  yield* snapshotAfter(id, feedbackId);
-  const item = yield* getItem(id);
+  const item = yield* snapshotAfter(id, feedbackId);
   const f = yield* findFeedback(item, feedbackId);
   const before = f.context?.before;
+
+  // Settling the versions already put the media back.
+  if (pendingVariants(f)) return yield* closeVariants(item, feedbackId, "restored");
 
   if (f.media === undefined || before === undefined) {
     return yield* new InvalidRequest({ message: "This request has no saved before version" });
@@ -406,6 +433,165 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   return yield* mutateItem(id, (doc) =>
     updateFeedback(doc, id, feedbackId, (entry) => withDecision(entry, "restored", now)),
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// Versions to compare
+
+/** A request with versions saved that the user has not picked from yet. */
+export type PendingVariants = Feedback & {
+  readonly variants: Variants & { readonly media: string };
+};
+
+export const pendingVariants = (f: Feedback): f is PendingVariants =>
+  f.decision === undefined && f.variants?.media !== undefined && f.variants.saved.length > 0;
+
+/** The file a version is of when the agent does not name one. */
+const variantMedia = (item: Item, f: Feedback) =>
+  f.variants?.media ?? f.media ?? (item.media.length === 1 ? item.media[0]?.name : undefined);
+
+/**
+ * Save the media as it is now as one version of a request, for the user to compare with the
+ * others and pick from. Saving again under the same label replaces that version.
+ */
+export const saveVariant = Effect.fn("edits.saveVariant")(function* (
+  id: string,
+  feedbackId: string,
+  label: string,
+  mediaName?: string,
+) {
+  const ws = yield* Workspace;
+  const item = yield* getItem(id);
+  const f = yield* findFeedback(item, feedbackId);
+  const name = mediaName ?? variantMedia(item, f);
+  const fixed = f.variants?.media ?? f.media;
+  const title = label.trim();
+  const saved = f.variants?.saved ?? [];
+  const replaced = saved.find((v) => v.label === title);
+
+  if (f.decision !== undefined) {
+    return yield* new InvalidRequest({ message: `The user already decided on ${feedbackId}` });
+  }
+
+  if (title === "") return yield* new InvalidRequest({ message: "A version needs a label" });
+
+  if (name === undefined) {
+    return yield* new InvalidRequest({ message: "Name the media file this is a version of" });
+  }
+
+  if (fixed !== undefined && name !== fixed) {
+    return yield* new InvalidRequest({ message: `Versions of this request are of ${fixed}` });
+  }
+
+  if (!item.media.some((m) => m.name === name)) {
+    return yield* new InvalidRequest({ message: `No media named ${name} on ${id}` });
+  }
+
+  // While the user compares, the media goes back to how it was, so that has to be saved.
+  if (f.media !== undefined && f.context?.before === undefined) {
+    return yield* new InvalidRequest({
+      message: `${feedbackId} has no saved before version to put back while the user compares`,
+    });
+  }
+
+  if (replaced === undefined && saved.length >= MAX_VARIANTS) {
+    return yield* new InvalidRequest({
+      message: `A request holds at most ${MAX_VARIANTS} versions; save under a label already used to replace one`,
+    });
+  }
+
+  const variantId = replaced?.id ?? (yield* shortId);
+  const file = `${variantsDir(item, f.id)}/${variantId}.${extension(name)}`;
+  yield* ws.copy(`${item.dir}/${name}`, file);
+
+  const variant: Variant = {
+    id: variantId,
+    label: title,
+    file: itemRel(item, file),
+    at: yield* nowIso,
+  };
+
+  const next = yield* mutateItem(id, (doc) =>
+    updateFeedback(doc, id, feedbackId, (entry) => {
+      const current = entry.variants?.saved ?? [];
+
+      const versions = current.some((v) => v.id === variantId)
+        ? current.map((v) => (v.id === variantId ? variant : v))
+        : [...current, variant];
+
+      return { ...entry, variants: { ...entry.variants, media: name, saved: versions } };
+    }),
+  );
+
+  const variants = (yield* findFeedback(next, feedbackId)).variants;
+
+  return { item: next, variant, saved: variants?.saved.length ?? 0, wanted: variants?.wanted };
+});
+
+/** The user keeps one of the versions: it becomes the request's result, and the others go. */
+export const pickVariant = Effect.fn("edits.pickVariant")(function* (
+  id: string,
+  feedbackId: string,
+  variantId: string,
+) {
+  const ws = yield* Workspace;
+  const item = yield* snapshotAfter(id, feedbackId);
+  const f = yield* findFeedback(item, feedbackId);
+
+  if (!pendingVariants(f)) {
+    return yield* new InvalidRequest({ message: `No versions to pick from on ${feedbackId}` });
+  }
+
+  const chosen = f.variants.saved.find((v) => v.id === variantId);
+
+  if (chosen === undefined) {
+    return yield* new InvalidRequest({ message: `No version ${variantId} on ${feedbackId}` });
+  }
+
+  const { media } = f.variants;
+  const after = afterFile(item, f.id, media);
+  yield* ws.copy(`${item.dir}/${chosen.file}`, after);
+  yield* ws.copy(after, `${item.dir}/${media}`);
+  const file = itemRel(item, after);
+  yield* recordMedia(item, [{ media, file, base: f.context?.before }], {
+    cause: "edit",
+    feedbackId,
+  });
+
+  return yield* closeVariants(item, feedbackId, "approved", chosen.label, file);
+});
+
+/**
+ * Record the user's verdict on a request's versions, with the one kept, if any, then delete them.
+ * The verdict goes first so a failed delete leaves stray files, not versions that point at nothing.
+ */
+const closeVariants = Effect.fnUntraced(function* (
+  item: Item,
+  feedbackId: string,
+  decision: Decision,
+  picked?: string,
+  after?: string,
+) {
+  const ws = yield* Workspace;
+  const now = yield* nowIso;
+
+  const next = yield* mutateItem(item.id, (doc) =>
+    updateFeedback(doc, item.id, feedbackId, (entry) =>
+      withDecision(
+        {
+          ...entry,
+          context: after === undefined ? entry.context : { ...entry.context, after },
+          variants: { ...entry.variants, saved: [], picked },
+        },
+        decision,
+        now,
+      ),
+    ),
+  );
+
+  yield* ws.remove(variantsDir(item, feedbackId));
+
+  return next;
 });
 
 /** `75.25` → `1:15.3`. */
@@ -510,6 +696,7 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   const ws = yield* Workspace;
   const abs = (rel: string) => ws.abs(`${item.dir}/${rel}`);
   const folder = yield* ws.abs(item.dir);
+  const wanted = f.variants?.wanted ?? 1;
 
   const lines = [
     `Edit request ${f.id} on content item "${item.id}" (${item.doc.title}) in the Cutfac workspace at ${ws.root}. Follow the cutfac skill.`,
@@ -585,7 +772,9 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
 
     lines.push(
       "",
-      "Change only what the request asks for. Write the result over the same media file name; the previous version is already saved, and the user compares before and after on the board.",
+      wanted > 1
+        ? "Change only what the request asks for. The media as it was is already saved."
+        : "Change only what the request asks for. Write the result over the same media file name; the previous version is already saved, and the user compares before and after on the board.",
     );
   } else if (item.media.length > 0) {
     const files = yield* Effect.forEach(item.media, (m) => abs(m.name));
@@ -604,6 +793,16 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
       `- The item has no video yet. Make it in ${folder}, named like \`[${aspect}] ${item.id.split("/").at(-1) ?? "video"}.mp4\` (the bracket is the aspect ratio).`,
       "",
       `Render an ${video} that fits the request and the item brief.`,
+    );
+  }
+
+  if (wanted > 1) {
+    lines.push(
+      "",
+      `The user asked for ${wanted} versions to compare side by side and pick from. Make ${wanted} clearly different takes on the request, not small tweaks of one.`,
+      "For each: render it in full over the same file name, built from the request rather than from the previous version; check it as below; then call save_variant with this feedback id and a few words on how it differs. Saving under a label already used replaces that version.",
+      "Call resolve_feedback once, after the last version. The board then puts the media back as it was until the user picks one.",
+      "",
     );
   }
 

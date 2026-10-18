@@ -58,6 +58,7 @@ export const MCP_WRITE_TOOLS = [
   "update_item",
   "review_media",
   "resolve_feedback",
+  "save_variant",
   "save_format",
 ] as const;
 

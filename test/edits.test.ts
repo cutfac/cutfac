@@ -28,16 +28,25 @@ import {
   drawboxFilter,
   formatTimecode,
   frameArgs,
+  pickVariant,
   requestEdit,
   resolveEdit,
   restoreBefore,
   rewordWaiting,
+  saveVariant,
   waitingLine,
 } from "../src/core/edits.ts";
 import { Conflict, InvalidRequest } from "../src/core/errors.ts";
+import { readHistory } from "../src/core/history.ts";
 import { addFeedback, createItem, getItem, resolveFeedback } from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";
-import { type AgentPick, Feedback, FeedbackInput, FormatDoc } from "../src/core/schema.ts";
+import {
+  type AgentPick,
+  Feedback,
+  FeedbackInput,
+  FormatDoc,
+  MAX_VARIANTS,
+} from "../src/core/schema.ts";
 import type { Workspace } from "../src/core/workspace.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -840,4 +849,180 @@ describe("the waiting line", () => {
     },
     20_000,
   );
+});
+
+const feedbackOf = (item: { doc: { feedback: ReadonlyArray<Feedback> } }, id: string) =>
+  item.doc.feedback.find((f) => f.id === id);
+
+describe("versions to compare", () => {
+  const VIDEO = "[9x16] video.mp4";
+  let t: TestWorkspace;
+
+  beforeEach(async () => {
+    t = await makeWorkspace();
+  });
+
+  afterEach(() => t.remove());
+
+  const newItem = () => t.run(Effect.map(createItem({ title: "Clip" }), (item) => item.id));
+  const itemFile = (id: string, rel: string) => join(t.root, "items", id, rel);
+  const read = (id: string, rel: string) => readFile(itemFile(id, rel), "utf8");
+
+  /** An item with one video, and a request for `wanted` versions of it. */
+  const requestVersions = async (wanted = 2) => {
+    const id = await newItem();
+    await writeFile(itemFile(id, VIDEO), "first");
+
+    const requested = await t.run(
+      requestEdit(id, { body: "Punchier", media: VIDEO, variants: wanted }),
+    );
+
+    return { id, feedbackId: requested.feedback.id, requested };
+  };
+
+  /** Stands in for the agent: render a take over the media, then save it as a version. */
+  const render = (id: string, feedbackId: string, label: string, content = label) =>
+    Effect.andThen(
+      Effect.promise(() => writeFile(itemFile(id, VIDEO), content)),
+      saveVariant(id, feedbackId, label),
+    );
+
+  test("a request asks for versions only when it wants more than one", async () => {
+    const { id, requested } = await requestVersions(3);
+    const prompt = await t.run(buildEditPrompt(requested.item, requested.feedback));
+    const single = await t.run(requestEdit(id, { body: "Once", media: VIDEO, variants: 1 }));
+    const plain = await t.run(buildEditPrompt(single.item, single.feedback));
+
+    expect(requested.feedback.variants).toEqual({ wanted: 3, media: VIDEO, saved: [] });
+    expect(single.feedback.variants).toBeUndefined();
+    expect(prompt).toContain("3 versions to compare");
+    expect(prompt).toContain("save_variant");
+    expect(plain).not.toContain("save_variant");
+
+    const decode = Schema.decodeUnknownSync(FeedbackInput);
+
+    expect(() => decode({ body: "x", variants: MAX_VARIANTS + 1 })).toThrow();
+    expect(() => decode({ body: "x", variants: 0 })).toThrow();
+    expect(() => decode({ body: "x", variants: 1.5 })).toThrow();
+  });
+
+  test("saved versions wait for the user, with the media put back as it was", async () => {
+    const { id, feedbackId } = await requestVersions();
+    const first = await t.run(render(id, feedbackId, "Big captions"));
+    const second = await t.run(render(id, feedbackId, " Fast cuts "));
+
+    expect([first.saved, second.saved, second.wanted]).toEqual([1, 2, 2]);
+    expect(second.variant.label).toBe("Fast cuts");
+    expect(second.variant.file).toBe(`edits/${feedbackId}/variants/${second.variant.id}.mp4`);
+    expect(await read(id, second.variant.file)).toBe(" Fast cuts ");
+
+    const resolved = await t.run(resolveEdit(id, feedbackId, "Two takes"));
+    const f = feedbackOf(resolved, feedbackId);
+
+    expect(f?.status).toBe("resolved");
+    expect(f?.context?.after).toBeUndefined();
+    expect(f?.variants?.saved.map((v) => v.label)).toEqual(["Big captions", "Fast cuts"]);
+    expect(await read(id, VIDEO)).toBe("first");
+
+    // Settling again leaves it alone, and only a pick or keeping none ends the request.
+    await t.run(resolveEdit(id, feedbackId, "Two takes"));
+    expect(await read(id, VIDEO)).toBe("first");
+    expect(await t.fail(approveEdit(id, feedbackId))).toBeInstanceOf(InvalidRequest);
+  });
+
+  test("picking a version makes it the result, and the others go", async () => {
+    const { id, feedbackId } = await requestVersions();
+    const { variant: chosen } = await t.run(render(id, feedbackId, "Big captions"));
+    const { variant: other } = await t.run(render(id, feedbackId, "Fast cuts"));
+    await t.run(resolveEdit(id, feedbackId, "Two takes"));
+
+    expect(await t.fail(pickVariant(id, feedbackId, "nope"))).toBeInstanceOf(InvalidRequest);
+
+    const picked = await t.run(pickVariant(id, feedbackId, chosen.id));
+    const f = feedbackOf(picked, feedbackId);
+    const after = `edits/${feedbackId}/after.mp4`;
+
+    expect(f?.decision).toBe("approved");
+    expect(f?.variants?.picked).toBe("Big captions");
+    expect(f?.variants?.saved).toEqual([]);
+    expect(f?.context?.after).toBe(after);
+    expect(await read(id, VIDEO)).toBe("Big captions");
+    expect(await read(id, after)).toBe("Big captions");
+    expect(await Bun.file(itemFile(id, other.file)).exists()).toBe(false);
+
+    const history = await t.run(readHistory(picked));
+
+    expect(history.entries.at(-1)).toMatchObject({
+      kind: "media",
+      media: VIDEO,
+      cause: "edit",
+      feedbackId,
+    });
+    expect(await t.fail(pickVariant(id, feedbackId, chosen.id))).toBeInstanceOf(InvalidRequest);
+  });
+
+  test("keeping none throws the versions away and leaves the media as it was", async () => {
+    const { id, feedbackId } = await requestVersions();
+    const { variant } = await t.run(render(id, feedbackId, "Big captions"));
+
+    // Even when the run stopped before resolving.
+    const kept = await t.run(restoreBefore(id, feedbackId));
+    const f = feedbackOf(kept, feedbackId);
+
+    expect(f?.decision).toBe("restored");
+    expect(f?.variants?.saved).toEqual([]);
+    expect(f?.variants?.picked).toBeUndefined();
+    expect(await read(id, VIDEO)).toBe("first");
+    expect(await Bun.file(itemFile(id, variant.file)).exists()).toBe(false);
+    expect(await t.fail(render(id, feedbackId, "Late"))).toBeInstanceOf(InvalidRequest);
+  });
+
+  test("a version needs a label, the request's file, a saved before side, and room", async () => {
+    const { id, feedbackId } = await requestVersions();
+    await writeFile(itemFile(id, "[1x1] cover.png"), "png");
+
+    expect(await t.fail(render(id, feedbackId, "  "))).toBeInstanceOf(InvalidRequest);
+    expect(await t.fail(saveVariant(id, feedbackId, "Cover", "[1x1] cover.png"))).toBeInstanceOf(
+      InvalidRequest,
+    );
+
+    const labels = Array.from({ length: MAX_VARIANTS }, (_, i) => `Take ${i + 1}`);
+    const takes = await t.run(Effect.forEach(labels, (label) => render(id, feedbackId, label)));
+
+    expect(takes.at(-1)?.saved).toBe(MAX_VARIANTS);
+    expect(await t.fail(render(id, feedbackId, "One more"))).toBeInstanceOf(InvalidRequest);
+
+    // Saving under a label already used replaces that version in place.
+    const again = await t.run(render(id, feedbackId, "Take 1", "Take 1, louder"));
+
+    expect(again.saved).toBe(MAX_VARIANTS);
+    expect(again.variant.id).toBe(takes[0]?.variant.id ?? "");
+    expect(await read(id, again.variant.file)).toBe("Take 1, louder");
+
+    // A note never set up as an edit has no copy of the media to put back.
+    const note = await t.run(addFeedback(id, { body: "Note", media: VIDEO }));
+
+    expect(await t.fail(render(id, note.feedback.id, "Take"))).toBeInstanceOf(InvalidRequest);
+  });
+
+  test("versions of a new file leave no file until the user picks one", async () => {
+    const id = await newItem();
+
+    const { feedback } = await t.run(
+      requestEdit(id, { body: "Make the first video", variants: 2 }),
+    );
+
+    expect(feedback.variants?.media).toBeUndefined();
+
+    const { variant } = await t.run(render(id, feedback.id, "Calm"));
+    await t.run(render(id, feedback.id, "Loud"));
+    await t.run(resolveEdit(id, feedback.id, "Two takes"));
+
+    expect(await Bun.file(itemFile(id, VIDEO)).exists()).toBe(false);
+
+    const picked = await t.run(pickVariant(id, feedback.id, variant.id));
+
+    expect(await read(id, VIDEO)).toBe("Calm");
+    expect(picked.media.map((m) => m.name)).toEqual([VIDEO]);
+  });
 });

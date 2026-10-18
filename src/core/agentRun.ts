@@ -22,6 +22,7 @@ import {
   baselineMillis,
   beginEdit,
   buildEditPrompt,
+  pendingVariants,
   resolveEdit,
   snapshotAfter,
   waitingLine,
@@ -562,7 +563,10 @@ export const converse = Effect.fnUntraced(function* <R>(conversation: Conversati
   return result;
 });
 
-/** The request is handled once its media changed, even if the agent forgot resolve_feedback. */
+/**
+ * The request is handled once its media changed or versions of it were saved, even if the agent
+ * forgot resolve_feedback.
+ */
 const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: string) {
   const { itemId, feedbackId } = input;
   const item = yield* snapshotAfter(itemId, feedbackId);
@@ -572,9 +576,10 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
   const since = baselineMillis(f);
 
   const changed =
-    f.context?.before === undefined
+    pendingVariants(f) ||
+    (f.context?.before === undefined
       ? item.media.some((m) => m.mtime > since)
-      : f.context.after !== undefined;
+      : f.context.after !== undefined);
 
   if (changed) yield* resolveEdit(itemId, feedbackId, firstLine(reply) || "Edited by agent");
 });

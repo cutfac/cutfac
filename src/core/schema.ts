@@ -165,6 +165,31 @@ export const EditContext = Schema.Struct({
 
 export type EditContext = typeof EditContext.Type;
 
+/** Most versions one request can hold for the user to compare. */
+export const MAX_VARIANTS = 4;
+
+/** One take on a request, saved to compare with the others. */
+export const Variant = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String.annotate(describe("how this version differs, in a few words")),
+  file: Schema.String.annotate(describe("item-relative copy of the media as this version")),
+  at: Schema.String,
+});
+
+export type Variant = typeof Variant.Type;
+
+/** Versions of one request for the user to compare side by side and pick from. */
+export const Variants = Schema.Struct({
+  wanted: Schema.optional(Count.annotate(describe("how many versions the user asked for"))),
+  media: Schema.optional(
+    Schema.String.annotate(describe("the media file the versions are of, once one is saved")),
+  ),
+  saved: Schema.Array(Variant).pipe(withDefault([])),
+  picked: Schema.optional(Schema.String.annotate(describe("label of the version the user kept"))),
+});
+
+export type Variants = typeof Variants.Type;
+
 export const AgentRun = Schema.Struct({
   agent: AgentName,
   ...ModelSettings.fields,
@@ -202,6 +227,7 @@ export const Feedback = Schema.Struct({
   body: Schema.String,
   ...targetFields,
   context: Schema.optional(EditContext),
+  variants: Schema.optional(Variants),
   run: Schema.optional(AgentRun),
   waiting: Schema.optional(
     AgentName.annotate(
@@ -232,6 +258,13 @@ export const FeedbackInput = Schema.Struct({
   body: Schema.String,
   author: Schema.optional(Schema.String),
   ...targetFields,
+  variants: Schema.optional(
+    Schema.Finite.check(
+      Schema.isInt(),
+      Schema.isGreaterThanOrEqualTo(1),
+      Schema.isLessThanOrEqualTo(MAX_VARIANTS),
+    ).annotate(describe("how many versions to make and compare; 1 is a single edit")),
+  ),
 }).check(rangeIsOrdered);
 
 export type FeedbackInput = typeof FeedbackInput.Type;
