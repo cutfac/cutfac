@@ -52,10 +52,7 @@
 <br />
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/editor-dark.png">
-    <img alt="The editor: a part of the timeline and a box on the video are selected, and the agent's reply sits in the chat beside it" src=".github/assets/editor-light.png">
-  </picture>
+  <img alt="A part of a video and a box on its caption are selected and the request &quot;Make this caption shorter&quot; is sent; Claude edits the video while its steps stream into the chat, then before and after play side by side and the edit is kept" src=".github/assets/demo.webp">
 </p>
 
 ## ✨ Features
@@ -176,6 +173,13 @@ streams its steps into the chat. The agent gets a clip of the range, the frame w
 on it, the timecodes, and the original file. When it is done, compare before and after, then keep
 the edit or restore the previous version. Without a connected agent, the request waits in the chat
 and "Copy prompt" hands it to any agent you run yourself.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/editor-dark.png">
+    <img alt="The editor: a part of the timeline and a box on the video are selected, and the agent's reply sits in the chat beside it" src=".github/assets/editor-light.png">
+  </picture>
+</p>
 
 Press `+` in the chat to give the agent something to read whenever it works on the video: paste a
 link or a folder or file path, or in the desktop app choose one from disk. They show as chips above
