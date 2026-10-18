@@ -4,7 +4,10 @@ import {
   buildFiles,
   feedVersion,
   missingEnv,
+  releaseNotes,
   REQUIRED_ENV,
+  tagName,
+  treeProblem,
   versionProblem,
 } from "../electron/release.ts";
 
@@ -71,5 +74,69 @@ describe("desktop release checks", () => {
     expect(() => buildFiles("0.2.0", ["cutfac-0.2.0-arm64.dmg"])).toThrow(
       "did not produce cutfac-0.2.0-arm64.zip",
     );
+  });
+});
+
+describe("release tagging", () => {
+  test("releases only a tree that matches its commit", () => {
+    expect(treeProblem("")).toBeUndefined();
+    // Notes and folders a build never reads cannot change it.
+    expect(treeProblem("?? docs/guides/\n?? .github/workflows/\n")).toBeUndefined();
+    expect(treeProblem(" M src/core/item.ts\n?? docs/guides/\n")).toBe(
+      "Commit or stash src/core/item.ts first, so the release matches a commit.",
+    );
+    expect(treeProblem("?? web/src/new.tsx\n?? notes.txt\nM  package.json\n")).toContain(
+      "web/src/new.tsx, notes.txt, package.json",
+    );
+    // Any other folder may feed the build, like the skill the server bundles.
+    expect(treeProblem("?? skills/cutfac/extra.md\n")).toContain("skills/cutfac/extra.md");
+    // A change to a tracked file anywhere counts, even where untracked notes do not.
+    expect(treeProblem(" M docs/guides/a.md")).toContain("docs/guides/a.md");
+  });
+
+  test("tags a version with a v", () => {
+    expect(tagName("0.2.0")).toBe("v0.2.0");
+  });
+
+  test("lists the changes people notice, grouped, with their scope", () => {
+    const notes = releaseNotes([
+      "feat(core)!: drop STATUS.md item discovery",
+      "fix(board): show a sent request as working right away",
+      "docs: add security policy",
+      "feat: compare variations side by side",
+      "perf(server): stream frames",
+      "chore: package metadata",
+      "Merge branch 'main'",
+    ]);
+
+    expect(notes).toBe(
+      [
+        "### Breaking changes",
+        "",
+        "- **core:** drop STATUS.md item discovery",
+        "",
+        "### Features",
+        "",
+        "- compare variations side by side",
+        "",
+        "### Fixes",
+        "",
+        "- **board:** show a sent request as working right away",
+        "",
+        "### Performance",
+        "",
+        "- **server:** stream frames",
+        "",
+        "The signed Mac app is at https://cutfac.com and updates itself. To build it yourself, see the README.",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("says so when only maintenance changed", () => {
+    expect(releaseNotes(["docs: fix a typo", "test: cover tags"])).toStartWith(
+      "Maintenance and documentation changes.\n\n",
+    );
+    expect(releaseNotes([])).toStartWith("Maintenance and documentation changes.");
   });
 });

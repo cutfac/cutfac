@@ -244,6 +244,12 @@ cutfac.com hands out short-lived CloudFront links to these files: the dmg from i
 the rest to the app's update checks, each for a live license key. The feed is never cached and build
 files never change, so a release needs no cache invalidation.
 
+Commit before you release: the script refuses changes a build would pick up and a version that is
+already tagged, so every release matches a commit. After the upload it tags that commit
+`v<version>`, pushes the tag, and creates a GitHub release with no files attached, whose notes list
+the features and fixes since the last tag. That step needs `gh` logged in. If it fails, the builds
+are already out and the script prints the commands left to run.
+
 The feed is the `publish` url in `electron-builder.yml`, and every build keeps the URL it was built
 with. To move the feed, publish one release that points to the new place while the old one keeps
 serving.
