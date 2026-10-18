@@ -1,4 +1,13 @@
-import type { AgentName, AgentRun, RunMessage } from "../api.ts";
+import type {
+  AgentName,
+  AgentRun,
+  EditInput,
+  EditReceipt,
+  Feedback,
+  ItemDetail,
+  ModelSettings,
+  RunMessage,
+} from "../api.ts";
 
 export type RunStep =
   | { readonly kind: "text"; readonly text: string }
@@ -16,6 +25,17 @@ export interface LiveRun {
   readonly steps: ReadonlyArray<RunStep>;
   readonly reply?: string;
   readonly error?: string;
+  /** A request on its way to an agent that the server has not answered yet. */
+  readonly sending?: Sending | undefined;
+}
+
+/** A request the board sent, before the server answers with its id. */
+export interface Sending {
+  readonly agent: AgentName;
+  readonly model?: string | undefined;
+  readonly effort?: string | undefined;
+  /** The item's requests before it was sent; the one being sent is the request not among them. */
+  readonly before: ReadonlyArray<string>;
 }
 
 export const NO_RUN: LiveRun = {
@@ -27,6 +47,13 @@ export const NO_RUN: LiveRun = {
 
 const append = (run: LiveRun, step: RunStep): LiveRun => ({ ...run, steps: [...run.steps, step] });
 
+/** A run that just started on request `subject`, before anything streamed. */
+const startedRun = (
+  subject: string,
+  agent: AgentName,
+  { model, effort }: Pick<LiveRun, "model" | "effort">,
+): LiveRun => ({ ...NO_RUN, subject, agent, model, effort, status: "running" });
+
 /**
  * Fold one stream message into the run. The stream replays a run from its start whenever it
  * (re)connects, so `run` and `start` begin from scratch instead of appending to what is shown.
@@ -37,14 +64,7 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
       return { ...NO_RUN, subject: message.subject, status: "running" };
 
     case "start":
-      return {
-        ...NO_RUN,
-        subject: message.subject,
-        agent: message.agent,
-        model: message.model,
-        effort: message.effort,
-        status: "running",
-      };
+      return startedRun(message.subject, message.agent, message);
 
     case "text":
       return append(run, { kind: "text", text: message.text });
@@ -66,6 +86,58 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
     case "error":
       return { ...run, status: "failed", error: message.error };
   }
+}
+
+/** Changes the run the chat shows, as React's `setState` does. */
+export type OnRun = (update: (run: LiveRun) => LiveRun) => void;
+
+/**
+ * Mark a request as on its way. The board sees a new request before the server answers, while
+ * the server still prepares the agent's context, so without this it would read as not sent. A
+ * request to no agent, or one that will wait behind the run going now, starts nothing.
+ */
+export function sendingRun(run: LiveRun, item: ItemDetail, input: EditInput): LiveRun {
+  const { agent, model, effort } = input;
+
+  if (agent === "queue" || item.running || run.status === "running") return run;
+
+  const before = item.doc.feedback.map((feedback) => feedback.id);
+
+  return { ...run, sending: { agent, model, effort, before } };
+}
+
+/** Forget the request on its way, once the server answered or the send failed. */
+export const settledRun = (run: LiveRun): LiveRun =>
+  run.sending === undefined ? run : { ...run, sending: undefined };
+
+/** The run a just-sent request starts, until the stream reports it. */
+export function sentRun(run: LiveRun, receipt: EditReceipt, settings: ModelSettings): LiveRun {
+  const { sent, feedbackId } = receipt;
+  const request = receipt.item.doc.feedback.find((feedback) => feedback.id === feedbackId);
+
+  // Sent to no agent, or lined up behind another run: nothing started yet.
+  if (sent === "queue" || request === undefined || request.waiting !== undefined) {
+    return settledRun(run);
+  }
+
+  // The stream got there first.
+  if (run.subject === feedbackId) return settledRun(run);
+
+  return startedRun(feedbackId, sent, settings);
+}
+
+/** The streamed run as a request shows it: its own, or the one it is on its way to start. */
+export function liveFor(run: LiveRun, feedback: Feedback): LiveRun | undefined {
+  if (run.subject === feedback.id) return run;
+
+  const { sending } = run;
+
+  if (sending === undefined || sending.before.includes(feedback.id)) return undefined;
+
+  // Lined up or already run: not the request on its way.
+  if (feedback.waiting !== undefined || feedback.run !== undefined) return undefined;
+
+  return startedRun(feedback.id, sending.agent, sending);
 }
 
 /** A finished run as the chat lays it out: the steps, then the reply under them. */

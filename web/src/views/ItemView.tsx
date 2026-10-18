@@ -315,9 +315,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 agent,
                 onSend: (body) =>
                   sendRequest(
-                    item.id,
+                    item,
                     editInput(body, agent, pickedSettings(statuses, picks, agent), media, target),
                     setData,
+                    setRun,
                   ).then(clear),
               }}
               pins={pins}
@@ -391,6 +392,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               onPick={setPick}
               inputRef={inputRef}
               onItem={setData}
+              onRun={setRun}
               onClearTarget={clear}
               onShow={show}
               onRetarget={(feedback: Feedback) => {

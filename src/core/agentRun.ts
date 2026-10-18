@@ -583,7 +583,9 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const ws = yield* Workspace;
   const { itemId, feedbackId, agent, model, effort } = input;
   const pick: AgentPick = { agent, model, effort };
-  // First, so a request that waited leaves the line before anything else can change it.
+  // Before anything can fail, so the board shows the run, and any error, on this request.
+  yield* emit({ type: "start", subject: feedbackId, ...pick });
+  // First write, so a request that waited leaves the line before anything else can change it.
   const { item, feedback: f } = yield* beginEdit(itemId, feedbackId);
   const bin = yield* agentBin(agent);
   const prompt = yield* buildEditPrompt(item, f);
@@ -594,7 +596,6 @@ const performEdit = Effect.fnUntraced(function* (input: RunInput, emit: Emit, st
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
 
   yield* setRun(itemId, feedbackId, { ...pick, status: "running", startedAt });
-  yield* emit({ type: "start", subject: feedbackId, ...pick });
 
   const { reply, failure } = yield* converse({
     agent,

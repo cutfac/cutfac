@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type { AgentRun, Feedback, ItemDetail } from "../web/src/api.ts";
+import type { AgentRun, EditReceipt, Feedback, ItemDetail } from "../web/src/api.ts";
 import { hasResult, inOrder, linePaused, pinsOn, waitingLine } from "../web/src/lib/requests.ts";
-import { NO_RUN, type LiveRun } from "../web/src/lib/run.ts";
+import { liveFor, NO_RUN, sendingRun, sentRun, type LiveRun } from "../web/src/lib/run.ts";
 
 const at = (second: number) => new Date(Date.UTC(2026, 9, 14, 0, 0, second)).toISOString();
 
@@ -153,5 +153,88 @@ describe("pinsOn", () => {
     expect(pinsOn({ ...item, running: true }, "clip.mp4", NO_RUN).map((pin) => pin.state)).toEqual([
       "working",
     ]);
+  });
+});
+
+const receipt = (feedback: Feedback, sent: EditReceipt["sent"] = "claude"): EditReceipt => ({
+  item: itemWith([feedback], { running: true }),
+  feedbackId: feedback.id,
+  sent,
+  warnings: [],
+  prompt: "",
+});
+
+describe("sent request", () => {
+  const picked = { model: "opus", effort: "max" };
+
+  test("shows as working before the stream reports it", () => {
+    expect(sentRun(NO_RUN, receipt(request("f1", 1)), picked)).toEqual({
+      ...NO_RUN,
+      subject: "f1",
+      agent: "claude",
+      model: "opus",
+      effort: "max",
+      status: "running",
+    });
+  });
+
+  test("keeps what the stream already reported", () => {
+    const streamed: LiveRun = {
+      ...live("f1", "running"),
+      steps: [{ kind: "text", text: "On it." }],
+    };
+
+    expect(sentRun(streamed, receipt(request("f1", 1)), picked)).toBe(streamed);
+  });
+
+  test("starts nothing when lined up or sent to no agent", () => {
+    const earlier = live("f0", "running");
+
+    expect(sentRun(earlier, receipt(request("f1", 1, { waiting: "claude" })), picked)).toBe(
+      earlier,
+    );
+    expect(sentRun(NO_RUN, receipt(request("f1", 1), "queue"), picked)).toBe(NO_RUN);
+  });
+});
+
+describe("request on its way", () => {
+  const input = { body: "Shorter", agent: "claude", model: "opus" } as const;
+  const old = request("f0", 0, { run: saved("done") });
+
+  test("shows the new request as working until the server answers", () => {
+    const sending = sendingRun(NO_RUN, itemWith([old]), input);
+    const fresh = request("f1", 1);
+
+    expect(liveFor(sending, fresh)).toEqual({
+      ...NO_RUN,
+      subject: "f1",
+      agent: "claude",
+      model: "opus",
+      effort: undefined,
+      status: "running",
+    });
+    // The requests that were there before the send stay as they were.
+    expect(liveFor(sending, old)).toBeUndefined();
+    expect(liveFor(sending, request("f1", 1, { waiting: "claude" }))).toBeUndefined();
+
+    const answered = sentRun(sending, receipt(fresh), input);
+
+    expect(answered.sending).toBeUndefined();
+    expect(liveFor(answered, fresh)?.status).toBe("running");
+  });
+
+  test("marks nothing for no agent or behind a run going now", () => {
+    const busy = live("f0", "running");
+
+    expect(sendingRun(NO_RUN, itemWith([old]), { ...input, agent: "queue" })).toBe(NO_RUN);
+    expect(sendingRun(busy, itemWith([old]), input)).toBe(busy);
+    expect(sendingRun(NO_RUN, itemWith([old], { running: true }), input)).toBe(NO_RUN);
+  });
+
+  test("forgets the send when the request lines up instead", () => {
+    const sending = sendingRun(NO_RUN, itemWith([old]), input);
+    const lined = sentRun(sending, receipt(request("f1", 1, { waiting: "claude" })), input);
+
+    expect(lined).toEqual(NO_RUN);
   });
 });

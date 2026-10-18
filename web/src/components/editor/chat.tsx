@@ -58,7 +58,15 @@ import {
   type NamedSettings,
 } from "../../lib/models.ts";
 import { hasResult, inOrder, linePaused, waitingLine } from "../../lib/requests.ts";
-import { closingReply, runView, type LiveRun, type RunStep, type RunView } from "../../lib/run.ts";
+import {
+  closingReply,
+  liveFor,
+  runView,
+  type LiveRun,
+  type OnRun,
+  type RunStep,
+  type RunView,
+} from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
 import { CompareDialog } from "./compare-dialog.tsx";
 import { composing, Composer, copyPrompt } from "./composer.tsx";
@@ -110,6 +118,7 @@ interface ChatProps {
   onPick: (agent: AgentName, settings: ModelSettings) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onItem: (item: ItemDetail) => void;
+  onRun: OnRun;
   onClearTarget: () => void;
   /** Show where a past request pointed: its media, its moment, its outline. */
   onShow: (feedback: Feedback) => void;
@@ -132,6 +141,7 @@ export function Chat({
   onPick,
   inputRef,
   onItem,
+  onRun,
   onClearTarget,
   onShow,
   onRetarget,
@@ -207,7 +217,7 @@ export function Chat({
                       feedback={feedback}
                       number={index + 1}
                       ahead={aheadOf(feedback)}
-                      live={run.subject === feedback.id ? run : undefined}
+                      live={liveFor(run, feedback)}
                       statuses={statuses}
                       actions={actions}
                     />
@@ -242,6 +252,7 @@ export function Chat({
         running={running}
         inputRef={inputRef}
         onItem={onItem}
+        onRun={onRun}
         onClearTarget={onClearTarget}
         onStop={actions.stop}
       />

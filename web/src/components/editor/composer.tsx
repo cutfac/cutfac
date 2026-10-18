@@ -53,6 +53,7 @@ import { desktop } from "../../desktop.ts";
 import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
+import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { sourceKey, sourceOf, sourceView } from "../../lib/sources.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { ModelPicker } from "./model-picker.tsx";
@@ -132,16 +133,25 @@ export function editInput(
  * run; when it went to no agent, its prompt is copied to paste into one.
  */
 export async function sendRequest(
-  id: string,
+  item: ItemDetail,
   input: EditInput,
   onItem: (item: ItemDetail) => void,
+  onRun: OnRun,
 ): Promise<void> {
-  const receipt = await api.requestEdit(id, input);
-  onItem(receipt.item);
+  onRun((run) => sendingRun(run, item, input));
 
-  for (const warning of receipt.warnings) toast.warning(warning);
+  try {
+    const receipt = await api.requestEdit(item.id, input);
+    onItem(receipt.item);
+    onRun((run) => sentRun(run, receipt, input));
 
-  if (receipt.sent === "queue") copyPrompt(receipt.prompt);
+    for (const warning of receipt.warnings) toast.warning(warning);
+
+    if (receipt.sent === "queue") copyPrompt(receipt.prompt);
+  } catch (cause) {
+    onRun(settledRun);
+    throw cause;
+  }
 }
 
 /** Enter while an IME is composing (Korean, Japanese, …) confirms the syllable, not the message. */
@@ -322,6 +332,7 @@ interface ComposerProps {
   running: boolean;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onItem: (item: ItemDetail) => void;
+  onRun: OnRun;
   onClearTarget: () => void;
   onStop: () => void;
 }
@@ -342,6 +353,7 @@ export function Composer({
   running,
   inputRef,
   onItem,
+  onRun,
   onClearTarget,
   onStop,
 }: ComposerProps) {
@@ -358,7 +370,7 @@ export function Composer({
     setSending(true);
 
     try {
-      await sendRequest(item.id, editInput(text, agent, settings, media, target), onItem);
+      await sendRequest(item, editInput(text, agent, settings, media, target), onItem, onRun);
       setBody("");
       onClearTarget();
     } catch (cause) {

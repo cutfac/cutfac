@@ -1,5 +1,5 @@
 import type { Feedback, ItemDetail } from "../api.ts";
-import { runView, type LiveRun } from "./run.ts";
+import { liveFor, runView, type LiveRun } from "./run.ts";
 
 /** The item's requests in the order they were made, which is how the chat numbers them. */
 export const inOrder = (item: ItemDetail) =>
@@ -48,7 +48,7 @@ export interface Pin {
 }
 
 function pinState(item: ItemDetail, feedback: Feedback, live: LiveRun): PinState | undefined {
-  const run = runView(feedback.run, live.subject === feedback.id ? live : undefined, item.running);
+  const run = runView(feedback.run, liveFor(live, feedback), item.running);
 
   if (run.running) return "working";
 
