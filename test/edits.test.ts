@@ -14,6 +14,7 @@ import {
   makeRunRegistry,
   parseClaudeLine,
   parseCodexLine,
+  relativeToRoot,
   toolsFor,
 } from "../src/core/agentRun.ts";
 import {
@@ -191,6 +192,37 @@ describe("agent CLIs", () => {
       ).events,
     ).toEqual([{ type: "tool", name: "shell", detail: "ffprobe a" }]);
     expect(parseCodexLine('{"type":"turn.failed","error":{"message":"boom"}}').error).toBe("boom");
+  });
+
+  test("shows tool paths relative to the workspace", () => {
+    const root = "/Users/me/Videos/brew";
+
+    expect(relativeToRoot(`cd ${root} && bun ${root}/render.ts`, root)).toBe(
+      "cd . && bun render.ts",
+    );
+    // A sibling folder that only starts with the root's name is left alone.
+    expect(relativeToRoot(`ls ${root}-old/a.mp4`, root)).toBe(`ls ${root}-old/a.mp4`);
+
+    const claude = parseClaudeLine(
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", name: "Read", input: { file_path: `${root}/story.yaml` } }],
+        },
+      }),
+      root,
+    );
+
+    expect(claude.events).toEqual([{ type: "tool", name: "Read", detail: "story.yaml" }]);
+    expect(
+      parseCodexLine(
+        JSON.stringify({
+          type: "item.completed",
+          item: { type: "file_change", changes: [{ path: `${root}/items/a/story.yaml` }] },
+        }),
+        root,
+      ).events,
+    ).toEqual([{ type: "tool", name: "edit", detail: "items/a/story.yaml" }]);
   });
 });
 

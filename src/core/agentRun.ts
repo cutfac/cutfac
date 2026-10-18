@@ -219,18 +219,30 @@ const decodeDetail = Schema.decodeUnknownOption(DetailValue);
 
 const DETAIL_KEYS = ["command", "file_path", "path", "pattern"] as const;
 
-const clampDetail = (value: string | ReadonlyArray<string>) => {
-  const text = Predicate.isString(value) ? value : value.join(" ");
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * `text` with the workspace root taken out of its paths: `<root>/a.mp4` reads as `a.mp4` and the
+ * root itself as `.`, so a tool line shows the part that matters and not the user's home folder.
+ */
+export const relativeToRoot = (text: string, root: string) =>
+  text.replace(new RegExp(`${escapeRegExp(root)}(?:/|(?![\\w.-]))`, "g"), (match) =>
+    match.endsWith("/") ? "" : ".",
+  );
+
+const clampDetail = (value: string | ReadonlyArray<string>, root: string | undefined) => {
+  const joined = Predicate.isString(value) ? value : value.join(" ");
+  const text = root === undefined ? joined : relativeToRoot(joined, root);
 
   return text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL - 3)}…` : text;
 };
 
 /** The one argument worth showing for a tool call: its command, file, or search pattern. */
-export function toolDetail(input: Schema.JsonObject): string | undefined {
+export function toolDetail(input: Schema.JsonObject, root?: string): string | undefined {
   for (const key of DETAIL_KEYS) {
     const value = decodeDetail(input[key]);
 
-    if (Option.isSome(value)) return clampDetail(value.value);
+    if (Option.isSome(value)) return clampDetail(value.value, root);
   }
 
   return undefined;
@@ -263,7 +275,7 @@ const decodeClaudeMessage = Schema.decodeUnknownOption(
   Schema.Struct({ content: Schema.Array(ClaudeBlock) }),
 );
 
-const claudeEvents = (json: Schema.JsonObject): ReadonlyArray<RunEvent> =>
+const claudeEvents = (json: Schema.JsonObject, root: string | undefined): ReadonlyArray<RunEvent> =>
   Option.match(decodeClaudeMessage(json["message"]), {
     onNone: () => [],
     onSome: (message) =>
@@ -273,7 +285,7 @@ const claudeEvents = (json: Schema.JsonObject): ReadonlyArray<RunEvent> =>
         }
 
         if (block.type === "tool_use" && block.name !== undefined) {
-          const detail = block.input === undefined ? undefined : toolDetail(block.input);
+          const detail = block.input === undefined ? undefined : toolDetail(block.input, root);
 
           return [{ type: "tool", name: block.name, detail }];
         }
@@ -282,8 +294,11 @@ const claudeEvents = (json: Schema.JsonObject): ReadonlyArray<RunEvent> =>
       }),
   });
 
-/** One line of `claude -p --output-format stream-json`. */
-export function parseClaudeLine(line: string): ParsedLine {
+/**
+ * One line of `claude -p --output-format stream-json`. Paths under `root`, the workspace the agent
+ * runs in, show relative to it.
+ */
+export function parseClaudeLine(line: string, root?: string): ParsedLine {
   const json = jsonLine(line);
 
   if (Option.isNone(json)) return NOTHING;
@@ -291,7 +306,7 @@ export function parseClaudeLine(line: string): ParsedLine {
 
   if (Option.isNone(envelope)) return NOTHING;
   const msg = envelope.value;
-  const events = msg.type === "assistant" ? claudeEvents(json.value) : [];
+  const events = msg.type === "assistant" ? claudeEvents(json.value, root) : [];
 
   if (msg.type !== "result") return { events, sessionId: msg.session_id };
   const failed = msg.is_error === true || msg.subtype !== "success";
@@ -325,7 +340,7 @@ type CodexItem = typeof CodexItem.Type;
 
 const decodeCodexItem = Schema.decodeUnknownOption(CodexItem);
 
-const codexItemLine = (phase: string, item: CodexItem): ParsedLine => {
+const codexItemLine = (phase: string, item: CodexItem, root: string | undefined): ParsedLine => {
   if (phase === "item.completed" && item.type === "agent_message") {
     const text = item.text ?? "";
 
@@ -333,7 +348,7 @@ const codexItemLine = (phase: string, item: CodexItem): ParsedLine => {
   }
 
   if (phase === "item.started" && item.type === "command_execution") {
-    const detail = item.command === undefined ? undefined : clampDetail(item.command);
+    const detail = item.command === undefined ? undefined : clampDetail(item.command, root);
 
     return { events: [{ type: "tool", name: "shell", detail }] };
   }
@@ -347,7 +362,11 @@ const codexItemLine = (phase: string, item: CodexItem): ParsedLine => {
 
     return {
       events: [
-        { type: "tool", name: "edit", detail: paths.length === 0 ? undefined : clampDetail(paths) },
+        {
+          type: "tool",
+          name: "edit",
+          detail: paths.length === 0 ? undefined : clampDetail(paths, root),
+        },
       ],
     };
   }
@@ -355,8 +374,8 @@ const codexItemLine = (phase: string, item: CodexItem): ParsedLine => {
   return NOTHING;
 };
 
-/** One line of `codex exec --json`. */
-export function parseCodexLine(line: string): ParsedLine {
+/** One line of `codex exec --json`, with paths under `root` relative to it. */
+export function parseCodexLine(line: string, root?: string): ParsedLine {
   const json = jsonLine(line);
 
   if (Option.isNone(json)) return NOTHING;
@@ -373,7 +392,7 @@ export function parseCodexLine(line: string): ParsedLine {
 
   return Option.match(decodeCodexItem(json.value["item"]), {
     onNone: () => NOTHING,
-    onSome: (item) => codexItemLine(msg.type, item),
+    onSome: (item) => codexItemLine(msg.type, item, root),
   });
 }
 
@@ -449,7 +468,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
   });
 
   const onLine = Effect.fnUntraced(function* (line: string) {
-    const parsed = parse(line);
+    const parsed = parse(line, ws.root);
     yield* Effect.forEach(parsed.events, emit, { discard: true });
     const { session } = yield* Ref.get(progress);
 
