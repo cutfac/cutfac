@@ -61,6 +61,7 @@ import {
 } from "../core/schema.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
+import { requestGuard } from "./guard.ts";
 
 export interface ServerOptions {
   /** The built board, served at `/`. Without it the server is API-only. */
@@ -887,7 +888,9 @@ export const routes = (options: ServerOptions) =>
 
 /** The board and its API on a local port. Needs the workspace; brings everything else. */
 export const serverLayer = (options: ListenOptions) =>
-  HttpRouter.serve(routes(options), { disableLogger: true }).pipe(
+  HttpRouter.serve(Layer.merge(routes(options), requestGuard(options.hostname)), {
+    disableLogger: true,
+  }).pipe(
     Layer.provide(Layer.mergeAll(RunRegistry.layer, ImportRuns.layer)),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(

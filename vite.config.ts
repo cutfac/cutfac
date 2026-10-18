@@ -17,5 +17,11 @@ export default defineConfig({
   plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./web/src", import.meta.url)) } },
   build: { outDir: "../dist/web", emptyOutDir: true },
-  server: { proxy: { "/api": server, "/files": server } },
+  server: {
+    // Keep the board's own Host, so the server sees its requests as same-origin.
+    proxy: {
+      "/api": { target: server, changeOrigin: false },
+      "/files": { target: server, changeOrigin: false },
+    },
+  },
 });
