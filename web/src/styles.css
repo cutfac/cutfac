@@ -166,11 +166,8 @@
   }
   html {
     @apply font-sans antialiased;
-    color-scheme: light;
-    overscroll-behavior: none;
-  }
-  html.dark {
     color-scheme: dark;
+    overscroll-behavior: none;
   }
   body {
     @apply bg-background text-foreground;

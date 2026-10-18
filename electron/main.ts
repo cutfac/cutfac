@@ -8,6 +8,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeTheme,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -146,6 +147,8 @@ function assertFromApp(event: IpcMainInvokeEvent): void {
 }
 
 async function boot(): Promise<void> {
+  // The board is dark only; this keeps the title bar, menus and dialogs dark with it.
+  nativeTheme.themeSource = "dark";
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
 
   updates = startUpdates({

@@ -7,11 +7,10 @@ import {
 } from "lucide-react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-// `theme="system"` follows prefers-color-scheme, which is also what main.tsx uses for the
-// `dark` class, so the toasts always match the page.
+// The board is dark only (index.html sets the `dark` class), so the toasts are too.
 const Toaster = (props: ToasterProps) => (
   <Sonner
-    theme="system"
+    theme="dark"
     className="group [--border-radius:var(--radius-2xl)] [--normal-bg:var(--popover)] [--normal-border:var(--border)] [--normal-text:var(--popover-foreground)]"
     icons={{
       success: <CircleCheckIcon className="size-4" />,
