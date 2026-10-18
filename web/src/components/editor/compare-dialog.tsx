@@ -37,15 +37,32 @@ const IMAGE = /\.(png|jpe?g|webp|gif|avif)$/i;
 const kindOf = (item: ItemDetail, name: string): MediaKind =>
   item.media.find((media) => media.name === name)?.kind ?? (IMAGE.test(name) ? "image" : "video");
 
-/** Play every video from `from`, or from its end when it is shorter. */
-function playFrom(videos: Iterable<HTMLVideoElement | null>, from: number) {
-  for (const video of videos) {
-    if (video === null) continue;
+/** Seek to `from`, or to the end when the video is shorter, and settle once the frame is there. */
+function seek(video: HTMLVideoElement, from: number): Promise<void> {
+  return new Promise((resolve) => {
+    // A video that fails to load must not hold the others back.
+    video.addEventListener("error", () => resolve(), { once: true });
 
-    video.currentTime = Math.min(from, Number.isFinite(video.duration) ? video.duration : from);
-    // A pause before playback starts rejects; that is the user's choice, not an error.
-    video.play().catch(() => undefined);
-  }
+    const go = () => {
+      video.addEventListener("seeked", () => resolve(), { once: true });
+      video.currentTime = Math.min(from, video.duration);
+    };
+
+    if (video.error !== null) resolve();
+    else if (video.readyState >= HTMLMediaElement.HAVE_METADATA) go();
+    else video.addEventListener("loadedmetadata", go, { once: true });
+  });
+}
+
+/** Play every video from `from` together: start only once all of them have seeked. */
+async function playFrom(videos: Iterable<HTMLVideoElement | null>, from: number) {
+  const ready = [...videos].filter((video) => video !== null);
+
+  for (const video of ready) video.pause();
+  await Promise.all(ready.map((video) => seek(video, from)));
+
+  // A pause before playback starts rejects; that is the user's choice, not an error.
+  for (const video of ready) video.play().catch(() => undefined);
 }
 
 /** URLs of the two versions; `after` is the media as it is now until the result is saved. */
@@ -144,7 +161,7 @@ export function CompareDialog({
             <Button
               variant="outline"
               className="sm:mr-auto"
-              onClick={() => playFrom([before.current, after.current], from)}
+              onClick={() => void playFrom([before.current, after.current], from)}
             >
               <PlayIcon data-icon="inline-start" />
               {t.compare.playBoth(formatTime(from))}
@@ -296,7 +313,7 @@ export function VersionsDialog({
             <Button
               variant="outline"
               className="sm:mr-auto"
-              onClick={() => playFrom(grid.current?.querySelectorAll("video") ?? [], from)}
+              onClick={() => void playFrom(grid.current?.querySelectorAll("video") ?? [], from)}
             >
               <PlayIcon data-icon="inline-start" />
               {t.versions.playAll(formatTime(from))}
