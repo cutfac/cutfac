@@ -285,6 +285,8 @@ off any agent run in progress. Closing the app or Ctrl+C stops everything.
 See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap, and
 [docs/templates.md](docs/templates.md) for the template spec.
 
+To send a change, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 Cutfac is licensed under the [GNU Affero General Public License v3.0](LICENSE).
