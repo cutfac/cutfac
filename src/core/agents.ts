@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
-import { WorkspaceError } from "./errors.ts";
+import { CommandFailed, WorkspaceError } from "./errors.ts";
 import { type AgentModels, CLAUDE_MODELS, NO_MODELS, codexModels } from "./models.ts";
 import { isInstalled, run, which } from "./process.ts";
 import type { AgentName } from "./schema.ts";
@@ -182,6 +182,14 @@ const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.s
 /** Where Codex's config keeps the MCP server `name`. */
 export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
 
+/** Whether `name` is how some workspace registered its server with Codex, now or before the rename. */
+const isCodexWorkspaceServer = (name: string) =>
+  [SERVER_NAME, LEGACY_SERVER_NAME].some((server) => name.startsWith(`${server}-`));
+
+/** The Codex config entry that takes the tools only the user's own session may call off `name`. */
+const codexUserOnlyOff = (name: string) =>
+  `${codexServerKey(name)}.disabled_tools=${JSON.stringify(MCP_USER_ONLY_TOOLS)}`;
+
 /**
  * Codex config entries for a headless run: the server `name` started with `launch`, whatever the
  * user config says, without the tools only the user's own session may call.
@@ -189,8 +197,58 @@ export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
 export const codexServerLaunch = (name: string, launch: McpLaunch) => [
   `${codexServerKey(name)}.command=${JSON.stringify(launch.command)}`,
   `${codexServerKey(name)}.args=${JSON.stringify(launch.args)}`,
-  `${codexServerKey(name)}.disabled_tools=${JSON.stringify(MCP_USER_ONLY_TOOLS)}`,
+  codexUserOnlyOff(name),
 ];
+
+const CodexServers = Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String })));
+
+const decodeCodexServers = Schema.decodeUnknownOption(CodexServers);
+
+/** Listing servers reads a config file; a Codex that takes longer is stuck, not slow. */
+const LIST_TIMEOUT = "15 seconds";
+
+/**
+ * The MCP servers in the user's Codex config, which a run loads unless it switches them off.
+ * Without this list a run could reach a server that writes, so it fails when Codex cannot give it.
+ */
+export const codexServerNames = Effect.fn("agents.codexServerNames")(function* (bin: string) {
+  const ws = yield* Workspace;
+
+  const failed = new CommandFailed({
+    message: "Could not list Codex's MCP servers to switch off the ones this run must not reach",
+  });
+
+  const listed = yield* run(bin, ["mcp", "list", "--json", "-c", "features.plugins=false"], {
+    cwd: ws.root,
+  }).pipe(Effect.timeoutOrElse({ duration: LIST_TIMEOUT, orElse: () => Effect.fail(failed) }));
+
+  const servers = listed.code === 0 ? decodeCodexServers(listed.stdout) : Option.none();
+
+  if (Option.isNone(servers)) return yield* failed;
+
+  return servers.value.map((server) => server.name);
+});
+
+/**
+ * Codex config entries that keep a board run on this workspace's server, `ours`, out of the
+ * servers Codex `listed`. Every other workspace's server is switched off, so the run never acts on
+ * a workspace it was not started for, and ours goes without the tools only the user's own session
+ * may call. With `launch`, ours is started for this root; without it, ours is used as registered.
+ */
+export function codexRunServers(
+  ours: string,
+  launch: McpLaunch | undefined,
+  listed: ReadonlyArray<string>,
+): string[] {
+  const others = listed.flatMap((name) =>
+    name !== ours && isCodexWorkspaceServer(name) ? [`${codexServerKey(name)}.enabled=false`] : [],
+  );
+
+  if (launch !== undefined) return [...others, ...codexServerLaunch(ours, launch)];
+
+  // An entry with no command stops Codex from starting, so ours is narrowed only when registered.
+  return listed.includes(ours) ? [...others, codexUserOnlyOff(ours)] : others;
+}
 
 const CodexServer = Schema.fromJsonString(Schema.Struct({ transport: LaunchArgs }));
 

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { agentInvocation } from "../src/core/agentRun.ts";
 import {
   agentStatus,
+  codexRunServers,
   codexServerLaunch,
   connectClaude,
   connectCodex,
@@ -217,5 +218,25 @@ exit 1
     expect(args[args.indexOf("--disallowedTools") + 1]).toBe(
       "mcp__cutfac__send_feedback_to_cutfac",
     );
+  });
+
+  test("a codex board run switches off the other workspaces' servers and keeps the rest", () => {
+    const listed = ["cutfac-test", "cutfac-other", "content-factory-old", "github"];
+
+    expect(codexRunServers("cutfac-test", launch("/here"), listed)).toEqual([
+      "mcp_servers.cutfac-other.enabled=false",
+      "mcp_servers.content-factory-old.enabled=false",
+      ...codexServerLaunch("cutfac-test", launch("/here")),
+    ]);
+  });
+
+  test("without the CLI, a codex board run narrows this workspace's server only when registered", () => {
+    const off = 'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]';
+
+    expect(codexRunServers("cutfac-test", undefined, ["cutfac-test", "cutfac-other"])).toEqual([
+      "mcp_servers.cutfac-other.enabled=false",
+      off,
+    ]);
+    expect(codexRunServers("cutfac-test", undefined, ["github"])).toEqual([]);
   });
 });

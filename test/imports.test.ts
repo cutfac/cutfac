@@ -7,12 +7,16 @@ import { dirname, join } from "node:path";
 import { Context, Effect, Layer, ManagedRuntime, Result, Stream } from "effect";
 import { Tool } from "effect/ai";
 
-import { MCP_READ_TOOLS, MCP_WRITE_TOOLS, type McpLaunch } from "../src/core/agents.ts";
+import {
+  MCP_READ_TOOLS,
+  MCP_WRITE_TOOLS,
+  type McpLaunch,
+  codexServerNames,
+} from "../src/core/agents.ts";
 import {
   ImportRuns,
   claudeImportFlags,
   codexImportConfig,
-  codexOtherServers,
   startImport,
   startTurn,
   stopAndCloseImport,
@@ -621,15 +625,14 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
     expect(await t.run(listImports())).toEqual([]);
   });
 
-  test("Codex's other MCP servers are listed, and the run fails closed without them", async () => {
-    const ours = "cutfac-imports";
+  test("Codex's MCP servers are listed, and the run fails closed without them", async () => {
     const listed = '[{"name":"cutfac-imports"},{"name":"github"},{"name":"a.b"}]';
     const codex = await fakeBin("codex", `echo '${listed}'\n`);
 
-    expect(await t.run(codexOtherServers(codex, ours))).toEqual(["github", "a.b"]);
+    expect(await t.run(codexServerNames(codex))).toEqual(["cutfac-imports", "github", "a.b"]);
 
     await fakeBin("codex", "echo 'unknown flag' >&2\nexit 2\n");
-    const error = await t.fail(codexOtherServers(codex, ours));
+    const error = await t.fail(codexServerNames(codex));
 
     expect(error.message).toContain("Could not list Codex's MCP servers");
   });

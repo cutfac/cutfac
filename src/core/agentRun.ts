@@ -22,8 +22,9 @@ import {
   type CliEntry,
   MCP_USER_ONLY_TOOLS,
   claudeMcpTool,
-  codexServerLaunch,
+  codexRunServers,
   codexServerName,
+  codexServerNames,
   mcpLaunch,
   runMcpConfig,
 } from "./agents.ts";
@@ -602,23 +603,28 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 /**
  * How the agent reaches this workspace's MCP server. With the CLI known, the server is always
  * started for this root, so a copied or moved workspace never acts on the one it came from.
- * Otherwise Claude gets the workspace's `.mcp.json` as it is.
+ * Otherwise Claude gets the workspace's `.mcp.json` as it is. Codex, which loads every server in
+ * the user's config, has the other workspaces' servers switched off.
  */
-const runServers = Effect.fnUntraced(function* (cli: CliEntry | undefined) {
+const runServers = Effect.fnUntraced(function* (
+  cli: CliEntry | undefined,
+  agent: AgentName,
+  bin: string,
+) {
   const ws = yield* Workspace;
+  const launch = cli === undefined ? undefined : mcpLaunch(cli, ws.root);
 
-  if (cli === undefined) {
-    const mcpConfig = (yield* ws.exists(MCP_FILE)) ? yield* ws.abs(MCP_FILE) : undefined;
+  if (agent === "codex") {
+    const ours = codexServerName(ws.config.name);
 
-    return { mcpConfig, codexServer: [] };
+    return { codexServer: codexRunServers(ours, launch, yield* codexServerNames(bin)) };
   }
 
-  const launch = mcpLaunch(cli, ws.root);
+  if (launch === undefined) {
+    return { mcpConfig: (yield* ws.exists(MCP_FILE)) ? yield* ws.abs(MCP_FILE) : undefined };
+  }
 
-  return {
-    mcpConfig: yield* runMcpConfig(launch),
-    codexServer: codexServerLaunch(codexServerName(ws.config.name), launch),
-  };
+  return { mcpConfig: yield* runMcpConfig(launch) };
 });
 
 const performEdit = Effect.fnUntraced(function* (
@@ -638,7 +644,7 @@ const performEdit = Effect.fnUntraced(function* (
   const prompt = yield* buildEditPrompt(item, f);
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
-  const servers = yield* runServers(cli);
+  const servers = yield* runServers(cli, agent, bin);
   const frame = f.context?.frame;
   const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
 

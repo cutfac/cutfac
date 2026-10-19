@@ -1,4 +1,4 @@
-import { Context, Effect, Option, Schema } from "effect";
+import { Context, Effect } from "effect";
 
 import {
   type Emit,
@@ -24,8 +24,9 @@ import {
   codexServerKey,
   codexServerLaunch,
   codexServerName,
+  codexServerNames,
 } from "./agents.ts";
-import { CommandFailed, Conflict, NotFound } from "./errors.ts";
+import { Conflict, NotFound } from "./errors.ts";
 import {
   type NewImport,
   type RunEnd,
@@ -41,7 +42,6 @@ import {
   turnMessage,
 } from "./imports.ts";
 import { shortId } from "./items.ts";
-import { run } from "./process.ts";
 import type { ImportDoc } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -214,40 +214,6 @@ export function codexImportConfig(
   ]);
 }
 
-const CodexServers = Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String })));
-
-const decodeCodexServers = Schema.decodeUnknownOption(CodexServers);
-
-/** Listing servers reads a config file; a Codex that takes longer is stuck, not slow. */
-const LIST_TIMEOUT = "15 seconds";
-
-/**
- * The MCP servers in the user's Codex config other than `ours`. Without this list a run could
- * reach a server that writes, so it fails when Codex cannot give it.
- */
-export const codexOtherServers = Effect.fn("importRun.codexOtherServers")(function* (
-  bin: string,
-  ours: string,
-) {
-  const ws = yield* Workspace;
-
-  const failed = new CommandFailed({
-    message: "Could not list Codex's MCP servers to keep them out of the import",
-  });
-
-  const listed = yield* run(
-    bin,
-    ["mcp", "list", "--json", ...codexConfig(["features.plugins=false"])],
-    { cwd: ws.root },
-  ).pipe(Effect.timeoutOrElse({ duration: LIST_TIMEOUT, orElse: () => Effect.fail(failed) }));
-
-  const servers = listed.code === 0 ? decodeCodexServers(listed.stdout) : Option.none();
-
-  if (Option.isNone(servers)) return yield* failed;
-
-  return servers.value.map((server) => server.name).filter((name) => name !== ours);
-});
-
 /** Start the agent on the turn and wait for its reply. */
 const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit) {
   const ws = yield* Workspace;
@@ -269,7 +235,12 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
   const flags =
     agent === "claude"
       ? claudeImportFlags(phase, server, doc.link)
-      : codexImportConfig(phase, server, ours, yield* codexOtherServers(bin, ours));
+      : codexImportConfig(
+          phase,
+          server,
+          ours,
+          (yield* codexServerNames(bin)).filter((name) => name !== ours),
+        );
 
   // Without a session to resume, the prompt carries the conversation so far.
   const prompt = (session: SessionArgs) =>
