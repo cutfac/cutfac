@@ -164,6 +164,15 @@
   img {
     -webkit-user-drag: none;
   }
+  /* Scrollbars the way macOS draws them: thin, with no track, and only while the pointer is over
+     the area. A component's own scrollbar utilities still win. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover {
+    scrollbar-color: color-mix(in oklab, var(--foreground) 35%, transparent) transparent;
+  }
   html {
     @apply font-sans antialiased;
     color-scheme: dark;
