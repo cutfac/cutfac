@@ -3,7 +3,6 @@ dist/
 release/
 .env
 .env.*
-!.env.example
 .DS_Store
 
 # Internal notes and local agent settings

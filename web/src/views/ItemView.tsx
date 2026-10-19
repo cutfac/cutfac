@@ -326,7 +326,12 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     ),
                     setData,
                     setRun,
-                  ).then(clear),
+                  ).then((sentTo) => {
+                    // `/feedback` leaves the box drawn, so the request about it can still follow.
+                    if (sentTo === "item") clear();
+
+                    return sentTo;
+                  }),
               }}
               pins={pins}
               onPin={(feedback) => {

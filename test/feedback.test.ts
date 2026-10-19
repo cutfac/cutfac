@@ -1,32 +1,35 @@
 import { describe, expect, test } from "bun:test";
 
-import { feedbackUrl } from "../web/src/lib/feedback.ts";
+import { feedbackCommand, typingFeedbackCommand } from "../web/src/lib/feedback.ts";
 
-const context = { version: "0.1.0", locale: "ko-KR", platform: "macOS 15.4.0" };
-
-describe("feedbackUrl", () => {
-  test("links to the form with the context as hidden fields", () => {
-    const url = new URL(feedbackUrl("wQ8bKl", context) ?? "");
-
-    expect(url.origin).toBe("https://tally.so");
-    expect(url.pathname).toBe("/r/wQ8bKl");
-    expect(Object.fromEntries(url.searchParams)).toEqual(context);
+describe("feedbackCommand", () => {
+  test("takes what follows /feedback, across lines", () => {
+    expect(feedbackCommand("/feedback the timeline is slow")).toBe("the timeline is slow");
+    expect(feedbackCommand("  /feedback\nline one\nline two  ")).toBe("line one\nline two");
   });
 
-  test("encodes values that aren't URL-safe", () => {
-    const url = feedbackUrl("wQ8bKl", { ...context, platform: "Linux 6.8 & co" });
-
-    expect(url).toContain("platform=Linux+6.8+%26+co");
+  test("gives an empty message for the command alone", () => {
+    expect(feedbackCommand("/feedback")).toBe("");
+    expect(feedbackCommand("/feedback   ")).toBe("");
   });
 
-  test("trims the configured id", () => {
-    expect(feedbackUrl("  wQ8bKl\n", context)).toStartWith("https://tally.so/r/wQ8bKl?");
+  test("leaves other messages to the agent", () => {
+    expect(feedbackCommand("make it brighter")).toBeUndefined();
+    expect(feedbackCommand("/feedbackish")).toBeUndefined();
+    expect(feedbackCommand("send /feedback later")).toBeUndefined();
+  });
+});
+
+describe("typingFeedbackCommand", () => {
+  test("shows the hint once the command is being typed", () => {
+    expect(typingFeedbackCommand("/fe")).toBeTrue();
+    expect(typingFeedbackCommand("/feedback hi")).toBeTrue();
   });
 
-  test("has no link when the form isn't configured or the id isn't a form id", () => {
-    expect(feedbackUrl(undefined, context)).toBeUndefined();
-    expect(feedbackUrl("", context)).toBeUndefined();
-    expect(feedbackUrl("../evil", context)).toBeUndefined();
-    expect(feedbackUrl("https://tally.so/r/wQ8bKl", context)).toBeUndefined();
+  test("stays quiet otherwise", () => {
+    expect(typingFeedbackCommand("/")).toBeFalse();
+    expect(typingFeedbackCommand("/cut")).toBeFalse();
+    expect(typingFeedbackCommand("/feedbackish")).toBeFalse();
+    expect(typingFeedbackCommand("hello")).toBeFalse();
   });
 });

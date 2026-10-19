@@ -536,4 +536,18 @@ export const ko: Messages = {
     goToBox: "이 박스가 있는 프레임으로 이동",
     removeBox: "박스 지우기",
   },
+  teamFeedback: {
+    title: "피드백 보내기",
+    description:
+      "버그, 헷갈렸던 부분, 있었으면 하는 기능을 컷팩 팀에 알려주세요. 모든 메시지를 직접 읽어요.",
+    messageLabel: "내용",
+    placeholder: "무슨 일이 있었는지, 무엇이 있으면 좋을지 적어주세요",
+    emailLabel: "답장 받을 이메일",
+    emailHint: "선택이에요. 비워두면 익명으로 보내져요.",
+    send: "보내기",
+    failed: "피드백을 보내지 못했어요",
+    sent: "고마워요! 피드백이 컷팩 팀에 전달됐어요.",
+    slashHint: "/feedback 뒤의 내용은 에이전트가 아니라 컷팩 팀에 전달돼요.",
+    slashEmpty: "/feedback 뒤에 전할 내용을 적어주세요.",
+  },
 };

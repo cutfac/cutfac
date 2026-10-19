@@ -1,6 +1,7 @@
 import { ArrowUpIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { SlashFeedbackHint } from "@/components/feedback-dialog";
 import {
   InputGroup,
   InputGroupAddon,
@@ -11,15 +12,16 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 
 import type { AgentChoice } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { typingFeedbackCommand } from "../../lib/feedback.ts";
 import { agentLabel } from "./chat.tsx";
-import { composing, sendFailed, VersionsPicker } from "./composer.tsx";
+import { composing, type SentTo, sendFailed, VersionsPicker } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */
 export interface BoxAsk {
   /** Where the request goes: the agent picked in the chat, or a prompt to copy. */
   readonly agent: AgentChoice;
   /** Send the request about the box, asking for `versions` of it; rejects when it could not go. */
-  readonly onSend: (body: string, versions: number) => Promise<void>;
+  readonly onSend: (body: string, versions: number) => Promise<SentTo>;
 }
 
 interface BoxPromptProps {
@@ -51,10 +53,11 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
 
     ask
       .onSend(text, versions)
-      .then(() => {
+      .then((sentTo) => {
         setBody("");
+
         // Versions cost a run each, so the next request is a single edit unless asked again.
-        setVersions(1);
+        if (sentTo === "item") setVersions(1);
       }, sendFailed)
       .finally(() => setSending(false));
   }
@@ -109,6 +112,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
+        {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
       </PopoverContent>
     </Popover>
   );

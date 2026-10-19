@@ -123,7 +123,8 @@ plus content we prepare for you.
 - The server listens on `127.0.0.1` unless you pass `--host`, and refuses requests that other
   websites send it from your browser. [SECURITY.md](SECURITY.md) covers how to report a problem.
 - It only goes online when you ask it to: learning from a link (videos through your own `yt-dlp`)
-  or opening the feedback form. The Mac app also checks cutfac.com for updates, sending your
+  or sending feedback to the Cutfac team (your message, an optional reply address, and the app's
+  version, platform and language). The Mac app also checks cutfac.com for updates, sending your
   license key and nothing about your workspace.
 - Learn from videos you're allowed to download, and don't repost other people's videos.
 
@@ -259,13 +260,15 @@ point the `publish` url at a feed you serve. The app fetches `latest-mac.yml` fr
 the files it names next to it, and sends a license key only when one is saved in the app.
 `dist:desktop` builds stay unsigned and need none of this.
 
-### Feedback form
+### Feedback
 
-"Send feedback" in the sidebar opens a [Tally](https://tally.so) form in the browser. Set
-`VITE_FEEDBACK_FORM_ID` in `.env` (see `.env.example`) or the environment before building the web
-UI; without it the entry is hidden. The link fills the form's hidden fields `version`, `locale` and
-`platform` (`macOS 15.4.0` in the desktop app, `web` in a browser), so the form needs hidden fields
-with those names. Nothing is sent until the form is submitted.
+People can tell the Cutfac team something three ways: "Send feedback" in the sidebar, a message
+that starts with `/feedback` in the editor's message box, the box prompt or the import chat (it goes
+to the team, not the agent), or by asking their agent, which calls the `send_feedback_to_cutfac` MCP
+tool or the `feedback` prompt. The board posts to `/api/team-feedback`; the MCP tool sends from the
+MCP server itself. Either way `https://cutfac.com/api/feedback` gets the message, an optional reply
+address, the app's version, platform and language, which way it came, and the agent, if one was
+involved. Nothing else is sent.
 
 ## Workspace layout
 

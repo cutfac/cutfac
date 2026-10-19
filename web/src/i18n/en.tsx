@@ -579,6 +579,21 @@ export const en = {
     goToBox: "Go to the frame this box is on",
     removeBox: "Remove the box",
   },
+  teamFeedback: {
+    title: "Send feedback",
+    description:
+      "Tell the people who make Cutfac about a bug, a confusing step, or something you wish it did. We read every message.",
+    messageLabel: "Message",
+    placeholder: "What happened, or what would help?",
+    emailLabel: "Email for a reply",
+    emailHint: "Optional. Leave it empty to stay anonymous.",
+    send: "Send",
+    failed: "Could not send feedback",
+    sent: "Thanks! Your feedback reached the Cutfac team.",
+    /** Shows under a message box while its text starts with `/feedback`. */
+    slashHint: "/feedback sends the rest of the message to the Cutfac team, not to your agent.",
+    slashEmpty: "Write what to tell us after /feedback.",
+  },
 };
 
 export type Messages = typeof en;

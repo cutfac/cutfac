@@ -1,21 +1,19 @@
-/** What the feedback form pre-fills. The Tally form needs hidden fields with these exact names. */
-export interface FeedbackContext {
-  version: string;
-  locale: string;
-  platform: string;
+/** Matches a message that starts with `/feedback`, with what follows it after any whitespace. */
+const COMMAND = /^\/feedback(?:\s+([\s\S]*))?$/u;
+
+/**
+ * What a `/feedback` message tells the Cutfac team, trimmed, or undefined when the message is not
+ * the command and goes to the agent as usual. The command alone gives an empty string.
+ */
+export function feedbackCommand(text: string): string | undefined {
+  const match = COMMAND.exec(text.trim());
+
+  return match === null ? undefined : (match[1] ?? "").trim();
 }
 
-/** Tally form ids are short alphanumeric slugs, as in `https://tally.so/r/wQ8bKl`. */
-const FORM_ID = /^[A-Za-z0-9]+$/;
+/** Whether to tell the person what `/feedback` does: they have begun typing it. */
+export function typingFeedbackCommand(text: string): boolean {
+  const word = text.trimStart().split(/\s/u)[0] ?? "";
 
-/** The feedback form link with the context filled in, or undefined when no form is configured. */
-export function feedbackUrl(
-  formId: string | undefined,
-  context: FeedbackContext,
-): string | undefined {
-  const id = formId?.trim() ?? "";
-
-  if (!FORM_ID.test(id)) return undefined;
-
-  return `https://tally.so/r/${id}?${new URLSearchParams({ ...context }).toString()}`;
+  return word.length > 1 && "/feedback".startsWith(word);
 }

@@ -9,6 +9,7 @@ import {
 import { useEffect, useEffectEvent, useState, type KeyboardEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
 import { ErrorAlert, ListSkeleton } from "@/components/page";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
@@ -38,9 +39,17 @@ import {
 } from "@/components/ui/message-scroller";
 import { safeHttpUrl } from "@/lib/utils";
 
-import { api, onImportRun, type ImportDetail, type ImportTurn, type RunMessage } from "../api.ts";
+import {
+  api,
+  onImportRun,
+  type AgentName,
+  type ImportDetail,
+  type ImportTurn,
+  type RunMessage,
+} from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useLocale, useMessages } from "../i18n/index.ts";
+import { feedbackCommand, typingFeedbackCommand } from "../lib/feedback.ts";
 import { importState, isWorking, linkLabel, turnRun, type ImportState } from "../lib/imports.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import { agentLabel, clockTime, RunReport } from "./editor/chat.tsx";
@@ -186,6 +195,7 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
         ) : (
           <ImportComposer
             state={state}
+            agent={doc.agent}
             onSend={(body) => act(() => api.replyImport(id, body))}
             onStop={stop}
           />
@@ -329,24 +339,43 @@ function NextStep({ detail, state, onAllow, onRetry, onFinish }: NextStepProps) 
 
 interface ImportComposerProps {
   state: ImportState;
+  agent: AgentName;
   /** Resolves true once the server took the reply. */
   onSend: (body: string) => Promise<boolean>;
   onStop: () => void;
 }
 
-function ImportComposer({ state, onSend, onStop }: ImportComposerProps) {
+function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const working = isWorking(state);
   const text = body.trim();
+  // `/feedback` goes to the team, so it can go while the agent works too.
+  const blocked = working && feedbackCommand(text) === undefined;
   const t = useMessages();
 
+  /** Send the reply, or a `/feedback` message to the Cutfac team; true once it was taken. */
+  function deliver(reply: string): Promise<boolean> {
+    const feedback = feedbackCommand(reply);
+
+    if (feedback === undefined) return onSend(reply);
+
+    return sendSlashFeedback(feedback, agent).then(
+      () => true,
+      (cause: Error) => {
+        toast.error(cause.message);
+
+        return false;
+      },
+    );
+  }
+
   async function send() {
-    if (text === "" || working || sending) return;
+    if (text === "" || blocked || sending) return;
 
     setSending(true);
 
-    if (await onSend(text)) setBody("");
+    if (await deliver(text)) setBody("");
 
     setSending(false);
   }
@@ -370,39 +399,42 @@ function ImportComposer({ state, onSend, onStop }: ImportComposerProps) {
       : t.imports.placeholder.reply;
 
   return (
-    <InputGroup>
-      <InputGroupTextarea
-        value={body}
-        rows={2}
-        placeholder={placeholder}
-        aria-label={t.imports.reply}
-        onChange={(event) => setBody(event.target.value)}
-        onKeyDown={onKeyDown}
-      />
-      <InputGroupAddon align="block-end">
-        {working && text === "" ? (
-          <InputGroupButton
-            variant="secondary"
-            size="icon-sm"
-            className="ml-auto"
-            aria-label={t.composer.stop}
-            onClick={onStop}
-          >
-            <SquareIcon />
-          </InputGroupButton>
-        ) : (
-          <InputGroupButton
-            variant="default"
-            size="icon-sm"
-            className="ml-auto"
-            aria-label={t.composer.send}
-            disabled={text === "" || working || sending}
-            onClick={() => void send()}
-          >
-            <ArrowUpIcon />
-          </InputGroupButton>
-        )}
-      </InputGroupAddon>
-    </InputGroup>
+    <div className="flex w-full flex-col gap-2">
+      <InputGroup>
+        <InputGroupTextarea
+          value={body}
+          rows={2}
+          placeholder={placeholder}
+          aria-label={t.imports.reply}
+          onChange={(event) => setBody(event.target.value)}
+          onKeyDown={onKeyDown}
+        />
+        <InputGroupAddon align="block-end">
+          {working && text === "" ? (
+            <InputGroupButton
+              variant="secondary"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label={t.composer.stop}
+              onClick={onStop}
+            >
+              <SquareIcon />
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              variant="default"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label={t.composer.send}
+              disabled={text === "" || blocked || sending}
+              onClick={() => void send()}
+            >
+              <ArrowUpIcon />
+            </InputGroupButton>
+          )}
+        </InputGroupAddon>
+      </InputGroup>
+      {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+    </div>
   );
 }

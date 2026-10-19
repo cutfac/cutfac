@@ -13,6 +13,7 @@ import {
 import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
 
+import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +54,7 @@ import {
 import { desktop } from "../../desktop.ts";
 import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
+import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
@@ -175,15 +177,31 @@ export function editInput(
 }
 
 /**
- * Ask for an edit. The item comes back with the request on it, sent or lined up behind the item's
- * run; when it went to no agent, its prompt is copied to paste into one.
+ * Where a request went: onto the item as an edit, or to the Cutfac team as `/feedback`, which
+ * leaves the item, and what was picked on it, as they were.
+ */
+export type SentTo = "item" | "team";
+
+/**
+ * Ask for an edit, or pass a `/feedback` message on to the Cutfac team. The item comes back with
+ * the request on it, sent or lined up behind the item's run; when it went to no agent, its prompt
+ * is copied to paste into one.
  */
 export async function sendRequest(
   item: ItemDetail,
   input: EditInput,
   onItem: (item: ItemDetail) => void,
   onRun: OnRun,
-): Promise<void> {
+): Promise<SentTo> {
+  const feedback = feedbackCommand(input.body);
+
+  // `/feedback` is for the people who make Cutfac, so it never reaches the agent or the item.
+  if (feedback !== undefined) {
+    await sendSlashFeedback(feedback, input.agent);
+
+    return "team";
+  }
+
   onRun((run) => sendingRun(run, item, input));
 
   try {
@@ -194,6 +212,8 @@ export async function sendRequest(
     for (const warning of receipt.warnings) toast.warning(warning);
 
     if (receipt.sent === "queue") copyPrompt(receipt.prompt);
+
+    return "item";
   } catch (cause) {
     onRun(settledRun);
     throw cause;
@@ -417,16 +437,20 @@ export function Composer({
     setSending(true);
 
     try {
-      await sendRequest(
+      const sentTo = await sendRequest(
         item,
         editInput(text, agent, settings, media, target, versions),
         onItem,
         onRun,
       );
+
       setBody("");
-      // Versions cost a run each, so the next request is a single edit unless asked again.
-      setVersions(1);
-      onClearTarget();
+
+      if (sentTo === "item") {
+        // Versions cost a run each, so the next request is a single edit unless asked again.
+        setVersions(1);
+        onClearTarget();
+      }
     } catch (cause) {
       sendFailed(cause);
     } finally {
@@ -547,6 +571,7 @@ export function Composer({
           )}
         </InputGroupAddon>
       </InputGroup>
+      {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
     </div>
   );
 }

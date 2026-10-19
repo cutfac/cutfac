@@ -61,6 +61,18 @@ function send<T, Body>(method: "POST" | "PATCH", path: string, body: Body): Prom
   });
 }
 
+/** What a person tells the people who make Cutfac, from the board's dialog or a `/feedback` message. */
+export interface TeamFeedback {
+  message: string;
+  /** Where the team can reply; left out to stay anonymous. */
+  email?: string;
+  source: "board" | "slash";
+  platform: string;
+  locale: string;
+  /** The agent the person works with; left out, the server names the workspace's default. */
+  agent?: AgentName;
+}
+
 const q = (id: string) => `?id=${encodeURIComponent(id)}`;
 
 export const STATUSES = ["drafting", "review", "done", "archived"] as const;
@@ -633,6 +645,9 @@ export const api = {
   connectAgent: (agent: AgentName) =>
     send<AgentConnection, { agent: AgentName }>("POST", "/api/agents/connect", { agent }),
   feedback: () => request<OpenFeedback[]>("/api/feedback"),
+  /** Feedback for the Cutfac team, which the server passes on to cutfac.com. */
+  teamFeedback: (feedback: TeamFeedback) =>
+    send<{ ok: true }, TeamFeedback>("POST", "/api/team-feedback", feedback),
   learned: () => request<LearnedList>("/api/learned"),
   /** Learn a link, or a folder or file on this computer. */
   learn: (source: string) =>

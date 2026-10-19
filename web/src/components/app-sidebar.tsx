@@ -14,6 +14,7 @@ import {
 import { useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemDialog } from "@/components/new-item-dialog";
 import {
   DropdownMenu,
@@ -50,7 +51,6 @@ import {
   useLocale,
   useMessages,
 } from "../i18n/index.ts";
-import { feedbackUrl } from "../lib/feedback.ts";
 
 interface MainNavItem {
   view: "board" | "learn" | "templates";
@@ -284,7 +284,6 @@ interface AppSidebarProps {
 
 export function AppSidebar({ ws, view, id }: AppSidebarProps) {
   const t = useMessages();
-  const locale = useLocale();
   const { data: items } = useLive("items", api.items);
   const videos = sidebarVideos(items ?? []);
   const editing = view === "item" && id ? id : undefined;
@@ -292,13 +291,6 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
   // An open video that is not listed leaves Board lit, as the board is where it lives.
   const boardActive =
     view === "board" || (editing !== undefined && !videos.some((v) => v.id === editing));
-
-  // Undefined unless the build names a feedback form, so forks don't send feedback to ours.
-  const feedbackLink = feedbackUrl(import.meta.env.VITE_FEEDBACK_FORM_ID, {
-    version: import.meta.env.APP_VERSION,
-    locale,
-    platform: desktop?.platform ?? "web",
-  });
 
   return (
     <Sidebar collapsible="icon">
@@ -376,21 +368,16 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
             <span>{t.nav.setup}</span>
           </LinkRow>
           <LanguageMenu />
-          {feedbackLink === undefined ? null : (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip={t.nav.sendFeedback}
-                // The desktop app hands new-window links to the default browser.
-                render={
-                  // oxlint-disable-next-line jsx-a11y/control-has-associated-label -- the label is the button's children
-                  <a href={feedbackLink} target="_blank" rel="noopener noreferrer" />
-                }
-              >
-                <MessageSquareIcon />
-                <span>{t.nav.sendFeedback}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
+          <SidebarMenuItem>
+            <FeedbackDialog
+              trigger={
+                <SidebarMenuButton tooltip={t.nav.sendFeedback}>
+                  <MessageSquareIcon />
+                  <span>{t.nav.sendFeedback}</span>
+                </SidebarMenuButton>
+              }
+            />
+          </SidebarMenuItem>
         </SidebarMenu>
         <SidebarTrigger
           title={t.nav.toggle}
