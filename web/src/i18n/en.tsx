@@ -541,6 +541,29 @@ export const en = {
     stop: "Stop the agent",
     send: "Send (Enter)",
   },
+  /** Files the user drops, pastes or picks: kept with the item, and attached to a request. */
+  attachments: {
+    /** What a drop does on each area, shown while files are dragged over the window. */
+    drop: {
+      composer: "Attach",
+      stage: "Attach to the chat",
+      box: "Attach to the box request",
+      references: "Add as reference files",
+      media: "Add as new media",
+    },
+    attach: "Attach files",
+    uploading: "Uploading…",
+    folder: (name: string, files: number) =>
+      `${name}/ · ${files === 1 ? "1 file" : `${files} files`}`,
+    detach: (name: string) => `Detach ${name}`,
+    media: "Media",
+    references: "Reference files",
+    referencesEmpty: "Drop files here for agents to use",
+    attachTile: (name: string) => `Attach ${name} to the chat`,
+    remove: (name: string) => `Delete ${name}`,
+    removed: "Deleted",
+    undo: "Undo",
+  },
   compare: {
     open: "Compare",
     title: "Before and after",

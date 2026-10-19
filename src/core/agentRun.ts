@@ -32,6 +32,7 @@ import {
   baselineMillis,
   beginEdit,
   buildEditPrompt,
+  editImages,
   pendingVariants,
   resolveEdit,
   snapshotAfter,
@@ -94,7 +95,8 @@ export interface InvocationOptions extends SessionArgs {
   readonly mcpConfig?: string | undefined;
   /** Codex config entries that point its MCP server at this workspace. */
   readonly codexServer?: ReadonlyArray<string> | undefined;
-  readonly image?: string | undefined;
+  /** Pictures the agent should see: the marked frame and any the user attached. */
+  readonly images?: ReadonlyArray<string> | undefined;
   /** Hosts of the web pages the user pointed the item at, which the agent may read. */
   readonly hosts?: ReadonlyArray<string> | undefined;
   readonly model?: string | undefined;
@@ -195,7 +197,17 @@ const flag = (name: string, value: string | undefined) =>
 
 /** The headless command line for one edit request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
-  const { bin, prompt, mcpConfig, codexServer = [], image, hosts = [], model, effort } = options;
+  const {
+    bin,
+    prompt,
+    mcpConfig,
+    codexServer = [],
+    images = [],
+    hosts = [],
+    model,
+    effort,
+  } = options;
+
   const fetch = hosts.map((host) => `WebFetch(domain:${host})`);
   const search = hosts.length === 0 ? [] : ['web_search="live"'];
   // The schema keeps an effort to lowercase letters, so it is safe inside the TOML string.
@@ -221,7 +233,10 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
             ...codexServer,
           ]),
           ...flag("-m", model),
-          ...flag("--image", image),
+          // `--image` takes several values and would swallow the `-` that reads the prompt from
+          // stdin, so each goes in its own `=` form. It also splits on commas, so a path with one
+          // stays listed in the prompt only.
+          ...images.filter((image) => !image.includes(",")).map((image) => `--image=${image}`),
         ];
 
   return agentCommand(agent, bin, prompt, flags, options);
@@ -645,8 +660,7 @@ const performEdit = Effect.fnUntraced(function* (
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
   const servers = yield* runServers(cli, agent, bin);
-  const frame = f.context?.frame;
-  const image = frame === undefined ? undefined : yield* ws.abs(`${item.dir}/${frame}`);
+  const images = yield* editImages(item, f);
 
   yield* setRun(itemId, feedbackId, { ...pick, status: "running", startedAt });
 
@@ -664,7 +678,7 @@ const performEdit = Effect.fnUntraced(function* (
             formatTools,
           ),
           ...servers,
-          image,
+          images,
           hosts: sourceHosts(item.doc.sources),
           model,
           effort,

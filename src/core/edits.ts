@@ -17,7 +17,8 @@ import {
 } from "./items.ts";
 import { ABOUT_FILE } from "./learn.ts";
 import type { Format } from "./library.ts";
-import { extension, ffmpeg, type MediaKind } from "./media.ts";
+import { extension, ffmpeg, type MediaKind, mediaKind } from "./media.ts";
+import { REFERENCES } from "./references.ts";
 import {
   type AgentName,
   type AgentPick,
@@ -688,6 +689,23 @@ const sourceLines = Effect.fnUntraced(function* (item: Item) {
   );
 });
 
+/**
+ * The pictures an agent should see with a request, as absolute paths: the marked frame, then the
+ * attached images. A picture removed from the references while the request waited is left out.
+ */
+export const editImages = Effect.fn("edits.editImages")(function* (item: Item, f: Feedback) {
+  const ws = yield* Workspace;
+
+  const pictures = [
+    ...(f.context?.frame === undefined ? [] : [f.context.frame]),
+    ...(f.attachments ?? []).filter((path) => mediaKind(path) === "image"),
+  ];
+
+  const kept = yield* Effect.filter(pictures, (path) => ws.exists(`${item.dir}/${path}`));
+
+  return yield* Effect.forEach(kept, (path) => ws.abs(`${item.dir}/${path}`));
+});
+
 /** The message an agent receives for one request, headless or pasted by the user. */
 export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
   item: Item,
@@ -704,6 +722,22 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
     `Request: ${f.body}`,
     "",
   ];
+
+  if (f.attachments !== undefined && f.attachments.length > 0) {
+    const attached = yield* Effect.forEach(f.attachments, (path) => abs(path));
+    lines.push(
+      "Files the user attached to this request. Open them; never change them:",
+      ...attached.map((path) => `- ${path}`),
+      "",
+    );
+  }
+
+  if (yield* ws.exists(`${item.dir}/${REFERENCES}`)) {
+    lines.push(
+      `Reference files the user keeps for this item: ${yield* abs(REFERENCES)}. Look there when the request needs material.`,
+      "",
+    );
+  }
 
   const format = Option.getOrUndefined(yield* itemFormat(item.doc.format));
   const described = format === undefined ? undefined : yield* formatLines(format);

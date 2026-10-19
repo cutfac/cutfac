@@ -28,6 +28,7 @@ import { updateDetails } from "../core/history.ts";
 import { createItem, getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats, saveFormat } from "../core/library.ts";
+import { listReferences } from "../core/references.ts";
 import {
   DEFAULT_FRAMES,
   MAX_FRAMES,
@@ -99,6 +100,20 @@ const MediaFile = Schema.Struct({
   mtime: Schema.Finite.annotate(describe("epoch milliseconds")),
 });
 
+const ReferenceFile = Schema.Struct({
+  path: Schema.String.annotate(
+    describe("relative to the item folder, such as references/logo.png"),
+  ),
+  name: Schema.String,
+  dir: Schema.Boolean,
+  files: Schema.optional(
+    Schema.Finite.annotate(describe("for a folder: files in it, all the way down")),
+  ),
+  size: Schema.Finite.annotate(describe("bytes; for a folder, of everything in it")),
+  mtime: Schema.Finite.annotate(describe("epoch milliseconds")),
+  kind: Schema.optional(Schema.Literals(["video", "image"])),
+});
+
 const AbsDir = Schema.String.annotate(describe("absolute folder; read and write files here"));
 
 const Created = Schema.Struct({ id: Schema.String, absDir: AbsDir });
@@ -118,6 +133,11 @@ const ItemDetail = Schema.Struct({
   absDir: AbsDir,
   doc: ItemDoc,
   media: Schema.Array(MediaFile),
+  references: Schema.Array(ReferenceFile).annotate(
+    describe(
+      "files and folders the user gave this item to work from; read them, never change them",
+    ),
+  ),
   docs: Schema.Record(Schema.String, Schema.String).annotate(
     describe(`markdown files in the folder by name, cut at ${DOC_PREVIEW_CHARS} characters`),
   ),
@@ -248,7 +268,7 @@ const ListItems = tool("list_items", {
 
 const GetItem = tool("get_item", {
   description:
-    "Full item: item.yaml fields, media files, absolute folder path, and any markdown docs.",
+    "Full item: item.yaml fields, media files, the user's reference files, absolute folder path, and any markdown docs.",
   parameters: Schema.Struct({ id: Id }),
   success: ItemDetail,
   readonly: true,
@@ -627,6 +647,7 @@ const handlers = CutfacToolkit.toLayer(
             return {
               ...item,
               absDir: yield* ws.abs(item.dir),
+              references: yield* listReferences(item),
               docs: Object.fromEntries(docs),
             };
           }),

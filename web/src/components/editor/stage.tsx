@@ -1,6 +1,8 @@
 import { XIcon } from "lucide-react";
 import { useState, type PointerEvent, type ReactNode, type Ref } from "react";
 
+import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
+
 import type { Feedback, Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
@@ -78,6 +80,8 @@ interface StageProps {
   onRegion: (region: Region | undefined) => void;
   /** Where a request about a freshly drawn box goes, asked right beside the box. */
   ask: BoxAsk;
+  /** Files dropped on the frame with no box drawn, which go with the chat's next request. */
+  onAttach: (files: ReadonlyArray<DroppedFile>) => void;
   /** The requests on this media still in play; the ones about a box are numbered on it. */
   pins: ReadonlyArray<Pin>;
   onPin: (feedback: Feedback) => void;
@@ -97,6 +101,7 @@ export function Stage({
   ghost,
   onRegion,
   ask,
+  onAttach,
   pins,
   onPin,
 }: StageProps) {
@@ -107,6 +112,7 @@ export function Stage({
   const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
   const videoRatio = usePlayer(player, (state) => state.ratio);
   const frameRatio = (kind === "video" ? videoRatio : imageRatio) ?? ratio ?? 9 / 16;
+  const t = useMessages();
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -153,64 +159,83 @@ export function Stage({
 
   const draft = drag?.drawing === true ? boxBetween(drag.from, drag.to) : undefined;
 
-  return (
-    <div className="@container-size relative flex min-h-0 flex-1 items-center justify-center">
-      <div
-        style={{ "--ratio": frameRatio }}
-        className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] overflow-hidden rounded-xl bg-muted shadow-sm ring-1 ring-foreground/10"
-      >
-        {kind === "video" ? (
-          // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
-          <video
-            key={src}
-            ref={(video) => player.attach(video)}
-            src={src}
-            playsInline
-            preload="auto"
-            className="size-full object-contain"
-          />
-        ) : (
-          <img
-            src={src}
-            alt=""
-            className="size-full object-contain"
-            onLoad={(e) => {
-              const { naturalWidth, naturalHeight } = e.currentTarget;
+  /** With a box drawn, a dropped file is about the box; otherwise it goes to the chat. */
+  function onFiles(files: ReadonlyArray<DroppedFile>) {
+    if (region === undefined) {
+      onAttach(files);
 
-              if (naturalHeight > 0) setImageRatio(naturalWidth / naturalHeight);
-            }}
-          />
-        )}
+      return;
+    }
+
+    ask.files.add(files);
+    setAsking(region);
+  }
+
+  // The request box stays out of the drop area, which would otherwise take its drops too.
+  return (
+    <>
+      <Dropzone
+        label={region === undefined ? t.attachments.drop.stage : t.attachments.drop.box}
+        onFiles={onFiles}
+        className="@container-size flex min-h-0 flex-1 items-center justify-center"
+      >
         <div
-          aria-hidden="true"
-          className="absolute inset-0 cursor-crosshair touch-none"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={() => setDrag(undefined)}
-        />
-        {ghost !== undefined && ghost !== region ? <AreaMark box={ghost} look="ghost" /> : null}
-        {pins.map((pin) =>
-          pin.feedback.region === undefined ? null : (
-            <PinMark
-              key={pin.feedback.id}
-              player={player}
-              pin={pin}
-              region={pin.feedback.region}
-              onPin={onPin}
+          style={{ "--ratio": frameRatio }}
+          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] overflow-hidden rounded-xl bg-muted shadow-sm ring-1 ring-foreground/10"
+        >
+          {kind === "video" ? (
+            // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
+            <video
+              key={src}
+              ref={(video) => player.attach(video)}
+              src={src}
+              playsInline
+              preload="auto"
+              className="size-full object-contain"
             />
-          ),
-        )}
-        {region !== undefined && draft === undefined ? (
-          <RegionBox
-            ref={setAnchor}
-            player={player}
-            region={region}
-            onRemove={() => onRegion(undefined)}
+          ) : (
+            <img
+              src={src}
+              alt=""
+              className="size-full object-contain"
+              onLoad={(e) => {
+                const { naturalWidth, naturalHeight } = e.currentTarget;
+
+                if (naturalHeight > 0) setImageRatio(naturalWidth / naturalHeight);
+              }}
+            />
+          )}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 cursor-crosshair touch-none"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => setDrag(undefined)}
           />
-        ) : null}
-        {draft === undefined ? null : <AreaMark box={draft} look="draft" />}
-      </div>
+          {ghost !== undefined && ghost !== region ? <AreaMark box={ghost} look="ghost" /> : null}
+          {pins.map((pin) =>
+            pin.feedback.region === undefined ? null : (
+              <PinMark
+                key={pin.feedback.id}
+                player={player}
+                pin={pin}
+                region={pin.feedback.region}
+                onPin={onPin}
+              />
+            ),
+          )}
+          {region !== undefined && draft === undefined ? (
+            <RegionBox
+              ref={setAnchor}
+              player={player}
+              region={region}
+              onRemove={() => onRegion(undefined)}
+            />
+          ) : null}
+          {draft === undefined ? null : <AreaMark box={draft} look="draft" />}
+        </div>
+      </Dropzone>
       {region === undefined ? null : (
         <BoxPrompt
           ask={ask}
@@ -220,7 +245,7 @@ export function Stage({
           side={region.x + region.w / 2 < 0.5 ? "right" : "left"}
         />
       )}
-    </div>
+    </>
   );
 }
 

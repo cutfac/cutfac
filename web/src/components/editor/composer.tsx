@@ -6,6 +6,7 @@ import {
   FolderOpenIcon,
   LayersIcon,
   LinkIcon,
+  PaperclipIcon,
   PlusIcon,
   SquareIcon,
   XIcon,
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dropzone } from "@/components/ui/dropzone";
 import {
   InputGroup,
   InputGroupAddon,
@@ -56,10 +58,12 @@ import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { sourceKey, sourceOf, sourceView } from "../../lib/sources.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
+import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 
 /** What the request points at, which picks the starting points and the placeholder. */
@@ -160,10 +164,13 @@ export function editInput(
   media: Media | undefined,
   target: Target,
   versions = 1,
+  attachments: ReadonlyArray<string> = [],
 ) {
   const input: EditInput = { body, agent, ...settings };
 
   if (versions > 1) input.variants = versions;
+
+  if (attachments.length > 0) input.attachments = [...attachments];
 
   if (media !== undefined) input.media = media.name;
 
@@ -223,10 +230,6 @@ export async function sendRequest(
 /** Enter while an IME is composing (Korean, Japanese, …) confirms the syllable, not the message. */
 export const composing = (event: KeyboardEvent<HTMLElement>) =>
   event.nativeEvent.isComposing || event.keyCode === 229;
-
-/** Show why a request could not be sent. */
-export const sendFailed = (cause: unknown) =>
-  toast.error(cause instanceof Error ? cause.message : String(cause));
 
 /** The agent picker's choices; an agent that is not installed shows but cannot be picked. */
 const agentItems = (statuses: ReadonlyArray<AgentStatus> | undefined, t: Messages) =>
@@ -397,6 +400,8 @@ interface ComposerProps {
   /** An agent is working on this item, so an empty composer offers to stop it. */
   running: boolean;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  /** Files going with the next request. */
+  files: Attachments;
   onItem: (item: ItemDetail) => void;
   onRun: OnRun;
   onClearTarget: () => void;
@@ -418,28 +423,34 @@ export function Composer({
   onPick,
   running,
   inputRef,
+  files,
   onItem,
   onRun,
   onClearTarget,
   onStop,
 }: ComposerProps) {
   const [body, setBody] = useState("");
+  const openFiles = useRef<() => void>(null);
   const [sending, setSending] = useState(false);
   const [versions, setVersions] = useState(1);
   const empty = isEmptyTarget(target);
   const text = body.trim();
   const t = useMessages();
   const scope = scopeOf(target, media);
+  // A file still uploading would be left out of the request.
+  const ready = text !== "" && !sending && files.uploading === 0;
 
   async function send() {
-    if (text === "" || sending) return;
+    if (!ready) return;
 
     setSending(true);
 
     try {
+      const attached = attachedReferences(item, files.paths).map((reference) => reference.path);
+
       const sentTo = await sendRequest(
         item,
-        editInput(text, agent, settings, media, target, versions),
+        editInput(text, agent, settings, media, target, versions, attached),
         onItem,
         onRun,
       );
@@ -450,6 +461,7 @@ export function Composer({
         // Versions cost a run each, so the next request is a single edit unless asked again.
         setVersions(1);
         onClearTarget();
+        files.clear();
       }
     } catch (cause) {
       sendFailed(cause);
@@ -473,105 +485,118 @@ export function Composer({
   const status = statusOf(statuses, agent);
 
   return (
-    <div className="flex flex-col gap-2 border-t p-3">
-      <div className="flex flex-wrap gap-1.5">
-        {t.composer.ideas[scope].map((idea) => (
-          <Button
-            key={idea}
-            variant="outline"
-            size="xs"
-            onClick={() => {
-              setBody(idea);
-              inputRef.current?.focus();
-            }}
-          >
-            {idea}
-          </Button>
-        ))}
-      </div>
-      <SourceChips item={item} onItem={onItem} />
-      <InputGroup>
-        <InputGroupAddon align="block-start">
-          {empty ? (
-            <InputGroupText>
-              <CrosshairIcon />
-              {media === undefined ? t.chat.newMedia : t.composer.wholeVideo}
-            </InputGroupText>
-          ) : (
-            <span className="flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
-              {describeTarget(target, t.target.boxAt)}
+    <Dropzone paste label={t.attachments.drop.composer} openRef={openFiles} onFiles={files.add}>
+      <div className="flex flex-col gap-2 border-t p-3">
+        <div className="flex flex-wrap gap-1.5">
+          {t.composer.ideas[scope].map((idea) => (
+            <Button
+              key={idea}
+              variant="outline"
+              size="xs"
+              onClick={() => {
+                setBody(idea);
+                inputRef.current?.focus();
+              }}
+            >
+              {idea}
+            </Button>
+          ))}
+        </div>
+        <SourceChips item={item} onItem={onItem} />
+        <AttachmentChips item={item} files={files} />
+        <InputGroup>
+          <InputGroupAddon align="block-start">
+            {empty ? (
+              <InputGroupText>
+                <CrosshairIcon />
+                {media === undefined ? t.chat.newMedia : t.composer.wholeVideo}
+              </InputGroupText>
+            ) : (
+              <span className="flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
+                {describeTarget(target, t.target.boxAt)}
+                <InputGroupButton
+                  size="icon-xs"
+                  aria-label={t.composer.clear}
+                  onClick={onClearTarget}
+                >
+                  <XIcon />
+                </InputGroupButton>
+              </span>
+            )}
+          </InputGroupAddon>
+          <InputGroupTextarea
+            ref={inputRef}
+            value={body}
+            rows={2}
+            placeholder={t.composer.placeholder[scope]}
+            aria-label={t.composer.request}
+            onChange={(event) => setBody(event.target.value)}
+            onKeyDown={onKeyDown}
+          />
+          <InputGroupAddon align="block-end">
+            {/* Packed close, so a narrow chat still has room for the model's name. */}
+            <div className="flex min-w-0 items-center gap-1">
+              <AddSource item={item} onItem={onItem} />
               <InputGroupButton
-                size="icon-xs"
-                aria-label={t.composer.clear}
-                onClick={onClearTarget}
+                size="icon-sm"
+                aria-label={t.attachments.attach}
+                onClick={() => openFiles.current?.()}
               >
-                <XIcon />
+                <PaperclipIcon />
               </InputGroupButton>
-            </span>
-          )}
-        </InputGroupAddon>
-        <InputGroupTextarea
-          ref={inputRef}
-          value={body}
-          rows={2}
-          placeholder={t.composer.placeholder[scope]}
-          aria-label={t.composer.request}
-          onChange={(event) => setBody(event.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <InputGroupAddon align="block-end">
-          <AddSource item={item} onItem={onItem} />
-          <Select
-            items={choices}
-            value={agent}
-            onValueChange={(value) => {
-              if (value !== null) onAgent(value);
-            }}
-          >
-            <SelectTrigger size="sm" aria-label={t.composer.agent}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              {choices.map((option) => (
-                <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {agent !== "queue" && offersModels(status) ? (
-            <ModelPicker
-              status={status}
-              settings={settings}
-              onPick={(next) => onPick(agent, next)}
-            />
-          ) : null}
-          <VersionsPicker value={versions} onChange={setVersions} />
-          {running && text === "" ? (
-            <InputGroupButton
-              variant="secondary"
-              size="icon-sm"
-              className="ml-auto"
-              aria-label={t.composer.stop}
-              onClick={onStop}
-            >
-              <SquareIcon />
-            </InputGroupButton>
-          ) : (
-            <InputGroupButton
-              variant="default"
-              size="icon-sm"
-              className="ml-auto"
-              aria-label={t.composer.send}
-              disabled={text === "" || sending}
-              onClick={() => void send()}
-            >
-              <ArrowUpIcon />
-            </InputGroupButton>
-          )}
-        </InputGroupAddon>
-      </InputGroup>
-      {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
-    </div>
+              <Select
+                items={choices}
+                value={agent}
+                onValueChange={(value) => {
+                  if (value !== null) onAgent(value);
+                }}
+              >
+                <SelectTrigger size="sm" aria-label={t.composer.agent}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {choices.map((option) => (
+                    <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {agent !== "queue" && offersModels(status) ? (
+                <ModelPicker
+                  status={status}
+                  settings={settings}
+                  onPick={(next) => onPick(agent, next)}
+                />
+              ) : null}
+              <VersionsPicker value={versions} onChange={setVersions} />
+            </div>
+            {running && text === "" ? (
+              <InputGroupButton
+                variant="secondary"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label={t.composer.stop}
+                onClick={onStop}
+              >
+                <SquareIcon />
+              </InputGroupButton>
+            ) : (
+              <InputGroupButton
+                variant="default"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label={t.composer.send}
+                disabled={!ready}
+                onClick={() => void send()}
+              >
+                <ArrowUpIcon />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
+        {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+      </div>
+    </Dropzone>
   );
 }

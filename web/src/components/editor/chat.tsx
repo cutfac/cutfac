@@ -81,6 +81,7 @@ import {
   type ToolStep,
 } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf, type Target } from "../../lib/target.ts";
+import { SentAttachments, type Attachments } from "./attachments.tsx";
 import { CompareDialog, VersionsDialog } from "./compare-dialog.tsx";
 import { composing, Composer, copyPrompt } from "./composer.tsx";
 
@@ -130,6 +131,8 @@ interface ChatProps {
   picks: ModelPicks;
   onPick: (agent: AgentName, settings: ModelSettings) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  /** Files going with the next request. */
+  files: Attachments;
   onItem: (item: ItemDetail) => void;
   onRun: OnRun;
   onClearTarget: () => void;
@@ -153,6 +156,7 @@ export function Chat({
   picks,
   onPick,
   inputRef,
+  files,
   onItem,
   onRun,
   onClearTarget,
@@ -275,6 +279,7 @@ export function Chat({
         onPick={onPick}
         running={running}
         inputRef={inputRef}
+        files={files}
         onItem={onItem}
         onRun={onRun}
         onClearTarget={onClearTarget}
@@ -370,6 +375,7 @@ function Request({ item, feedback, number, ahead, live, statuses, actions }: Req
               </BubbleContent>
             </Bubble>
           )}
+          <SentAttachments item={item} paths={feedback.attachments ?? []} />
           <MessageFooter>
             <span className="tabular-nums">#{number}</span> · {feedback.media ?? t.chat.newMedia} ·{" "}
             {clockTime(feedback.at, locale)}

@@ -107,6 +107,7 @@ function AddSource({ onLearned }: { onLearned: () => void }) {
   return (
     <div
       className={`flex flex-col gap-3 rounded-3xl border p-4 transition-colors ${dragging ? "border-ring bg-muted/50" : ""}`}
+      data-drop-target=""
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);

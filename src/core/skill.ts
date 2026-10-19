@@ -44,6 +44,7 @@ export const BUNDLED_SKILL: BundledSkill = {
     "4c8bf750bb30a835802666cef8cf0353b5a0a345ef02f7bb0ec500523cc8bf78",
     "637545b0a71f9ad9a8687bdb7c69315331ec5657cf8a357cae3d6b120701ef8c",
     "3a4582b48c0e3d488c1b5e4dfe0a7d099262c4b5c7243f5e367cf48da4c4a51d",
+    "4438bd0df4607db73e318eebed97276d1a0ae4210c7963b6fa648c046937d91f",
   ]),
 };
 

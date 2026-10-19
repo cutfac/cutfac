@@ -212,6 +212,13 @@ const targetFields = {
   region: Schema.optional(Region),
 };
 
+/** Files the user put in with a request, kept in the item's references folder. */
+const attachments = Schema.optional(
+  Schema.Array(Schema.String).annotate(
+    describe("item-relative files under references/ the user attached to the request"),
+  ),
+);
+
 const rangeIsOrdered = Schema.makeFilter(
   (t: { readonly timecode?: number | undefined; readonly end?: number | undefined }) =>
     t.end === undefined ||
@@ -226,6 +233,7 @@ export const Feedback = Schema.Struct({
   author: Schema.String.pipe(withDefault("you")),
   body: Schema.String,
   ...targetFields,
+  attachments,
   context: Schema.optional(EditContext),
   variants: Schema.optional(Variants),
   run: Schema.optional(AgentRun),
@@ -258,6 +266,7 @@ export const FeedbackInput = Schema.Struct({
   body: Schema.String,
   author: Schema.optional(Schema.String),
   ...targetFields,
+  attachments,
   variants: Schema.optional(
     Schema.Finite.check(
       Schema.isInt(),

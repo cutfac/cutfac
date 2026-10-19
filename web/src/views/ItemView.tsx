@@ -6,19 +6,13 @@ import {
   Redo2Icon,
   Undo2Icon,
 } from "lucide-react";
-import {
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-} from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
 import {
   Empty,
   EmptyContent,
@@ -48,6 +42,7 @@ import {
   type Media,
   type Status,
 } from "../api.ts";
+import { FileStrip, ReferenceStrip, useAttachments } from "../components/editor/attachments.tsx";
 import { agentLabel, Chat } from "../components/editor/chat.tsx";
 import { Checks } from "../components/editor/checks.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
@@ -135,6 +130,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   // The server refuses to step through the history while an agent writes to the item.
   const running = item !== undefined && (item.running || run.status === "running");
   const history = useItemHistory(setData);
+  // The files going with the chat's next request, and with the next request about a box.
+  const chatFiles = useAttachments(id, setData);
+  const boxFiles = useAttachments(id, setData);
   const t = useMessages();
 
   useEffect(
@@ -155,6 +153,18 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   };
 
   const focusComposer = () => inputRef.current?.focus({ preventScroll: true });
+
+  /** Show the chat with the cursor in its box, once files are attached to its next request. */
+  function toChat() {
+    setTab("chat");
+    // The chat's tab is hidden until the switch renders.
+    requestAnimationFrame(focusComposer);
+  }
+
+  function attachToChat(files: ReadonlyArray<DroppedFile>) {
+    chatFiles.add(files);
+    toChat();
+  }
 
   /** Show `name` and put the playhead at `at`, waiting for the file to load if it is another. */
   function goTo(name: string | undefined, at: number | undefined) {
@@ -312,8 +322,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 setGhost(undefined);
               }}
               ask={{
+                item,
                 agent,
-                onSend: (body, versions) =>
+                files: boxFiles,
+                onSend: (body, versions, attachments) =>
                   sendRequest(
                     item,
                     editInput(
@@ -323,6 +335,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                       media,
                       target,
                       versions,
+                      attachments,
                     ),
                     setData,
                     setRun,
@@ -333,6 +346,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     return sentTo;
                   }),
               }}
+              onAttach={attachToChat}
               pins={pins}
               onPin={(feedback) => {
                 show(feedback);
@@ -370,13 +384,34 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             ) : (
               <p className="text-center text-xs text-muted-foreground">{t.item.imageHint}</p>
             )}
-            <MediaStrip
-              item={item}
-              shown={media}
-              onPick={pick}
-              onItem={setData}
-              onUploaded={setMediaName}
-            />
+            <div className="flex shrink-0 gap-3">
+              <MediaStrip
+                item={item}
+                shown={media}
+                onPick={pick}
+                onItem={setData}
+                onUploaded={setMediaName}
+              />
+              <ReferenceStrip
+                item={item}
+                onItem={setData}
+                onAttach={(path) => {
+                  chatFiles.attach(path);
+                  toChat();
+                }}
+                onDetach={(path) => {
+                  const holding = [chatFiles, boxFiles].filter((files) =>
+                    files.paths.includes(path),
+                  );
+
+                  for (const files of holding) files.detach(path);
+
+                  return () => {
+                    for (const files of holding) files.attach(path);
+                  };
+                }}
+              />
+            </div>
           </>
         )}
       </section>
@@ -403,6 +438,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               picks={picks}
               onPick={setPick}
               inputRef={inputRef}
+              files={chatFiles}
               onItem={setData}
               onRun={setRun}
               onClearTarget={clear}
@@ -535,7 +571,7 @@ function Toolbar({
   );
 }
 
-/** Upload the first file in a drop or a file picker; the server names it with its aspect. */
+/** Upload a file as new media of the item; the server names it with its aspect. */
 function useUpload(
   item: ItemDetail,
   onItem: (item: ItemDetail) => void,
@@ -564,18 +600,12 @@ function useUpload(
 
   return {
     uploading,
-    fromInput: (event: ChangeEvent<HTMLInputElement>) => {
-      upload(event.target.files?.[0]);
-      event.target.value = "";
-    },
-    fromDrop: (event: DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      upload(event.dataTransfer.files[0]);
-    },
+    /** Takes the first of the files dropped or picked. */
+    fromFiles: (files: ReadonlyArray<DroppedFile>) => upload(files[0]?.file),
   };
 }
 
-const allowDrop = (event: DragEvent<HTMLElement>) => event.preventDefault();
+const MEDIA_ACCEPT = "video/*,image/*";
 
 function NoMedia({
   item,
@@ -586,36 +616,41 @@ function NoMedia({
   onItem: (item: ItemDetail) => void;
   onUploaded: (name: string) => void;
 }) {
-  const { uploading, fromInput, fromDrop } = useUpload(item, onItem, onUploaded);
+  const { uploading, fromFiles } = useUpload(item, onItem, onUploaded);
+  const openFiles = useRef<() => void>(null);
   const t = useMessages();
 
   return (
-    <div
-      className="flex flex-1 rounded-3xl border border-dashed"
-      onDragOver={allowDrop}
-      onDrop={fromDrop}
+    <Dropzone
+      label={t.attachments.drop.media}
+      accept={MEDIA_ACCEPT}
+      multiple={false}
+      openRef={openFiles}
+      onFiles={fromFiles}
+      className="flex flex-1"
     >
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <ClapperboardIcon />
-          </EmptyMedia>
-          <EmptyTitle>{t.item.noMediaTitle}</EmptyTitle>
-          <EmptyDescription>{t.item.noMediaBody}</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <label className={buttonVariants({ variant: "outline" })}>
-            {uploading ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <PlusIcon data-icon="inline-start" />
-            )}
-            {t.item.addMedia}
-            <input type="file" accept="video/*,image/*" className="sr-only" onChange={fromInput} />
-          </label>
-        </EmptyContent>
-      </Empty>
-    </div>
+      <div className="flex flex-1 rounded-3xl border border-dashed">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ClapperboardIcon />
+            </EmptyMedia>
+            <EmptyTitle>{t.item.noMediaTitle}</EmptyTitle>
+            <EmptyDescription>{t.item.noMediaBody}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={() => openFiles.current?.()}>
+              {uploading ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <PlusIcon data-icon="inline-start" />
+              )}
+              {t.item.addMedia}
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </div>
+    </Dropzone>
   );
 }
 
@@ -633,14 +668,18 @@ function MediaStrip({
   onItem: (item: ItemDetail) => void;
   onUploaded: (name: string) => void;
 }) {
-  const { uploading, fromInput, fromDrop } = useUpload(item, onItem, onUploaded);
+  const { uploading, fromFiles } = useUpload(item, onItem, onUploaded);
   const t = useMessages();
 
   return (
-    <div
-      className="flex shrink-0 gap-2 overflow-x-auto pb-1"
-      onDragOver={allowDrop}
-      onDrop={fromDrop}
+    <FileStrip
+      title={t.attachments.media}
+      label={t.attachments.drop.media}
+      addLabel={t.item.addMedia}
+      accept={MEDIA_ACCEPT}
+      multiple={false}
+      uploading={uploading}
+      onFiles={fromFiles}
     >
       {item.media.map((media) => (
         <button
@@ -657,15 +696,7 @@ function MediaStrip({
           </span>
         </button>
       ))}
-      <label
-        className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-1 text-xs text-muted-foreground select-none hover:bg-muted has-focus-visible:bg-muted"
-        title={t.item.addMedia}
-      >
-        {uploading ? <Spinner /> : <PlusIcon className="size-4" />}
-        {t.item.add}
-        <input type="file" accept="video/*,image/*" className="sr-only" onChange={fromInput} />
-      </label>
-    </div>
+    </FileStrip>
   );
 }
 

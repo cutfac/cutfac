@@ -1,7 +1,8 @@
-import { ArrowUpIcon } from "lucide-react";
+import { ArrowUpIcon, PaperclipIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { SlashFeedbackHint } from "@/components/feedback-dialog";
+import { Dropzone } from "@/components/ui/dropzone";
 import {
   InputGroup,
   InputGroupAddon,
@@ -10,18 +11,30 @@ import {
 } from "@/components/ui/input-group";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 
-import type { AgentChoice } from "../../api.ts";
+import type { AgentChoice, ItemDetail } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { typingFeedbackCommand } from "../../lib/feedback.ts";
+import { sendFailed } from "../../lib/notify.ts";
+import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { agentLabel } from "./chat.tsx";
-import { composing, type SentTo, sendFailed, VersionsPicker } from "./composer.tsx";
+import { composing, type SentTo, VersionsPicker } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */
 export interface BoxAsk {
+  readonly item: ItemDetail;
   /** Where the request goes: the agent picked in the chat, or a prompt to copy. */
   readonly agent: AgentChoice;
-  /** Send the request about the box, asking for `versions` of it; rejects when it could not go. */
-  readonly onSend: (body: string, versions: number) => Promise<SentTo>;
+  /** Files going with the request about the box. */
+  readonly files: Attachments;
+  /**
+   * Send the request about the box, asking for `versions` of it, with the reference files
+   * attached; rejects when it could not go.
+   */
+  readonly onSend: (
+    body: string,
+    versions: number,
+    attachments: ReadonlyArray<string>,
+  ) => Promise<SentTo>;
 }
 
 interface BoxPromptProps {
@@ -43,21 +56,32 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
   const [sending, setSending] = useState(false);
   const [versions, setVersions] = useState(1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const openFiles = useRef<() => void>(null);
   const text = body.trim();
   const t = useMessages();
+  const { files } = ask;
+  // A file still uploading would be left out of the request.
+  const ready = text !== "" && !sending && files.uploading === 0;
 
   function send() {
-    if (text === "" || sending) return;
+    if (!ready) return;
 
     setSending(true);
 
     ask
-      .onSend(text, versions)
+      .onSend(
+        text,
+        versions,
+        attachedReferences(ask.item, files.paths).map((reference) => reference.path),
+      )
       .then((sentTo) => {
         setBody("");
 
-        // Versions cost a run each, so the next request is a single edit unless asked again.
-        if (sentTo === "item") setVersions(1);
+        if (sentTo === "item") {
+          // Versions cost a run each, so the next request is a single edit unless asked again.
+          setVersions(1);
+          files.clear();
+        }
       }, sendFailed)
       .finally(() => setSending(false));
   }
@@ -78,41 +102,53 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
         initialFocus={inputRef}
         finalFocus={false}
       >
-        <InputGroup>
-          <InputGroupTextarea
-            ref={inputRef}
-            value={body}
-            rows={2}
-            placeholder={t.composer.placeholder.box}
-            aria-label={t.boxPrompt.label}
-            onChange={(event) => setBody(event.target.value)}
-            onKeyDown={(event) => {
-              if (composing(event)) return;
+        <Dropzone paste label={t.attachments.drop.box} openRef={openFiles} onFiles={files.add}>
+          <div className="flex flex-col gap-2">
+            <AttachmentChips item={ask.item} files={files} />
+            <InputGroup>
+              <InputGroupTextarea
+                ref={inputRef}
+                value={body}
+                rows={2}
+                placeholder={t.composer.placeholder.box}
+                aria-label={t.boxPrompt.label}
+                onChange={(event) => setBody(event.target.value)}
+                onKeyDown={(event) => {
+                  if (composing(event)) return;
 
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                send();
-              }
-            }}
-          />
-          <InputGroupAddon align="block-end">
-            <VersionsPicker value={versions} onChange={setVersions} />
-            <span className="min-w-0 truncate text-xs font-normal">
-              {t.boxPrompt.hint(ask.agent === "queue" ? undefined : agentLabel(ask.agent))}
-            </span>
-            <InputGroupButton
-              variant="default"
-              size="icon-sm"
-              className="ml-auto"
-              aria-label={t.boxPrompt.send}
-              disabled={text === "" || sending}
-              onClick={send}
-            >
-              <ArrowUpIcon />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-        {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <InputGroupAddon align="block-end">
+                <InputGroupButton
+                  size="icon-sm"
+                  aria-label={t.attachments.attach}
+                  onClick={() => openFiles.current?.()}
+                >
+                  <PaperclipIcon />
+                </InputGroupButton>
+                <VersionsPicker value={versions} onChange={setVersions} />
+                <span className="min-w-0 truncate text-xs font-normal">
+                  {t.boxPrompt.hint(ask.agent === "queue" ? undefined : agentLabel(ask.agent))}
+                </span>
+                <InputGroupButton
+                  variant="default"
+                  size="icon-sm"
+                  className="ml-auto"
+                  aria-label={t.boxPrompt.send}
+                  disabled={!ready}
+                  onClick={send}
+                >
+                  <ArrowUpIcon />
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+            {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+          </div>
+        </Dropzone>
       </PopoverContent>
     </Popover>
   );

@@ -245,6 +245,55 @@ describe("routes", () => {
     expect(text.status).toBe(400);
   });
 
+  test("keeps dropped files as references and lists them on the request that attached them", async () => {
+    await sendJson("POST", "/api/items", { title: "Clip" });
+
+    const form = new FormData();
+    form.append("files", new File(["png"], "logo.png"));
+    form.append("paths", "/logo.png");
+    form.append("files", new File(["jpg"], "a.jpg"));
+    form.append("paths", "/photos/a.jpg");
+
+    const added = await send("/api/item/references?id=clip", { method: "POST", body: form });
+
+    expect(added.status).toBe(200);
+    expect(await added.json()).toMatchObject({
+      added: ["references/logo.png", "references/photos"],
+      item: {
+        media: [],
+        references: [
+          { path: "references/logo.png", kind: "image" },
+          { path: "references/photos", dir: true, files: 1 },
+        ],
+      },
+    });
+
+    const edit = await sendJson("POST", "/api/item/edit?id=clip", {
+      agent: "queue",
+      body: "Put the logo in the corner",
+      attachments: ["references/logo.png"],
+    });
+
+    // SAFETY: the edit route answers with this field.
+    const { prompt } = (await edit.json()) as { prompt: string };
+
+    expect(prompt).toContain(`${t.root}/items/clip/references/logo.png`);
+
+    const removed = await sendJson("POST", "/api/item/references/remove?id=clip", {
+      path: "references/photos",
+    });
+
+    expect(await removed.json()).toMatchObject({
+      references: [{ path: "references/logo.png" }],
+    });
+
+    const outside = await sendJson("POST", "/api/item/references/remove?id=clip", {
+      path: "item.yaml",
+    });
+
+    expect(outside.status).toBe(400);
+  });
+
   test("queues an edit request with a copyable prompt", async () => {
     await sendJson("POST", "/api/items", { title: "Hook", hook: "Wait for it" });
 

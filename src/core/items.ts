@@ -3,6 +3,7 @@ import { Crypto, Effect, Option, Path, Schema } from "effect";
 import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import { inputFieldsOf, resolveInputs } from "./formatSpec.ts";
 import { aspectOf, extension, type MediaFile, mediaKind, probe, toMediaFiles } from "./media.ts";
+import { checkAttachments } from "./references.ts";
 import {
   type AgentPick,
   type Feedback,
@@ -294,6 +295,9 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
 
   if (body === "") return yield* new InvalidRequest({ message: "Feedback needs a message" });
 
+  const ws = yield* Workspace;
+  const attachments = yield* checkAttachments(itemDir(ws, id), input.attachments);
+
   const entry: Feedback = {
     id: yield* shortId,
     at: yield* nowIso,
@@ -303,6 +307,7 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
     timecode: input.timecode,
     end: input.end,
     region: input.region,
+    attachments,
     variants:
       input.variants === undefined || input.variants < 2
         ? undefined

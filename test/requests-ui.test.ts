@@ -47,6 +47,7 @@ function itemWith(feedback: Feedback[], extra: Partial<ItemDetail> = {}): ItemDe
     },
     history: { cursor: 0, entries: [], versions: [], heads: {} },
     reviews: [],
+    references: [],
     updatedAt: 0,
     ...extra,
   };

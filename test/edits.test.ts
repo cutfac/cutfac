@@ -146,12 +146,19 @@ describe("agent CLIs", () => {
   });
 
   test("codex reads the prompt from stdin and resumes by thread id", () => {
-    const first = agentInvocation("codex", { ...opts, sessionId: undefined, image: "/f.png" });
+    const first = agentInvocation("codex", {
+      ...opts,
+      sessionId: undefined,
+      images: ["/f.png", "/a,b.png"],
+    });
+
     const next = agentInvocation("codex", { ...opts, sessionId: "t1" });
 
     expect(first.args.slice(0, 2)).toEqual(["exec", "--json"]);
     expect(first.args.at(-1)).toBe("-");
-    expect(first.args).toContain("/f.png");
+    // In `=` form, so the flag cannot take the `-` that reads the prompt; a comma would split it.
+    expect(first.args.at(-2)).toBe("--image=/f.png");
+    expect(first.args.join(" ")).not.toContain("a,b.png");
     expect(next.args.slice(0, 2)).toEqual(["exec", "resume"]);
     expect(next.args.slice(-2)).toEqual(["t1", "-"]);
   });

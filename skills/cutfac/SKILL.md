@@ -171,6 +171,13 @@ change anything. Write the result over the same media file name and never touch 
 user compares the two and keeps or rolls back the edit. Change only the selected part unless the
 request says otherwise, and end with a plain summary for someone who does not use video editors.
 
+Files the user drops or pastes on the board are kept in the item's `references/` folder; a dropped
+folder keeps its structure. A request lists the ones attached to it in `attachments`, and
+`get_item` lists them all under `references`. Open them, use them as material, and never change or
+delete them. A logo or font meant for every video of a template belongs in that template: copy it
+into the format folder and add its path to the format's `references` with `save_format`, sending
+the rest of `format.yaml` unchanged.
+
 A request with `variants.wanted` asks for that many versions to compare side by side. Make clearly
 different takes, not small tweaks of one. For each, render it over the same media file name from the
 request (not from the last version), check it, then `save_variant` with a few words on how it

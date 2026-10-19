@@ -90,6 +90,27 @@ export interface Media {
   mtime: number;
 }
 
+/** A file or folder in an item's `references/`. */
+export interface Reference {
+  /** Item-relative, such as `references/logo.png`. */
+  path: string;
+  name: string;
+  dir: boolean;
+  /** For a folder: how many files are in it, all the way down. */
+  files?: number;
+  /** Bytes; for a folder, of everything in it. */
+  size: number;
+  mtime: number;
+  /** Set for a picture or video, which shows as a thumbnail. */
+  kind?: MediaKind;
+}
+
+/** A file to upload with its path in what the user dropped: `logo.png`, `photos/a.jpg`. */
+export interface Upload {
+  file: File;
+  path: string;
+}
+
 export type AgentName = "claude" | "codex";
 
 export type AgentChoice = AgentName | "queue";
@@ -151,6 +172,8 @@ export interface Feedback {
   timecode?: number;
   end?: number;
   region?: Region;
+  /** Files the user attached, under the item's `references/`. */
+  attachments?: string[];
   context?: EditContext;
   variants?: Variants;
   run?: AgentRun;
@@ -190,6 +213,8 @@ export interface EditInput extends ModelSettings {
   timecode?: number;
   end?: number;
   region?: Region;
+  /** Item-relative files under `references/` that go with the request. */
+  attachments?: string[];
   /** How many versions to make and compare; 1 is a single edit. */
   variants?: number;
   agent: AgentChoice;
@@ -200,6 +225,7 @@ export interface NewFeedback {
   body: string;
   media?: string;
   timecode?: number;
+  attachments?: string[];
 }
 
 export interface EditReceipt {
@@ -309,6 +335,8 @@ export interface ItemDetail {
   /** An agent process is working on this item right now. */
   running: boolean;
   media: Media[];
+  /** What the user gave the item to work from, in its `references/` folder; a folder is one entry. */
+  references: Reference[];
   /** Markdown files in the item folder, by file name. */
   docs: Partial<Record<string, string>>;
   doc: ItemDoc;
@@ -574,6 +602,22 @@ export const api = {
 
     return request<ItemDetail>(`/api/item/media${q(id)}`, { method: "POST", body: form });
   },
+  /** Keep files as the item's references; a dropped folder keeps its structure. */
+  uploadReferences: (id: string, uploads: ReadonlyArray<Upload>) => {
+    const form = new FormData();
+
+    for (const { file, path } of uploads) {
+      form.append("files", file);
+      form.append("paths", path);
+    }
+
+    return request<{ item: ItemDetail; added: string[] }>(`/api/item/references${q(id)}`, {
+      method: "POST",
+      body: form,
+    });
+  },
+  removeReference: (id: string, path: string) =>
+    send<ItemDetail, { path: string }>("POST", `/api/item/references/remove${q(id)}`, { path }),
   addFeedback: (id: string, input: NewFeedback) =>
     send<ItemDetail, NewFeedback>("POST", `/api/item/feedback${q(id)}`, input),
   resolveFeedback: (id: string, feedbackId: string) =>

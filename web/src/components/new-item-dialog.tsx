@@ -210,6 +210,7 @@ export function NewItemDialog({ formats, trigger }: NewItemDialogProps) {
         }
       />
       <DialogContent
+        data-drop-target=""
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);

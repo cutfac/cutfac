@@ -51,6 +51,7 @@ import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/lea
 import { getFormat, listFormats } from "../core/library.ts";
 import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
+import { addReferences, listReferences, removeReference } from "../core/references.ts";
 import { listReviews } from "../core/review.ts";
 import {
   AgentChoice,
@@ -209,6 +210,14 @@ const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
 
 const MediaForm = Schema.Struct({ file: Multipart.SingleFileSchema });
 
+/** Dropped files and, in the same order, each one's path in the drop: `logo.png`, `photos/a.jpg`. */
+const ReferencesForm = Schema.Struct({
+  files: Multipart.FilesSchema,
+  paths: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+});
+
+const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
+
 const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
 
 /** Feedback for the Cutfac team, from the board's dialog or a `/feedback` message. */
@@ -243,7 +252,7 @@ const isMultipart = (request: HttpServerRequest.HttpServerRequest) =>
 
 /**
  * What the board shows for one item: the item, its markdown docs, its undo history, the agent's
- * last frame review of each video, and whether an agent is on it.
+ * last frame review of each video, its reference files, and whether an agent is on it.
  */
 const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
   const ws = yield* Workspace;
@@ -261,8 +270,24 @@ const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
     docs: Object.fromEntries(docs),
     history: yield* readHistory(item),
     reviews: yield* listReviews(item),
+    references: yield* listReferences(item),
     running: yield* runs.isRunning(item.id),
   };
+});
+
+/** Files dropped, pasted or picked on the board, kept as the item's references. */
+const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: string) {
+  const { files, paths } = yield* HttpServerRequest.schemaBodyMultipart(ReferencesForm);
+  const given = paths === undefined ? files.map((file) => file.name) : [paths].flat();
+
+  if (given.length !== files.length) {
+    return yield* new InvalidRequest({ message: "Send one path for each file" });
+  }
+
+  const uploads = files.map((file, index) => ({ source: file.path, path: given[index] ?? "" }));
+  const added = yield* addReferences(yield* getItem(id), uploads);
+
+  return { item: yield* itemDetail(yield* getItem(id)), added };
 });
 
 const itemSummary = (item: Item) => ({
@@ -683,6 +708,19 @@ const apiRoutes = (options: ServerOptions) =>
           const { item } = yield* importMedia(id, file.path, file.name);
 
           return yield* itemDetail(item);
+        }),
+      ),
+    ),
+    json("POST", "/api/item/references", withId(addReferencesRoute)),
+    json(
+      "POST",
+      "/api/item/references/remove",
+      withId((id) =>
+        Effect.gen(function* () {
+          const { path } = yield* HttpServerRequest.schemaBodyJson(ReferenceBody);
+          yield* removeReference(yield* getItem(id), path);
+
+          return yield* itemDetail(yield* getItem(id));
         }),
       ),
     ),
