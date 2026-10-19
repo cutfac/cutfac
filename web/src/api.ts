@@ -530,6 +530,8 @@ export interface AgentStatus {
   models: ModelOption[];
   /** The efforts that suit whatever model the agent picks itself. */
   efforts: string[];
+  /** The name of the model the agent runs when none is picked, such as `Sonnet 5`, if known. */
+  defaultModel?: string;
 }
 
 export interface AgentConnection {

@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
-import { Schema } from "effect";
+import { ConfigProvider, Schema } from "effect";
 
 import { agentInvocation } from "../src/core/agentRun.ts";
 import { agentStatus } from "../src/core/agents.ts";
-import { CLAUDE_MODELS, parseCodexModels } from "../src/core/models.ts";
+import {
+  CLAUDE_MODELS,
+  claudeModelName,
+  codexConfigModel,
+  parseCodexModels,
+} from "../src/core/models.ts";
 import { ModelSettings } from "../src/core/schema.ts";
 import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -129,6 +136,33 @@ describe("running on a model", () => {
   });
 });
 
+describe("the model an agent picks itself", () => {
+  test("a Claude model goes by the name people know it by", () => {
+    expect(claudeModelName("claude-opus-5-5")).toBe("Opus 5.5");
+    expect(claudeModelName("claude-sonnet-5")).toBe("Sonnet 5");
+    expect(claudeModelName("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
+    expect(claudeModelName("claude-opus-4-6[1m]")).toBe("Opus 4.6");
+    expect(claudeModelName("claude-3-5-sonnet-20241022")).toBe("Sonnet 3.5");
+    expect(claudeModelName("opus")).toBe("Opus");
+    expect(claudeModelName("Opus[1m]")).toBe("Opus");
+    expect(claudeModelName("us.anthropic.custom")).toBe("us.anthropic.custom");
+    expect(claudeModelName("default")).toBeUndefined();
+    expect(claudeModelName(" ")).toBeUndefined();
+  });
+
+  test("Codex's config sets it, through the profile in use when there is one", () => {
+    expect(codexConfigModel('model = "gpt-b"\n[tui]\ntheme = "dark"\n')).toBe("gpt-b");
+    expect(
+      codexConfigModel(
+        'model = "gpt-b"\nprofile = "fast"\n[profiles.fast]\nmodel = "gpt-a"\n[profiles.slow]\n',
+      ),
+    ).toBe("gpt-a");
+    expect(codexConfigModel('profile = "slow"\nmodel = "gpt-b"\n[profiles.slow]\n')).toBe("gpt-b");
+    expect(codexConfigModel("[tui]\n")).toBeUndefined();
+    expect(codexConfigModel("model = ")).toBeUndefined();
+  });
+});
+
 describe("agent status", () => {
   let t: TestWorkspace;
   let fakes: FakeAgents;
@@ -160,6 +194,38 @@ exit 1
     expect(claude).toMatchObject({ agent: "claude", installed: true, ...CLAUDE_MODELS });
     expect(codex).toMatchObject({ agent: "codex", installed: true, connected: false });
     expect(codex?.models.map((m) => m.id)).toEqual(["gpt-a", "gpt-b"]);
+  });
+
+  test("names the model each agent runs when none is picked, as its own settings set it", async () => {
+    const home = join(fakes.dir, "home");
+    await mkdir(join(home, ".claude"), { recursive: true });
+    await mkdir(join(home, ".codex"));
+    await mkdir(join(t.root, ".claude"));
+    await writeFile(join(home, ".claude/settings.json"), '{"model":"claude-opus-5-5"}');
+    await writeFile(join(home, ".codex/config.toml"), 'model = "gpt-b"\n');
+    await fakes.bin("claude", "exit 0\n");
+    await fakes.bin("codex", `[ "$1 $2" = "debug models" ] && cat <<'JSON'\n${catalog}\nJSON\n`);
+
+    const env = { PATH: join(fakes.dir, "bin"), HOME: home };
+    const layer = ConfigProvider.layer(ConfigProvider.fromEnv({ env }));
+    const status = () => t.runWith(layer, agentStatus());
+    const named = async () => (await status()).map((agent) => agent.defaultModel);
+
+    expect(await named()).toEqual(["Opus 5.5", "GPT-B"]);
+
+    // The workspace's own settings come before the user's, and its local ones before both.
+    await writeFile(join(t.root, ".claude/settings.json"), '{"model":"sonnet"}');
+    expect((await named())[0]).toBe("Sonnet");
+    await writeFile(join(t.root, ".claude/settings.local.json"), '{"model":"claude-haiku-4-5"}');
+    expect((await named())[0]).toBe("Haiku 4.5");
+
+    // Set nowhere, Claude's pick is unknown and Codex's is the first model it lists.
+    await rm(join(t.root, ".claude"), { recursive: true });
+    await rm(join(home, ".codex/config.toml"));
+    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+
+    expect(claude?.defaultModel).toBeUndefined();
+    expect(codex?.defaultModel).toBe("GPT-A");
   });
 
   test("an agent that is not installed offers nothing to pick", async () => {

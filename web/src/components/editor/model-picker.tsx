@@ -54,15 +54,24 @@ export function ModelPicker({ status, settings, onPick }: ModelPickerProps) {
   const efforts = effortsFor(status, settings.model);
   const own = status.models.find((option) => option.id === settings.model)?.defaultEffort;
   const labels = settingsLabels(status, settings, t);
-  const shown = (settings.model === undefined ? [m.defaultModel, ...labels] : labels).join(" · ");
+  // The agent's own pick shows by name, so no one has to guess what "default" means.
+  const ownModel = status.defaultModel ?? m.defaultModel;
+  const shown = (settings.model === undefined ? [ownModel, ...labels] : labels).join(" · ");
   const pick = (next: ModelSettings) => onPick(usableSettings(status, next));
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<InputGroupButton title={m.label} aria-label={`${m.label}: ${shown}`} />}
+        // In a narrow chat the label gives way first, so the send button stays in view.
+        render={
+          <InputGroupButton
+            title={`${m.label}: ${shown}`}
+            aria-label={`${m.label}: ${shown}`}
+            className="min-w-0 shrink"
+          />
+        }
       >
-        {shown}
+        <span className="truncate">{shown}</span>
         <ChevronDownIcon className="text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-auto min-w-48">
@@ -74,7 +83,7 @@ export function ModelPicker({ status, settings, onPick }: ModelPickerProps) {
               onValueChange={(value: string) => pick(fromChoices(value, effort))}
             >
               <DropdownMenuRadioItem value={BY_DEFAULT}>
-                {m.byDefault(undefined)}
+                {m.byDefault(status.defaultModel)}
               </DropdownMenuRadioItem>
               {status.models.map((option) => (
                 <DropdownMenuRadioItem key={option.id} value={option.id}>

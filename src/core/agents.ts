@@ -1,7 +1,15 @@
-import { Effect, Option, Schema } from "effect";
+import { Config, Effect, Option, Path, Schema } from "effect";
 
 import { CommandFailed, WorkspaceError } from "./errors.ts";
-import { type AgentModels, CLAUDE_MODELS, NO_MODELS, codexModels } from "./models.ts";
+import {
+  type AgentModels,
+  CLAUDE_MODELS,
+  NO_MODELS,
+  claudeModelName,
+  codexConfigModel,
+  codexDefaultModel,
+  codexModels,
+} from "./models.ts";
 import { isInstalled, run, which } from "./process.ts";
 import type { AgentName } from "./schema.ts";
 import { Workspace, slugify } from "./workspace.ts";
@@ -294,6 +302,72 @@ export const connectCodex = Effect.fn("agents.connectCodex")(function* (launch: 
 export const connectAgent = (agent: AgentName, launch: McpLaunch) =>
   agent === "claude" ? connectClaude(launch) : connectCodex(launch);
 
+/** Enough of a settings or config file to find the model in it. */
+const SETTINGS_BYTES = 1024 * 1024;
+
+const ModelSetting = Schema.fromJsonString(
+  Schema.Struct({ model: Schema.optional(Schema.String) }),
+);
+
+const decodeModelSetting = Schema.decodeUnknownOption(ModelSetting);
+
+const env = (name: string) =>
+  Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none));
+
+/** A file outside the workspace, or nothing when it is missing or unreadable. */
+const peek = (full: string) =>
+  Effect.flatMap(Workspace, (ws) => ws.peekText(full, SETTINGS_BYTES)).pipe(Effect.option);
+
+/**
+ * The model Claude Code runs when none is picked, as its own settings set it: the environment,
+ * then this workspace's settings, then the user's.
+ */
+const claudeDefaultModel = Effect.fn("agents.claudeDefaultModel")(function* () {
+  const ws = yield* Workspace;
+  const path = yield* Path.Path;
+  const fromEnv = yield* env("ANTHROPIC_MODEL");
+
+  if (Option.isSome(fromEnv)) return claudeModelName(fromEnv.value);
+
+  const home = yield* env("HOME");
+
+  const configDir = Option.orElse(yield* env("CLAUDE_CONFIG_DIR"), () =>
+    Option.map(home, (dir) => path.join(dir, ".claude")),
+  );
+
+  const files = [
+    path.join(ws.root, ".claude", "settings.local.json"),
+    path.join(ws.root, ".claude", "settings.json"),
+    ...Option.toArray(Option.map(configDir, (dir) => path.join(dir, "settings.json"))),
+  ];
+
+  for (const file of files) {
+    const model = Option.flatMap(yield* peek(file), decodeModelSetting).pipe(
+      Option.flatMapNullishOr((settings) => settings.model),
+    );
+
+    if (Option.isSome(model)) return claudeModelName(model.value);
+  }
+
+  return undefined;
+});
+
+/** The model Codex's own `config.toml` sets, if any. */
+const codexConfiguredModel = Effect.fn("agents.codexConfiguredModel")(function* () {
+  const path = yield* Path.Path;
+  const home = yield* env("HOME");
+
+  const codexHome = Option.orElse(yield* env("CODEX_HOME"), () =>
+    Option.map(home, (dir) => path.join(dir, ".codex")),
+  );
+
+  if (Option.isNone(codexHome)) return undefined;
+
+  const config = yield* peek(path.join(codexHome.value, "config.toml"));
+
+  return Option.isSome(config) ? codexConfigModel(config.value) : undefined;
+});
+
 /**
  * Whether each supported agent CLI is installed and already pointed at this workspace, and the
  * models it can run. An entry for another root, as in a copied workspace, is not connected, so
@@ -328,7 +402,10 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
             ),
             Effect.orElseSucceed(() => false),
           ),
-          codexModels(bin),
+          Effect.zipWith(codexModels(bin), codexConfiguredModel(), (offers, configured) => ({
+            ...offers,
+            defaultModel: codexDefaultModel(offers, configured),
+          })),
         ],
         { concurrency: "unbounded" },
       ),
@@ -340,6 +417,7 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
       installed: yield* isInstalled("claude"),
       connected: claudeConnected,
       ...CLAUDE_MODELS,
+      defaultModel: yield* claudeDefaultModel(),
     },
     { agent: "codex", installed: Option.isSome(codex), connected: codexConnected, ...codexOffers },
   ];
