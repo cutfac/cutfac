@@ -783,20 +783,30 @@ const SkillSync = Layer.effectDiscard(
 
 /**
  * For clients that list MCP prompts as commands. Claude Code shows it as `/mcp__cutfac__feedback`;
- * its own `/feedback` reports to Anthropic, not to the Cutfac team.
+ * its own `/feedback` reports to Anthropic, not to the Cutfac team. Claude Code splits what follows
+ * the command on spaces and passes only the first word, though its agent sees the whole line, so
+ * the message is optional and the prompt tells the agent where to find the rest.
  */
 const FeedbackPrompt = McpServer.prompt({
   name: "feedback",
   title: "Send feedback to Cutfac",
   description: "Tell the people who make Cutfac about a bug, a confusing step, or a wish.",
-  parameters: { message: Schema.String },
-  content: ({ message }) =>
-    Effect.succeed(
+  parameters: {
+    message: Schema.optional(Schema.String.annotate(describe("what to tell the team"))),
+  },
+  content: ({ message }) => {
+    const typed = message?.trim() ?? "";
+
+    return Effect.succeed(
       "I want to send feedback about Cutfac to its team. " +
-        `What I want to say: ${message}\n\n` +
+        (typed === ""
+          ? "Ask me what I want to tell them.\n\n"
+          : `What I typed: ${typed}\n` +
+            "Some agents pass on only the first word of it. If it looks cut short, take the rest from the command I typed, or ask me.\n\n") +
         "Write it up as a short message in my words, show me the exact text, and once I agree, send it with send_feedback_to_cutfac. " +
         "Leave out file contents, paths, and other private details unless I say to include them.",
-    ),
+    );
+  },
 });
 
 /**

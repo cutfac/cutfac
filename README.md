@@ -265,10 +265,12 @@ the files it names next to it, and sends a license key only when one is saved in
 People can tell the Cutfac team something three ways: "Send feedback" in the sidebar, a message
 that starts with `/feedback` in the editor's message box, the box prompt or the import chat (it goes
 to the team, not the agent), or by asking their agent, which calls the `send_feedback_to_cutfac` MCP
-tool or the `feedback` prompt. The board posts to `/api/team-feedback`; the MCP tool sends from the
-MCP server itself. Either way `https://cutfac.com/api/feedback` gets the message, an optional reply
-address, the app's version, platform and language, which way it came, and the agent, if one was
-involved. Nothing else is sent.
+tool. Agents that list MCP prompts as commands also offer the `feedback` prompt,
+`/mcp__cutfac__feedback` in Claude Code, which takes the message after it or asks for one. The
+agent shows them the exact text and sends it only once they agree. The board posts to
+`/api/team-feedback`; the MCP tool sends from the MCP server itself. Either way
+`https://cutfac.com/api/feedback` gets the message, an optional reply address, the app's version,
+platform and language, which way it came, and the agent, if one was involved. Nothing else is sent.
 
 ## Workspace layout
 

@@ -196,21 +196,45 @@ test("offers /feedback as a prompt that drafts before sending", async () => {
   const { prompts } = await server.request(
     "prompts/list",
     {},
-    Schema.Struct({ prompts: Schema.Array(Schema.Struct({ name: Schema.String })) }),
-  );
-
-  expect(prompts.map((prompt) => prompt.name)).toContain("feedback");
-
-  const { messages } = await server.request(
-    "prompts/get",
-    { name: "feedback", arguments: { message: "the trim handles are tiny" } },
     Schema.Struct({
-      messages: Schema.Array(Schema.Struct({ content: Schema.Struct({ text: Schema.String }) })),
+      prompts: Schema.Array(
+        Schema.Struct({
+          name: Schema.String,
+          arguments: Schema.Array(Schema.Struct({ name: Schema.String, required: Schema.Boolean })),
+        }),
+      ),
     }),
   );
 
-  expect(messages[0]?.content.text).toContain("the trim handles are tiny");
-  expect(messages[0]?.content.text).toContain("send_feedback_to_cutfac");
+  // Claude Code refuses to run a prompt whose required argument is left out.
+  expect(prompts.find((prompt) => prompt.name === "feedback")?.arguments).toEqual([
+    { name: "message", required: false },
+  ]);
+
+  const prompt = async (args: Record<string, string>) => {
+    const { messages } = await server.request(
+      "prompts/get",
+      { name: "feedback", arguments: args },
+      Schema.Struct({
+        messages: Schema.Array(Schema.Struct({ content: Schema.Struct({ text: Schema.String }) })),
+      }),
+    );
+
+    return messages[0]?.content.text ?? "";
+  };
+
+  // Claude Code passes on only the first word of `/mcp__cutfac__feedback the trim handles are tiny`.
+  const cut = await prompt({ message: "the" });
+  const none = await prompt({});
+
+  expect(cut).toContain("What I typed: the\n");
+  expect(cut).toContain("take the rest from the command I typed");
+  expect(none).toContain("Ask me what I want to tell them.");
+
+  for (const text of [cut, none]) {
+    expect(text).toContain("show me the exact text");
+    expect(text).toContain("send_feedback_to_cutfac");
+  }
 }, 20_000);
 
 test("sends feedback with the agent that asked and the version of this build", async () => {
