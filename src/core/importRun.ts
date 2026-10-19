@@ -16,9 +16,11 @@ import {
 import {
   CLAUDE_MCP_TOOLS,
   MCP_READ_TOOLS,
+  MCP_USER_ONLY_TOOLS,
   MCP_WRITE_TOOLS,
   type McpLaunch,
   SERVER_NAME,
+  claudeMcpTool,
   codexServerKey,
   codexServerLaunch,
   codexServerName,
@@ -78,8 +80,6 @@ const CLAUDE_INSTALL_ALLOWED = [
   "Bash(unzip:*)",
   "Bash(tar:*)",
 ];
-
-const claudeMcpTool = (name: string) => `${CLAUDE_MCP_TOOLS}__${name}`;
 
 /**
  * What an import may never read, in either phase: credentials in the home folder and the
@@ -180,7 +180,7 @@ export function claudeImportFlags(phase: ImportPhase, server: McpLaunch, link: s
     "--allowedTools",
     [...CLAUDE_INSTALL_ALLOWED, CLAUDE_MCP_TOOLS].join(","),
     "--disallowedTools",
-    CLAUDE_READ_DENIED.join(","),
+    [...CLAUDE_READ_DENIED, ...MCP_USER_ONLY_TOOLS.map(claudeMcpTool)].join(","),
     ...shared,
   ];
 }

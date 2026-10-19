@@ -63,8 +63,9 @@ const ItemInputs = Schema.Struct({
 });
 
 /** A newline-delimited JSON-RPC client for `cutfac mcp`, the way Claude Code talks to it. */
-function startServer(root: string) {
+function startServer(root: string, feedbackUrl: string) {
   const child = Bun.spawn(["bun", CLI, "mcp", "--workspace", root], {
+    env: { ...process.env, CUTFAC_FEEDBACK_URL: feedbackUrl },
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -139,9 +140,22 @@ let t: TestWorkspace;
 
 let server: ReturnType<typeof startServer>;
 
+/** What the server sent to the Cutfac team, caught here instead of reaching cutfac.com. */
+const teamFeedback: URLSearchParams[] = [];
+
+const site = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch: async (request) => {
+    teamFeedback.push(new URLSearchParams(await request.text()));
+
+    return Response.json({ ok: true });
+  },
+});
+
 beforeAll(async () => {
   t = await makeWorkspace("mcp");
-  server = startServer(t.root);
+  server = startServer(t.root, new URL("/api/feedback", site.url).href);
 
   await server.request(
     "initialize",
@@ -160,6 +174,7 @@ beforeAll(async () => {
 afterAll(async () => {
   server.child.kill();
   await server.child.exited;
+  await site.stop();
   await t.remove();
 });
 
@@ -174,6 +189,43 @@ test("lists the workspace tools", async () => {
   expect(names).toContain("check_format");
   expect(names).toContain("get_skill");
   expect(names).toContain("review_media");
+  expect(names).toContain("send_feedback_to_cutfac");
+}, 20_000);
+
+test("offers /feedback as a prompt that drafts before sending", async () => {
+  const { prompts } = await server.request(
+    "prompts/list",
+    {},
+    Schema.Struct({ prompts: Schema.Array(Schema.Struct({ name: Schema.String })) }),
+  );
+
+  expect(prompts.map((prompt) => prompt.name)).toContain("feedback");
+
+  const { messages } = await server.request(
+    "prompts/get",
+    { name: "feedback", arguments: { message: "the trim handles are tiny" } },
+    Schema.Struct({
+      messages: Schema.Array(Schema.Struct({ content: Schema.Struct({ text: Schema.String }) })),
+    }),
+  );
+
+  expect(messages[0]?.content.text).toContain("the trim handles are tiny");
+  expect(messages[0]?.content.text).toContain("send_feedback_to_cutfac");
+}, 20_000);
+
+test("sends feedback with the agent that asked and the version of this build", async () => {
+  await server.call(
+    "send_feedback_to_cutfac",
+    { message: "the trim handles are tiny" },
+    Schema.Json,
+  );
+
+  const [sent] = teamFeedback;
+
+  expect(sent?.get("message")).toBe("the trim handles are tiny");
+  expect(sent?.get("source")).toBe("agent");
+  expect(sent?.get("agent")).toBe("test 0");
+  expect(sent?.get("version")).toEndWith("-dev");
 }, 20_000);
 
 test("keeps the workspace skill current and tells the agent about an edited copy", async () => {

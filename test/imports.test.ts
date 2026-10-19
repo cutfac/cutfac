@@ -182,6 +182,16 @@ test("after Allow, Codex may write in the workspace and reach the network", () =
   expect(config.some((entry) => entry.includes("enabled_tools"))).toBe(false);
 });
 
+test("neither phase of an import may send feedback to the Cutfac team", () => {
+  for (const phase of ["read", "install"] as const) {
+    const denied = valueOf(claudeImportFlags(phase, SERVER, LINK), "--disallowedTools").split(",");
+    const config = entries(codexImportConfig(phase, SERVER, "cutfac-x", []));
+
+    expect(denied).toContain("mcp__cutfac__send_feedback_to_cutfac");
+    expect(config).toContain('mcp_servers.cutfac-x.disabled_tools=["send_feedback_to_cutfac"]');
+  }
+});
+
 // --- The import record ------------------------------------------------------------------------
 
 const turn = (id: string, kind: ImportTurn["kind"], body = "") => ({ id, kind, body });

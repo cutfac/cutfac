@@ -38,6 +38,9 @@ const LEGACY_SERVER_NAME = "content-factory";
 /** Claude Code's `--allowedTools` entry for every tool this server offers. */
 export const CLAUDE_MCP_TOOLS = `mcp__${SERVER_NAME}`;
 
+/** Claude Code's name for one of this server's tools. */
+export const claudeMcpTool = (name: string) => `${CLAUDE_MCP_TOOLS}__${name}`;
+
 /** The MCP tools that only read the workspace: all an agent may call before the user allows more. */
 export const MCP_READ_TOOLS = [
   "workspace_overview",
@@ -60,7 +63,16 @@ export const MCP_WRITE_TOOLS = [
   "resolve_feedback",
   "save_variant",
   "save_format",
+  "send_feedback_to_cutfac",
 ] as const;
+
+/**
+ * The MCP tools a headless run from the board never gets: they send what the user has to see and
+ * agree to first, and no one is there to ask.
+ */
+export const MCP_USER_ONLY_TOOLS = ["send_feedback_to_cutfac"] as const satisfies ReadonlyArray<
+  (typeof MCP_WRITE_TOOLS)[number]
+>;
 
 const MCP_FILE = ".mcp.json";
 
@@ -170,10 +182,14 @@ const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.s
 /** Where Codex's config keeps the MCP server `name`. */
 export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
 
-/** Codex config entries that start the server `name` with `launch`, whatever the user config says. */
+/**
+ * Codex config entries for a headless run: the server `name` started with `launch`, whatever the
+ * user config says, without the tools only the user's own session may call.
+ */
 export const codexServerLaunch = (name: string, launch: McpLaunch) => [
   `${codexServerKey(name)}.command=${JSON.stringify(launch.command)}`,
   `${codexServerKey(name)}.args=${JSON.stringify(launch.args)}`,
+  `${codexServerKey(name)}.disabled_tools=${JSON.stringify(MCP_USER_ONLY_TOOLS)}`,
 ];
 
 const CodexServer = Schema.fromJsonString(Schema.Struct({ transport: LaunchArgs }));

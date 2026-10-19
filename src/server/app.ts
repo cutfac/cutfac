@@ -60,6 +60,7 @@ import {
   ItemPatch,
   ModelSettings,
 } from "../core/schema.ts";
+import { sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
 import { requestGuard } from "./guard.ts";
@@ -209,6 +210,16 @@ const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
 const MediaForm = Schema.Struct({ file: Multipart.SingleFileSchema });
 
 const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
+
+/** Feedback for the Cutfac team, from the board's dialog or a `/feedback` message. */
+const TeamFeedbackBody = Schema.Struct({
+  message: Schema.String,
+  email: Schema.optional(Schema.String),
+  source: Schema.Literals(["board", "slash"]),
+  platform: Schema.optional(Schema.String),
+  locale: Schema.optional(Schema.String),
+  agent: Schema.optional(Schema.String),
+});
 
 const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
 
@@ -809,6 +820,18 @@ const apiRoutes = (options: ServerOptions) =>
         const body = yield* HttpServerRequest.schemaBodyJson(LearnBody);
 
         return yield* learn(learnInputOf(body.source));
+      }),
+    ),
+    json(
+      "POST",
+      "/api/team-feedback",
+      Effect.gen(function* () {
+        const ws = yield* Workspace;
+        const body = yield* HttpServerRequest.schemaBodyJson(TeamFeedbackBody);
+
+        yield* sendTeamFeedback({ ...body, agent: body.agent ?? defaultAgent(ws) });
+
+        return { ok: true };
       }),
     ),
     json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),

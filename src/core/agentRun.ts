@@ -20,6 +20,8 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import {
   CLAUDE_MCP_TOOLS,
   type CliEntry,
+  MCP_USER_ONLY_TOOLS,
+  claudeMcpTool,
   codexServerLaunch,
   codexServerName,
   mcpLaunch,
@@ -203,6 +205,8 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
       ? [
           "--allowedTools",
           [...options.allowedTools, ...fetch].join(","),
+          "--disallowedTools",
+          MCP_USER_ONLY_TOOLS.map(claudeMcpTool).join(","),
           ...flag("--mcp-config", mcpConfig),
           ...flag("--model", model),
           ...flag("--effort", effort),

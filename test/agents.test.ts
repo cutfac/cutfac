@@ -199,8 +199,23 @@ exit 1
     expect(codexServer).toEqual([
       'mcp_servers.cutfac-test.command="/opt/cutfac"',
       'mcp_servers.cutfac-test.args=["mcp","--workspace","/here"]',
+      'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]',
     ]);
 
     for (const entry of codexServer) expect(args[args.indexOf(entry) - 1]).toBe("-c");
+  });
+
+  test("a board run never gets the tool that sends feedback to the Cutfac team", () => {
+    const { args } = agentInvocation("claude", {
+      bin: "/bin/claude",
+      prompt: "do it",
+      sessionId: undefined,
+      newSessionId: "new",
+      allowedTools: ["mcp__cutfac"],
+    });
+
+    expect(args[args.indexOf("--disallowedTools") + 1]).toBe(
+      "mcp__cutfac__send_feedback_to_cutfac",
+    );
   });
 });

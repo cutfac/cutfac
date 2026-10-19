@@ -25,7 +25,7 @@ export class CommandFailed extends Schema.TaggedError<CommandFailed>()("CommandF
   message: Schema.String,
 }) {}
 
-/** A store listing or landing page could not be fetched or understood. */
+/** A site, such as a store listing or cutfac.com, could not be reached or understood. */
 export class FetchFailed extends Schema.TaggedError<FetchFailed>()("FetchFailed", {
   message: Schema.String,
 }) {}

@@ -13,6 +13,7 @@ import {
   connectAgent,
   mcpLaunch,
 } from "./core/agents.ts";
+import { COMPILED } from "./core/build.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { syncSkill } from "./core/skill.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
@@ -23,12 +24,7 @@ const DEFAULT_PORT = 4317;
 
 const DEFAULT_HOST = "127.0.0.1";
 
-/**
- * `bun build --compile` serves this module from Bun's virtual filesystem, so the binary starts
- * itself; from source, agents start `bun src/cli.ts`.
- */
-const COMPILED = import.meta.path.startsWith("/$bunfs/") || import.meta.path.includes("~BUN");
-
+/** The compiled binary starts itself; from source, agents start `bun src/cli.ts`. */
 const CLI: CliEntry = COMPILED
   ? { command: process.execPath, args: [] }
   : { command: "bun", args: [import.meta.path] };
