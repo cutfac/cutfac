@@ -1,11 +1,14 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import type { CutfacDesktop } from "../web/src/desktop.ts";
+import type { CutfacDesktop, LicenseLock } from "../web/src/desktop.ts";
 import {
   EDIT_COMMAND_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
+  LICENSE_LOCK_CHANGE_CHANNEL,
+  LICENSE_LOCK_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
+  RECHECK_LICENSE_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
@@ -44,6 +47,17 @@ const bridge = {
       ipcRenderer.removeListener(LICENSE_KEY_REQUEST_CHANNEL, forward);
     };
   },
+  licenseLock: () => ipcRenderer.invoke(LICENSE_LOCK_CHANNEL),
+  onLicenseLock: (listener) => {
+    const forward = (_event: IpcRendererEvent, lock: LicenseLock | undefined) => listener(lock);
+
+    ipcRenderer.on(LICENSE_LOCK_CHANGE_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(LICENSE_LOCK_CHANGE_CHANNEL, forward);
+    };
+  },
+  recheckLicense: () => ipcRenderer.invoke(RECHECK_LICENSE_CHANNEL),
   platform: `${SYSTEM_NAMES[process.platform] ?? process.platform} ${process.getSystemVersion()}`,
 } satisfies CutfacDesktop;
 

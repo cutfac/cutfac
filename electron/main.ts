@@ -20,21 +20,24 @@ import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts"
 import {
   EDIT_COMMAND_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
+  LICENSE_LOCK_CHANGE_CHANNEL,
+  LICENSE_LOCK_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
+  RECHECK_LICENSE_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
 } from "./ipc.ts";
-import { licenseKeyFrom } from "./license.ts";
+import { startLicense, type License } from "./license.ts";
 import { MESSAGES } from "./messages.ts";
 import { probePort } from "./ports.ts";
 import {
-  loadLicenseKey,
+  loadLicense,
   loadLocale,
   loadPort,
   loadWorkspace,
-  saveLicenseKey,
+  saveLicense,
   saveLocale,
   savePort,
   saveWorkspace,
@@ -54,6 +57,9 @@ let window: BrowserWindow | undefined;
 let sidecar: Sidecar | undefined;
 
 let updates: Updates | undefined;
+
+/** Only the packaged app locks; a dev build runs open, like the CLI. */
+let license: License | undefined;
 
 let workspaceRoot: string | undefined;
 
@@ -107,19 +113,20 @@ if (!app.requestSingleInstanceLock()) {
 
     return pickSource();
   });
-  ipcMain.handle(SET_LICENSE_KEY_CHANNEL, async (event, input: string) => {
+  ipcMain.handle(SET_LICENSE_KEY_CHANNEL, (event, input: string) => {
     assertFromApp(event);
 
-    const key = licenseKeyFrom(input);
+    return license?.setKey(input) ?? "unavailable";
+  });
+  ipcMain.handle(LICENSE_LOCK_CHANNEL, (event) => {
+    assertFromApp(event);
 
-    if (!key || !updates) return "invalid";
+    return license?.lock();
+  });
+  ipcMain.handle(RECHECK_LICENSE_CHANNEL, (event) => {
+    assertFromApp(event);
 
-    const check = await updates.tryLicenseKey(key);
-
-    // An ended plan or an unreachable site still leaves a real key, worth keeping for later checks.
-    if (check !== "invalid") await saveLicenseKey(key);
-
-    return check;
+    return license?.recheck();
   });
   ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
     if (!isFromApp(event) || !isLocale(next) || next === locale) return;
@@ -151,10 +158,21 @@ async function boot(): Promise<void> {
   nativeTheme.themeSource = "dark";
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
 
+  const saved = await loadLicense();
+
+  if (app.isPackaged) {
+    license = startLicense({
+      ...saved,
+      save: saveLicense,
+      onLock: (lock) => window?.webContents.send(LICENSE_LOCK_CHANGE_CHANNEL, lock),
+      onKey: (key) => updates?.useKey(key),
+    });
+  }
+
   updates = startUpdates({
     messages: () => MESSAGES[locale],
     window: () => window,
-    licenseKey: await loadLicenseKey(),
+    licenseKey: saved.key,
     openLicense: requestLicenseKey,
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
@@ -186,7 +204,14 @@ function bringToFront(): void {
 /** Has the board ask for a license key; Electron has no text field dialog of its own. */
 function requestLicenseKey(): void {
   bringToFront();
-  window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, updates?.hasKey() ?? false);
+  window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, license?.hasKey() ?? false);
+}
+
+/** Coming back to a locked app, perhaps after renewing or getting online, asks cutfac.com again. */
+function recheckLocked(): void {
+  const lock = license?.lock();
+
+  if (lock === "ended" || lock === "offline") void license?.recheck();
 }
 
 /** The standard menus, spelled out so every label can follow the board's language. */
@@ -414,6 +439,7 @@ function createWindow(): BrowserWindow {
   const { webContents } = created;
 
   created.once("ready-to-show", () => created.show());
+  created.on("focus", recheckLocked);
   created.on("closed", () => {
     window = undefined;
   });

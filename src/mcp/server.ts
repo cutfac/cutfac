@@ -62,6 +62,7 @@ import {
 import { MAX_TEAM_FEEDBACK_CHARS, sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
+import { LicenseGate, LicenseLocked } from "./license.ts";
 
 export const MCP_VERSION = version;
 
@@ -71,7 +72,8 @@ const INSTRUCTIONS =
   "Read about.md (its path is in workspace_overview) before writing copy. Resolve each open feedback entry after addressing it. " +
   "Formats are templates: to turn a link into one, follow the cutfac skill's import steps, then call check_format until it is ready. " +
   "When a Cutfac tool fails in a way that looks like a bug in Cutfac rather than in the request, say so and offer to report it with send_feedback_to_cutfac; " +
-  "where that tool is not offered, as in a run from the board, tell the user they can report it by typing /feedback in the chat.";
+  "where that tool is not offered, as in a run from the board, tell the user they can report it by typing /feedback in the chat. " +
+  "A LicenseLocked failure means the Cutfac app's trial or plan needs attention: tell the user what its message says to do; it is not a bug.";
 
 /** How long a markdown doc in get_item may be before it is cut. */
 const DOC_PREVIEW_CHARS = 8000;
@@ -86,6 +88,7 @@ const CutfacFailure = Schema.Union([
   Conflict,
   CommandFailed,
   FetchFailed,
+  LicenseLocked,
 ]);
 
 const Id = Schema.String.annotate(describe("item id, such as hooks/first-try"));
@@ -552,9 +555,13 @@ const handlers = CutfacToolkit.toLayer(
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolServices>();
     const ws = yield* Workspace;
+    const gate = yield* LicenseGate;
+
+    const ungated = <A, E>(effect: Effect.Effect<A, E, ToolServices>) =>
+      Effect.map(Effect.provideContext(effect, services), asJson);
 
     const run = <A, E>(effect: Effect.Effect<A, E, ToolServices>) =>
-      Effect.map(Effect.provideContext(effect, services), asJson);
+      Effect.andThen(gate, ungated(effect));
 
     const itemAbs = (id: string) => ws.abs(`${ws.config.paths.items}/${id}`);
 
@@ -756,8 +763,9 @@ const handlers = CutfacToolkit.toLayer(
         ),
 
       send_feedback_to_cutfac: ({ message, email }) =>
+        // A locked app can still report a bug.
         Effect.flatMap(Effect.serviceOption(McpSchema.McpRequestContext), (request) =>
-          run(
+          ungated(
             Effect.as(
               sendTeamFeedback({
                 message,

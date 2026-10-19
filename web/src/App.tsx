@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import { LicenseKeyDialog } from "@/components/license-key-dialog";
+import { DesktopLicense } from "@/components/desktop-license";
 import { ErrorAlert } from "@/components/page";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
@@ -52,7 +52,7 @@ export function App() {
           </div>
         )}
       </SidebarInset>
-      {desktop ? <LicenseKeyDialog desktop={desktop} /> : null}
+      {desktop ? <DesktopLicense desktop={desktop} /> : null}
     </SidebarProvider>
   );
 }

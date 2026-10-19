@@ -4,6 +4,7 @@ import path from "node:path";
 import { Option, Schema } from "effect";
 import { app } from "electron";
 
+import { decodeLicenseRecord, type LicenseRecord } from "../src/license.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 
 interface Settings {
@@ -11,6 +12,7 @@ interface Settings {
   port: number;
   locale: Locale;
   licenseKey: string;
+  license: LicenseRecord | undefined;
 }
 
 function settingsFile(): string {
@@ -78,9 +80,22 @@ export async function loadLocale(): Promise<Locale | undefined> {
 
 export const saveLocale = (locale: Locale) => writeSettings({ locale });
 
-/** The license key update checks send. It stays on this computer and goes only to cutfac.com. */
-export async function loadLicenseKey(): Promise<string | undefined> {
-  return Option.getOrUndefined(decodeText((await readSettings()).licenseKey));
+/**
+ * The license key and cutfac.com's last answer about it, which the app's agent tools read too. The
+ * key stays on this computer and goes only to cutfac.com.
+ */
+export async function loadLicense(): Promise<{
+  key: string | undefined;
+  record: LicenseRecord | undefined;
+}> {
+  const settings = await readSettings();
+
+  return {
+    key: Option.getOrUndefined(decodeText(settings.licenseKey)),
+    record: Option.getOrUndefined(decodeLicenseRecord(settings.license)),
+  };
 }
 
-export const saveLicenseKey = (licenseKey: string) => writeSettings({ licenseKey });
+/** Saves both together; an undefined record drops the old one. */
+export const saveLicense = (licenseKey: string, license: LicenseRecord | undefined) =>
+  writeSettings({ licenseKey, license });

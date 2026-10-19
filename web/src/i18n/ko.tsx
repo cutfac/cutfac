@@ -222,20 +222,53 @@ export const ko: Messages = {
     title: "라이선스 키",
     description: (portal) => (
       <>
-        업데이트를 확인할 때 컷팩이 이 키를 cutfac.com에 보내요. 결제 후 Polar가 보낸 메일이나{" "}
-        {portal("고객 포털")}에서 찾을 수 있어요.
+        컷팩은 앱을 열 때와 업데이트를 받을 때 cutfac.com에서 이 키를 확인해요. 체험을 시작하거나
+        결제한 뒤 Polar가 보낸 메일이나 {portal("고객 포털")}에서 찾을 수 있어요.
       </>
     ),
     label: "라이선스 키",
     placeholder: "라이선스 키를 붙여넣으세요",
     replace: "저장된 키가 있어요. 새 키를 넣으면 바뀌어요.",
-    invalid: "유효하지 않은 키예요. 구매 메일이나 고객 포털에서 다시 복사해 주세요.",
+    invalid: "유효하지 않은 키예요. 체험이나 구매 메일, 또는 고객 포털에서 다시 복사해 주세요.",
     checking: "확인하는 중…",
     save: "저장",
-    granted: "라이선스 키를 저장했어요. 이제 업데이트를 받아요.",
-    ended: "라이선스 키를 저장했지만 요금제가 끝났어요. 고객 포털에서 갱신하면 업데이트를 받아요.",
-    unavailable:
-      "라이선스 키를 저장했어요. cutfac.com에 연결하지 못해서 다음 업데이트 확인 때 다시 확인해요.",
+    granted: "라이선스 키를 저장했어요.",
+    ended: "라이선스 키를 저장했지만 체험이나 요금제가 끝났어요.",
+    unavailable: "라이선스 키를 저장했어요. cutfac.com에 연결하지 못해서 아직 확인하지 못했어요.",
+  },
+  licenseLock: {
+    missing: {
+      title: "무료 체험을 시작해 보세요",
+      description: () =>
+        "컷팩은 라이선스 키로 열려요. 카드 없이 7일 동안 무료로 써 보거나 요금제를 고르면 Polar가 키를 메일로 보내요.",
+    },
+    invalid: {
+      title: "유효하지 않은 라이선스 키예요",
+      description: (portal) => (
+        <>체험이나 구매 메일에 있는 키를 넣어 주세요. {portal("고객 포털")}에서도 찾을 수 있어요.</>
+      ),
+    },
+    ended: {
+      title: "체험이나 요금제가 끝났어요",
+      description: (portal) => (
+        <>
+          컷팩을 계속 쓰려면 구독해 주세요. {portal("고객 포털")}에서 갱신했다면 다시 확인해 주세요.
+        </>
+      ),
+    },
+    offline: {
+      title: "라이선스를 확인해야 해요",
+      description: () =>
+        "컷팩은 cutfac.com에 마지막으로 연결된 뒤 7일 동안 오프라인으로 쓸 수 있어요. 인터넷에 연결한 뒤 다시 확인해 주세요.",
+    },
+    startTrial: "무료 체험 시작",
+    seePlans: "요금제 보기",
+    enterKey: "라이선스 키 넣기",
+    checkAgain: "다시 확인",
+    openSource:
+      "워크스페이스는 Mac에 평범한 파일로 그대로 남아요. 결제하지 않고 계속 쓰려면 무료 오픈소스 버전을 빌드해서 같은 워크스페이스를 열면 돼요.",
+    stillOffline: "아직 cutfac.com에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
+    stillEnded: "cutfac.com에서 아직 체험이나 요금제가 끝난 상태로 나와요.",
   },
   setup: {
     title: "설정",

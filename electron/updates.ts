@@ -1,7 +1,6 @@
 import { app, dialog, shell, type BrowserWindow, type MessageBoxOptions } from "electron";
 import electronUpdater from "electron-updater";
 
-import type { LicenseCheck } from "../web/src/desktop.ts";
 import { CUSTOMER_PORTAL_URL } from "../web/src/lib/license.ts";
 import { licenseCheckOf } from "./license.ts";
 import type { Messages } from "./messages.ts";
@@ -24,10 +23,8 @@ export interface Updates {
   readonly enabled: boolean;
   /** Checks now and says what it found, for the menu item. */
   checkNow: () => Promise<void>;
-  /** Checks with `key`, and keeps sending it unless the server says it names no license. */
-  tryLicenseKey: (key: string) => Promise<LicenseCheck>;
-  /** Whether update checks send a key. */
-  hasKey: () => boolean;
+  /** Sends `key` with update checks from now on, starting with one right away. */
+  useKey: (key: string) => void;
 }
 
 /**
@@ -44,8 +41,7 @@ export function startUpdates({
     return {
       enabled: false,
       checkNow: async () => {},
-      tryLicenseKey: async () => "unavailable",
-      hasKey: () => false,
+      useKey: () => {},
     };
   }
 
@@ -176,22 +172,9 @@ export function startUpdates({
         }
       }
     },
-    tryLicenseKey: async (next) => {
-      const previous = key;
-
+    useKey: (next) => {
       setKey(next);
-
-      try {
-        // No result means the updater is off, which says nothing about the key.
-        return (await check()) ? "granted" : "unavailable";
-      } catch (error) {
-        const refusal = licenseCheckOf(error);
-
-        if (refusal === "invalid") setKey(previous);
-
-        return refusal;
-      }
+      checkQuietly();
     },
-    hasKey: () => key !== undefined,
   };
 }

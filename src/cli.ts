@@ -17,6 +17,7 @@ import { COMPILED } from "./core/build.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { syncSkill } from "./core/skill.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
+import { desktopLicenseGate } from "./mcp/license.ts";
 import { MCP_VERSION, mcpLayer } from "./mcp/server.ts";
 import { serverLayer } from "./server/app.ts";
 
@@ -206,7 +207,9 @@ const serve = Command.make(
 
 const mcp = Command.make("mcp", { workspace: workspaceFlag }, ({ workspace }) =>
   // stdout carries the protocol, so nothing here may print to it.
-  Layer.launch(mcpLayer.pipe(Layer.provide(Workspace.layer(workspace)))),
+  Layer.launch(
+    mcpLayer.pipe(Layer.provide(desktopLicenseGate), Layer.provide(Workspace.layer(workspace))),
+  ),
 ).pipe(Command.withDescription("Run the MCP server over stdio for Claude Code and Codex"));
 
 const learnCommand = Command.make(

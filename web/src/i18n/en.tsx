@@ -233,20 +233,58 @@ export const en = {
     title: "License key",
     description: (portal: Link) => (
       <>
-        Cutfac sends it to cutfac.com when it checks for updates. Find it in the email Polar sent
-        after checkout, or in the {portal("customer portal")}.
+        Cutfac checks it with cutfac.com to open and to get updates. Find it in the email Polar sent
+        when you started the trial or checked out, or in the {portal("customer portal")}.
       </>
     ),
     label: "License key",
     placeholder: "Paste your license key",
     replace: "A key is saved already. A new one replaces it.",
-    invalid: "That key isn't valid. Copy it again from your purchase email or the customer portal.",
+    invalid:
+      "That key isn't valid. Copy it again from your trial or purchase email, or the customer portal.",
     checking: "Checking…",
     save: "Save",
-    granted: "License key saved. Updates are on.",
-    ended:
-      "License key saved, but its plan has ended. Renew in the customer portal to get updates.",
-    unavailable: "License key saved. Couldn't reach cutfac.com, so the next update check tries it.",
+    granted: "License key saved.",
+    ended: "License key saved, but its trial or plan has ended.",
+    unavailable: "License key saved. Couldn't reach cutfac.com to confirm it yet.",
+  },
+  licenseLock: {
+    missing: {
+      title: "Start your free trial",
+      description: () =>
+        "Cutfac opens with a license key. Try it free for 7 days with no card, or choose a plan, and Polar emails you one.",
+    },
+    invalid: {
+      title: "That license key isn't valid",
+      description: (portal: Link) => (
+        <>
+          Enter the key from your trial or purchase email. You can also find it in the{" "}
+          {portal("customer portal")}.
+        </>
+      ),
+    },
+    ended: {
+      title: "Your trial or plan has ended",
+      description: (portal: Link) => (
+        <>
+          Subscribe to keep using Cutfac. If you renewed in the {portal("customer portal")}, check
+          again.
+        </>
+      ),
+    },
+    offline: {
+      title: "Cutfac needs to check your license",
+      description: () =>
+        "Cutfac keeps working offline for 7 days after it last reaches cutfac.com. Connect to the internet and check again.",
+    },
+    startTrial: "Start free trial",
+    seePlans: "See plans",
+    enterKey: "Enter license key",
+    checkAgain: "Check again",
+    openSource:
+      "Your workspace stays on your Mac as plain files. To keep going without paying, build the free open-source version and open the same workspace.",
+    stillOffline: "Still couldn't reach cutfac.com. Check your connection and try again.",
+    stillEnded: "cutfac.com still shows this trial or plan as ended.",
   },
   setup: {
     title: "Set up",

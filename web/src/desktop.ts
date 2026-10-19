@@ -8,6 +8,12 @@ export type EditCommand = "undo" | "redo";
  */
 export type LicenseCheck = "granted" | "invalid" | "ended" | "unavailable";
 
+/**
+ * Why the app is locked: no key saved, a key that names no license, an ended trial or plan, or no
+ * word from cutfac.com for a week. The app's own copy of this lives outside the board.
+ */
+export type LicenseLock = "missing" | "invalid" | "ended" | "offline";
+
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
 export interface CutfacDesktop {
   /** Ask for a workspace folder and restart the local server on it. Resolves false if cancelled. */
@@ -24,10 +30,16 @@ export interface CutfacDesktop {
   /** Undo and Redo chosen from the app menu or its shortcuts. Returns an unsubscribe. */
   onEditCommand: (listener: (command: EditCommand) => void) => () => void;
   /**
-   * Check a license key with the update server and keep it for update checks, unless it is
-   * invalid. Resolves what the server said.
+   * Check a license key with cutfac.com and keep it to open the app and get updates, unless it is
+   * invalid. Resolves what cutfac.com said.
    */
   setLicenseKey: (key: string) => Promise<LicenseCheck>;
+  /** Why the app is locked, or undefined while it is open. */
+  licenseLock: () => Promise<LicenseLock | undefined>;
+  /** The app locked, unlocked, or locked for another reason. Returns an unsubscribe. */
+  onLicenseLock: (listener: (lock: LicenseLock | undefined) => void) => () => void;
+  /** Ask cutfac.com again about the saved key. Resolves the lock after. */
+  recheckLicense: () => Promise<LicenseLock | undefined>;
   /**
    * License Key… chosen from the app menu, or asked for by an update check. `saved` says whether a
    * key is kept already. Returns an unsubscribe.
