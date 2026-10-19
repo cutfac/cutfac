@@ -44,6 +44,7 @@
   "devDependencies": {
     "@babel/core": "8.0.7",
     "@base-ui/react": "1.9.0",
+    "@dnd-kit/core": "6.3.1",
     "@effect/tsgo": "0.51.1",
     "@oxlint/plugins": "1.87.0",
     "@rolldown/plugin-babel": "0.2.4",
@@ -69,6 +70,7 @@
     "react-dom": "^19.3.0",
     "react-dropzone": "20.1.4",
     "react-markdown": "10.1.0",
+    "react-resizable-panels": "4.14.3",
     "remark-gfm": "4.0.1",
     "shadcn": "4.21.4",
     "sonner": "2.0.8",

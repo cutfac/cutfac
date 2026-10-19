@@ -64,6 +64,7 @@
   --color-background: var(--background);
   --color-selection: var(--selection);
   --color-selection-foreground: var(--selection-foreground);
+  --color-dock: var(--dock);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -109,6 +110,9 @@
   /* What the user marked on the video: the one colour in the editor, so it is never missed. */
   --selection: oklch(0.8 0.16 85);
   --selection-foreground: oklch(0.25 0.05 85);
+  /* Where a section being moved can go. It shows only during the move, so it never competes with
+     the selection. */
+  --dock: oklch(0.62 0.19 255);
 }
 
 .dark {
@@ -145,6 +149,7 @@
   --sidebar-ring: oklch(0.556 0 0);
   --selection: oklch(0.82 0.16 85);
   --selection-foreground: oklch(0.25 0.05 85);
+  --dock: oklch(0.7 0.16 255);
 }
 
 @layer base {

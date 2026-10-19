@@ -47,6 +47,7 @@ import { agentLabel, Chat } from "../components/editor/chat.tsx";
 import { Checks } from "../components/editor/checks.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
+import { EditorDock, SectionGrip } from "../components/editor/dock.tsx";
 import { Hint, keepFocus } from "../components/editor/hint.tsx";
 import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
 import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
@@ -83,7 +84,8 @@ const TEXT_ENTRY =
   "input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog'], [role='listbox'], [role='menu']";
 
 /** Controls that Space and the arrow keys already operate. */
-const CONTROL = "button, a[href], [role='button'], [role='tab'], [role='option'], [role='slider']";
+const CONTROL =
+  "button, a[href], [role='button'], [role='tab'], [role='option'], [role='slider'], [role='separator']";
 
 const within = (target: EventTarget | null, selector: string) =>
   target instanceof Element && target.closest(selector) !== null;
@@ -296,188 +298,203 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const pins = pinsOn(item, media?.name, run);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
-        <Toolbar
-          item={item}
-          running={running}
-          agent={run.agent}
-          onItem={setData}
-          onEdit={edit}
-          onShortcuts={() => setShortcuts(true)}
-        />
-        {media === undefined ? (
-          <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
-        ) : (
-          <>
-            <Stage
-              player={player}
-              src={mediaUrl(item, media)}
-              kind={media.kind}
-              ratio={aspectRatio(media.aspect)}
-              region={target.region}
-              ghost={ghost?.region}
-              onRegion={(region) => {
-                setTarget((current) => withRegion(current, region));
-                setGhost(undefined);
-              }}
-              ask={{
-                item,
-                agent,
-                files: boxFiles,
-                onSend: (body, versions, attachments) =>
-                  sendRequest(
-                    item,
-                    editInput(
-                      body,
-                      agent,
-                      pickedSettings(statuses, picks, agent),
-                      media,
-                      target,
-                      versions,
-                      attachments,
-                    ),
-                    setData,
-                    setRun,
-                  ).then((sentTo) => {
-                    // `/feedback` leaves the box drawn, so the request about it can still follow.
-                    if (sentTo === "item") clear();
+    <>
+      <EditorDock
+        toolbar={
+          <Toolbar
+            item={item}
+            running={running}
+            agent={run.agent}
+            onItem={setData}
+            onEdit={edit}
+            onShortcuts={() => setShortcuts(true)}
+          />
+        }
+        stage={
+          media === undefined ? (
+            <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
+          ) : (
+            <>
+              <Stage
+                player={player}
+                src={mediaUrl(item, media)}
+                kind={media.kind}
+                ratio={aspectRatio(media.aspect)}
+                region={target.region}
+                ghost={ghost?.region}
+                onRegion={(region) => {
+                  setTarget((current) => withRegion(current, region));
+                  setGhost(undefined);
+                }}
+                ask={{
+                  item,
+                  agent,
+                  files: boxFiles,
+                  onSend: (body, versions, attachments) =>
+                    sendRequest(
+                      item,
+                      editInput(
+                        body,
+                        agent,
+                        pickedSettings(statuses, picks, agent),
+                        media,
+                        target,
+                        versions,
+                        attachments,
+                      ),
+                      setData,
+                      setRun,
+                    ).then((sentTo) => {
+                      // `/feedback` leaves the box drawn, so the request about it can still follow.
+                      if (sentTo === "item") clear();
 
-                    return sentTo;
-                  }),
-              }}
-              onAttach={attachToChat}
-              pins={pins}
-              onPin={(feedback) => {
-                show(feedback);
-                setTab("chat");
-              }}
-            />
-            {video ? (
-              <>
-                <Timeline
-                  player={player}
-                  src={mediaUrl(item, media)}
+                      return sentTo;
+                    }),
+                }}
+                onAttach={attachToChat}
+                pins={pins}
+                onPin={(feedback) => {
+                  show(feedback);
+                  setTab("chat");
+                }}
+              />
+              {video ? (
+                <>
+                  <Timeline
+                    player={player}
+                    src={mediaUrl(item, media)}
+                    target={target}
+                    ghost={ghost}
+                    onRange={(from, to) => {
+                      setTarget((current) => withRange(current, from, to));
+                      setGhost(undefined);
+                    }}
+                    onMarked={focusComposer}
+                    pins={pins}
+                  />
+                  <Transport
+                    player={player}
+                    target={target}
+                    loop={loop}
+                    onLoop={setLoop}
+                    onIn={() =>
+                      setTarget((current) => withStart(current, roundTime(player.getState().time)))
+                    }
+                    onOut={() =>
+                      setTarget((current) => withEnd(current, roundTime(player.getState().time)))
+                    }
+                    onClear={clear}
+                  />
+                </>
+              ) : (
+                <p className="text-center text-xs text-muted-foreground">{t.item.imageHint}</p>
+              )}
+            </>
+          )
+        }
+        strips={
+          media === undefined
+            ? undefined
+            : {
+                media: (
+                  <MediaStrip
+                    item={item}
+                    shown={media}
+                    onPick={pick}
+                    onItem={setData}
+                    onUploaded={setMediaName}
+                  />
+                ),
+                references: (
+                  <ReferenceStrip
+                    item={item}
+                    onItem={setData}
+                    onAttach={(path) => {
+                      chatFiles.attach(path);
+                      toChat();
+                    }}
+                    onDetach={(path) => {
+                      const holding = [chatFiles, boxFiles].filter((files) =>
+                        files.paths.includes(path),
+                      );
+
+                      for (const files of holding) files.detach(path);
+
+                      return () => {
+                        for (const files of holding) files.attach(path);
+                      };
+                    }}
+                  />
+                ),
+              }
+        }
+        chat={
+          <aside className="flex min-h-0 flex-1 flex-col">
+            <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
+              <div className="flex items-center gap-1 border-b p-2">
+                <TabsList className="min-w-0 flex-1">
+                  <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
+                  <TabsTrigger value="checks">{t.item.checks}</TabsTrigger>
+                  <TabsTrigger value="history">{t.item.history}</TabsTrigger>
+                  <TabsTrigger value="details">{t.item.details}</TabsTrigger>
+                </TabsList>
+                <SectionGrip section="chat" />
+              </div>
+              {/* Kept mounted so a half-typed request survives a look at the other tabs. */}
+              <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
+                <Chat
+                  item={item}
+                  media={media}
+                  run={run}
                   target={target}
-                  ghost={ghost}
-                  onRange={(from, to) => {
-                    setTarget((current) => withRange(current, from, to));
+                  statuses={statuses}
+                  agent={agent}
+                  onAgent={setChosen}
+                  picks={picks}
+                  onPick={setPick}
+                  inputRef={inputRef}
+                  files={chatFiles}
+                  onItem={setData}
+                  onRun={setRun}
+                  onClearTarget={clear}
+                  onShow={show}
+                  onRetarget={(feedback: Feedback) => {
+                    const again = targetOf(feedback);
+
+                    goTo(feedback.media, anchorOf(again));
+                    setTarget(again);
                     setGhost(undefined);
                   }}
-                  onMarked={focusComposer}
-                  pins={pins}
+                  onCompare={() => player.pause()}
                 />
-                <Transport
-                  player={player}
-                  target={target}
-                  loop={loop}
-                  onLoop={setLoop}
-                  onIn={() =>
-                    setTarget((current) => withStart(current, roundTime(player.getState().time)))
-                  }
-                  onOut={() =>
-                    setTarget((current) => withEnd(current, roundTime(player.getState().time)))
-                  }
-                  onClear={clear}
-                />
-              </>
-            ) : (
-              <p className="text-center text-xs text-muted-foreground">{t.item.imageHint}</p>
-            )}
-            <div className="flex shrink-0 gap-3">
-              <MediaStrip
-                item={item}
-                shown={media}
-                onPick={pick}
-                onItem={setData}
-                onUploaded={setMediaName}
-              />
-              <ReferenceStrip
-                item={item}
-                onItem={setData}
-                onAttach={(path) => {
-                  chatFiles.attach(path);
-                  toChat();
-                }}
-                onDetach={(path) => {
-                  const holding = [chatFiles, boxFiles].filter((files) =>
-                    files.paths.includes(path),
-                  );
-
-                  for (const files of holding) files.detach(path);
-
-                  return () => {
-                    for (const files of holding) files.attach(path);
-                  };
-                }}
-              />
-            </div>
-          </>
-        )}
-      </section>
-      <aside className="flex min-h-0 w-105 shrink-0 flex-col border-l">
-        <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
-          <div className="border-b p-2">
-            <TabsList className="w-full">
-              <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
-              <TabsTrigger value="checks">{t.item.checks}</TabsTrigger>
-              <TabsTrigger value="history">{t.item.history}</TabsTrigger>
-              <TabsTrigger value="details">{t.item.details}</TabsTrigger>
-            </TabsList>
-          </div>
-          {/* Kept mounted so a half-typed request survives a look at the other tabs. */}
-          <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
-            <Chat
-              item={item}
-              media={media}
-              run={run}
-              target={target}
-              statuses={statuses}
-              agent={agent}
-              onAgent={setChosen}
-              picks={picks}
-              onPick={setPick}
-              inputRef={inputRef}
-              files={chatFiles}
-              onItem={setData}
-              onRun={setRun}
-              onClearTarget={clear}
-              onShow={show}
-              onRetarget={(feedback: Feedback) => {
-                const again = targetOf(feedback);
-
-                goTo(feedback.media, anchorOf(again));
-                setTarget(again);
-                setGhost(undefined);
-              }}
-              onCompare={() => player.pause()}
-            />
-          </TabsContent>
-          <TabsContent value="checks" className="min-h-0 overflow-y-auto">
-            <div className="p-4">
-              <Checks item={item} />
-            </div>
-          </TabsContent>
-          <TabsContent value="history" className="min-h-0 overflow-y-auto">
-            <div className="p-4">
-              <HistoryPanel
-                item={item}
-                running={running}
-                onGoTo={(entryId) => history.goTo(item.id, entryId)}
-                onRestore={(version) => history.restore(item.id, version)}
-                onPreview={() => player.pause()}
-              />
-            </div>
-          </TabsContent>
-          <TabsContent value="details" className="min-h-0 overflow-y-auto">
-            <div className="p-4">
-              <Details item={item} onItem={setData} />
-            </div>
-          </TabsContent>
-        </Tabs>
-      </aside>
+              </TabsContent>
+              <TabsContent value="checks" className="min-h-0 overflow-y-auto">
+                <div className="p-4">
+                  <Checks item={item} />
+                </div>
+              </TabsContent>
+              <TabsContent value="history" className="min-h-0 overflow-y-auto">
+                <div className="p-4">
+                  <HistoryPanel
+                    item={item}
+                    running={running}
+                    onGoTo={(entryId) => history.goTo(item.id, entryId)}
+                    onRestore={(version) => history.restore(item.id, version)}
+                    onPreview={() => player.pause()}
+                  />
+                </div>
+              </TabsContent>
+              <TabsContent value="details" className="min-h-0 overflow-y-auto">
+                <div className="p-4">
+                  <Details item={item} onItem={setData} />
+                </div>
+              </TabsContent>
+            </Tabs>
+          </aside>
+        }
+      />
       <ShortcutsDialog open={shortcuts} onOpenChange={setShortcuts} />
-    </div>
+    </>
   );
 }
 

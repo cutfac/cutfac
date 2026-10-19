@@ -344,6 +344,22 @@ export const en = {
     notesPlaceholder: "Anything worth remembering about this video",
     titleRequired: "The title cannot be empty.",
   },
+  layout: {
+    /** The panel of chat, checks, history and details, as the editor's sections name it. */
+    chat: "Chat panel",
+    move: (section: string) => `Move ${section}`,
+    place: (section: string) => `Where ${section} goes`,
+    below: "Below the preview",
+    left: "Left of the preview",
+    right: "Right of the preview",
+    leftEdge: "Left side of the window",
+    rightEdge: "Right side of the window",
+    swap: "Swap the order",
+    reset: "Reset the layout",
+    narrow: "The window is too narrow for this",
+    folded: "Moved down for now, as the window is narrow. It goes back once the window is wider.",
+    resize: "Drag to resize, double-click to reset",
+  },
   checks: {
     template: "Template",
     templateMissing: (id: string) => `There is no "${id}" template in this workspace.`,
