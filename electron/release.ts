@@ -1,8 +1,11 @@
 /**
- * `bun run release:desktop`: builds the mac app, signs and notarizes it, and uploads it to the
- * private release bucket. Apps and the download page reach it through cutfac.com, which checks the
- * license key and hands out short-lived links. Then it tags the commit it built and publishes a
- * source-only GitHub release. Credentials come from .env.release; nothing here prints their values.
+ * `bun run release [patch | minor | major | <version>]` ships the Mac app in one command. It first
+ * checks everything the release needs, so nothing turns up missing after the long build. Then it
+ * bumps the version with `bun pm version` when given one, runs CI's checks, builds, signs and
+ * notarizes the app, and uploads it to the private release bucket, the update feed last. Apps and
+ * the download page reach it through short-lived cutfac.com links, with no license key. Last, it
+ * pushes main with a `v<version>` tag and publishes a source-only GitHub release. Credentials come
+ * from .env.release; nothing here prints their values.
  */
 import { readdir } from "node:fs/promises";
 import path from "node:path";
@@ -12,6 +15,23 @@ import { Option, Schema } from "effect";
 const root = path.resolve(import.meta.dir, "..");
 
 const outputDir = path.join(root, "release");
+
+const packageFile = path.join(root, "package.json");
+
+/** The branch releases are made from, and pushed to with their tag. */
+const BRANCH = "main";
+
+const USAGE = "Usage: bun run release [patch | minor | major | <version>]";
+
+const BUMP = "Bump it with `bun run release patch` (or minor, major).";
+
+/** What CI runs on every push besides the build, so no release ships what CI would fail. */
+const CHECKS = [
+  ["bun", "test"],
+  ["bun", "run", "typecheck"],
+  ["bun", "run", "lint"],
+  ["bun", "run", "format:check"],
+];
 
 export const REQUIRED_ENV = [
   "APPLE_ID",
@@ -38,6 +58,18 @@ const decodeFeed = Schema.decodeUnknownOption(Schema.Struct({ version: Schema.No
 
 const decodePackage = Schema.decodeUnknownSync(Schema.Struct({ version: Schema.NonEmptyString }));
 
+/**
+ * The version bump `bun run release` was given, which `bun pm version` checks, or undefined to
+ * release the version package.json is at.
+ */
+export function incrementFrom(args: readonly string[]): string | undefined {
+  const [increment, ...rest] = args;
+
+  if (rest.length > 0 || increment?.startsWith("-")) throw new Error(USAGE);
+
+  return increment;
+}
+
 /** The names in `REQUIRED_ENV` that are unset or empty. */
 export function missingEnv(env: Record<string, string | undefined>): string[] {
   return REQUIRED_ENV.filter((name) => !env[name]);
@@ -52,7 +84,7 @@ export function feedVersion(feed: string): string | undefined {
 export function versionProblem(version: string, published: string | undefined): string | undefined {
   if (published === undefined || Bun.semver.order(version, published) > 0) return undefined;
 
-  return `package.json is at ${version}, but ${published} is already published. Bump the version first.`;
+  return `package.json is at ${version}, but ${published} is already published. ${BUMP}`;
 }
 
 /** Folders a build never reads, so an untracked file there, like a note in docs/, cannot change it. */
@@ -77,6 +109,29 @@ export function treeProblem(status: string): string | undefined {
   if (dirty.length === 0) return undefined;
 
   return `Commit or stash ${dirty.join(", ")} first, so the release matches a commit.`;
+}
+
+/** Why the checkout cannot be released from, given its branch and how far it is behind origin. */
+export function branchProblem(branch: string, behind: number): string | undefined {
+  if (branch !== BRANCH) return `Release from ${BRANCH}, not ${branch || "a detached HEAD"}.`;
+
+  if (behind > 0) return `${BRANCH} is ${behind} commit(s) behind origin/${BRANCH}. Pull first.`;
+
+  return undefined;
+}
+
+/**
+ * Why the keychain cannot sign the app, from `security find-identity -v -p codesigning`, or
+ * undefined when it holds a valid Developer ID Application certificate for `team`.
+ */
+export function signingProblem(identities: string, team: string): string | undefined {
+  const signs = identities
+    .split("\n")
+    .some((line) => line.includes('"Developer ID Application: ') && line.endsWith(`(${team})"`));
+
+  return signs
+    ? undefined
+    : "The keychain has no valid Developer ID Application certificate for APPLE_TEAM_ID.";
 }
 
 export const tagName = (version: string) => `v${version}`;
@@ -213,11 +268,97 @@ async function subjectsSinceRelease(commit: string): Promise<string[]> {
   return log === undefined || log === "" ? [] : log.split("\n");
 }
 
+/** What stops a release, found in seconds so that nothing fails for it after the long build. */
+async function preflight(): Promise<string[]> {
+  const missing = missingEnv(process.env);
+  const team = process.env["APPLE_TEAM_ID"];
+  const fetched = await output(["git", "fetch", "--quiet", "origin", BRANCH]);
+
+  const [status, branch, behind, identities, github] = await Promise.all([
+    output(["git", "status", "--porcelain"]),
+    output(["git", "branch", "--show-current"]),
+    output(["git", "rev-list", "--count", `HEAD..origin/${BRANCH}`]),
+    output(["security", "find-identity", "-v", "-p", "codesigning"]),
+    output(["gh", "auth", "status"]),
+  ]);
+
+  return [
+    missing.length === 0
+      ? undefined
+      : `Set ${missing.join(", ")} in .env.release (see README, Releasing the app).`,
+    status === undefined ? "Run this in a git checkout." : treeProblem(status),
+    fetched === undefined
+      ? `Couldn't fetch origin/${BRANCH}.`
+      : branchProblem(branch ?? "", Number(behind ?? 0)),
+    team ? signingProblem(identities ?? "", team) : undefined,
+    github === undefined ? "Log in to GitHub with `gh auth login`." : undefined,
+  ].filter((problem) => problem !== undefined);
+}
+
+async function packageVersion(): Promise<string> {
+  return decodePackage(await Bun.file(packageFile).json()).version;
+}
+
+/** Refuses a version that is already tagged, or not newer than the one the bucket serves. */
+async function refuseReleased(version: string, releases: Bun.S3Client): Promise<void> {
+  if (await output(["git", "rev-parse", "--quiet", "--verify", `refs/tags/${tagName(version)}`])) {
+    throw new Error(`${tagName(version)} is already tagged. ${BUMP}`);
+  }
+
+  const problem = versionProblem(version, await publishedVersion(releases));
+
+  if (problem) throw new Error(problem);
+}
+
 /**
- * Tag the commit that was built, push the tag, and publish a source-only GitHub release. The builds
- * are live by now, so a failure here only leaves the remaining steps to run by hand.
+ * The version to release once it is new and passes CI's checks: package.json's, or the one
+ * `bun pm version` bumps it to. The bump is committed only after the checks pass; until then a
+ * failure puts package.json back, so the next try starts from the same tree.
  */
-async function publishTag(version: string, commit: string, notes: string): Promise<void> {
+async function checkedVersion(
+  increment: string | undefined,
+  releases: Bun.S3Client,
+): Promise<string> {
+  const original = await Bun.file(packageFile).text();
+
+  if (increment !== undefined) {
+    await run(["bun", "pm", "version", increment, "--no-git-tag-version"]);
+  }
+
+  try {
+    const version = await packageVersion();
+
+    await refuseReleased(version, releases);
+    console.log(`[release] Running CI's checks on ${version}.`);
+
+    for (const check of CHECKS) await run(check);
+
+    if (increment !== undefined) {
+      await run([
+        "git",
+        "commit",
+        "--quiet",
+        "-m",
+        `chore(release): ${version}`,
+        "--",
+        "package.json",
+      ]);
+    }
+
+    return version;
+  } catch (error) {
+    if (increment !== undefined) await Bun.write(packageFile, original);
+
+    throw error;
+  }
+}
+
+/**
+ * Tag the commit that was built, push it to main with the tag, and publish a source-only GitHub
+ * release. The builds are live by now, so a failure here only leaves the remaining steps to run by
+ * hand.
+ */
+async function publishSource(version: string, commit: string, notes: string): Promise<void> {
   const tag = tagName(version);
   const notesFile = path.join(outputDir, `notes-${version}.md`);
 
@@ -225,7 +366,8 @@ async function publishTag(version: string, commit: string, notes: string): Promi
 
   const steps = [
     ["git", "tag", "-a", tag, commit, "-m", `Cutfac ${version}`],
-    ["git", "push", "origin", tag],
+    // Atomic, so GitHub gets main and its tag together or neither.
+    ["git", "push", "--atomic", "origin", BRANCH, `refs/tags/${tag}`],
     [
       "gh",
       "release",
@@ -254,35 +396,19 @@ async function publishTag(version: string, commit: string, notes: string): Promi
     }
   }
 
-  console.log(`[release] Tagged ${tag} and published its GitHub release.`);
+  console.log(`[release] Pushed ${BRANCH} with ${tag} and published its GitHub release.`);
 }
 
-async function release(): Promise<void> {
-  const missing = missingEnv(process.env);
+async function release(increment: string | undefined): Promise<void> {
+  const problems = await preflight();
 
-  if (missing.length > 0) {
-    throw new Error(`Set ${missing.join(", ")} in .env.release (see README, Releasing the app).`);
-  }
-
-  const status = await output(["git", "status", "--porcelain"]);
-  const commit = await output(["git", "rev-parse", "HEAD"]);
-
-  if (status === undefined || commit === undefined) throw new Error("Run this in a git checkout.");
-
-  const dirty = treeProblem(status);
-
-  if (dirty) throw new Error(dirty);
-
-  const { version } = decodePackage(await Bun.file(path.join(root, "package.json")).json());
-
-  if (await output(["git", "rev-parse", "--quiet", "--verify", `refs/tags/${tagName(version)}`])) {
-    throw new Error(`${tagName(version)} is already tagged. Bump the version first.`);
-  }
+  if (problems.length > 0) throw new Error(`Fix these first:\n  - ${problems.join("\n  - ")}`);
 
   const releases = bucket();
-  const problem = versionProblem(version, await publishedVersion(releases));
+  const version = await checkedVersion(increment, releases);
+  const commit = await output(["git", "rev-parse", "HEAD"]);
 
-  if (problem) throw new Error(problem);
+  if (commit === undefined) throw new Error("Couldn't read the commit to release.");
 
   console.log(`[release] Building Cutfac ${version}.`);
   await run(["bun", "run", "build"]);
@@ -315,12 +441,12 @@ async function release(): Promise<void> {
 
   console.log(`[release] Published ${version}. cutfac.com/download now hands it out.`);
 
-  await publishTag(version, commit, releaseNotes(await subjectsSinceRelease(commit)));
+  await publishSource(version, commit, releaseNotes(await subjectsSinceRelease(commit)));
 }
 
 if (import.meta.main) {
   try {
-    await release();
+    await release(incrementFrom(Bun.argv.slice(2)));
   } catch (error) {
     console.error(`[release] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);

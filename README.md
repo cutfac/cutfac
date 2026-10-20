@@ -208,7 +208,7 @@ item (`Ctrl+Z`/`Ctrl+Y` elsewhere), and `?` shows them all.
 ```sh
 bun run desktop           # build the web UI and Electron shell, then open it
 bun run dist:desktop      # unsigned macOS app in release/, with the server compiled as a sidecar
-bun run release:desktop   # signed and notarized release, uploaded to the private release bucket
+bun run release           # signed, notarized and uploaded release, tagged on GitHub (see below)
 ```
 
 The app runs the same server as `cutfac serve` as a sidecar on `127.0.0.1` and opens the board in
@@ -228,7 +228,14 @@ for more than a week, the app is the free version again. Runs from source (`desk
 
 ### Releasing the app
 
-`release:desktop` reads its credentials from `.env.release`, which git ignores:
+One command ships a release, from a clean `main`:
+
+```sh
+bun run release          # release the version in package.json
+bun run release patch    # or minor, major, or a version: bump it with `bun pm version` first
+```
+
+It reads its credentials from `.env.release`, which git ignores:
 
 - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` to notarize
 - `CUTFAC_RELEASES_BUCKET`, `CUTFAC_RELEASES_REGION` for the private S3 bucket the builds go to
@@ -239,19 +246,22 @@ objects and `s3:ListBucket` on the bucket, which lets the first release see that
 It never deletes or changes bucket settings. The site holds no AWS key: it signs CloudFront links,
 and only that distribution may read the bucket.
 
-It also needs a Developer ID Application certificate in the keychain. Bump `version` in
-`package.json` first: the script refuses a version that is not newer than the published one. It
-builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
+Before the long build, the script checks in seconds that every variable is set, the keychain has a
+Developer ID Application certificate for `APPLE_TEAM_ID`, `gh` is logged in, and `main` has no
+uncommitted changes a build would pick up and isn't behind `origin/main`. It lists everything to fix
+at once. It then refuses a version that is already tagged or not newer than the published one, and
+runs the checks CI runs. A bump is committed as `chore(release): <version>` only once they pass;
+until then a failure puts `package.json` back.
+
+Then it builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
 blockmaps to `mac/`, then `latest-mac.yml` last so no app sees the release before its files.
 cutfac.com hands out short-lived CloudFront links to these files: the dmg from its download page and
 the rest to the app's update checks. The feed is never cached and build files never change, so a
 release needs no cache invalidation.
 
-Commit before you release: the script refuses changes a build would pick up and a version that is
-already tagged, so every release matches a commit. After the upload it tags that commit
-`v<version>`, pushes the tag, and creates a GitHub release with no files attached, whose notes list
-the features and fixes since the last tag. That step needs `gh` logged in. If it fails, the builds
-are already out and the script prints the commands left to run.
+Last, it tags the commit it built `v<version>`, pushes `main` and the tag together, and creates a
+GitHub release with no files attached, whose notes list the features and fixes since the last tag.
+If that step fails, the builds are already out and the script prints the commands left to run.
 
 The feed is the `publish` url in `electron-builder.yml`, and every build keeps the URL it was built
 with. To move the feed, publish one release that points to the new place while the old one keeps

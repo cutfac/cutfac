@@ -33,11 +33,11 @@ mac:
   artifactName: cutfac-${version}-${arch}.${ext}
   # Signed with the Developer ID certificate in the keychain, under the hardened runtime with
   # build/entitlements.mac*.plist. Notarized when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and
-  # APPLE_TEAM_ID are set; `bun run release:desktop` requires them.
+  # APPLE_TEAM_ID are set; `bun run release` requires them.
 
-# Where the app checks for updates (it goes into app-update.yml). The site checks the license key the
-# app sends and redirects to a short-lived link into the private release bucket.
-# `bun run release:desktop` uploads the builds; electron-builder publishes nothing itself.
+# Where the app checks for updates (it goes into app-update.yml). The site redirects to a short-lived
+# link into the private release bucket, with no license key involved.
+# `bun run release` uploads the builds; electron-builder publishes nothing itself.
 publish:
   provider: generic
   url: https://cutfac.com/api/updates/mac

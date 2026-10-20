@@ -117,7 +117,7 @@ need the machine. Only the origin that serves the SPA differs:
   (`cutfac serve --host 127.0.0.1 --web-dir <bundled web>`), compiled with `bun build --compile`
   for the packaged app, and the window loads it. The packaged app updates itself with
   electron-updater from cutfac.com, which redirects to short-lived links into the private bucket
-  that `bun run release:desktop` uploads to (`latest-mac.yml` plus the signed zip). The free
+  that `bun run release` uploads to (`latest-mac.yml` plus the signed zip). The free
   version and paid plans get the same updates, so the app sends no license key with them.
 
 A pure in-browser version (File System Access API, ffmpeg.wasm) is out of scope: agents cannot
