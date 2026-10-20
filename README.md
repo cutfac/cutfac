@@ -97,20 +97,20 @@
 ## Mac app vs. open source
 
 The Mac app, Cutfac Solo, is built from this repository. Both have the same features, and
-we don't lock any of them behind a license key. Paying gets you a signed build that updates itself,
-plus content we prepare for you.
+we don't lock any of them behind a license key. The Mac app makes its first 3 videos for free with
+everything open; a paid plan lets it make as many as you want, plus content we prepare for you.
 
-| Area                                             | Solo (Mac app)                                    | Open source (this repository)                  |
-| ------------------------------------------------ | ------------------------------------------------- | ---------------------------------------------- |
-| **Cost**                                         | $19/month or $180/year, 7-day free trial          | Free forever (AGPL-3.0)                        |
-| **Setup**                                        | Download a signed app and open it                 | Install Bun and ffmpeg, then build it          |
-| **Updates**                                      | Install themselves                                | Pull and rebuild                               |
-| **Board, editor, learning, formats, MCP server** | Included                                          | Included                                       |
-| **Agents**                                       | Your own Claude Code or Codex, on your machine    | Your own Claude Code or Codex, on your machine |
-| **Reference feed and format packs**              | Included once they ship                           | Not included                                   |
-| **Data**                                         | Plain folders on your Mac                         | Plain folders on your machine                  |
-| **If you stop paying**                           | The app keeps working at the last version you had | Not applicable                                 |
-| **Source and changes**                           | Built from this repository                        | Fork and modify under the AGPL-3.0             |
+| Area                                             | Solo (Mac app)                                                      | Open source (this repository)                  |
+| ------------------------------------------------ | ------------------------------------------------------------------- | ---------------------------------------------- |
+| **Cost**                                         | First 3 videos free, then a [paid plan](https://cutfac.com/pricing) | Free forever (AGPL-3.0)                        |
+| **Setup**                                        | Download a signed app and open it                                   | Install Bun and ffmpeg, then build it          |
+| **Updates**                                      | Install themselves                                                  | Pull and rebuild                               |
+| **Board, editor, learning, formats, MCP server** | Included                                                            | Included                                       |
+| **Agents**                                       | Your own Claude Code or Codex, on your machine                      | Your own Claude Code or Codex, on your machine |
+| **Reference feed and format packs**              | Included once they ship                                             | Not included                                   |
+| **Data**                                         | Plain folders on your Mac                                           | Plain folders on your machine                  |
+| **If you stop paying**                           | Back to the free version; your videos stay editable                 | Not applicable                                 |
+| **Source and changes**                           | Built from this repository                                          | Fork and modify under the AGPL-3.0             |
 
 ## Privacy
 
@@ -124,8 +124,9 @@ plus content we prepare for you.
   websites send it from your browser. [SECURITY.md](SECURITY.md) covers how to report a problem.
 - It only goes online when you ask it to: learning from a link (videos through your own `yt-dlp`)
   or sending feedback to the Cutfac team (your message, an optional reply address, and the app's
-  version, platform and language). The Mac app also checks cutfac.com for updates, sending your
-  license key and nothing about your workspace.
+  version, platform and language). The Mac app also checks cutfac.com for updates and, once you
+  enter a license key, whether its plan is active. Only that check sends the key, and neither sends
+  anything about your workspace.
 - Learn from videos you're allowed to download, and don't repost other people's videos.
 
 ## Tech stack
@@ -219,9 +220,10 @@ The released app checks its feed at launch and every four hours, downloads a new
 background, and offers to restart once it is ready. Choosing Later installs it the next time the app
 quits. The app menu also has Check for Updates… and License Key….
 
-The feed is served by cutfac.com, which needs the license key from checkout with every request. The
-app keeps the key in its settings and sends it to cutfac.com only. Without a key, or with one whose
-plan has ended, the app keeps working at its version and stops updating. Runs from source (`desktop`,
+The feed is served by cutfac.com and needs no license key, so the free version updates too. The
+license key from checkout unlocks the paid plan: the app keeps it in its settings and asks
+cutfac.com at launch and once a day whether its plan is active. Without an active plan, or offline
+for more than a week, the app is the free version again. Runs from source (`desktop`,
 `desktop:dev`) never update.
 
 ### Releasing the app
@@ -242,8 +244,8 @@ It also needs a Developer ID Application certificate in the keychain. Bump `vers
 builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
 blockmaps to `mac/`, then `latest-mac.yml` last so no app sees the release before its files.
 cutfac.com hands out short-lived CloudFront links to these files: the dmg from its download page and
-the rest to the app's update checks, each for a live license key. The feed is never cached and build
-files never change, so a release needs no cache invalidation.
+the rest to the app's update checks. The feed is never cached and build files never change, so a
+release needs no cache invalidation.
 
 Commit before you release: the script refuses changes a build would pick up and a version that is
 already tagged, so every release matches a commit. After the upload it tags that commit
@@ -257,7 +259,7 @@ serving.
 
 To sign and ship your own build, put your own Apple account, bucket and key in `.env.release` and
 point the `publish` url at a feed you serve. The app fetches `latest-mac.yml` from that url, with
-the files it names next to it, and sends a license key only when one is saved in the app.
+the files it names next to it, and sends no license key with them.
 `dist:desktop` builds stay unsigned and need none of this.
 
 ### Feedback
