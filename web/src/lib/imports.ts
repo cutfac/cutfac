@@ -1,4 +1,4 @@
-import type { AgentChoice, AgentName, AgentStatus, ImportDetail, ImportTurn } from "../api.ts";
+import type { AgentChoice, AgentName, AgentStatus, ImportSummary, ImportTurn } from "../api.ts";
 import { runView, type LiveRun, type RunView } from "./run.ts";
 
 /** Imports open on the Templates page under this prefix, as `#/templates/import/<id>`. */
@@ -26,7 +26,7 @@ export type ImportState =
   | "closed";
 
 /** A turn's run: the streamed one while it is about this turn, else the saved one. */
-export function turnRun(detail: ImportDetail, turn: ImportTurn, live: LiveRun): RunView {
+export function turnRun(detail: ImportSummary, turn: ImportTurn, live: LiveRun): RunView {
   // Only the last turn can have an agent on it; an earlier one still marked running was cut off.
   const alive = detail.running && detail.doc.turns.at(-1)?.id === turn.id;
 
@@ -34,7 +34,7 @@ export function turnRun(detail: ImportDetail, turn: ImportTurn, live: LiveRun): 
 }
 
 /** Where the import stands, from its last turn's run. */
-export function importState(detail: ImportDetail, live: LiveRun): ImportState {
+export function importState(detail: ImportSummary, live: LiveRun): ImportState {
   const { doc } = detail;
 
   if (doc.closed) return "closed";

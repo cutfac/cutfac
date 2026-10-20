@@ -35,7 +35,13 @@ import {
   stopAndCloseImport,
   stopImport,
 } from "../core/importRun.ts";
-import { type Import, type TurnInput, getImport, listImports } from "../core/imports.ts";
+import {
+  type Import,
+  type TurnInput,
+  getImport,
+  importFiles,
+  listImports,
+} from "../core/imports.ts";
 import {
   type Item,
   addFeedback,
@@ -51,7 +57,13 @@ import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/lea
 import { getFormat, listFormats } from "../core/library.ts";
 import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
-import { addReferences, listReferences, removeReference } from "../core/references.ts";
+import {
+  type ReferenceUpload,
+  addReferences,
+  itemReferences,
+  listReferences,
+  removeReference,
+} from "../core/references.ts";
 import { listReviews } from "../core/review.ts";
 import {
   AgentChoice,
@@ -216,6 +228,12 @@ const ReferencesForm = Schema.Struct({
   paths: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
 });
 
+/** A new import with files the user dropped, pasted or picked to go with the link. */
+const NewImportForm = Schema.Struct({ ...NewImportBody.fields, ...ReferencesForm.fields });
+
+/** A reply to the import's agent with files; Allow carries none, so it stays JSON. */
+const ImportReplyForm = Schema.Struct({ ...ReferencesForm.fields, body: Schema.String });
+
 const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
 
 const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
@@ -247,6 +265,21 @@ const nonEmpty = (text: string | undefined) =>
 const isMultipart = (request: HttpServerRequest.HttpServerRequest) =>
   (request.headers["content-type"] ?? "").startsWith("multipart/form-data");
 
+/** What was dropped, each file with its path in the drop: its name unless the form gave paths. */
+const uploadsOf = Effect.fnUntraced(function* (form: typeof ReferencesForm.Type) {
+  const given =
+    form.paths === undefined ? form.files.map((file) => file.name) : [form.paths].flat();
+
+  if (given.length !== form.files.length) {
+    return yield* new InvalidRequest({ message: "Send one path for each file" });
+  }
+
+  return form.files.map((file, index): ReferenceUpload => ({
+    source: file.path,
+    path: given[index] ?? "",
+  }));
+});
+
 // ---------------------------------------------------------------------------------------------
 // Items
 
@@ -270,22 +303,15 @@ const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
     docs: Object.fromEntries(docs),
     history: yield* readHistory(item),
     reviews: yield* listReviews(item),
-    references: yield* listReferences(item),
+    references: yield* listReferences(itemReferences(item)),
     running: yield* runs.isRunning(item.id),
   };
 });
 
 /** Files dropped, pasted or picked on the board, kept as the item's references. */
 const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: string) {
-  const { files, paths } = yield* HttpServerRequest.schemaBodyMultipart(ReferencesForm);
-  const given = paths === undefined ? files.map((file) => file.name) : [paths].flat();
-
-  if (given.length !== files.length) {
-    return yield* new InvalidRequest({ message: "Send one path for each file" });
-  }
-
-  const uploads = files.map((file, index) => ({ source: file.path, path: given[index] ?? "" }));
-  const added = yield* addReferences(yield* getItem(id), uploads);
+  const uploads = yield* uploadsOf(yield* HttpServerRequest.schemaBodyMultipart(ReferencesForm));
+  const added = yield* addReferences(itemReferences(yield* getItem(id)), uploads);
 
   return { item: yield* itemDetail(yield* getItem(id)), added };
 });
@@ -462,11 +488,22 @@ const continueRoute = withId((id) =>
 // ---------------------------------------------------------------------------------------------
 // Imports
 
-/** An import and whether an agent is on it. */
-const importDetail = Effect.fn("server.importDetail")(function* (found: Import) {
+/** An import and whether an agent is on it, as the list of imports shows it. */
+const importSummary = Effect.fn("server.importSummary")(function* (found: Import) {
   const runs = yield* ImportRuns;
 
   return { ...found, running: yield* runs.isRunning(found.id) };
+});
+
+/** An import as its chat shows it, with the files the user sent to it. */
+const importDetail = Effect.fn("server.importDetail")(function* (found: Import) {
+  const files = importFiles(found.id);
+
+  return {
+    ...(yield* importSummary(found)),
+    dir: files.owner,
+    references: yield* listReferences(files),
+  };
 });
 
 /** How agents launch this workspace's MCP server. `instead` says what to do when that is unknown. */
@@ -485,23 +522,40 @@ const ownLaunch = (options: ServerOptions, instead: string) =>
 
 const COPY_INSTEAD = "copy the import prompt to your agent instead";
 
-/** Start the user's agent on a link, read-only until the user allows installs. */
+/** Start the user's agent on a link and any files sent with it, read-only until installs are allowed. */
 const newImportRoute = (options: ServerOptions) =>
   Effect.gen(function* () {
     const ws = yield* Workspace;
-    const body = yield* HttpServerRequest.schemaBodyJson(NewImportBody);
+    const request = yield* HttpServerRequest.HttpServerRequest;
+
+    const form = isMultipart(request)
+      ? yield* HttpServerRequest.schemaBodyMultipart(NewImportForm)
+      : undefined;
+
+    const body = form ?? (yield* HttpServerRequest.schemaBodyJson(NewImportBody));
+    const uploads = form === undefined ? [] : yield* uploadsOf(form);
     const server = yield* ownLaunch(options, COPY_INSTEAD);
     const agent = body.agent ?? defaultAgent(ws);
-    const started = yield* startImport({ link: body.link, agent, locale: body.locale }, server);
+    const input = { link: body.link, agent, locale: body.locale };
+    const started = yield* startImport(input, server, uploads);
 
     return yield* importDetail(started);
   });
 
-/** Send the user's reply, or their Allow, to the import's agent in the same session. */
+/** Send the user's reply and any files with it, or their Allow, to the import's agent. */
 const importReplyRoute = (options: ServerOptions) =>
   withId((id) =>
     Effect.gen(function* () {
-      const body = yield* HttpServerRequest.schemaBodyJson(ImportReplyBody);
+      const request = yield* HttpServerRequest.HttpServerRequest;
+
+      const form = isMultipart(request)
+        ? yield* HttpServerRequest.schemaBodyMultipart(ImportReplyForm)
+        : undefined;
+
+      const body: typeof ImportReplyBody.Type =
+        form ?? (yield* HttpServerRequest.schemaBodyJson(ImportReplyBody));
+
+      const uploads = form === undefined ? [] : yield* uploadsOf(form);
       const allow = body.allow === true;
       const text = body.body?.trim() ?? "";
 
@@ -511,7 +565,7 @@ const importReplyRoute = (options: ServerOptions) =>
       const server = yield* ownLaunch(options, COPY_INSTEAD);
       const turn: TurnInput = { id: yield* shortId, kind: allow ? "allow" : "reply", body: text };
 
-      return yield* importDetail(yield* startTurn(id, turn, server));
+      return yield* importDetail(yield* startTurn(id, turn, server, uploads));
     }),
   );
 
@@ -824,7 +878,7 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "GET",
       "/api/imports",
-      Effect.flatMap(listImports(), (imports) => Effect.forEach(imports, importDetail)),
+      Effect.flatMap(listImports(), (imports) => Effect.forEach(imports, importSummary)),
     ),
     json("POST", "/api/imports", newImportRoute(options)),
     json(

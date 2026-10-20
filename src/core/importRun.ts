@@ -10,6 +10,7 @@ import {
   agentBin,
   agentCommand,
   codexConfig,
+  codexImageFlags,
   converse,
   runsLayer,
 } from "./agentRun.ts";
@@ -26,22 +27,27 @@ import {
   codexServerName,
   codexServerNames,
 } from "./agents.ts";
-import { Conflict, NotFound } from "./errors.ts";
+import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
 import {
   type NewImport,
   type RunEnd,
   type TurnInput,
   beginTurn,
   closeImport,
+  closeUnstarted,
   createImport,
   endTurn,
   freshPrompt,
   getImport,
+  importFiles,
   saveImportSession,
   settleInstalls,
   turnMessage,
+  turnProblem,
 } from "./imports.ts";
 import { shortId } from "./items.ts";
+import { mediaKind } from "./media.ts";
+import { type ReferenceUpload, addReferences } from "./references.ts";
 import type { ImportDoc } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
@@ -231,20 +237,34 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
   const bin = yield* agentBin(agent);
   const phase = importPhase(doc);
   const ours = codexServerName(ws.config.name);
+  const { owner } = importFiles(importId);
+  const folder = yield* ws.abs(owner);
+
+  // Codex is handed the pictures that came with this message; Claude opens them with Read, so
+  // only a Codex run looks for them.
+  const pictures = Effect.filter(
+    (turn.attachments ?? []).filter((path) => mediaKind(path) === "image"),
+    (path) => ws.exists(`${owner}/${path}`),
+  );
 
   const flags =
     agent === "claude"
       ? claudeImportFlags(phase, server, doc.link)
-      : codexImportConfig(
-          phase,
-          server,
-          ours,
-          (yield* codexServerNames(bin)).filter((name) => name !== ours),
-        );
+      : [
+          ...codexImportConfig(
+            phase,
+            server,
+            ours,
+            (yield* codexServerNames(bin)).filter((name) => name !== ours),
+          ),
+          ...codexImageFlags((yield* pictures).map((path) => `${folder}/${path}`)),
+        ];
 
   // Without a session to resume, the prompt carries the conversation so far.
   const prompt = (session: SessionArgs) =>
-    session.sessionId === undefined ? freshPrompt(doc, turn) : turnMessage(doc, turn);
+    session.sessionId === undefined
+      ? freshPrompt(doc, turn, folder)
+      : turnMessage(doc, turn, folder);
 
   return yield* converse({
     agent,
@@ -321,13 +341,15 @@ export class ImportRuns extends Context.Service<ImportRuns, Runs<ImportInput>>()
 }
 
 /**
- * Record the user's message on the import, then start the agent on it. The message is on the
- * import before this returns, so the board shows it at once.
+ * Record the user's message on the import, with the files they dropped on it kept in the import's
+ * folder, then start the agent on it. The message is on the import before this returns, so the
+ * board shows it at once.
  */
 export const startTurn = Effect.fn("importRun.startTurn")(function* (
   importId: string,
   turn: TurnInput,
   server: McpLaunch,
+  uploads: ReadonlyArray<ReferenceUpload> = [],
 ) {
   const runs = yield* ImportRuns;
 
@@ -339,9 +361,18 @@ export const startTurn = Effect.fn("importRun.startTurn")(function* (
 
       if (yield* runs.isRunning(importId)) return yield* new Conflict({ message: BUSY });
 
+      // Closing waits on the same lock, so a turn that can go now still can once its files are in.
+      const problem = turnProblem(doc, turn.kind);
+
+      if (problem !== undefined) return yield* new InvalidRequest({ message: problem });
+
       yield* agentBin(doc.agent);
 
-      const begun = yield* beginTurn(importId, turn, yield* nowIso);
+      const added =
+        uploads.length === 0 ? [] : yield* addReferences(importFiles(importId), uploads);
+
+      const sent = added.length === 0 ? turn : { ...turn, attachments: added };
+      const begun = yield* beginTurn(importId, sent, yield* nowIso);
       const input: ImportInput = { importId, turnId: turn.id, server };
 
       yield* runs
@@ -377,14 +408,18 @@ export const stopAndCloseImport = Effect.fn("importRun.stopAndCloseImport")(func
   );
 });
 
-/** Record a new import and start the agent on its link. */
+/** Record a new import and start the agent on its link and the files the user gave with it. */
 export const startImport = Effect.fn("importRun.startImport")(function* (
   input: NewImport,
   server: McpLaunch,
+  uploads: ReadonlyArray<ReferenceUpload> = [],
 ) {
   yield* agentBin(input.agent);
   const created = yield* createImport(input);
   const turn: TurnInput = { id: yield* shortId, kind: "start", body: created.doc.link };
 
-  return yield* startTurn(created.id, turn, server);
+  return yield* startTurn(created.id, turn, server, uploads).pipe(
+    // Files that could not be kept leave an import with no message; set it aside.
+    Effect.tapError(() => closeUnstarted(created.id).pipe(Effect.ignore({ log: true }))),
+  );
 });

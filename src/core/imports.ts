@@ -4,6 +4,7 @@ import { InvalidRequest, NotFound } from "./errors.ts";
 import { shortId } from "./items.ts";
 import { FORMAT_FILE } from "./library.ts";
 import { carriesSecret } from "./links.ts";
+import type { ReferenceFolder } from "./references.ts";
 import {
   type AgentName,
   type AgentRun,
@@ -29,12 +30,24 @@ export interface TurnInput {
   readonly id: string;
   readonly kind: ImportTurnKind;
   readonly body: string;
+  /** Files kept in the import's folder that go with the message, such as `files/logo.png`. */
+  readonly attachments?: ReadonlyArray<string> | undefined;
 }
 
 /** Ids come from `shortId`; anything else could name a file outside the imports folder. */
 const isImportId = (id: string) => /^[0-9a-f]{8}$/.test(id);
 
 const importPath = (id: string) => `${IMPORTS_DIR}/${id}.yaml`;
+
+/**
+ * Where the files the user hands an import's agent are kept: `files/` in a folder beside the
+ * import's record. The agent copies what the template needs into the template's own folder.
+ */
+export const importFiles = (id: string): ReferenceFolder => ({
+  owner: `${IMPORTS_DIR}/${id}`,
+  name: "files",
+  lock: `import-files:${id}`,
+});
 
 export const getImport = Effect.fn("imports.getImport")(function* (id: string) {
   const ws = yield* Workspace;
@@ -224,6 +237,12 @@ export const saveImportSession = (id: string, session: string | undefined) =>
 export const closeImport = (id: string) =>
   mutateImport(id, (doc) => Effect.succeed({ ...doc, closed: true }));
 
+/** Set aside an import whose first message never made it on, so it does not sit there empty. */
+export const closeUnstarted = (id: string) =>
+  mutateImport(id, (doc) =>
+    Effect.succeed(doc.turns.length === 0 ? { ...doc, closed: true } : doc),
+  );
+
 /**
  * After the agent was allowed to install: copy each new skill to the skill folder it is missing
  * from, then record the skills and formats the import added.
@@ -253,13 +272,34 @@ export function languageName(locale: string): string | undefined {
 
 const SKILL_SECTION = '"Import a template from a link" in the cutfac skill';
 
-/** The first message: read the link, report what it needs, and wait for the user to allow it. */
-export function startPrompt(doc: ImportDoc): string {
+/**
+ * The lines that hand the agent the files a turn carries, after a blank line; none without any.
+ * `folder` is the import's folder, as an absolute path.
+ */
+function attachedLines(turn: ImportTurn | undefined, folder: string): string[] {
+  const attachments = turn?.attachments ?? [];
+
+  if (attachments.length === 0) return [];
+
+  return [
+    "",
+    "Files the user attached. Open them and never change them; if the template needs any, copy them into the folder save_format returns:",
+    ...attachments.map((path) => `- ${folder}/${path}`),
+  ];
+}
+
+/**
+ * The first message: read the link and any files the user attached, report what the template
+ * needs, and wait for the user to allow it. `folder` is the import's folder, as an absolute path.
+ */
+export function startPrompt(doc: ImportDoc, folder: string): string {
   const language = doc.locale === undefined ? undefined : languageName(doc.locale);
+  const start = doc.turns.find((turn) => turn.kind === "start");
 
   return [
     `The user wants to bring in a template from ${doc.link}. You are running from the Cutfac board, which shows the user your replies and sends you theirs.`,
     `Follow ${SKILL_SECTION}; call get_skill if you do not have it.`,
+    ...attachedLines(start, folder),
     "",
     "For now you can only read: the link, the web, and the workspace. Installing, downloading, and writing stay blocked until the user presses Allow on the board.",
     "Read the link and what it points to, then end your reply with:",
@@ -296,28 +336,41 @@ const withRules = (body: string) =>
   body === "" ? ALLOW_RULES : `${ALLOW_RULES}\n\nThe user added: ${body}`;
 
 /**
- * The message for one turn, in a session that already has the ones before it. Once allowed, the
- * rules go with every message until a run that answered Allow finished, so a failed or stopped
- * one does not leave the agent without them.
+ * The message for one turn, in a session that already has the ones before it, with the files the
+ * turn carries in `folder`, the import's folder as an absolute path. Once allowed, the rules go
+ * with every message until a run that answered Allow finished, so a failed or stopped one does
+ * not leave the agent without them.
  */
-export function turnMessage(doc: ImportDoc, turn: ImportTurn, heard = rulesHeard(doc)): string {
-  if (turn.kind === "start") return startPrompt(doc);
+export function turnMessage(
+  doc: ImportDoc,
+  turn: ImportTurn,
+  folder: string,
+  heard = rulesHeard(doc),
+): string {
+  if (turn.kind === "start") return startPrompt(doc, folder);
 
-  if (turn.kind === "allow") return withRules(turn.body);
+  const files = attachedLines(turn, folder);
 
-  if (!doc.allowed) return `${turn.body}\n\n${BLOCKED_NOTE}`;
+  if (turn.kind === "allow") return [withRules(turn.body), ...files].join("\n");
 
-  return heard ? turn.body : withRules(turn.body);
+  if (!doc.allowed) return [turn.body, ...files, "", BLOCKED_NOTE].join("\n");
+
+  return [heard ? turn.body : withRules(turn.body), ...files].join("\n");
 }
 
-const transcriptLines = (turn: ImportTurn): string[] => {
+/** One earlier turn, as the user and the agent said it. The first message is the start prompt. */
+const transcriptLines = (turn: ImportTurn, folder: string): string[] => {
   const said =
     turn.kind === "allow" ? `User: (pressed Allow) ${turn.body}`.trimEnd() : `User: ${turn.body}`;
 
+  const attachments = turn.attachments ?? [];
   const reply = turn.run?.reply;
 
   return [
     ...(turn.kind === "start" ? [] : [said]),
+    ...(turn.kind === "start" || attachments.length === 0
+      ? []
+      : ["User attached:", ...attachments.map((path) => `- ${folder}/${path}`)]),
     ...(reply === undefined ? [] : [`You: ${reply}`]),
   ];
 };
@@ -326,22 +379,22 @@ const transcriptLines = (turn: ImportTurn): string[] => {
  * The message for `turn` when the agent has no session to resume: the first turn, or one after the
  * session was lost. It carries the conversation so far.
  */
-export function freshPrompt(doc: ImportDoc, turn: ImportTurn): string {
+export function freshPrompt(doc: ImportDoc, turn: ImportTurn, folder: string): string {
   const earlier = doc.turns.slice(
     0,
     doc.turns.findIndex((entry) => entry.id === turn.id),
   );
 
-  if (turn.kind === "start" || earlier.length === 0) return turnMessage(doc, turn);
+  if (turn.kind === "start" || earlier.length === 0) return turnMessage(doc, turn, folder);
 
   // A new session has heard no rules, so the message carries them once allowed.
   return [
-    startPrompt(doc),
+    startPrompt(doc, folder),
     "",
     "Your earlier session is gone. The conversation so far:",
     "",
-    ...earlier.flatMap(transcriptLines),
+    ...earlier.flatMap((entry) => transcriptLines(entry, folder)),
     "",
-    turnMessage(doc, turn, false),
+    turnMessage(doc, turn, folder, false),
   ].join("\n");
 }

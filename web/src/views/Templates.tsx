@@ -3,14 +3,16 @@ import {
   DownloadIcon,
   LayoutTemplateIcon,
   LinkIcon,
+  PaperclipIcon,
   PlusIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useEffect, useEffectEvent, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { HeldChips, useHeldFiles } from "@/components/editor/attachments";
 import { ImportChat } from "@/components/import-chat";
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +36,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Dropzone } from "@/components/ui/dropzone";
 import {
   Empty,
   EmptyContent,
@@ -42,7 +45,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   Item,
@@ -70,6 +73,7 @@ import {
   type Format,
   type FormatStatus,
   type ImportDetail,
+  type ImportSummary,
   type InputChoice,
   type InputField,
   type WorkspaceInfo,
@@ -147,7 +151,8 @@ function AddTemplate({ ws, onStarted }: AddTemplateProps) {
 
 /**
  * The dialog's form. It mounts with the dialog, so each opening starts empty and reads which
- * agents are installed afresh: the user may have just connected one.
+ * agents are installed afresh: the user may have just connected one. Files dropped or pasted on
+ * it go to the agent with the link.
  */
 function AddTemplateForm({
   ws,
@@ -160,6 +165,8 @@ function AddTemplateForm({
   const [link, setLink] = useState("");
   const [chosen, setChosen] = useState<AgentName | undefined>(undefined);
   const [sending, setSending] = useState(false);
+  const files = useHeldFiles();
+  const openFiles = useRef<() => void>(null);
   const agent = chosen ?? importAgent(ws.config.agent.default, statuses);
   const trimmed = link.trim();
   const locale = useLocale();
@@ -179,7 +186,7 @@ function AddTemplateForm({
     setSending(true);
 
     try {
-      onStarted(await api.startImport({ link: trimmed, agent, locale }));
+      onStarted(await api.startImport({ link: trimmed, agent, locale }, files.uploads));
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : String(cause));
       setSending(false);
@@ -187,71 +194,95 @@ function AddTemplateForm({
   }
 
   return (
-    <form className="flex flex-col gap-6" onSubmit={(event) => void start(event)}>
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="template-link">{t.templates.link}</FieldLabel>
-          <InputGroup>
-            <InputGroupAddon>
-              <LinkIcon />
-            </InputGroupAddon>
-            <InputGroupInput
-              id="template-link"
-              type="url"
-              required
-              value={link}
-              placeholder={t.templates.linkPlaceholder}
-              onChange={(e) => setLink(e.target.value)}
-            />
-          </InputGroup>
-        </Field>
-        {agent === undefined ? (
-          <FieldDescription>
-            {t.imports.noAgent((text) => (
-              <a href={href("setup")}>{text}</a>
-            ))}
-          </FieldDescription>
-        ) : (
-          <Field orientation="horizontal">
-            <FieldLabel htmlFor="template-agent">{t.imports.agent}</FieldLabel>
-            <Select
-              items={agentItems}
-              value={agent}
-              onValueChange={(value) => {
-                if (value !== null) setChosen(value);
-              }}
-            >
-              <SelectTrigger id="template-agent" className="ml-auto">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                {agentItems.map((option) => (
-                  <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <Dropzone
+      paste
+      label={t.attachments.drop.withLink}
+      openRef={openFiles}
+      onFiles={files.add}
+      // The outline sits in the dialog's padding, clear of the fields.
+      className="-m-3"
+    >
+      <form className="flex flex-col gap-6 p-3" onSubmit={(event) => void start(event)}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="template-link">{t.templates.link}</FieldLabel>
+            <InputGroup>
+              <InputGroupAddon>
+                <LinkIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                id="template-link"
+                type="url"
+                required
+                value={link}
+                placeholder={t.templates.linkPlaceholder}
+                onChange={(e) => setLink(e.target.value)}
+              />
+            </InputGroup>
           </Field>
-        )}
-      </FieldGroup>
-      <DialogFooter>
-        <DialogClose render={<Button variant="outline" />}>{t.common.close}</DialogClose>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={trimmed === ""}
-          onClick={() => copyText(importPrompt(trimmed, ws.root), t.templates.promptCopied)}
-        >
-          <CopyIcon data-icon="inline-start" />
-          {t.templates.copyPrompt}
-        </Button>
-        <Button type="submit" disabled={trimmed === "" || agent === undefined || sending}>
-          {sending ? <Spinner data-icon="inline-start" /> : null}
-          {t.imports.start}
-        </Button>
-      </DialogFooter>
-    </form>
+          <Field>
+            <FieldTitle>{t.templates.files}</FieldTitle>
+            <HeldChips files={files} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => openFiles.current?.()}
+            >
+              <PaperclipIcon data-icon="inline-start" />
+              {t.attachments.attach}
+            </Button>
+            <FieldDescription>{t.templates.filesHint}</FieldDescription>
+          </Field>
+          {agent === undefined ? (
+            <FieldDescription>
+              {t.imports.noAgent((text) => (
+                <a href={href("setup")}>{text}</a>
+              ))}
+            </FieldDescription>
+          ) : (
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="template-agent">{t.imports.agent}</FieldLabel>
+              <Select
+                items={agentItems}
+                value={agent}
+                onValueChange={(value) => {
+                  if (value !== null) setChosen(value);
+                }}
+              >
+                <SelectTrigger id="template-agent" className="ml-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {agentItems.map((option) => (
+                    <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+        </FieldGroup>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>{t.common.close}</DialogClose>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={trimmed === ""}
+            onClick={() => copyText(importPrompt(trimmed, ws.root), t.templates.promptCopied)}
+          >
+            <CopyIcon data-icon="inline-start" />
+            {t.templates.copyPrompt}
+          </Button>
+          <Button type="submit" disabled={trimmed === "" || agent === undefined || sending}>
+            {sending ? <Spinner data-icon="inline-start" /> : null}
+            {t.imports.start}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dropzone>
   );
 }
 
@@ -360,7 +391,7 @@ export function Templates({ selected }: { selected: string | undefined }) {
 }
 
 /** An import in progress, above the templates it may add. */
-function ImportRow({ detail, active }: { detail: ImportDetail; active: boolean }) {
+function ImportRow({ detail, active }: { detail: ImportSummary; active: boolean }) {
   const t = useMessages();
   const state = importState(detail, NO_RUN);
 

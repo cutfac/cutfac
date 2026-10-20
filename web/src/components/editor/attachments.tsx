@@ -1,4 +1,4 @@
-import { FileIcon, FolderIcon, PlusIcon, XIcon } from "lucide-react";
+import { FileIcon, FileVideoIcon, FolderIcon, ImageIcon, PlusIcon, XIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -8,9 +8,13 @@ import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
-import { api, fileUrl, type ItemDetail, type Reference } from "../../api.ts";
+import { api, fileUrl, type ItemDetail, type Reference, type Upload } from "../../api.ts";
 import { useMessages, type Messages } from "../../i18n/index.ts";
+import { heldEntries, type HeldEntry } from "../../lib/attachments.ts";
 import { sendFailed } from "../../lib/notify.ts";
+
+/** What files the user handed an agent belong to: an item, or a template import. */
+export type FileOwner = Pick<ItemDetail, "dir" | "references">;
 
 /**
  * Keep files as the item's reference files. Resolves to the paths they were kept under, such as
@@ -81,14 +85,14 @@ export const referenceLabel = (reference: Reference, t: Messages) =>
   reference.dir ? t.attachments.folder(reference.name, reference.files ?? 0) : reference.name;
 
 interface ReferenceThumbProps {
-  item: ItemDetail;
+  owner: FileOwner;
   reference: Reference;
   className?: string;
 }
 
 /** A picture or a video's frame for media, an icon for any other file or a folder. */
-export function ReferenceThumb({ item, reference, className }: ReferenceThumbProps) {
-  const src = fileUrl(`${item.dir}/${reference.path}`, reference.mtime);
+export function ReferenceThumb({ owner, reference, className }: ReferenceThumbProps) {
+  const src = fileUrl(`${owner.dir}/${reference.path}`, reference.mtime);
   const box = cn("shrink-0 rounded-sm bg-muted object-cover", className);
 
   if (reference.kind === "image") return <img src={src} alt="" className={box} />;
@@ -107,19 +111,55 @@ export function ReferenceThumb({ item, reference, className }: ReferenceThumbPro
 }
 
 interface ChipIconProps {
-  item: ItemDetail;
+  owner: FileOwner;
   reference: Reference | undefined;
 }
 
 /** A chip's picture: a round thumbnail for media, else the file or folder icon. */
-function ChipIcon({ item, reference }: ChipIconProps) {
+function ChipIcon({ owner, reference }: ChipIconProps) {
   if (reference?.kind === undefined) {
     const Icon = reference?.dir === true ? FolderIcon : FileIcon;
 
     return <Icon data-icon="inline-start" />;
   }
 
-  return <ReferenceThumb item={item} reference={reference} className="-ml-1 size-5 rounded-full" />;
+  return (
+    <ReferenceThumb owner={owner} reference={reference} className="-ml-1 size-5 rounded-full" />
+  );
+}
+
+interface FileChipProps {
+  icon: ReactNode;
+  label: string;
+  title: string;
+  /** Takes the file off the message; left out, the chip only shows it. */
+  onDetach?: (() => void) | undefined;
+}
+
+/** One file in a row of chips. */
+function FileChip({ icon, label, title, onDetach }: FileChipProps) {
+  const t = useMessages();
+
+  return (
+    <li className="min-w-0">
+      <Badge variant="outline" className="h-6 max-w-64" title={title}>
+        {icon}
+        <span className="truncate">{label}</span>
+        {onDetach === undefined ? null : (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="size-5"
+            data-icon="inline-end"
+            aria-label={t.attachments.detach(label)}
+            onClick={onDetach}
+          >
+            <XIcon />
+          </Button>
+        )}
+      </Badge>
+    </li>
+  );
 }
 
 interface AttachmentChipsProps {
@@ -136,28 +176,15 @@ export function AttachmentChips({ item, files }: AttachmentChipsProps) {
 
   return (
     <ul className="flex flex-wrap gap-1.5">
-      {attached.map((reference) => {
-        const label = referenceLabel(reference, t);
-
-        return (
-          <li key={reference.path} className="min-w-0">
-            <Badge variant="outline" className="h-6 max-w-64" title={reference.path}>
-              <ChipIcon item={item} reference={reference} />
-              <span className="truncate">{label}</span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="size-5"
-                data-icon="inline-end"
-                aria-label={t.attachments.detach(label)}
-                onClick={() => files.detach(reference.path)}
-              >
-                <XIcon />
-              </Button>
-            </Badge>
-          </li>
-        );
-      })}
+      {attached.map((reference) => (
+        <FileChip
+          key={reference.path}
+          icon={<ChipIcon owner={item} reference={reference} />}
+          label={referenceLabel(reference, t)}
+          title={reference.path}
+          onDetach={() => files.detach(reference.path)}
+        />
+      ))}
       {files.uploading === 0 ? null : (
         <li>
           <Badge variant="outline" className="h-6">
@@ -171,12 +198,13 @@ export function AttachmentChips({ item, files }: AttachmentChipsProps) {
 }
 
 interface SentAttachmentsProps {
-  item: ItemDetail;
+  owner: FileOwner;
+  /** Relative to the owner, such as `references/logo.png`. */
   paths: ReadonlyArray<string>;
 }
 
-/** The files a sent request carried; one deleted since still shows by name. */
-export function SentAttachments({ item, paths }: SentAttachmentsProps) {
+/** The files a sent message carried; one deleted since still shows by name. */
+export function SentAttachments({ owner, paths }: SentAttachmentsProps) {
   const t = useMessages();
 
   if (paths.length === 0) return null;
@@ -184,20 +212,88 @@ export function SentAttachments({ item, paths }: SentAttachmentsProps) {
   return (
     <ul className="flex flex-wrap justify-end gap-1.5">
       {paths.map((path) => {
-        const reference = item.references.find((other) => other.path === path);
-
-        const label =
-          reference === undefined ? (path.split("/").at(-1) ?? path) : referenceLabel(reference, t);
+        const reference = owner.references.find((other) => other.path === path);
 
         return (
-          <li key={path} className="min-w-0">
-            <Badge variant="outline" className="h-6 max-w-64" title={path}>
-              <ChipIcon item={item} reference={reference} />
-              <span className="truncate">{label}</span>
-            </Badge>
-          </li>
+          <FileChip
+            key={path}
+            icon={<ChipIcon owner={owner} reference={reference} />}
+            label={
+              reference === undefined
+                ? (path.split("/").at(-1) ?? path)
+                : referenceLabel(reference, t)
+            }
+            title={path}
+          />
         );
       })}
+    </ul>
+  );
+}
+
+/** Files dropped, pasted or picked for a message not sent yet; they upload with it. */
+export interface HeldFiles {
+  readonly entries: ReadonlyArray<HeldEntry>;
+  /** Every held file under its entry's name, to send with the message. */
+  readonly uploads: ReadonlyArray<Upload>;
+  add: (files: ReadonlyArray<DroppedFile>) => void;
+  detach: (key: string) => void;
+}
+
+/** `kept` names what the folder the files go to already has, so a held file is named as it will be. */
+export function useHeldFiles(kept: ReadonlyArray<string> = []): HeldFiles {
+  const [entries, setEntries] = useState<ReadonlyArray<HeldEntry>>([]);
+
+  return {
+    entries,
+    uploads: entries.flatMap((entry) => entry.uploads),
+    add: (files) =>
+      setEntries((current) => [
+        ...current,
+        ...heldEntries(files, [...kept, ...current.map((entry) => entry.name)]),
+      ]),
+    detach: (key) => setEntries((current) => current.filter((entry) => entry.key !== key)),
+  };
+}
+
+interface HeldIconProps {
+  entry: HeldEntry;
+}
+
+/** A folder, a picture, a video or any other file; held files have no thumbnail yet. */
+function HeldIcon({ entry }: HeldIconProps) {
+  const type = entry.uploads[0]?.file.type ?? "";
+
+  if (entry.dir) return <FolderIcon data-icon="inline-start" />;
+
+  if (type.startsWith("image/")) return <ImageIcon data-icon="inline-start" />;
+
+  if (type.startsWith("video/")) return <FileVideoIcon data-icon="inline-start" />;
+
+  return <FileIcon data-icon="inline-start" />;
+}
+
+interface HeldChipsProps {
+  files: HeldFiles;
+}
+
+/** The files going with a message not sent yet, each with a way to take it off. */
+export function HeldChips({ files }: HeldChipsProps) {
+  const t = useMessages();
+
+  if (files.entries.length === 0) return null;
+
+  return (
+    <ul className="flex flex-wrap gap-1.5">
+      {files.entries.map((entry) => (
+        <FileChip
+          key={entry.key}
+          icon={<HeldIcon entry={entry} />}
+          label={entry.dir ? t.attachments.folder(entry.name, entry.uploads.length) : entry.name}
+          title={entry.name}
+          onDetach={() => files.detach(entry.key)}
+        />
+      ))}
     </ul>
   );
 }
@@ -330,7 +426,7 @@ export function ReferenceStrip({ item, onItem, onAttach, onDetach }: ReferenceSt
               onClick={() => onAttach(reference.path)}
             >
               <ReferenceThumb
-                item={item}
+                owner={item}
                 reference={reference}
                 className="aspect-square w-full rounded-md ring-1 ring-foreground/10"
               />

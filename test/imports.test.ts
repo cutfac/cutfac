@@ -29,12 +29,15 @@ import {
   endTurn,
   freshPrompt,
   getImport,
+  importFiles,
   languageName,
   listImports,
   settleInstalls,
   turnMessage,
 } from "../src/core/imports.ts";
+import { listReferences } from "../src/core/references.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
+import { Workspace } from "../src/core/workspace.ts";
 import { CutfacToolkit } from "../src/mcp/server.ts";
 import {
   type FakeAgents,
@@ -62,6 +65,13 @@ const write = async (rel: string, text: string) => {
 };
 
 const read = (rel: string) => readFile(join(t.root, rel), "utf8");
+
+/** Where a workspace path is on disk, as the agent is told it. */
+const absolute = (rel: string) => t.run(Effect.flatMap(Workspace, (ws) => ws.abs(rel)));
+
+/** The `--image` flags in an argument list. */
+const imageFlags = (args: ReadonlyArray<string> = []) =>
+  args.filter((arg) => arg.startsWith("--image"));
 
 /** The value after `flag` in an argument list. */
 const valueOf = (args: ReadonlyArray<string>, flag: string) => args[args.indexOf(flag) + 1] ?? "";
@@ -339,6 +349,9 @@ const docWith = (overrides: Partial<ImportDoc>): ImportDoc => ({
   ...overrides,
 });
 
+/** The import's folder, as the agent is told it. */
+const FOLDER = "/w/.cutfac/imports/x";
+
 const said = (id: string, kind: ImportTurn["kind"], body: string): ImportTurn => ({
   id,
   at: AT,
@@ -359,21 +372,23 @@ const answered = (
 
 test("the first message names the link and the user's language, and asks for Allow", () => {
   const start = said("t1", "start", "https://example.com/pack");
-  const message = turnMessage(docWith({ locale: "ko", turns: [start] }), start);
+  const message = turnMessage(docWith({ locale: "ko", turns: [start] }), start, FOLDER);
 
   expect(message).toContain("https://example.com/pack");
   expect(message).toContain("Write to the user in Korean.");
   expect(message).toContain("press Allow");
-  expect(turnMessage(docWith({ turns: [start] }), start)).not.toContain("Write to the user in");
+  expect(turnMessage(docWith({ turns: [start] }), start, FOLDER)).not.toContain(
+    "Write to the user in",
+  );
 });
 
 test("a reply says writing is still blocked until the user allows", () => {
   const reply = said("t3", "reply", "Use the short version");
   const allowed = answered("t2", "allow", "", "Installed.");
 
-  expect(turnMessage(docWith({}), reply)).toContain("still blocked");
+  expect(turnMessage(docWith({}), reply, FOLDER)).toContain("still blocked");
 
-  expect(turnMessage(docWith({ allowed: true, turns: [allowed, reply] }), reply)).toBe(
+  expect(turnMessage(docWith({ allowed: true, turns: [allowed, reply] }), reply, FOLDER)).toBe(
     "Use the short version",
   );
 });
@@ -386,16 +401,46 @@ test("a reply carries the rules until a run that answered Allow finished", () =>
     run: { agent: "claude", status: "failed", startedAt: AT, error: "crashed" },
   };
 
-  expect(turnMessage(docWith({ allowed: true, turns: [failed, reply] }), reply)).toBe(
+  expect(turnMessage(docWith({ allowed: true, turns: [failed, reply] }), reply, FOLDER)).toBe(
     `${ALLOW_RULES}\n\nThe user added: Try again`,
   );
 });
 
 test("Allow carries the rules and what the user added", () => {
-  expect(turnMessage(docWith({ allowed: true }), said("t2", "allow", ""))).toBe(ALLOW_RULES);
+  expect(turnMessage(docWith({ allowed: true }), said("t2", "allow", ""), FOLDER)).toBe(
+    ALLOW_RULES,
+  );
 
-  expect(turnMessage(docWith({ allowed: true }), said("t2", "allow", "Skip the fonts"))).toBe(
-    `${ALLOW_RULES}\n\nThe user added: Skip the fonts`,
+  expect(
+    turnMessage(docWith({ allowed: true }), said("t2", "allow", "Skip the fonts"), FOLDER),
+  ).toBe(`${ALLOW_RULES}\n\nThe user added: Skip the fonts`);
+});
+
+test("the files a message carries go with it by their full path, and never change it otherwise", () => {
+  const start = {
+    ...said("t1", "start", "https://example.com/pack"),
+    attachments: ["files/a.png"],
+  };
+
+  const opening = turnMessage(docWith({ turns: [start] }), start, FOLDER);
+
+  expect(opening).toContain(`- ${FOLDER}/files/a.png`);
+  expect(opening.indexOf("files/a.png")).toBeLessThan(opening.indexOf("press Allow"));
+
+  const reply = { ...said("t3", "reply", "Use this logo"), attachments: ["files/logo.png"] };
+  const allowed = answered("t2", "allow", "", "Installed.");
+  const blocked = turnMessage(docWith({}), reply, FOLDER);
+
+  expect(blocked.startsWith("Use this logo\n\nFiles the user attached.")).toBe(true);
+  expect(blocked.indexOf("files/logo.png")).toBeLessThan(blocked.indexOf("still blocked"));
+
+  expect(turnMessage(docWith({ allowed: true, turns: [allowed, reply] }), reply, FOLDER)).toBe(
+    [
+      "Use this logo",
+      "",
+      "Files the user attached. Open them and never change them; if the template needs any, copy them into the folder save_format returns:",
+      `- ${FOLDER}/files/logo.png`,
+    ].join("\n"),
   );
 });
 
@@ -408,7 +453,7 @@ test("without a session, the prompt carries the conversation so far", () => {
     next,
   ];
 
-  const prompt = freshPrompt(docWith({ allowed: true, turns }), next);
+  const prompt = freshPrompt(docWith({ allowed: true, turns }), next, FOLDER);
 
   expect(prompt).toContain("Your earlier session is gone.");
   expect(prompt).toContain("You: It needs one skill.");
@@ -416,6 +461,26 @@ test("without a session, the prompt carries the conversation so far", () => {
   expect(prompt).toContain("You: Installed.");
   expect(prompt.split(ALLOW_RULES)).toHaveLength(2);
   expect(prompt.endsWith("The user added: Make it shorter")).toBe(true);
+});
+
+test("without a session, the prompt names the files sent earlier, the first message's too", () => {
+  const next = said("t3", "reply", "Make it shorter");
+
+  const turns = [
+    {
+      ...answered("t1", "start", "https://example.com/pack", "Got it."),
+      attachments: ["files/brief.md"],
+    },
+    { ...answered("t2", "reply", "Here is the logo", "Thanks."), attachments: ["files/logo.png"] },
+    next,
+  ];
+
+  const prompt = freshPrompt(docWith({ turns }), next, FOLDER);
+
+  expect(prompt).toContain(`- ${FOLDER}/files/brief.md`);
+  expect(prompt).toContain(
+    `User: Here is the logo\nUser attached:\n- ${FOLDER}/files/logo.png\nYou: Thanks.`,
+  );
 });
 
 test("a locale that is not one names no language", () => {
@@ -538,6 +603,114 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
     expect(installed.doc.skills).toEqual(["stub"]);
     expect(installed.doc.turns.map((entry) => entry.run?.status)).toEqual(["done", "done"]);
     expect(await read(".claude/skills/stub/SKILL.md")).toBe("# stub\n");
+  });
+
+  /**
+   * A `codex` that lists no MCP servers of its own, records each run's arguments and prompt, and
+   * answers in its JSON events.
+   */
+  const fakeCodex = () =>
+    fakeBin(
+      "codex",
+      `[ "$1 $2" = "mcp list" ] && echo '[]' && exit 0
+calls="${fakes.calls}"
+call="$calls/$(ls "$calls" | grep -c 'args$')"
+printf '%s\n' "$@" > "$call.args"
+: > "$call.scrub"
+cat > "$call.stdin"
+echo '{"type":"thread.started","thread_id":"th-1"}'
+echo '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
+`,
+    );
+
+  /** A file outside the workspace, standing in for an upload's temporary copy. */
+  const dropped = async (path: string, text = path) => {
+    const source = join(fakes.dir, `drop-${crypto.randomUUID()}`);
+    await writeFile(source, text);
+
+    return { source, path };
+  };
+
+  test("files sent with the link are kept beside the import and named in the first message", async () => {
+    await fakeClaude();
+    const uploads = [await dropped("brief.md", "# brief"), await dropped("photos/a.jpg")];
+    const link = "https://example.com/pack";
+    const started = await run(startImport({ link, agent: "claude" }, SERVER, uploads));
+
+    expect(started.doc.turns[0]?.attachments).toEqual(["files/brief.md", "files/photos"]);
+    expect((await runEnd(started.id))?.type).toBe("done");
+
+    const dir = importFiles(started.id).owner;
+    const [first] = await calls();
+
+    expect(await read(`${dir}/files/brief.md`)).toBe("# brief");
+    expect(await read(`${dir}/files/photos/a.jpg`)).toBe("photos/a.jpg");
+    expect(first?.stdin).toContain(`- ${await absolute(`${dir}/files/brief.md`)}`);
+    expect(first?.stdin).toContain(`- ${await absolute(`${dir}/files/photos`)}`);
+
+    const kept = await t.run(listReferences(importFiles(started.id)));
+
+    expect(kept.map((file) => [file.path, file.files])).toEqual([
+      ["files/brief.md", undefined],
+      ["files/photos", 1],
+    ]);
+  });
+
+  test("Codex is handed the pictures a reply carries, and told of its other files", async () => {
+    await fakeCodex();
+    const started = await run(startImport({ link: "https://example.com", agent: "codex" }, SERVER));
+    await runEnd(started.id);
+
+    const uploads = [await dropped("logo.png"), await dropped("notes.txt")];
+    const reply = turn("r1", "reply", "Use this logo");
+    const sent = await run(startTurn(started.id, reply, SERVER, uploads));
+
+    expect(sent.doc.turns.at(-1)?.attachments).toEqual(["files/logo.png", "files/notes.txt"]);
+    expect((await runEnd(started.id))?.type).toBe("done");
+
+    const dir = importFiles(started.id).owner;
+    const [first, second] = await calls();
+
+    expect(imageFlags(first?.args)).toEqual([]);
+    expect(second?.args).toContain("th-1");
+    expect(imageFlags(second?.args)).toEqual([
+      `--image=${await absolute(`${dir}/files/logo.png`)}`,
+    ]);
+    expect(second?.stdin).toContain(`- ${await absolute(`${dir}/files/notes.txt`)}`);
+  });
+
+  test("a closed import keeps none of the files sent to it", async () => {
+    await fakeClaude();
+
+    const started = await run(
+      startImport({ link: "https://example.com", agent: "claude" }, SERVER),
+    );
+
+    await runEnd(started.id);
+    await run(stopAndCloseImport(started.id));
+
+    const reply = turn("r1", "reply", "One more");
+
+    const refused = await run(
+      Effect.flip(startTurn(started.id, reply, SERVER, [await dropped("logo.png")])),
+    );
+
+    expect(refused.message).toContain("closed");
+    expect(await t.run(listReferences(importFiles(started.id)))).toEqual([]);
+  });
+
+  test("an import whose files could not be kept is set aside instead of left empty", async () => {
+    await fakeClaude();
+    const missing = { source: join(fakes.dir, "gone.png"), path: "gone.png" };
+    const link = "https://example.com";
+
+    await run(Effect.flip(startImport({ link, agent: "claude" }, SERVER, [missing])));
+
+    const [only, ...rest] = await t.run(listImports());
+
+    expect(rest).toEqual([]);
+    expect(only?.doc).toMatchObject({ closed: true, turns: [] });
+    expect(await calls()).toEqual([]);
   });
 
   test("a message while the agent works is refused", async () => {

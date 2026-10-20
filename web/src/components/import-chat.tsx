@@ -1,12 +1,20 @@
 import {
   ArrowUpIcon,
   LayoutTemplateIcon,
+  PaperclipIcon,
   RotateCcwIcon,
   ShieldCheckIcon,
   SquareIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useEffectEvent, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
@@ -22,6 +30,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Dropzone } from "@/components/ui/dropzone";
 import {
   InputGroup,
   InputGroupAddon,
@@ -37,6 +46,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
+import { Spinner } from "@/components/ui/spinner";
 import { safeHttpUrl } from "@/lib/utils";
 
 import {
@@ -46,13 +56,16 @@ import {
   type ImportDetail,
   type ImportTurn,
   type RunMessage,
+  type Upload,
 } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useLocale, useMessages } from "../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../lib/feedback.ts";
 import { importState, isWorking, linkLabel, turnRun, type ImportState } from "../lib/imports.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
+import { HeldChips, SentAttachments, useHeldFiles, type HeldFiles } from "./editor/attachments.tsx";
 import { agentLabel, clockTime, RunReport } from "./editor/chat.tsx";
+import { composing } from "./editor/composer.tsx";
 
 const ENDED = new Set<RunMessage["type"]>(["done", "stopped", "error"]);
 
@@ -82,11 +95,14 @@ interface ImportChatProps {
 
 /**
  * Bringing a template in, as a conversation with the user's agent. The agent first reads the link
- * and says what it needs; it may install and write only after the user presses Allow.
+ * and says what it needs; it may install and write only after the user presses Allow. Files
+ * dropped anywhere on it go with the next reply.
  */
 export function ImportChat({ id, onChange }: ImportChatProps) {
   const { data: detail, error, reload, setData } = useLive(`import:${id}`, () => api.import(id));
   const [run, setRun] = useState<LiveRun>(NO_RUN);
+  const files = useHeldFiles(detail?.references.map(({ path }) => path.split("/").at(-1) ?? path));
+  const openFiles = useRef<() => void>(null);
   const t = useMessages();
 
   // Import files live in a folder the watcher skips, so the end of a run is the cue to reload.
@@ -146,62 +162,73 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
   );
 
   return (
-    <Card className="h-[calc(100svh-11rem)] min-h-[28rem]">
-      <CardHeader>
-        <CardTitle>
-          <SourceLink link={doc.link} className="wrap-anywhere outline-none hover:underline" />
-        </CardTitle>
-        <CardDescription>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {agentLabel(doc.agent)}
-            <Badge variant={state === "failed" ? "destructive" : "secondary"}>
-              {t.imports.state[state]}
-            </Badge>
-          </div>
-        </CardDescription>
-        {doc.closed ? null : (
-          <CardAction>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t.imports.close}
-              title={t.imports.close}
-              onClick={() => void close(href("templates"))}
-            >
-              <XIcon />
-            </Button>
-          </CardAction>
-        )}
-      </CardHeader>
-      <MessageScrollerProvider autoScroll>
-        <MessageScroller className="min-h-0 flex-1">
-          <MessageScrollerViewport>
-            <MessageScrollerContent className="mx-5">
-              {doc.turns.map((turn) => (
-                <MessageScrollerItem key={turn.id} messageId={turn.id}>
-                  <Turn detail={detail} turn={turn} live={run} onStop={stop}>
-                    {turn.id === last?.id ? next : null}
-                  </Turn>
-                </MessageScrollerItem>
-              ))}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton />
-        </MessageScroller>
-      </MessageScrollerProvider>
-      <CardFooter>
-        {doc.closed ? (
-          <p className="text-muted-foreground">{t.imports.closedNote}</p>
-        ) : (
-          <ImportComposer
-            state={state}
-            agent={doc.agent}
-            onSend={(body) => act(() => api.replyImport(id, body))}
-            onStop={stop}
-          />
-        )}
-      </CardFooter>
-    </Card>
+    <Dropzone
+      paste
+      disabled={doc.closed}
+      label={t.attachments.drop.reply}
+      openRef={openFiles}
+      onFiles={files.add}
+      className="h-[calc(100svh-11rem)] min-h-[28rem]"
+    >
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>
+            <SourceLink link={doc.link} className="wrap-anywhere outline-none hover:underline" />
+          </CardTitle>
+          <CardDescription>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {agentLabel(doc.agent)}
+              <Badge variant={state === "failed" ? "destructive" : "secondary"}>
+                {t.imports.state[state]}
+              </Badge>
+            </div>
+          </CardDescription>
+          {doc.closed ? null : (
+            <CardAction>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t.imports.close}
+                title={t.imports.close}
+                onClick={() => void close(href("templates"))}
+              >
+                <XIcon />
+              </Button>
+            </CardAction>
+          )}
+        </CardHeader>
+        <MessageScrollerProvider autoScroll>
+          <MessageScroller className="min-h-0 flex-1">
+            <MessageScrollerViewport>
+              <MessageScrollerContent className="mx-5">
+                {doc.turns.map((turn) => (
+                  <MessageScrollerItem key={turn.id} messageId={turn.id}>
+                    <Turn detail={detail} turn={turn} live={run} onStop={stop}>
+                      {turn.id === last?.id ? next : null}
+                    </Turn>
+                  </MessageScrollerItem>
+                ))}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+        </MessageScrollerProvider>
+        <CardFooter>
+          {doc.closed ? (
+            <p className="text-muted-foreground">{t.imports.closedNote}</p>
+          ) : (
+            <ImportComposer
+              state={state}
+              agent={doc.agent}
+              files={files}
+              onAttach={() => openFiles.current?.()}
+              onSend={(body, uploads) => act(() => api.replyImport(id, body, uploads))}
+              onStop={stop}
+            />
+          )}
+        </CardFooter>
+      </Card>
+    </Dropzone>
   );
 }
 
@@ -241,6 +268,7 @@ function Turn({ detail, turn, live, onStop, children }: TurnProps) {
               </BubbleContent>
             </Bubble>
           ) : null}
+          <SentAttachments owner={detail} paths={turn.attachments ?? []} />
           <MessageFooter>{clockTime(turn.at, locale)}</MessageFooter>
         </MessageContent>
       </Message>
@@ -340,12 +368,16 @@ function NextStep({ detail, state, onAllow, onRetry, onFinish }: NextStepProps) 
 interface ImportComposerProps {
   state: ImportState;
   agent: AgentName;
-  /** Resolves true once the server took the reply. */
-  onSend: (body: string) => Promise<boolean>;
+  /** The files going with the next reply. */
+  files: HeldFiles;
+  /** Opens the file picker. */
+  onAttach: () => void;
+  /** Resolves true once the server took the reply and its files. */
+  onSend: (body: string, uploads: ReadonlyArray<Upload>) => Promise<boolean>;
   onStop: () => void;
 }
 
-function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
+function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: ImportComposerProps) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const working = isWorking(state);
@@ -354,11 +386,22 @@ function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
   const blocked = working && feedbackCommand(text) === undefined;
   const t = useMessages();
 
-  /** Send the reply, or a `/feedback` message to the Cutfac team; true once it was taken. */
-  function deliver(reply: string): Promise<boolean> {
+  /**
+   * Send the reply with the held files, or a `/feedback` message to the Cutfac team, which leaves
+   * the files for the reply; true once it was taken.
+   */
+  async function deliver(reply: string): Promise<boolean> {
     const feedback = feedbackCommand(reply);
 
-    if (feedback === undefined) return onSend(reply);
+    if (feedback === undefined) {
+      // Files dropped while this one uploads stay held for the next reply.
+      const sent = files.entries;
+      const taken = await onSend(reply, files.uploads);
+
+      if (taken) for (const entry of sent) files.detach(entry.key);
+
+      return taken;
+    }
 
     return sendSlashFeedback(feedback, agent).then(
       () => true,
@@ -381,8 +424,7 @@ function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter while an IME is composing (Korean, Japanese, …) confirms the syllable, not the message.
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (composing(event)) return;
 
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -400,6 +442,7 @@ function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
 
   return (
     <div className="flex w-full flex-col gap-2">
+      <HeldChips files={files} />
       <InputGroup>
         <InputGroupTextarea
           value={body}
@@ -410,6 +453,9 @@ function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
           onKeyDown={onKeyDown}
         />
         <InputGroupAddon align="block-end">
+          <InputGroupButton size="icon-sm" aria-label={t.attachments.attach} onClick={onAttach}>
+            <PaperclipIcon />
+          </InputGroupButton>
           {working && text === "" ? (
             <InputGroupButton
               variant="secondary"
@@ -429,7 +475,7 @@ function ImportComposer({ state, agent, onSend, onStop }: ImportComposerProps) {
               disabled={text === "" || blocked || sending}
               onClick={() => void send()}
             >
-              <ArrowUpIcon />
+              {sending ? <Spinner /> : <ArrowUpIcon />}
             </InputGroupButton>
           )}
         </InputGroupAddon>

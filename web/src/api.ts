@@ -90,9 +90,9 @@ export interface Media {
   mtime: number;
 }
 
-/** A file or folder in an item's `references/`. */
+/** A file or folder the user handed an agent, such as one in an item's `references/`. */
 export interface Reference {
-  /** Item-relative, such as `references/logo.png`. */
+  /** Relative to what it belongs to, such as `references/logo.png` in an item. */
   path: string;
   name: string;
   dir: boolean;
@@ -109,6 +109,25 @@ export interface Reference {
 export interface Upload {
   file: File;
   path: string;
+}
+
+/** A form with the fields that are set and each file next to its path in the drop. */
+function uploadForm(
+  uploads: ReadonlyArray<Upload>,
+  fields: Record<string, string | undefined> = {},
+) {
+  const form = new FormData();
+
+  for (const [name, value] of Object.entries(fields)) {
+    if (value !== undefined) form.set(name, value);
+  }
+
+  for (const { file, path } of uploads) {
+    form.append("files", file);
+    form.append("paths", path);
+  }
+
+  return form;
 }
 
 export type AgentName = "claude" | "codex";
@@ -552,6 +571,8 @@ export interface ImportTurn {
   at: string;
   kind: "start" | "reply" | "allow";
   body: string;
+  /** The files sent with it, relative to the import's `dir`, such as `files/logo.png`. */
+  attachments?: string[];
   run?: AgentRun;
 }
 
@@ -571,10 +592,19 @@ export interface ImportDoc {
   updated: string;
 }
 
-export interface ImportDetail {
+/** An import as the list of imports shows it. */
+export interface ImportSummary {
   id: string;
   doc: ImportDoc;
   running: boolean;
+}
+
+/** An import as its chat shows it. */
+export interface ImportDetail extends ImportSummary {
+  /** Workspace-relative folder of the import, which the paths of its files are relative to. */
+  dir: string;
+  /** Every file the user sent to the import's agent. */
+  references: Reference[];
 }
 
 export interface NewImport {
@@ -605,19 +635,11 @@ export const api = {
     return request<ItemDetail>(`/api/item/media${q(id)}`, { method: "POST", body: form });
   },
   /** Keep files as the item's references; a dropped folder keeps its structure. */
-  uploadReferences: (id: string, uploads: ReadonlyArray<Upload>) => {
-    const form = new FormData();
-
-    for (const { file, path } of uploads) {
-      form.append("files", file);
-      form.append("paths", path);
-    }
-
-    return request<{ item: ItemDetail; added: string[] }>(`/api/item/references${q(id)}`, {
+  uploadReferences: (id: string, uploads: ReadonlyArray<Upload>) =>
+    request<{ item: ItemDetail; added: string[] }>(`/api/item/references${q(id)}`, {
       method: "POST",
-      body: form,
-    });
-  },
+      body: uploadForm(uploads),
+    }),
   removeReference: (id: string, path: string) =>
     send<ItemDetail, { path: string }>("POST", `/api/item/references/remove${q(id)}`, { path }),
   addFeedback: (id: string, input: NewFeedback) =>
@@ -708,12 +730,26 @@ export const api = {
   forgetLearned: (id: string) => send<LearnedList, {}>("POST", `/api/learned/forget${q(id)}`, {}),
   formats: () => request<Format[]>("/api/formats"),
   formatStatuses: () => request<FormatStatus[]>("/api/formats/status"),
-  imports: () => request<ImportDetail[]>("/api/imports"),
+  imports: () => request<ImportSummary[]>("/api/imports"),
   import: (id: string) => request<ImportDetail>(`/api/import${q(id)}`),
-  /** Start the user's agent on a link. It can only read until the user allows installs. */
-  startImport: (input: NewImport) => send<ImportDetail, NewImport>("POST", "/api/imports", input),
-  replyImport: (id: string, body: string) =>
-    send<ImportDetail, ImportReply>("POST", `/api/import/reply${q(id)}`, { body }),
+  /**
+   * Start the user's agent on a link and any files that go with it. It can only read until the user
+   * allows installs.
+   */
+  startImport: (input: NewImport, uploads: ReadonlyArray<Upload> = []) =>
+    uploads.length === 0
+      ? send<ImportDetail, NewImport>("POST", "/api/imports", input)
+      : request<ImportDetail>("/api/imports", {
+          method: "POST",
+          body: uploadForm(uploads, { ...input }),
+        }),
+  replyImport: (id: string, body: string, uploads: ReadonlyArray<Upload> = []) =>
+    uploads.length === 0
+      ? send<ImportDetail, ImportReply>("POST", `/api/import/reply${q(id)}`, { body })
+      : request<ImportDetail>(`/api/import/reply${q(id)}`, {
+          method: "POST",
+          body: uploadForm(uploads, { body }),
+        }),
   /** Let the agent install and write what it listed, with an optional note. */
   allowImport: (id: string, body: string) =>
     send<ImportDetail, ImportReply>("POST", `/api/import/reply${q(id)}`, { body, allow: true }),

@@ -8,7 +8,12 @@ import { Effect } from "effect";
 import { editImages } from "../src/core/edits.ts";
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
-import { addReferences, listReferences, removeReference } from "../src/core/references.ts";
+import {
+  addReferences,
+  itemReferences,
+  listReferences,
+  removeReference,
+} from "../src/core/references.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 let t: TestWorkspace;
@@ -34,9 +39,10 @@ async function upload(name: string, text = name) {
 }
 
 const add = (id: string, files: ReadonlyArray<{ source: string; path: string }>) =>
-  Effect.flatMap(getItem(id), (item) => addReferences(item, files));
+  Effect.flatMap(getItem(id), (item) => addReferences(itemReferences(item), files));
 
-const list = (id: string) => Effect.flatMap(getItem(id), listReferences);
+const list = (id: string) =>
+  Effect.flatMap(getItem(id), (item) => listReferences(itemReferences(item)));
 
 test("keeps dropped files and folders, with a folder's structure, and lists them", async () => {
   const item = await t.run(createItem({ title: "Launch" }));

@@ -8,8 +8,28 @@ import { Workspace, type WorkspaceService } from "./workspace.ts";
 /** The folder in an item for what the user hands the agent to work from: a logo, a script, photos. */
 export const REFERENCES = "references";
 
+/**
+ * Where files the user hands an agent are kept: a folder inside what they belong to, such as an
+ * item's `references/`. Paths to the files are relative to `owner`, such as `references/logo.png`.
+ */
+export interface ReferenceFolder {
+  /** Workspace-relative: the item's folder, or whatever else the files belong to. */
+  readonly owner: string;
+  /** The folder inside `owner` that holds the files. */
+  readonly name: string;
+  /** Held while files are added, so two drops at once never take the same name. */
+  readonly lock: string;
+}
+
+/** An item's references folder. */
+export const itemReferences = (item: Item): ReferenceFolder => ({
+  owner: item.dir,
+  name: REFERENCES,
+  lock: `references:${item.id}`,
+});
+
 export interface Reference {
-  /** Item-relative, such as `references/logo.png`. */
+  /** Relative to the folder's owner, such as `references/logo.png` in an item. */
   readonly path: string;
   readonly name: string;
   readonly dir: boolean;
@@ -57,17 +77,19 @@ const tally = (
     );
   });
 
-/** What is in an item's references folder, top level only; a folder is one entry. */
-export const listReferences = Effect.fn("references.listReferences")(function* (item: Item) {
+/** What is in a references folder, top level only; a folder is one entry. */
+export const listReferences = Effect.fn("references.listReferences")(function* (
+  folder: ReferenceFolder,
+) {
   const ws = yield* Workspace;
-  const root = `${item.dir}/${REFERENCES}`;
+  const root = `${folder.owner}/${folder.name}`;
 
   return yield* Effect.forEach(
     yield* ws.list(root),
     (entry) =>
       Effect.gen(function* () {
         const reference: Reference = {
-          path: `${REFERENCES}/${entry.name}`,
+          path: `${folder.name}/${entry.name}`,
           name: entry.name,
           dir: entry.dir,
           size: entry.size,
@@ -102,16 +124,17 @@ function freeName(name: string, dir: boolean, taken: ReadonlySet<string>): strin
 }
 
 /**
- * Copy what the user dropped, pasted or picked into an item's references folder. A folder keeps
- * its structure; a name already taken gets a `-2`, `-3`… suffix. Dotfiles such as `.DS_Store`
- * are left out. Returns the item-relative paths of what was added, one per file or folder.
+ * Copy what the user dropped, pasted or picked into a references folder. A folder keeps its
+ * structure; a name already taken gets a `-2`, `-3`… suffix. Dotfiles such as `.DS_Store` are
+ * left out. Returns the paths of what was added, relative to the folder's owner, one per file or
+ * folder.
  */
 export const addReferences = Effect.fn("references.addReferences")(function* (
-  item: Item,
+  folder: ReferenceFolder,
   uploads: ReadonlyArray<ReferenceUpload>,
 ) {
   const ws = yield* Workspace;
-  const root = `${item.dir}/${REFERENCES}`;
+  const root = `${folder.owner}/${folder.name}`;
 
   /** Each dropped file is its own entry; files of one dropped folder go together. */
   const entries: Array<{ name: string; dir: boolean; files: ReferenceUpload[] }> = [];
@@ -133,20 +156,20 @@ export const addReferences = Effect.fn("references.addReferences")(function* (
       continue;
     }
 
-    const folder = folders.get(top);
+    const grouped = folders.get(top);
     const file = { ...upload, path: rest.join("/") };
 
-    if (folder === undefined) {
+    if (grouped === undefined) {
       const files = [file];
       folders.set(top, files);
       entries.push({ name: top, dir: true, files });
     } else {
-      folder.push(file);
+      grouped.push(file);
     }
   }
 
   return yield* ws.exclusive(
-    `references:${item.id}`,
+    folder.lock,
     Effect.gen(function* () {
       const taken = new Set((yield* ws.list(root)).map((entry) => entry.name.toLowerCase()));
       const added: string[] = [];
@@ -160,7 +183,7 @@ export const addReferences = Effect.fn("references.addReferences")(function* (
           yield* ws.importFile(file.source, to);
         }
 
-        added.push(`${REFERENCES}/${name}`);
+        added.push(`${folder.name}/${name}`);
       }
 
       return added;

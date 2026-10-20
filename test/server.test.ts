@@ -367,10 +367,31 @@ describe("routes", () => {
     });
     expect(await (await send("/api/imports")).json()).toEqual([]);
 
+    const withFile = new FormData();
+    withFile.append("link", link);
+    withFile.append("files", new File(["brief"], "brief.md"));
+    const refusedWithFile = await send("/api/imports", { method: "POST", body: withFile });
+
+    expect(await refusedWithFile.json()).toMatchObject({
+      error: expect.stringContaining("copy the import prompt"),
+    });
+    expect(await (await send("/api/imports")).json()).toEqual([]);
+
     const { id } = await t.run(createImport({ link, agent: "claude" }));
     const blank = await sendJson("POST", `/api/import/reply?id=${id}`, { body: "  " });
 
     expect(await blank.json()).toMatchObject({ error: "Write a reply first" });
+
+    const blankWithFile = new FormData();
+    blankWithFile.append("body", "  ");
+    blankWithFile.append("files", new File(["png"], "logo.png"));
+
+    const refusedReply = await send(`/api/import/reply?id=${id}`, {
+      method: "POST",
+      body: blankWithFile,
+    });
+
+    expect(await refusedReply.json()).toMatchObject({ error: "Write a reply first" });
     expect((await sendJson("POST", `/api/import/reply?id=${id}`, { allow: true })).status).toBe(
       400,
     );
@@ -378,6 +399,8 @@ describe("routes", () => {
     expect(await (await send(`/api/import?id=${id}`)).json()).toMatchObject({
       id,
       running: false,
+      dir: `.cutfac/imports/${id}`,
+      references: [],
       doc: { link, allowed: false, closed: false },
     });
 

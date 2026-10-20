@@ -195,6 +195,14 @@ export const agentBin = (agent: AgentName) =>
 const flag = (name: string, value: string | undefined) =>
   value === undefined ? [] : [name, value];
 
+/**
+ * Codex's flags for pictures it should see. `--image` takes several values and would swallow the
+ * `-` that reads the prompt from stdin, so each goes in its own `=` form. It also splits on
+ * commas, so a path with one stays listed in the prompt only.
+ */
+export const codexImageFlags = (images: ReadonlyArray<string>) =>
+  images.flatMap((image) => (image.includes(",") ? [] : [`--image=${image}`]));
+
 /** The headless command line for one edit request, resuming the item's session when it has one. */
 export function agentInvocation(agent: AgentName, options: InvocationOptions): AgentInvocation {
   const {
@@ -233,10 +241,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
             ...codexServer,
           ]),
           ...flag("-m", model),
-          // `--image` takes several values and would swallow the `-` that reads the prompt from
-          // stdin, so each goes in its own `=` form. It also splits on commas, so a path with one
-          // stays listed in the prompt only.
-          ...images.filter((image) => !image.includes(",")).map((image) => `--image=${image}`),
+          ...codexImageFlags(images),
         ];
 
   return agentCommand(agent, bin, prompt, flags, options);

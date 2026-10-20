@@ -28,7 +28,7 @@ import { updateDetails } from "../core/history.ts";
 import { createItem, getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats, saveFormat } from "../core/library.ts";
-import { listReferences } from "../core/references.ts";
+import { itemReferences, listReferences } from "../core/references.ts";
 import {
   DEFAULT_FRAMES,
   MAX_FRAMES,
@@ -654,7 +654,7 @@ const handlers = CutfacToolkit.toLayer(
             return {
               ...item,
               absDir: yield* ws.abs(item.dir),
-              references: yield* listReferences(item),
+              references: yield* listReferences(itemReferences(item)),
               docs: Object.fromEntries(docs),
             };
           }),

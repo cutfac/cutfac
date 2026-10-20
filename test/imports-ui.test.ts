@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { AgentRun, AgentStatus, ImportDetail, ImportTurn } from "../web/src/api.ts";
+import type { AgentRun, AgentStatus, ImportSummary, ImportTurn } from "../web/src/api.ts";
 import {
   importAgent,
   importIdOf,
@@ -27,7 +27,7 @@ function turn(id: string, kind: ImportTurn["kind"], status?: AgentRun["status"])
 const detail = (
   turns: ImportTurn[],
   { allowed = false, closed = false, running = false } = {},
-): ImportDetail => ({
+): ImportSummary => ({
   id: "0a1b2c3d",
   doc: {
     link: "https://example.com/template",

@@ -288,6 +288,11 @@ export const ImportTurn = Schema.Struct({
     describe("start: the link; reply: an answer to the agent; allow: consent to install and write"),
   ),
   body: Schema.String,
+  attachments: Schema.optional(
+    Schema.Array(Schema.String).annotate(
+      describe("files under files/ in the import's folder that the user attached to the message"),
+    ),
+  ),
   run: Schema.optional(AgentRun),
 });
 

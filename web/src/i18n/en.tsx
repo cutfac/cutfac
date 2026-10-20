@@ -125,6 +125,9 @@ export const en = {
       "Paste a link to a template, a skill, or a post. Your agent reads it here and tells you what it needs. Nothing is installed until you press Allow.",
     link: "Link",
     linkPlaceholder: "Paste a link",
+    files: "Files",
+    filesHint:
+      "Optional. You can also drop or paste them here; your agent gets them with the link.",
     copyPrompt: "Copy prompt",
     promptCopied: "Prompt copied. Paste it into your agent.",
     copyFix: "Copy fix prompt",
@@ -604,6 +607,8 @@ export const en = {
       box: "Attach to the box request",
       references: "Add as reference files",
       media: "Add as new media",
+      reply: "Attach to your reply",
+      withLink: "Send with the link",
     },
     attach: "Attach files",
     uploading: "Uploading…",

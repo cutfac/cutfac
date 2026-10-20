@@ -375,7 +375,7 @@ function Request({ item, feedback, number, ahead, live, statuses, actions }: Req
               </BubbleContent>
             </Bubble>
           )}
-          <SentAttachments item={item} paths={feedback.attachments ?? []} />
+          <SentAttachments owner={item} paths={feedback.attachments ?? []} />
           <MessageFooter>
             <span className="tabular-nums">#{number}</span> · {feedback.media ?? t.chat.newMedia} ·{" "}
             {clockTime(feedback.at, locale)}
