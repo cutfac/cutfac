@@ -25,7 +25,7 @@ import {
 } from "../core/errors.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
-import { createItem, getItem, listItems, openFeedback } from "../core/items.ts";
+import { getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats, saveFormat } from "../core/library.ts";
 import { itemReferences, listReferences } from "../core/references.ts";
@@ -62,7 +62,7 @@ import {
 import { MAX_TEAM_FEEDBACK_CHARS, sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
-import { LicenseGate, LicenseLocked } from "./license.ts";
+import { FreeLimitReached, createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
 
 export const MCP_VERSION = version;
 
@@ -73,7 +73,8 @@ const INSTRUCTIONS =
   "Formats are templates: to turn a link into one, follow the cutfac skill's import steps, then call check_format until it is ready. " +
   "When a Cutfac tool fails in a way that looks like a bug in Cutfac rather than in the request, say so and offer to report it with send_feedback_to_cutfac; " +
   "where that tool is not offered, as in a run from the board, tell the user they can report it by typing /feedback in the chat. " +
-  "A LicenseLocked failure means the Cutfac app's trial or plan needs attention: tell the user what its message says to do; it is not a bug.";
+  "In the Cutfac app's free version, results carry a freeVersion note on how many videos are left. A FreeLimitReached failure is not a bug: " +
+  "tell the user what its message says, and keep working on their existing items.";
 
 /** How long a markdown doc in get_item may be before it is cut. */
 const DOC_PREVIEW_CHARS = 8000;
@@ -88,7 +89,7 @@ const CutfacFailure = Schema.Union([
   Conflict,
   CommandFailed,
   FetchFailed,
-  LicenseLocked,
+  FreeLimitReached,
 ]);
 
 const Id = Schema.String.annotate(describe("item id, such as hooks/first-try"));
@@ -120,6 +121,12 @@ const ReferenceFile = Schema.Struct({
 const AbsDir = Schema.String.annotate(describe("absolute folder; read and write files here"));
 
 const Created = Schema.Struct({ id: Schema.String, absDir: AbsDir });
+
+const FreeVersion = Schema.optional(
+  Schema.String.annotate(
+    describe("in the Cutfac app's free version, how many of its videos are used; tell the user"),
+  ),
+);
 
 const ItemSummary = Schema.Struct({
   id: Schema.String,
@@ -235,6 +242,7 @@ const WorkspaceOverview = tool("workspace_overview", {
     notices: Schema.Array(Schema.String).annotate(
       describe("problems with the workspace to act on before the task, and how to fix each"),
     ),
+    freeVersion: FreeVersion,
   }),
   readonly: true,
 });
@@ -300,7 +308,7 @@ const CreateItem = tool("create_item", {
       ),
     ),
   }),
-  success: Created,
+  success: Schema.Struct({ ...Created.fields, freeVersion: FreeVersion }),
 });
 
 const UpdateItem = tool("update_item", {
@@ -555,13 +563,9 @@ const handlers = CutfacToolkit.toLayer(
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolServices>();
     const ws = yield* Workspace;
-    const gate = yield* LicenseGate;
-
-    const ungated = <A, E>(effect: Effect.Effect<A, E, ToolServices>) =>
-      Effect.map(Effect.provideContext(effect, services), asJson);
 
     const run = <A, E>(effect: Effect.Effect<A, E, ToolServices>) =>
-      Effect.andThen(gate, ungated(effect));
+      Effect.map(Effect.provideContext(effect, services), asJson);
 
     const itemAbs = (id: string) => ws.abs(`${ws.config.paths.items}/${id}`);
 
@@ -575,8 +579,15 @@ const handlers = CutfacToolkit.toLayer(
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
-            const [items, formats, feedback, copies, learned] = yield* Effect.all(
-              [listItems(), listFormats(), openFeedback(), skillCopies(), listLearned()],
+            const [items, formats, feedback, copies, learned, plan] = yield* Effect.all(
+              [
+                listItems(),
+                listFormats(),
+                openFeedback(),
+                skillCopies(),
+                listLearned(),
+                planStatus(),
+              ],
               { concurrency: "unbounded" },
             );
 
@@ -599,6 +610,7 @@ const handlers = CutfacToolkit.toLayer(
               ),
               openFeedback: feedback.length,
               notices: [...skillNotices(yield* absCopies(copies)), ...learnNotices(learned, about)],
+              freeVersion: freeVersionNote(plan),
             };
           }),
         ),
@@ -663,9 +675,13 @@ const handlers = CutfacToolkit.toLayer(
       create_item: (input) =>
         run(
           Effect.gen(function* () {
-            const item = yield* createItem(input);
+            const item = yield* createCountedItem(input);
 
-            return { id: item.id, absDir: yield* ws.abs(item.dir) };
+            return {
+              id: item.id,
+              absDir: yield* ws.abs(item.dir),
+              freeVersion: freeVersionNote(yield* planStatus()),
+            };
           }),
         ),
 
@@ -763,9 +779,8 @@ const handlers = CutfacToolkit.toLayer(
         ),
 
       send_feedback_to_cutfac: ({ message, email }) =>
-        // A locked app can still report a bug.
         Effect.flatMap(Effect.serviceOption(McpSchema.McpRequestContext), (request) =>
-          ungated(
+          run(
             Effect.as(
               sendTeamFeedback({
                 message,

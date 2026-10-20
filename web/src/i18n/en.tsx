@@ -236,58 +236,35 @@ export const en = {
     title: "License key",
     description: (portal: Link) => (
       <>
-        Cutfac checks it with cutfac.com to open and to get updates. Find it in the email Polar sent
-        when you started the trial or checked out, or in the {portal("customer portal")}.
+        A license key unlocks the paid plan, so you can make as many videos as you want. Find it in
+        the email Polar sent when you checked out, or in the {portal("customer portal")}.
       </>
     ),
     label: "License key",
     placeholder: "Paste your license key",
     replace: "A key is saved already. A new one replaces it.",
-    invalid:
-      "That key isn't valid. Copy it again from your trial or purchase email, or the customer portal.",
+    invalid: "That key isn't valid. Copy it again from your purchase email or the customer portal.",
     checking: "Checking…",
     save: "Save",
     granted: "License key saved.",
-    ended: "License key saved, but its trial or plan has ended.",
+    ended: "License key saved, but its plan has ended, so you're on the free version.",
     unavailable: "License key saved. Couldn't reach cutfac.com to confirm it yet.",
   },
-  licenseLock: {
-    missing: {
-      title: "Start your free trial",
-      description: () =>
-        "Cutfac opens with a license key. Try it free for 7 days with no card, or choose a plan, and Polar emails you one.",
-    },
-    invalid: {
-      title: "That license key isn't valid",
-      description: (portal: Link) => (
-        <>
-          Enter the key from your trial or purchase email. You can also find it in the{" "}
-          {portal("customer portal")}.
-        </>
-      ),
-    },
-    ended: {
-      title: "Your trial or plan has ended",
-      description: (portal: Link) => (
-        <>
-          Subscribe to keep using Cutfac. If you renewed in the {portal("customer portal")}, check
-          again.
-        </>
-      ),
-    },
-    offline: {
-      title: "Cutfac needs to check your license",
-      description: () =>
-        "Cutfac keeps working offline for 7 days after it last reaches cutfac.com. Connect to the internet and check again.",
-    },
-    startTrial: "Start free trial",
-    seePlans: "See plans",
+  /**
+   * Which Cutfac this is: the desktop app's free version, which makes a few videos with every
+   * feature open, or the open-source version.
+   */
+  plan: {
+    freeTitle: "Free version",
+    used: (used: number, limit: number) => `${used} of ${limit} videos used`,
+    upgrade: "Upgrade",
     enterKey: "Enter license key",
-    checkAgain: "Check again",
-    openSource:
-      "Your workspace stays on your Mac as plain files. To keep going without paying, build the free open-source version and open the same workspace.",
-    stillOffline: "Still couldn't reach cutfac.com. Check your connection and try again.",
-    stillEnded: "cutfac.com still shows this trial or plan as ended.",
+    openSource: "Open-source version",
+    getDesktop: "Get the desktop app",
+    lastFree: "This is your last free video.",
+    limitTitle: (limit: number) => `You've made all ${limit} free videos`,
+    limitBody:
+      "Upgrade to make new videos. You can keep editing the ones you have and make new versions of them.",
   },
   setup: {
     title: "Set up",

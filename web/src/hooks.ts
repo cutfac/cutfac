@@ -6,7 +6,9 @@ import {
   type AgentName,
   type AgentStatus,
   type ModelSettings,
+  type Plan,
 } from "./api.ts";
+import { desktop } from "./desktop.ts";
 import type { ModelPicks } from "./lib/models.ts";
 
 interface Loaded<T> {
@@ -71,6 +73,19 @@ export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
     reload: () => setVersion((v) => v + 1),
     setData: (data) => setLoaded({ key, version, data }),
   };
+}
+
+/**
+ * The plan, reloaded as the workspace changes, which is when a new video counts, and as the desktop
+ * app hears back about its license key.
+ */
+export function usePlan(): Live<Plan> {
+  const plan = useLive("plan", api.plan);
+  const reload = useEffectEvent(plan.reload);
+
+  useEffect(() => desktop?.onLicenseChange(() => reload()), []);
+
+  return plan;
 }
 
 /**

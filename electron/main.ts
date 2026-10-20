@@ -19,12 +19,11 @@ import type { EditCommand } from "../web/src/desktop.ts";
 import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
 import {
   EDIT_COMMAND_CHANNEL,
+  LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
-  LICENSE_LOCK_CHANGE_CHANNEL,
-  LICENSE_LOCK_CHANNEL,
+  OPEN_LICENSE_KEY_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
-  RECHECK_LICENSE_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
@@ -58,7 +57,7 @@ let sidecar: Sidecar | undefined;
 
 let updates: Updates | undefined;
 
-/** Only the packaged app locks; a dev build runs open, like the CLI. */
+/** Only the packaged app checks its license key; a dev build leaves the saved one alone. */
 let license: License | undefined;
 
 let workspaceRoot: string | undefined;
@@ -118,15 +117,8 @@ if (!app.requestSingleInstanceLock()) {
 
     return license?.setKey(input) ?? "unavailable";
   });
-  ipcMain.handle(LICENSE_LOCK_CHANNEL, (event) => {
-    assertFromApp(event);
-
-    return license?.lock();
-  });
-  ipcMain.handle(RECHECK_LICENSE_CHANNEL, (event) => {
-    assertFromApp(event);
-
-    return license?.recheck();
+  ipcMain.on(OPEN_LICENSE_KEY_CHANNEL, (event) => {
+    if (isFromApp(event)) requestLicenseKey();
   });
   ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
     if (!isFromApp(event) || !isLocale(next) || next === locale) return;
@@ -158,23 +150,15 @@ async function boot(): Promise<void> {
   nativeTheme.themeSource = "dark";
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
 
-  const saved = await loadLicense();
-
   if (app.isPackaged) {
     license = startLicense({
-      ...saved,
+      ...(await loadLicense()),
       save: saveLicense,
-      onLock: (lock) => window?.webContents.send(LICENSE_LOCK_CHANGE_CHANNEL, lock),
-      onKey: (key) => updates?.useKey(key),
+      onChange: () => window?.webContents.send(LICENSE_CHANGE_CHANNEL),
     });
   }
 
-  updates = startUpdates({
-    messages: () => MESSAGES[locale],
-    window: () => window,
-    licenseKey: saved.key,
-    openLicense: requestLicenseKey,
-  });
+  updates = startUpdates({ messages: () => MESSAGES[locale], window: () => window });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
 
   let workspace = (await loadWorkspace()) ?? (await pickWorkspace());
@@ -205,13 +189,6 @@ function bringToFront(): void {
 function requestLicenseKey(): void {
   bringToFront();
   window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, license?.hasKey() ?? false);
-}
-
-/** Coming back to a locked app, perhaps after renewing or getting online, asks cutfac.com again. */
-function recheckLocked(): void {
-  const lock = license?.lock();
-
-  if (lock === "ended" || lock === "offline") void license?.recheck();
 }
 
 /** The standard menus, spelled out so every label can follow the board's language. */
@@ -439,7 +416,7 @@ function createWindow(): BrowserWindow {
   const { webContents } = created;
 
   created.once("ready-to-show", () => created.show());
-  created.on("focus", recheckLocked);
+  created.on("focus", () => license?.refresh());
   created.on("closed", () => {
     window = undefined;
   });

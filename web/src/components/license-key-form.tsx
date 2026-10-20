@@ -25,8 +25,8 @@ interface LicenseKeyFormProps {
 }
 
 /**
- * Takes the license key that opens the app and comes with update checks, inside a dialog. Electron
- * has no text field dialog of its own. Cancel closes the dialog, or goes back to the lock screen.
+ * Takes the license key that unlocks the paid plan, inside a dialog. Electron has no text field
+ * dialog of its own.
  */
 export function LicenseKeyForm({ desktop, saved, onSaved }: LicenseKeyFormProps) {
   const t = useMessages();

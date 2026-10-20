@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Schema } from "effect";
@@ -43,6 +44,9 @@ const Overview = Schema.Struct({
   notices: Schema.Array(Schema.String),
 });
 
+/** What a result says about the Cutfac app's free version, if anything. */
+const FreeVersion = Schema.Struct({ freeVersion: Schema.optional(Schema.String) });
+
 const Skill = Schema.Struct({
   markdown: Schema.String,
   copies: Schema.Array(Schema.Struct({ path: Schema.String, state: Schema.String })),
@@ -63,9 +67,9 @@ const ItemInputs = Schema.Struct({
 });
 
 /** A newline-delimited JSON-RPC client for `cutfac mcp`, the way Claude Code talks to it. */
-function startServer(root: string, feedbackUrl: string) {
+function startServer(root: string, feedbackUrl: string, env: Record<string, string> = {}) {
   const child = Bun.spawn(["bun", CLI, "mcp", "--workspace", root], {
-    env: { ...process.env, CUTFAC_FEEDBACK_URL: feedbackUrl },
+    env: { ...process.env, CUTFAC_FEEDBACK_URL: feedbackUrl, ...env },
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -133,7 +137,22 @@ function startServer(root: string, feedbackUrl: string) {
     return Schema.decodeUnknownSync(schema)(result.structuredContent ?? JSON.parse(text));
   };
 
-  return { child, send, request, call };
+  /** Open the session as a client does before calling tools. */
+  const initialize = async () => {
+    await request(
+      "initialize",
+      {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "test", version: "0" },
+      },
+      Schema.Struct({ protocolVersion: Schema.String }),
+    );
+
+    send({ method: "notifications/initialized" });
+  };
+
+  return { child, send, request, call, initialize };
 }
 
 let t: TestWorkspace;
@@ -157,17 +176,7 @@ beforeAll(async () => {
   t = await makeWorkspace("mcp");
   server = startServer(t.root, new URL("/api/feedback", site.url).href);
 
-  await server.request(
-    "initialize",
-    {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "test", version: "0" },
-    },
-    Schema.Struct({ protocolVersion: Schema.String }),
-  );
-
-  server.send({ method: "notifications/initialized" });
+  await server.initialize();
   // The server is a fresh Bun process; on a busy machine it takes seconds to start.
 }, 30_000);
 
@@ -306,6 +315,50 @@ test("a tool error comes back as an error result, not a crash", async () => {
 
   expect(await server.call("workspace_overview", {}, Overview)).toBeDefined();
 }, 20_000);
+
+test("the Cutfac app's free version tells agents what is left, then refuses a new video", async () => {
+  const free = await makeWorkspace("free");
+  const data = await mkdtemp(join(tmpdir(), "cutfac-app-data-"));
+
+  const app = startServer(free.root, new URL("/api/feedback", site.url).href, {
+    CUTFAC_DESKTOP_DATA: data,
+  });
+
+  try {
+    await app.initialize();
+
+    expect((await server.call("workspace_overview", {}, FreeVersion)).freeVersion).toBeUndefined();
+    expect((await app.call("workspace_overview", {}, FreeVersion)).freeVersion).toBe(
+      "Cutfac free version: 0 of 3 videos used on this Mac.",
+    );
+
+    await app.call("create_item", { title: "One" }, Created);
+    await app.call("create_item", { title: "Two" }, Created);
+
+    const last = await app.call(
+      "create_item",
+      { title: "Three" },
+      Schema.Struct({ ...Created.fields, ...FreeVersion.fields }),
+    );
+
+    expect(last.freeVersion).toContain("3 of 3 videos used");
+    expect(last.freeVersion).toContain("https://cutfac.com/pricing");
+
+    await expect(app.call("create_item", { title: "Four" }, Created)).rejects.toThrow(
+      "License Key",
+    );
+
+    // The videos already made stay editable.
+    expect(await app.call("update_item", { id: last.id, status: "review" }, Updated)).toEqual({
+      status: "review",
+    });
+  } finally {
+    app.child.kill();
+    await app.child.exited;
+    await free.remove();
+    await rm(data, { recursive: true, force: true });
+  }
+}, 60_000);
 
 test("agents can check a template and fill its inputs", async () => {
   await server.call(

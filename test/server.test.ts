@@ -1,17 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // The web handler is the test's entry point, so it provides every layer the routes need.
 // @effect-diagnostics strictEffectProvide:off
 import { BunHttpPlatform } from "@effect/platform-bun";
-import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { type RunEvent, RunRegistry } from "../src/core/agentRun.ts";
 import { ImportRuns } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
 import type { Feedback } from "../src/core/schema.ts";
+import { DesktopData } from "../src/plan.ts";
 import { parseRange, routes } from "../src/server/app.ts";
 import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -40,8 +42,11 @@ describe("parseRange", () => {
 const ended = (event: RunEvent) =>
   event.type === "done" || event.type === "error" || event.type === "stopped";
 
-/** The board's API on a test workspace, finding only the fake agents. */
-const makeServer = async (t: TestWorkspace, fakes: FakeAgents) => {
+/**
+ * The board's API on a test workspace, finding only the fake agents. With `desktopData`, it is the
+ * desktop app's, which keeps its count of videos there.
+ */
+const makeServer = async (t: TestWorkspace, fakes: FakeAgents, desktopData?: string) => {
   // Route handlers read their services per request, as `serve` does from the server's context.
   const runtime = ManagedRuntime.make(
     Layer.mergeAll(
@@ -49,6 +54,7 @@ const makeServer = async (t: TestWorkspace, fakes: FakeAgents) => {
       ImportRuns.layer,
       FetchHttpClient.layer,
       BunHttpPlatform.layer,
+      Layer.succeed(DesktopData, Option.fromUndefinedOr(desktopData)),
     ).pipe(Layer.provideMerge(t.layer), Layer.provideMerge(fakes.layer)),
   );
 
@@ -411,6 +417,57 @@ describe("routes", () => {
     const closed = await send(`/api/import/close?id=${id}`, { method: "POST" });
 
     expect(await closed.json()).toMatchObject({ id, running: false, doc: { closed: true } });
+  });
+});
+
+describe("the desktop app's free version on the board", () => {
+  let t: TestWorkspace;
+  let fakes: FakeAgents;
+  let data: string;
+  let server: Server;
+
+  beforeEach(async () => {
+    t = await makeWorkspace("Free");
+    fakes = await makeFakeAgents();
+    data = await mkdtemp(join(tmpdir(), "cutfac-app-data-"));
+    server = await makeServer(t, fakes, data);
+  });
+
+  afterEach(async () => {
+    await server.dispose();
+    await fakes.remove();
+    await t.remove();
+    await rm(data, { recursive: true, force: true });
+  });
+
+  const plan = async () => (await server.send("/api/plan")).json();
+
+  test("counts the videos made and refuses a new one past the limit", async () => {
+    expect(await plan()).toEqual({ edition: "desktop", paid: false, used: 0, limit: 3 });
+
+    for (const title of ["One", "Two", "Three"]) {
+      expect((await server.sendJson("POST", "/api/items", { title })).status).toBe(200);
+    }
+
+    const refused = await server.sendJson("POST", "/api/items", { title: "Four" });
+
+    expect(refused.status).toBe(402);
+    expect(await refused.json()).toEqual({ error: expect.stringContaining("cutfac.com/pricing") });
+    expect(await plan()).toMatchObject({ used: 3 });
+
+    const patched = await server.sendJson("PATCH", "/api/item?id=one", { status: "review" });
+
+    expect(patched.status).toBe(200);
+  });
+
+  test("the open-source board has no limit", async () => {
+    const open = await makeServer(t, fakes);
+
+    try {
+      expect(await (await open.send("/api/plan")).json()).toEqual({ edition: "open-source" });
+    } finally {
+      await open.dispose();
+    }
   });
 });
 

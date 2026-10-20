@@ -1,8 +1,7 @@
 import { Option, Schema } from "effect";
 
-import { licenseLock, lockChangesAt, type LicenseRecord } from "../src/license.ts";
-// The board's copy of the lock, so a reason it can't show fails to compile here.
-import type { LicenseCheck, LicenseLock } from "../web/src/desktop.ts";
+import { isPaid, type LicenseRecord } from "../src/license.ts";
+import type { LicenseCheck } from "../web/src/desktop.ts";
 
 /** Polar's keys are far shorter; anything longer is a paste gone wrong. */
 const MAX_KEY_LENGTH = 128;
@@ -10,17 +9,19 @@ const MAX_KEY_LENGTH = 128;
 /** Keys travel in an HTTP header, which takes visible ASCII only. */
 const KEY_CHARACTERS = /^[\x21-\x7e]+$/;
 
-/** Where the app asks whether its key still opens it. */
+/** Where the app asks whether its key unlocks the paid plan. */
 export const LICENSE_URL = "https://cutfac.com/api/license";
 
 const CHECK_TIMEOUT_MS = 8_000;
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
-const decodeHttpStatus = Schema.decodeUnknownOption(Schema.Struct({ statusCode: Schema.Finite }));
+/** Coming back to the app asks again at most this often. */
+const REFRESH_MS = 60 * 1_000;
 
+// cutfac.com also says whether the license is a trial's, but any grant unlocks the same plan.
 const decodeGrant = Schema.decodeUnknownOption(
-  Schema.Struct({ expiresAt: Schema.NullOr(Schema.String), trial: Schema.Boolean }),
+  Schema.Struct({ expiresAt: Schema.NullOr(Schema.String) }),
 );
 
 /** The key as typed or pasted, without surrounding space, or undefined when it can't be one. */
@@ -30,26 +31,11 @@ export function licenseKeyFrom(input: string): string | undefined {
   return key.length <= MAX_KEY_LENGTH && KEY_CHARACTERS.test(key) ? key : undefined;
 }
 
-/**
- * What a failed update check says about the key. cutfac.com answers 401 for a key that names no
- * license and 402 for one whose plan has ended. Anything else, from being offline to the site being
- * down, says nothing about the key.
- */
-export function licenseCheckOf(cause: unknown): Exclude<LicenseCheck, "granted"> {
-  const status = Option.getOrUndefined(decodeHttpStatus(cause))?.statusCode;
-
-  if (status === 401) return "invalid";
-
-  if (status === 402) return "ended";
-
-  return "unavailable";
-}
-
 type Request = (url: string, init: RequestInit) => Promise<Response>;
 
 /**
  * Asks cutfac.com about `key`: a grant, or a refusal for a key that names no license or one whose
- * trial or plan has ended. Undefined when it couldn't be asked or gave no clear answer.
+ * plan has ended. Undefined when it couldn't be asked or gave no clear answer.
  */
 export async function fetchLicense(
   key: string,
@@ -75,7 +61,7 @@ export async function fetchLicense(
 
     const expiresAt = grant.expiresAt === null ? null : Date.parse(grant.expiresAt);
 
-    return Number.isNaN(expiresAt) ? undefined : { checkedAt, expiresAt, trial: grant.trial };
+    return Number.isNaN(expiresAt) ? undefined : { checkedAt, expiresAt };
   } catch {
     return undefined;
   }
@@ -93,59 +79,48 @@ interface LicenseOptions {
   key: string | undefined;
   record: LicenseRecord | undefined;
   save: (key: string, record: LicenseRecord | undefined) => Promise<void>;
-  /** The app locked, unlocked, or locked for another reason. */
-  onLock: (lock: LicenseLock | undefined) => void;
-  /** The board took a key that names a license, so update checks should send it. */
-  onKey: (key: string) => void;
+  /** The paid plan unlocked or ran out, once the settings that say so are saved. */
+  onChange: () => void;
+  /** How to reach cutfac.com; tests answer for it. */
+  request?: Request;
 }
 
 export interface License {
-  /** Why the app is locked now, or undefined while it is open. */
-  lock: () => LicenseLock | undefined;
   /** Checks a key from the board and keeps it unless it names no license. */
   setKey: (input: string) => Promise<LicenseCheck>;
-  /** Asks cutfac.com again about the saved key, and resolves the lock after. */
-  recheck: () => Promise<LicenseLock | undefined>;
+  /** Catches up when the user comes back, asking again about a saved key that isn't paid now. */
+  refresh: () => void;
   hasKey: () => boolean;
 }
 
 /**
- * Keeps the app's lock: asks cutfac.com about the saved key at launch and once a day, and locks
- * on its own when a trial ends or the app goes the offline grace without an answer.
+ * Keeps cutfac.com's answer about the saved key fresh: asks at launch and once a day, and again
+ * when the user comes back to a key that doesn't unlock the paid plan, perhaps after renewing or
+ * getting online. Without the paid plan the app is the free version; it never locks.
  */
-export function startLicense({ key, record, save, onLock, onKey }: LicenseOptions): License {
+export function startLicense({
+  key,
+  record,
+  save,
+  onChange,
+  request = fetch,
+}: LicenseOptions): License {
   let saved = { key, record };
 
-  let published = lock();
+  let paid = isPaid(record, Date.now());
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let askedAt = Number.NEGATIVE_INFINITY;
 
   let checking: Promise<unknown> = Promise.resolve();
 
-  let rechecking: Promise<void> | undefined;
-
-  function lock() {
-    return licenseLock(saved.key !== undefined, saved.record, Date.now());
-  }
-
-  /** Tells the board when the lock changed, and wakes up when it next would on its own. */
+  /** Tells the board when the plan changed, which a grant running out does on its own. */
   function publish() {
-    const next = lock();
+    const next = isPaid(saved.record, Date.now());
 
-    if (next !== published) {
-      published = next;
-      onLock(next);
-    }
+    if (next === paid) return;
 
-    clearTimeout(timer);
-
-    const changesAt = lockChangesAt(saved.record);
-
-    if (next !== undefined || changesAt === undefined) return;
-
-    // A timer longer than about 24 days fires at once, and the daily check wakes it anyway.
-    timer = setTimeout(publish, Math.min(changesAt - Date.now(), DAY_MS));
-    timer.unref();
+    paid = next;
+    onChange();
   }
 
   /** Runs after any check in progress, so an answer about an old key never lands on a new one. */
@@ -159,56 +134,63 @@ export function startLicense({ key, record, save, onLock, onKey }: LicenseOption
 
   async function keep(next: typeof saved) {
     saved = next;
-    publish();
 
+    // The board's server reads the plan from the saved settings, so they go first.
     if (next.key !== undefined) await save(next.key, next.record);
+
+    publish();
   }
 
-  // Focusing the window while locked asks too; a check already on its way answers for all of them.
-  const check = () =>
-    (rechecking ??= serialize(async () => {
+  const check = () => {
+    askedAt = Date.now();
+
+    return serialize(async () => {
       if (saved.key === undefined) return;
 
-      const answer = await fetchLicense(saved.key);
+      const answer = await fetchLicense(saved.key, request);
 
       // No answer keeps the last one, which holds until its grace runs out.
       if (answer !== undefined) await keep({ key: saved.key, record: answer });
       else publish();
-    }).finally(() => {
-      rechecking = undefined;
-    }));
+    });
+  };
 
-  publish();
   void check();
   setInterval(() => void check(), DAY_MS).unref();
 
   return {
-    lock,
     setKey: (input) => {
       const next = licenseKeyFrom(input);
 
       if (next === undefined) return Promise.resolve("invalid");
 
       return serialize(async () => {
-        const answer = await fetchLicense(next);
+        const answer = await fetchLicense(next, request);
         const result = checkOf(answer);
 
         if (result === "invalid") return result;
 
-        // An unconfirmed new key keeps the app locked until cutfac.com answers for it.
+        // An unconfirmed new key stays on the free version until cutfac.com answers for it.
         await keep({
           key: next,
           record: answer ?? (next === saved.key ? saved.record : undefined),
         });
-        onKey(next);
 
         return result;
       });
     },
-    recheck: async () => {
-      await check();
+    refresh: () => {
+      publish();
 
-      return lock();
+      // A key that names no license won't name one later; a new key goes through `setKey`.
+      const invalid =
+        saved.record !== undefined &&
+        "refusal" in saved.record &&
+        saved.record.refusal === "invalid";
+
+      if (saved.key === undefined || paid || invalid || Date.now() - askedAt < REFRESH_MS) return;
+
+      void check();
     },
     hasKey: () => saved.key !== undefined,
   };

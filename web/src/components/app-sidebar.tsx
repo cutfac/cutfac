@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemDialog } from "@/components/new-item-dialog";
+import { PlanCard } from "@/components/plan-card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +43,7 @@ import {
 
 import { api, type ItemSummary, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop } from "../desktop.ts";
-import { href, useLive } from "../hooks.ts";
+import { href, useLive, usePlan } from "../hooks.ts";
 import {
   isLocale,
   LOCALE_NAMES,
@@ -285,6 +286,7 @@ interface AppSidebarProps {
 export function AppSidebar({ ws, view, id }: AppSidebarProps) {
   const t = useMessages();
   const { data: items } = useLive("items", api.items);
+  const plan = usePlan();
   const videos = sidebarVideos(items ?? []);
   const editing = view === "item" && id ? id : undefined;
 
@@ -302,6 +304,7 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
           <SidebarMenuItem>
             <NewItemDialog
               formats={ws?.formats}
+              plan={plan}
               trigger={
                 <SidebarMenuButton tooltip={t.nav.newVideo}>
                   <PlusIcon />
@@ -362,6 +365,7 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
         ) : null}
       </SidebarContent>
       <SidebarFooter>
+        <PlanCard plan={plan.data} />
         <SidebarMenu>
           <LinkRow to={href("setup")} active={view === "setup"} tooltip={t.nav.setup}>
             <PlugZapIcon />

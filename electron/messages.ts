@@ -47,16 +47,6 @@ const en = {
   upToDateDetail: (version: string) => `Cutfac ${version} is the newest version.`,
   updateCheckFailed: "Couldn't check for updates",
   licenseKey: "License Key…",
-  licenseNeeded: "Enter your license key to get updates",
-  licenseNeededDetail:
-    "Polar emails it when you start the free trial or check out. You can also find it in the customer portal.",
-  enterLicenseKey: "Enter License Key…",
-  licenseInvalid: "That license key isn't valid",
-  licenseInvalidDetail: "Copy it again from your trial or purchase email, or the customer portal.",
-  licenseEnded: "The trial or plan for your license key has ended",
-  licenseEndedDetail:
-    "Cutfac stays locked until you subscribe or renew. Your workspace files stay as they are.",
-  openPortal: "Open Customer Portal",
 };
 
 export type Messages = typeof en;
@@ -111,15 +101,5 @@ export const MESSAGES: Record<Locale, Messages> = {
     upToDateDetail: (version) => `컷팩 ${version} 버전이 가장 최신이에요.`,
     updateCheckFailed: "업데이트를 확인하지 못했어요",
     licenseKey: "라이선스 키…",
-    licenseNeeded: "업데이트를 받으려면 라이선스 키를 넣어 주세요",
-    licenseNeededDetail:
-      "무료 체험을 시작하거나 결제를 마치면 Polar가 키를 메일로 보내요. 고객 포털에서도 찾을 수 있어요.",
-    enterLicenseKey: "라이선스 키 넣기…",
-    licenseInvalid: "유효하지 않은 라이선스 키예요",
-    licenseInvalidDetail: "체험이나 구매 메일, 또는 고객 포털에서 다시 복사해 주세요.",
-    licenseEnded: "이 라이선스 키의 체험이나 요금제가 끝났어요",
-    licenseEndedDetail:
-      "구독하거나 갱신할 때까지 컷팩이 잠겨요. 워크스페이스 파일은 그대로 남아 있어요.",
-    openPortal: "고객 포털 열기",
   },
 };

@@ -533,6 +533,15 @@ export interface WorkspaceInfo {
   openFeedback: number;
 }
 
+/**
+ * Which Cutfac serves the board: the open-source version, which has no limit, or the desktop app,
+ * on a paid plan or its free version with the videos it has made on this Mac.
+ */
+export type Plan =
+  | { edition: "open-source" }
+  | { edition: "desktop"; paid: true }
+  | { edition: "desktop"; paid: false; used: number; limit: number };
+
 /** A model the board offers for an agent, and the efforts it takes. */
 export interface ModelOption {
   /** What the agent CLI takes, such as `opus`. */
@@ -622,6 +631,7 @@ interface ImportReply {
 export const api = {
   health: () => request<{ ok: true }>("/api/health"),
   workspace: () => request<WorkspaceInfo>("/api/workspace"),
+  plan: () => request<Plan>("/api/plan"),
   items: () => request<ItemSummary[]>("/api/items"),
   item: (id: string) => request<ItemDetail>(`/api/item${q(id)}`),
   createItem: (input: NewItem) => send<ItemDetail, NewItem>("POST", "/api/items", input),

@@ -3,16 +3,10 @@ import type { Locale } from "./i18n/locale.ts";
 export type EditCommand = "undo" | "redo";
 
 /**
- * What the update server said about a license key: `granted` reaches updates, `invalid` names no
+ * What cutfac.com said about a license key: `granted` unlocks the paid plan, `invalid` names no
  * license, `ended` names one whose plan has ended, and `unavailable` means it couldn't be asked.
  */
 export type LicenseCheck = "granted" | "invalid" | "ended" | "unavailable";
-
-/**
- * Why the app is locked: no key saved, a key that names no license, an ended trial or plan, or no
- * word from cutfac.com for a week. The app's own copy of this lives outside the board.
- */
-export type LicenseLock = "missing" | "invalid" | "ended" | "offline";
 
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
 export interface CutfacDesktop {
@@ -30,19 +24,20 @@ export interface CutfacDesktop {
   /** Undo and Redo chosen from the app menu or its shortcuts. Returns an unsubscribe. */
   onEditCommand: (listener: (command: EditCommand) => void) => () => void;
   /**
-   * Check a license key with cutfac.com and keep it to open the app and get updates, unless it is
-   * invalid. Resolves what cutfac.com said.
+   * Check a license key with cutfac.com and keep it to unlock the paid plan, unless it is invalid.
+   * Resolves what cutfac.com said.
    */
   setLicenseKey: (key: string) => Promise<LicenseCheck>;
-  /** Why the app is locked, or undefined while it is open. */
-  licenseLock: () => Promise<LicenseLock | undefined>;
-  /** The app locked, unlocked, or locked for another reason. Returns an unsubscribe. */
-  onLicenseLock: (listener: (lock: LicenseLock | undefined) => void) => () => void;
-  /** Ask cutfac.com again about the saved key. Resolves the lock after. */
-  recheckLicense: () => Promise<LicenseLock | undefined>;
   /**
-   * License Key… chosen from the app menu, or asked for by an update check. `saved` says whether a
-   * key is kept already. Returns an unsubscribe.
+   * The paid plan unlocked or ran out, so the plan the board shows is stale. Returns an
+   * unsubscribe.
+   */
+  onLicenseChange: (listener: () => void) => () => void;
+  /** Ask the app for its license key dialog, as License Key… in its menu does. */
+  requestLicenseKey: () => void;
+  /**
+   * License Key… chosen from the app menu, or asked for by the board. `saved` says whether a key
+   * is kept already. Returns an unsubscribe.
    */
   onLicenseKeyRequest: (listener: (saved: boolean) => void) => () => void;
   /** The operating system and its version, such as `macOS 15.4.0`. */

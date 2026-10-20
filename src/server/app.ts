@@ -45,7 +45,6 @@ import {
 import {
   type Item,
   addFeedback,
-  createItem,
   findFeedback,
   getItem,
   importMedia,
@@ -76,6 +75,7 @@ import {
 import { sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
+import { createCountedItem, planStatus } from "../plan.ts";
 import { requestGuard } from "./guard.ts";
 
 export interface ServerOptions {
@@ -134,6 +134,8 @@ const STATUS_BY_TAG = new Map([
   // Request bodies that are not JSON; route misses never reach the JSON routes.
   ["HttpServerError", 400],
   ["Conflict", 409],
+  // The desktop app's free version made all of its videos; the board offers the paid plan.
+  ["FreeLimitReached", 402],
   ["FetchFailed", 502],
 ]);
 
@@ -724,6 +726,7 @@ const json = <A, E extends Failure, R>(
 const apiRoutes = (options: ServerOptions) =>
   HttpRouter.addAll([
     json("GET", "/api/workspace", workspaceInfo),
+    json("GET", "/api/plan", planStatus()),
     json("GET", "/api/agents", agentStatus()),
     json(
       "POST",
@@ -745,7 +748,7 @@ const apiRoutes = (options: ServerOptions) =>
       "POST",
       "/api/items",
       Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), (body) =>
-        Effect.flatMap(createItem(body), itemDetail),
+        Effect.flatMap(createCountedItem(body), itemDetail),
       ),
     ),
     json(

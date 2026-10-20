@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
 
 import { api, fileUrl, STATUSES, type ItemSummary } from "../api.ts";
-import { href, useLive } from "../hooks.ts";
+import { href, useLive, usePlan } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
@@ -88,6 +88,7 @@ export function Board() {
   const t = useMessages();
   const { data: items, error } = useLive("items", api.items);
   const { data: formats } = useLive("formats", api.formats);
+  const plan = usePlan();
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
 
@@ -139,7 +140,7 @@ export function Board() {
               <ArchiveIcon data-icon="inline-start" />
               {t.board.archived}
             </Toggle>
-            <NewItemDialog formats={formats} />
+            <NewItemDialog formats={formats} plan={plan} />
           </div>
         ) : null}
       </div>
@@ -157,7 +158,7 @@ export function Board() {
               <EmptyDescription>{t.board.emptyBody}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <NewItemDialog formats={formats} />
+              <NewItemDialog formats={formats} plan={plan} />
             </EmptyContent>
           </Empty>
         </div>

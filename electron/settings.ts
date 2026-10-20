@@ -1,4 +1,5 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { Option, Schema } from "effect";
@@ -41,11 +42,18 @@ async function readSettings(): Promise<Schema.JsonObject> {
   }
 }
 
+/**
+ * The app's agent tools read the license from this file whenever they make a video, so it is
+ * replaced whole and never seen half written.
+ */
 async function writeSettings(patch: Partial<Settings>): Promise<void> {
   const settings = { ...(await readSettings()), ...patch };
+  const file = settingsFile();
+  const draft = `${file}.${randomUUID()}.tmp`;
 
   await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(settingsFile(), `${JSON.stringify(settings, null, 2)}\n`);
+  await writeFile(draft, `${JSON.stringify(settings, null, 2)}\n`);
+  await rename(draft, file);
 }
 
 /** The last workspace the user opened, or undefined if none is saved or its folder is gone. */
