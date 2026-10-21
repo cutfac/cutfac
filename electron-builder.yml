@@ -20,6 +20,21 @@ extraResources:
   - from: dist/web
     to: web
 
+# Switches baked into the Electron binary right before signing. The signed app can't be started as
+# plain Node or with NODE_OPTIONS or a debugger, so other programs can't borrow its permissions, and
+# it loads only its own app.asar, checked against the hash in Info.plist, so the code can't be
+# swapped. The app forks no Node processes and loads no file:// pages, so it needs none of these.
+# Flipping them breaks the binary's ad-hoc signature, which an unsigned build (`dist:desktop`)
+# needs reset to launch on Apple Silicon; a signed build signs over it.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+  resetAdHocDarwinSignature: true
+
 mac:
   category: public.app-category.productivity
   # An Icon Composer bundle: Liquid Glass on macOS 26, with flat fallbacks for older systems.
