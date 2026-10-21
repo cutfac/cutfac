@@ -111,13 +111,15 @@ interface AddTemplateProps {
   ws: WorkspaceInfo;
   /** An import started; the list should show it. */
   onStarted: () => void;
+  /** Small in the title bar. */
+  size?: "sm" | "default";
 }
 
 /**
  * Bringing a template in is the agent's job: the board runs the user's agent on a link to any
  * template, skill, or post it can read, or turns the link into a prompt to paste into one.
  */
-function AddTemplate({ ws, onStarted }: AddTemplateProps) {
+function AddTemplate({ ws, onStarted, size = "default" }: AddTemplateProps) {
   const [open, setOpen] = useState(false);
   const t = useMessages();
 
@@ -125,7 +127,7 @@ function AddTemplate({ ws, onStarted }: AddTemplateProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button>
+          <Button size={size}>
             <PlusIcon data-icon="inline-start" />
             {t.templates.add}
           </Button>
@@ -316,14 +318,14 @@ export function Templates({ selected }: { selected: string | undefined }) {
         ? templates?.[0]
         : templates?.find((s) => s.id === selected);
 
-  const add = ws === undefined ? null : <AddTemplate ws={ws} onStarted={imports.reload} />;
-
   return (
     <Page
       width="wide"
       title={t.templates.title}
       description={t.templates.description}
-      actions={add}
+      actions={
+        ws === undefined ? null : <AddTemplate ws={ws} onStarted={imports.reload} size="sm" />
+      }
     >
       {error ? (
         <ErrorAlert title={t.templates.loadError} message={error} />
@@ -343,7 +345,11 @@ export function Templates({ selected }: { selected: string | undefined }) {
                 ))}
               </EmptyDescription>
             </EmptyHeader>
-            {ws === undefined ? null : <EmptyContent>{add}</EmptyContent>}
+            {ws === undefined ? null : (
+              <EmptyContent>
+                <AddTemplate ws={ws} onStarted={imports.reload} />
+              </EmptyContent>
+            )}
           </Empty>
         </div>
       ) : (

@@ -1,8 +1,14 @@
-import { ArchiveIcon, BookOpenIcon, ClapperboardIcon, MessageSquareIcon } from "lucide-react";
+import {
+  ArchiveIcon,
+  BookOpenIcon,
+  ClapperboardIcon,
+  MessageSquareIcon,
+  PlusIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { NewItemDialog } from "@/components/new-item-dialog";
-import { ErrorAlert, pageTop } from "@/components/page";
+import { ErrorAlert, PageHeader } from "@/components/page";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -94,7 +100,8 @@ export function Board() {
 
   if (error) {
     return (
-      <div className={`px-6 ${pageTop}`}>
+      <div className="px-6 pt-2">
+        <PageHeader title={t.board.title} />
         <ErrorAlert title={t.board.loadError} message={error} />
       </div>
     );
@@ -112,38 +119,56 @@ export function Board() {
   const columns = STATUSES.filter((s) => showArchived || s !== "archived");
 
   return (
-    <div className={`flex min-h-0 flex-1 flex-col gap-4 px-6 ${pageTop}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">{t.board.title}</h1>
-          {items ? (
-            <span className="text-sm text-muted-foreground">{t.board.count(items.length)}</span>
-          ) : null}
-        </div>
-        {items?.length ? (
-          <div className="flex items-center gap-2">
-            {usedFormats.length > 0 ? (
-              <Select items={formatItems} value={format} onValueChange={setFormat}>
-                <SelectTrigger aria-label={t.board.filterByFormat} className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  {formatItems.map((f) => (
-                    <SelectItem key={f.value ?? "all"} value={f.value}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <Toggle variant="outline" pressed={showArchived} onPressedChange={setShowArchived}>
-              <ArchiveIcon data-icon="inline-start" />
-              {t.board.archived}
-            </Toggle>
-            <NewItemDialog formats={formats} plan={plan} />
-          </div>
-        ) : null}
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pt-2">
+      <PageHeader
+        title={t.board.title}
+        aside={
+          items ? (
+            <span className="shrink-0 text-sm text-muted-foreground">
+              {t.board.count(items.length)}
+            </span>
+          ) : null
+        }
+        actions={
+          items?.length ? (
+            <>
+              {usedFormats.length > 0 ? (
+                <Select items={formatItems} value={format} onValueChange={setFormat}>
+                  <SelectTrigger size="sm" aria-label={t.board.filterByFormat} className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {formatItems.map((f) => (
+                      <SelectItem key={f.value ?? "all"} value={f.value}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <Toggle
+                variant="outline"
+                size="sm"
+                pressed={showArchived}
+                onPressedChange={setShowArchived}
+              >
+                <ArchiveIcon data-icon="inline-start" />
+                {t.board.archived}
+              </Toggle>
+              <NewItemDialog
+                formats={formats}
+                plan={plan}
+                trigger={
+                  <Button size="sm">
+                    <PlusIcon data-icon="inline-start" />
+                    {t.newItem.open}
+                  </Button>
+                }
+              />
+            </>
+          ) : null
+        }
+      />
       {items?.length ? <LearnHint /> : null}
       {items === undefined ? (
         <BoardSkeleton />

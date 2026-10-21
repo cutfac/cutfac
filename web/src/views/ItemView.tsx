@@ -10,6 +10,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
+import { InTitleBar } from "@/components/title-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
@@ -299,17 +300,17 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
 
   return (
     <>
+      <InTitleBar>
+        <Toolbar
+          item={item}
+          running={running}
+          agent={run.agent}
+          onItem={setData}
+          onEdit={edit}
+          onShortcuts={() => setShortcuts(true)}
+        />
+      </InTitleBar>
       <EditorDock
-        toolbar={
-          <Toolbar
-            item={item}
-            running={running}
-            agent={run.agent}
-            onItem={setData}
-            onEdit={edit}
-            onShortcuts={() => setShortcuts(true)}
-          />
-        }
         stage={
           media === undefined ? (
             <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
@@ -517,12 +518,12 @@ function Toolbar({
   const statuses = STATUSES.map((status) => ({ value: status, label: t.status[status] }));
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
       <a href={href("board")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
         <ArrowLeftIcon data-icon="inline-start" />
         {t.nav.board}
       </a>
-      <h1 className="min-w-0 truncate text-base font-semibold">{item.doc.title}</h1>
+      <h1 className="min-w-0 truncate text-sm font-semibold">{item.doc.title}</h1>
       {running ? (
         <Badge variant="secondary">
           <Spinner data-icon="inline-start" />

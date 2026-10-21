@@ -38,7 +38,6 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 
@@ -385,10 +384,6 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
             />
           </SidebarMenuItem>
         </SidebarMenu>
-        <SidebarTrigger
-          title={t.nav.toggle}
-          className="self-end group-data-[collapsible=icon]:self-center"
-        />
       </SidebarFooter>
     </Sidebar>
   );

@@ -7,8 +7,10 @@ const APPLE = /Mac|iPhone|iPad/.test(navigator.userAgent);
 
 export const SHIFT_KEY = APPLE ? "⇧" : "Shift+";
 
+export const MOD_KEY = APPLE ? "⌘" : "Ctrl+";
+
 export const EDIT_KEYS: Record<EditCommand, string> = {
-  undo: APPLE ? "⌘Z" : "Ctrl+Z",
+  undo: `${MOD_KEY}Z`,
   redo: APPLE ? "⇧⌘Z" : "Ctrl+Y",
 };
 

@@ -2,16 +2,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { CircleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { InTitleBar } from "@/components/title-bar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { insetTitleBar } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 
-/** Room above a view's title. The macOS title bar strip above already gives the title most of it. */
-export const pageTop: string = insetTitleBar ? "pt-2" : "pt-6";
-
-const pageVariants = cva(`mx-auto flex w-full flex-col gap-6 px-6 pb-6 ${pageTop}`, {
+const pageVariants = cva("mx-auto flex w-full flex-col gap-6 px-6 pt-2 pb-6", {
   variants: {
     width: { narrow: "max-w-2xl", default: "max-w-5xl", wide: "max-w-7xl" },
   },
@@ -25,17 +22,31 @@ interface PageProps extends VariantProps<typeof pageVariants> {
   children: ReactNode;
 }
 
-/** A scrolling view's frame: a title row, then the content, centred at a readable width. */
+/** A view's title in the title bar, with what goes beside it and its actions at the far end. */
+export function PageHeader({
+  title,
+  aside,
+  actions,
+}: {
+  title: ReactNode;
+  aside?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <InTitleBar>
+      <h1 className="min-w-0 truncate text-sm font-semibold">{title}</h1>
+      {aside}
+      {actions ? <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </InTitleBar>
+  );
+}
+
+/** A scrolling view's frame: its title in the title bar, then the content at a readable width. */
 export function Page({ title, description, actions, width, children }: PageProps) {
   return (
     <div className={pageVariants({ width })}>
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
-        </div>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-      </div>
+      <PageHeader title={title} actions={actions} />
+      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       {children}
     </div>
   );

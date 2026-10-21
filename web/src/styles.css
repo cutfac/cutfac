@@ -178,6 +178,13 @@
   *:hover {
     scrollbar-color: color-mix(in oklab, var(--foreground) 35%, transparent) transparent;
   }
+  /* The macOS title bar drags the window, but the controls in it still take clicks, and so do the
+     menus and lists that open over it. */
+  [data-slot="title-bar"]
+    :is(a, button, input, select, textarea, [role="button"], [role="combobox"]),
+  [data-slot$="-content"] {
+    -webkit-app-region: no-drag;
+  }
   html {
     @apply font-sans antialiased;
     color-scheme: dark;

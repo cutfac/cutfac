@@ -493,7 +493,6 @@ const DockContext = createContext<Dock | undefined>(undefined);
 const NO_STRIPS: EditorLayout["slots"] = { bottom: [], left: [], right: [] };
 
 interface EditorDockProps {
-  toolbar: ReactNode;
   /** The preview with what goes under it, or what shows in its place. */
   stage: ReactNode;
   /** The strips to place around the preview; none while there is nothing to preview. */
@@ -502,7 +501,7 @@ interface EditorDockProps {
   chat: ReactNode;
 }
 
-export function EditorDock({ toolbar, stage, strips, chat }: EditorDockProps) {
+export function EditorDock({ stage, strips, chat }: EditorDockProps) {
   const t = useMessages();
   const layout = useEditorLayout();
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -586,8 +585,7 @@ export function EditorDock({ toolbar, stage, strips, chat }: EditorDockProps) {
       minSize={below ? PANEL.stacked.min : mainMinWidth(columns)}
       className="flex min-h-0 min-w-0 flex-col"
     >
-      <section className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-        {toolbar}
+      <section className="flex min-h-0 flex-1 flex-col p-4 pt-1">
         <div className="relative flex min-h-0 flex-1">
           {strips === undefined ? (
             stage

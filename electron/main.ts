@@ -432,8 +432,8 @@ function createWindow(): BrowserWindow {
     // On macOS the board draws to the top edge and leaves a strip for the window controls, as
     // Finder and Notes do, instead of sitting under a separate gray title bar.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // macOS only; elsewhere the system title bar stays.
-    trafficLightPosition: { x: 16, y: 14 },
+    // macOS only; elsewhere the system title bar stays. Centred in the board's 48px title bar.
+    trafficLightPosition: { x: 18, y: 18 },
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
