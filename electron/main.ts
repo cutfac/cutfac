@@ -121,6 +121,9 @@ if (!app.requestSingleInstanceLock()) {
   process.on("SIGTERM", () => app.quit());
   process.on("SIGINT", () => app.quit());
 
+  // `bun run desktop:dev` rebuilt the preload script, which a reload runs in the page.
+  if (devUrl) process.on("SIGUSR2", () => window?.webContents.reloadIgnoringCache());
+
   ipcMain.handle(OPEN_WORKSPACE_CHANNEL, (event) => {
     assertFromApp(event);
 

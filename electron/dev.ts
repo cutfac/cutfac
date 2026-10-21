@@ -1,7 +1,7 @@
 /**
  * `bun run desktop:dev`: the desktop app on live code. Vite serves the board with hot reload, the
- * server restarts itself when src/ changes, and the app restarts when electron/ changes. Closing the
- * app or Ctrl+C stops everything.
+ * server restarts itself when src/ changes, and the app restarts when electron/ changes, or only
+ * reloads its page when the preload script alone did. Closing the app or Ctrl+C stops everything.
  */
 import { watch } from "node:fs";
 import path from "node:path";
@@ -134,9 +134,26 @@ async function restart(): Promise<void> {
   if (!stopping) await launch();
 }
 
+// The preload script runs in the page, so a new one needs only the page reloaded, which the app
+// does on SIGUSR2. Windows has no such signal, so the app restarts there.
+async function reloadPage(): Promise<void> {
+  if (stopping) return;
+
+  log("electron/preload.ts changed, rebuilding and reloading the page.");
+
+  // Not `electron.kill("SIGUSR2")`: Bun sends Linux's number for it, which is SIGSYS on macOS.
+  if ((await buildElectron()) && electron) process.kill(electron.pid, "SIGUSR2");
+}
+
+const reloadsPage = (files: ReadonlySet<string>) =>
+  process.platform !== "win32" && [...files].every((file) => file === "preload.ts");
+
 let restarts = Promise.resolve();
 
 let pending: ReturnType<typeof setTimeout> | undefined;
+
+/** The files changed since the last rebuild, so a burst of saves rebuilds once. */
+const changed = new Set<string>();
 
 // The app does not run these, so a change to them is no reason to restart it.
 const devScripts = new Set([path.basename(import.meta.path), "devApp.ts"]);
@@ -144,9 +161,13 @@ const devScripts = new Set([path.basename(import.meta.path), "devApp.ts"]);
 watch(path.join(root, "electron"), { recursive: true }, (_event, file) => {
   if (!file?.endsWith(".ts") || devScripts.has(file)) return;
 
+  changed.add(file);
   clearTimeout(pending);
   pending = setTimeout(() => {
-    restarts = restarts.then(restart);
+    const next = reloadsPage(changed) ? reloadPage : restart;
+
+    changed.clear();
+    restarts = restarts.then(next);
   }, limits.restartDebounceMs);
 });
 
