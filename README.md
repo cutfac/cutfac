@@ -311,7 +311,8 @@ off any agent run in progress. Closing the app or Ctrl+C stops everything.
 
 On macOS it runs as Cutfac Dev (`com.cutfac.dev`), a copy of Electron under its own bundle id, so
 the permissions you grant it, such as an agent's computer use, stay with it and not with every app
-built on Electron.
+built on Electron. Its icon is the Cutfac icon with a DEV band across the bottom, compiled with
+Xcode 26's `actool`; without it the app keeps Electron's icon.
 
 See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap, and
 [docs/templates.md](docs/templates.md) for the template spec.

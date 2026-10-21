@@ -90,7 +90,7 @@ async function electronExecutable(): Promise<string> {
   if (process.platform !== "darwin") return bin("electron");
 
   try {
-    return await devElectron(root);
+    return await devElectron(root, log);
   } catch (error) {
     log(`Could not set up ${DEV_APP.name}, running stock Electron: ${String(error)}`);
 

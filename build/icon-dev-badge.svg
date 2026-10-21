@@ -1,0 +1,8 @@
+<!-- The DEV band `desktop:dev` lays over the Cutfac icon (build/icon.icon) for Cutfac Dev.
+     The letters are paths: actool does not render SVG text. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect x="0" y="772" width="1024" height="252" fill="#f0503a"/>
+  <path d="M356.6 843.0H326.0V955.0H356.6A49.4 56.0 0 0 0 356.6 843.0Z" fill="none" stroke="#fff" stroke-width="38"/>
+  <path d="M555.0 843.0H474.0V955.0H555.0M474.0 899.0H543.0" fill="none" stroke="#fff" stroke-width="38"/>
+  <path d="M585.0 824.0H626.5L651.0 897.4L675.5 824.0H717.0L667.0 974.0H635.0Z" fill="#fff"/>
+</svg>
