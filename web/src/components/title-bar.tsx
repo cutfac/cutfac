@@ -45,11 +45,11 @@ export function TitleBar({ children }: { children: ReactNode }) {
         )}
       >
         {insetTitleBar ? (
-          // A faint line over the open sidebar's edge, down to the content card.
+          // A short, faint line over the open sidebar's edge, level with the title.
           <div
             aria-hidden
             className={cn(
-              "absolute top-2 bottom-0 left-56 w-px bg-border transition-opacity duration-200 ease-linear",
+              "absolute top-4 left-56 h-4 w-px bg-border transition-opacity duration-200 ease-linear",
               state === "collapsed" && "opacity-0",
             )}
           />
