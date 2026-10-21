@@ -2,7 +2,7 @@ import { ArchiveIcon, BookOpenIcon, ClapperboardIcon, MessageSquareIcon } from "
 import { useState } from "react";
 
 import { NewItemDialog } from "@/components/new-item-dialog";
-import { ErrorAlert } from "@/components/page";
+import { ErrorAlert, pageTop } from "@/components/page";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -94,7 +94,7 @@ export function Board() {
 
   if (error) {
     return (
-      <div className="px-6 pt-6">
+      <div className={`px-6 ${pageTop}`}>
         <ErrorAlert title={t.board.loadError} message={error} />
       </div>
     );
@@ -112,7 +112,7 @@ export function Board() {
   const columns = STATUSES.filter((s) => showArchived || s !== "archived");
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pt-6">
+    <div className={`flex min-h-0 flex-1 flex-col gap-4 px-6 ${pageTop}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold tracking-tight">{t.board.title}</h1>

@@ -8,16 +8,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { insetTitleBar } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 
-const pageVariants = cva("mx-auto flex w-full flex-col gap-6 px-6 py-6", {
+/** Room above a view's title. The macOS title bar strip above already gives the title most of it. */
+export const pageTop: string = insetTitleBar ? "pt-2" : "pt-6";
+
+const pageVariants = cva(`mx-auto flex w-full flex-col gap-6 px-6 pb-6 ${pageTop}`, {
   variants: {
     width: { narrow: "max-w-2xl", default: "max-w-5xl", wide: "max-w-7xl" },
-    // The title bar strip above already gives the title room.
-    belowTitleBar: { true: "pt-2" },
   },
   defaultVariants: { width: "default" },
 });
 
-interface PageProps extends Omit<VariantProps<typeof pageVariants>, "belowTitleBar"> {
+interface PageProps extends VariantProps<typeof pageVariants> {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -27,7 +28,7 @@ interface PageProps extends Omit<VariantProps<typeof pageVariants>, "belowTitleB
 /** A scrolling view's frame: a title row, then the content, centred at a readable width. */
 export function Page({ title, description, actions, width, children }: PageProps) {
   return (
-    <div className={pageVariants({ width, belowTitleBar: insetTitleBar })}>
+    <div className={pageVariants({ width })}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
