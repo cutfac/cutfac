@@ -113,16 +113,46 @@ writes the template from that. So step 5 asks for:
 Start runs the agent on all of it through the import the Templates view already runs, with the
 same consent rules; only the request changes, from "make this link usable here" to "make a
 template for this person, starting from this reference". Without a reference the agent starts from
-what it knows.
+what it knows. The agent may ask when a guess would likely make the wrong thing, such as which
+product on a website to promote; the question shows in step 6 next to the title, and the import
+already takes replies. The request leans it toward deciding: ask only what it can't settle
+reasonably, gather it into one message rather than a back-and-forth, and otherwise pick a sensible
+default. That is guidance in the request, not a hard limit. What it settled without asking goes in
+the template's README, where the user can change it.
 
-The purpose, platforms and material are saved in the workspace, in a file the user can edit on the
-board (`brief.md`, name to be settled). Every later agent run and the MCP tools read it, so the next
-template and every video start from the same context.
+The purpose, platforms and material are saved in the workspace as `brief.md` at its root, which the
+user can edit on the board. Every later agent run and the MCP tools read it, so the next template
+and every video start from the same context. The front matter holds what the app reads, the body is
+the user's own words:
+
+```markdown
+---
+platforms: [tiktok, shorts]
+material:
+  - https://example.com
+  - ~/Documents/Brand
+---
+
+Short videos that promote my app. Light and friendly.
+```
 
 The gallery is a list of links hosted on cutfac.com, which the app fetches, so it changes without a
 release as new examples appear. Each entry carries a title, a preview clip, a link and its license.
 It lists only references with a license that allows reuse; a link pasted in is the user's call. The
-core stays domain-agnostic: the gallery and the brief are data, and nothing in the app knows a
+preview clips are short cuts of each reference's own demo, hosted on cutfac.com with the source and
+license beside them, so the gallery doesn't break when a repository moves its files.
+
+It starts with references that are ready to use as they are, not collections the agent would have
+to search:
+
+| Reference                                                                           | What it is                                                                     | License |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------- |
+| [lemomo-ai/lemo-opuscar](https://github.com/lemomo-ai/lemo-opuscar)                 | A Claude Code skill with 51 film styles, each a prompt and a demo made in code | MIT     |
+| [Vincentwei1021/mg-styles-15](https://github.com/Vincentwei1021/mg-styles-15)       | 15 motion graphics styles, with prompts and source                             | MIT     |
+| [JohnHeibel/ClaudeAnimationBase](https://github.com/JohnHeibel/ClaudeAnimationBase) | A starter kit for hand-painted cartoon animation                               | MIT     |
+| [mexicat/pdoom-video](https://github.com/mexicat/pdoom-video)                       | A finished lyric music video, rendered locally                                 | MIT     |
+
+The core stays domain-agnostic: the gallery and the brief are data, and nothing in the app knows a
 niche.
 
 ### First video
@@ -146,6 +176,5 @@ what is missing, and how to fix it, from the tools it already calls.
 
 ## Open questions
 
-- The first entries in the gallery, and a preview clip for each.
-- The brief's file name and format, and where the board shows it.
-- How the import's request reads when it is a brief and a reference rather than one link.
+- Where the board shows `brief.md` for editing.
+- The exact request the import sends for a brief and a reference.
