@@ -63,8 +63,16 @@ declare global {
 
 export const desktop: CutfacDesktop | undefined = window.cutfacDesktop;
 
+const macApp = desktop?.platform.startsWith("macOS") ?? false;
+
 /**
  * The macOS app hides its title bar and keeps the window controls over the board's top-left
  * corner, so the board leaves a strip across its top for them and for dragging the window.
  */
-export const insetTitleBar: boolean = desktop?.platform.startsWith("macOS") ?? false;
+export const insetTitleBar: boolean = macApp;
+
+/**
+ * The macOS app draws the system's translucent sidebar material behind the whole window, so the
+ * board leaves its own background off and the sidebar shows the desktop through it, blurred.
+ */
+export const vibrantSidebar: boolean = macApp;

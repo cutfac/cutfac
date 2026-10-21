@@ -159,6 +159,13 @@
   --dock: oklch(0.7 0.16 255);
 }
 
+/* The macOS app, over the system's sidebar material (see desktop.ts): the sidebar paints nothing of
+   its own so the material shows, and its rows tint white the way Finder's do. */
+.dark[data-vibrancy] {
+  --sidebar: transparent;
+  --sidebar-accent: oklch(1 0 0 / 10%);
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -199,5 +206,9 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* The page leaves its background off over the macOS sidebar material; the board paints its own. */
+  [data-vibrancy] body {
+    @apply bg-transparent;
   }
 }

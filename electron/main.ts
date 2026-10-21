@@ -486,6 +486,12 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     // macOS only; elsewhere the system title bar stays. Centred in the board's 48px title bar.
     trafficLightPosition: { x: 18, y: 18 },
+    // macOS: the system's sidebar material behind the whole window, as Finder's has. The board
+    // leaves its own background off there, so its sidebar shows the desktop through it, blurred.
+    ...(process.platform === "darwin" && {
+      vibrancy: "sidebar",
+      backgroundColor: "#00000000",
+    }),
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
