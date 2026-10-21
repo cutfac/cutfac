@@ -1,27 +1,21 @@
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import type { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
-import { promisify } from "node:util";
 
 import { app } from "electron";
 
+import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.ts";
 import { HOST } from "./ports.ts";
-
-const PATH_MARKER = "__CUTFAC_PATH__";
 
 const limits = {
   healthTimeoutMs: 20_000,
   healthPollMs: 150,
   stopGraceMs: 3_000,
-  shellPathTimeoutMs: 5_000,
   outputTailLines: 40,
 };
-
-const execFileAsync = promisify(execFile);
 
 export interface Sidecar {
   url: string;
@@ -59,42 +53,33 @@ interface Running {
   drained: Promise<void>;
 }
 
-let loginPath: Promise<string> | undefined;
+let launchEnv: Promise<NodeJS.ProcessEnv> | undefined;
 
 /**
- * GUI apps on macOS start with a minimal PATH, but the server spawns claude, codex, ffmpeg and
- * yt-dlp, so ask the user's login shell what PATH a terminal would have.
+ * The packaged app gives the server its user's terminal environment and nothing from the
+ * environment it was launched with, so another program can't open it with variables that make
+ * the server, or the agents it runs, load their code under the app's permissions. From a checkout
+ * the app was started from the developer's own terminal or editor, so that is kept and only the
+ * PATH is widened.
  */
-export function resolveLoginPath(): Promise<string> {
-  loginPath ??= readLoginPath();
+function resolveServerEnv(): Promise<NodeJS.ProcessEnv> {
+  launchEnv ??= readServerEnv();
 
-  return loginPath;
+  return launchEnv;
 }
 
-async function readLoginPath(): Promise<string> {
-  const extras = ["/opt/homebrew/bin", "/usr/local/bin", path.join(homedir(), ".bun", "bin")];
-  const fallback = [process.env.PATH, ...extras].filter(Boolean).join(path.delimiter);
-  const shell = process.env.SHELL;
+async function readServerEnv(): Promise<NodeJS.ProcessEnv> {
+  // The desktop app ships for macOS only; elsewhere there's no login shell to ask.
+  if (process.platform === "win32") return process.env;
 
-  if (!shell || process.platform === "win32") return fallback;
+  const account = await readAccount();
+  const clean = cleanEnv(account, process.env);
+  const shell = account.shell ? await readShellEnv(account.shell, clean) : undefined;
+  const env = serverEnv(shell, clean);
 
-  try {
-    // Interactive shells may print banners or rc output, so the PATH is fenced by markers.
-    const { stdout } = await execFileAsync(
-      shell,
-      ["-ilc", `printf '${PATH_MARKER}%s${PATH_MARKER}' "$PATH"`],
-      { timeout: limits.shellPathTimeoutMs, encoding: "utf8" },
-    );
+  if (app.isPackaged) return env;
 
-    const [, value] = stdout.split(PATH_MARKER);
-
-    // The shell appends its additions to the PATH it inherited, so entries repeat.
-    return value ? [...new Set(value.split(path.delimiter))].join(path.delimiter) : fallback;
-  } catch (error) {
-    console.warn("[desktop] Could not read the login shell PATH, using a fallback:", error);
-
-    return fallback;
-  }
+  return { ...process.env, PATH: joinPath(process.env.PATH, env.PATH) };
 }
 
 function findExecutable(name: string, searchPath: string): string {
@@ -108,18 +93,16 @@ function findExecutable(name: string, searchPath: string): string {
 }
 
 /**
+ * The compiled binary in the packaged app, `bun src/cli.ts` from a checkout. From a checkout,
  * CUTFAC_SIDECAR points at any executable that speaks the sidecar CLI (used to test the shell
- * without the real server). Otherwise: the compiled binary in the packaged app, `bun src/cli.ts`
- * from a checkout.
+ * without the real server); the packaged app runs only its own.
  */
-function resolveLaunch(searchPath: string): Launch {
-  const override = process.env.CUTFAC_SIDECAR;
-
+function resolveLaunch(env: NodeJS.ProcessEnv): Launch {
   if (app.isPackaged) {
     const resources = process.resourcesPath;
 
     return {
-      command: override || path.join(resources, "bin", "cutfac"),
+      command: path.join(resources, "bin", "cutfac"),
       args: [],
       webDir: path.join(resources, "web"),
       watchFlags: [],
@@ -128,11 +111,12 @@ function resolveLaunch(searchPath: string): Launch {
 
   const root = app.getAppPath();
   const webDir = path.join(root, "dist", "web");
+  const override = process.env.CUTFAC_SIDECAR;
 
   if (override) return { command: override, args: [], webDir, watchFlags: [] };
 
   return {
-    command: findExecutable("bun", searchPath),
+    command: findExecutable("bun", env.PATH ?? ""),
     args: [path.join(root, "src", "cli.ts")],
     webDir,
     // Bun re-executes in place, so the process (and the app's handle on it) survives a reload.
@@ -150,10 +134,10 @@ function forward(stream: Readable, log: (line: string) => void, tail: string[]):
   });
 }
 
-function run(launch: Launch, args: string[], workspace: string, searchPath: string): Running {
+function run(launch: Launch, args: string[], workspace: string, env: NodeJS.ProcessEnv): Running {
   const child = spawn(launch.command, [...launch.args, ...args], {
     cwd: workspace,
-    env: { ...process.env, PATH: searchPath },
+    env,
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -245,14 +229,14 @@ export async function startSidecar({
   onCrash,
   watch,
 }: SidecarOptions): Promise<Sidecar> {
-  const searchPath = await resolveLoginPath();
-  const launch = resolveLaunch(searchPath);
+  const env = await resolveServerEnv();
+  const launch = resolveLaunch(env);
 
   // factory.yaml is what a workspace made before the rename to Cutfac calls it; serving renames it.
   const configs = ["cutfac.yaml", "factory.yaml"].map((name) => path.join(workspace, name));
 
   if (!configs.some((file) => existsSync(file))) {
-    const init = run(launch, ["init", workspace, "--no-connect"], workspace, searchPath);
+    const init = run(launch, ["init", workspace, "--no-connect"], workspace, env);
 
     await init.ended;
 
@@ -275,7 +259,7 @@ export async function startSidecar({
       launch.webDir,
     ],
     workspace,
-    searchPath,
+    env,
   );
 
   const url = `http://${HOST}:${port}/`;
