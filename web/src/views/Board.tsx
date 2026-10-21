@@ -421,7 +421,7 @@ function Gallery({
   );
 
   return (
-    <div className="@container -mx-2 min-h-0 flex-1 overflow-y-auto px-2 pt-1 pb-6">
+    <div className="@container -mx-2 min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-6">
       {tiles.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">{t.board.emptyColumn}</p>
       ) : null}
@@ -765,47 +765,50 @@ function Tile({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger
-        data-card={item.id}
-        data-selected={selected}
-        className="group/tile relative min-w-0"
-        onClick={(event) => {
-          // Shift or ⌘ picks the tile, or puts it back, instead of opening it.
-          if (!(event.shiftKey || modHeld(event))) return;
+      {/* The tint reaches a little past the tile, so it sits on a wrapper that the link covers too. */}
+      <div className="relative -m-2 min-w-0 rounded-3xl p-2 transition-colors hover:bg-muted/50 has-focus-visible:bg-muted/50 has-data-popup-open:bg-muted/50">
+        <ContextMenuTrigger
+          data-card={item.id}
+          data-selected={selected}
+          className="group/tile"
+          onClick={(event) => {
+            // Shift or ⌘ picks the tile, or puts it back, instead of opening it.
+            if (!(event.shiftKey || modHeld(event))) return;
 
-          event.preventDefault();
-          onToggle();
-        }}
-        onContextMenu={onMenu}
-      >
-        <div className="rounded-2xl transition group-hover/tile:shadow-md group-has-focus-visible/tile:shadow-md group-has-focus-visible/tile:outline-2 group-has-focus-visible/tile:outline-offset-2 group-has-focus-visible/tile:outline-ring group-data-popup-open/tile:shadow-md group-data-[selected=true]/tile:ring-2 group-data-[selected=true]/tile:ring-primary">
-          <Thumbnail item={item} large />
-        </div>
-        <div className="mt-2 flex flex-col gap-1.5 px-1">
-          {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
-          <a
-            href={href("item", item.id)}
-            data-card-link
-            className="line-clamp-2 text-sm leading-snug font-medium break-keep outline-none after:absolute after:inset-0"
-          >
-            {item.title}
-            {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
-          </a>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline">
-              <StatusDot status={item.status} />
-              {t.status[item.status]}
-            </Badge>
-            {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
-            {item.openFeedback > 0 ? (
-              <Badge variant="destructive">
-                <MessageSquareIcon data-icon="inline-start" />
-                {t.board.openFeedback(item.openFeedback)}
-              </Badge>
-            ) : null}
+            event.preventDefault();
+            onToggle();
+          }}
+          onContextMenu={onMenu}
+        >
+          <div className="rounded-2xl transition group-hover/tile:shadow-md group-has-focus-visible/tile:shadow-md group-has-focus-visible/tile:outline-2 group-has-focus-visible/tile:outline-offset-2 group-has-focus-visible/tile:outline-ring group-data-popup-open/tile:shadow-md group-data-[selected=true]/tile:ring-2 group-data-[selected=true]/tile:ring-primary">
+            <Thumbnail item={item} large />
           </div>
-        </div>
-      </ContextMenuTrigger>
+          <div className="mt-2 flex flex-col gap-1.5 px-1">
+            {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
+            <a
+              href={href("item", item.id)}
+              data-card-link
+              className="line-clamp-2 text-sm leading-snug font-medium break-keep outline-none after:absolute after:inset-0"
+            >
+              {item.title}
+              {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
+            </a>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline">
+                <StatusDot status={item.status} />
+                {t.status[item.status]}
+              </Badge>
+              {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
+              {item.openFeedback > 0 ? (
+                <Badge variant="destructive">
+                  <MessageSquareIcon data-icon="inline-start" />
+                  {t.board.openFeedback(item.openFeedback)}
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+        </ContextMenuTrigger>
+      </div>
       {menu}
     </ContextMenu>
   );
@@ -842,7 +845,7 @@ function ItemCard({
         data-card={item.id}
         data-selected={selected}
         data-faded={faded}
-        className="relative cursor-grab rounded-3xl transition **:cursor-grab hover:*:shadow-md has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
+        className="relative cursor-grab rounded-3xl transition **:cursor-grab hover:*:bg-muted/50 hover:*:shadow-md has-focus-visible:*:bg-muted/50 has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:bg-muted/50 *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
       >
         <ContextMenuTrigger
           render={<Card size="sm" />}
