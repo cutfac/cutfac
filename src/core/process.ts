@@ -1,4 +1,4 @@
-import { Config, Effect, Option, Predicate, Stream } from "effect";
+import { Config, Effect, FileSystem, Option, Predicate, Stream } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -33,6 +33,13 @@ export const which = (name: string): Effect.Effect<Option.Option<string>> =>
       }),
     );
   });
+
+/** Where the program at `bin` really lives, past the links that put it on PATH; `bin` if unreadable. */
+export const realProgram = Effect.fnUntraced(function* (bin: string) {
+  const fs = yield* FileSystem.FileSystem;
+
+  return yield* fs.realPath(bin).pipe(Effect.orElseSucceed(() => bin));
+});
 
 export const isInstalled = (name: string): Effect.Effect<boolean> =>
   Effect.map(which(name), Option.isSome);

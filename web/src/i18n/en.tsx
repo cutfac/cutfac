@@ -301,6 +301,12 @@ export const en = {
     connecting: "Connecting…",
     connect: "Connect",
     notInstalled: "Not installed",
+    agentOutdated: (agent: string, version: string, minimum: string, command: ReactNode) => (
+      <>
+        {agent} {version} is older than {minimum}, the oldest version Cutfac supports, so some
+        things may not work. Update it by running {command} in a terminal.
+      </>
+    ),
   },
   item: {
     openError: "Cannot open this item",

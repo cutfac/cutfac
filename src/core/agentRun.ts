@@ -28,6 +28,7 @@ import {
   mcpLaunch,
   runMcpConfig,
 } from "./agents.ts";
+import { detectAgentRelease, unreadableOutputMessage } from "./agentVersion.ts";
 import {
   baselineMillis,
   beginEdit,
@@ -472,11 +473,15 @@ interface Progress {
   readonly error: string | undefined;
   /** The session the agent reported, once it has been saved to the item. */
   readonly session: string | undefined;
+  /** Whether any line gave a session or a reply, which says the output could be read at all. */
+  readonly understood: boolean;
 }
 
 interface Attempt extends Progress {
   readonly code: number;
   readonly stderr: string;
+  /** The agent ended well but said nothing that could be read: its output has likely changed. */
+  readonly unreadable: boolean;
 }
 
 /** Where a conversation keeps its session; `undefined` forgets it. */
@@ -502,6 +507,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
     reply: "",
     error: undefined,
     session: storedSession,
+    understood: false,
   });
 
   const onLine = Effect.fnUntraced(function* (line: string) {
@@ -517,6 +523,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
       reply: parsed.reply ?? state.reply,
       error: parsed.error ?? state.error,
       session: parsed.sessionId ?? state.session,
+      understood: state.understood || parsed.sessionId !== undefined || parsed.reply !== undefined,
     }));
   });
 
@@ -544,7 +551,19 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
     }),
   ).pipe(Effect.catchTag("PlatformError", (error) => Effect.fail(spawnFailure(agent)(error))));
 
-  const attempt: Attempt = { ...(yield* Ref.get(progress)), ...exit };
+  const read = yield* Ref.get(progress);
+
+  // An exit code of 0 with nothing read is a change in the agent's output, not a quiet success.
+  const unreadable = exit.code === 0 && read.error === undefined && !read.understood;
+
+  const attempt: Attempt = {
+    ...read,
+    ...exit,
+    error: unreadable
+      ? unreadableOutputMessage(agent, yield* detectAgentRelease(invocation.command))
+      : read.error,
+    unreadable,
+  };
 
   return attempt;
 });
@@ -591,7 +610,10 @@ export const converse = Effect.fnUntraced(function* <R>(conversation: Conversati
 
   // A resumed session the agent no longer has fails before it reports any session: start fresh.
   const staleSession =
-    stored !== undefined && first.session === stored && failureOf(agent, first) !== undefined;
+    stored !== undefined &&
+    first.session === stored &&
+    !first.unreadable &&
+    failureOf(agent, first) !== undefined;
 
   const final = staleSession ? yield* Effect.andThen(save(undefined), attempt(undefined)) : first;
   const result: TurnResult = { reply: final.reply, failure: failureOf(agent, final) };

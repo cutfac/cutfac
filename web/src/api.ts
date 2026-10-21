@@ -568,6 +568,10 @@ export interface AgentStatus {
   efforts: string[];
   /** The name of the model the agent runs when none is picked, such as `Sonnet 5`, if known. */
   defaultModel?: string;
+  /** The release the agent's CLI reports, if it does. */
+  version?: string;
+  /** Set when that release is older than Cutfac supports: the oldest one that is, and how to update. */
+  outdated?: { minimum: string; update: string };
 }
 
 export interface AgentConnection {

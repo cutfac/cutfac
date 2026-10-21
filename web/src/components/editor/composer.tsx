@@ -15,6 +15,7 @@ import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
+import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dropzone } from "@/components/ui/dropzone";
@@ -596,6 +597,9 @@ export function Composer({
           </InputGroupAddon>
         </InputGroup>
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+        {status === undefined ? null : (
+          <OutdatedAgentNote status={status} className="px-1 text-xs text-muted-foreground" />
+        )}
       </div>
     </Dropzone>
   );

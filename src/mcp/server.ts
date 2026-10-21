@@ -14,6 +14,7 @@ import type { ChildProcessSpawner } from "effect/process";
 
 import { version } from "../../package.json" with { type: "json" };
 import { SERVER_NAME } from "../core/agents.ts";
+import { agentVersionNotices } from "../core/agentVersion.ts";
 import { resolveEdit, saveVariant } from "../core/edits.ts";
 import {
   CommandFailed,
@@ -611,7 +612,11 @@ const handlers = CutfacToolkit.toLayer(
                 })),
               ),
               openFeedback: feedback.length,
-              notices: [...skillNotices(yield* absCopies(copies)), ...learnNotices(learned, about)],
+              notices: [
+                ...skillNotices(yield* absCopies(copies)),
+                ...learnNotices(learned, about),
+                ...(yield* agentVersionNotices()),
+              ],
               freeVersion: freeVersionNote(plan),
             };
           }),

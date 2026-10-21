@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { Schema } from "effect";
 
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
 
 const CLI = join(import.meta.dir, "../src/cli.ts");
 
@@ -157,7 +157,14 @@ function startServer(root: string, feedbackUrl: string, env: Record<string, stri
 
 let t: TestWorkspace;
 
+let fakes: FakeAgents;
+
 let server: ReturnType<typeof startServer>;
+
+/** The environment that puts the fake agent CLIs in `agents` ahead of any real ones on PATH. */
+const withAgents = (agents: FakeAgents) => ({
+  PATH: `${join(agents.dir, "bin")}:${process.env["PATH"] ?? ""}`,
+});
 
 /** What the server sent to the Cutfac team, caught here instead of reaching cutfac.com. */
 const teamFeedback: URLSearchParams[] = [];
@@ -174,7 +181,12 @@ const site = Bun.serve({
 
 beforeAll(async () => {
   t = await makeWorkspace("mcp");
-  server = startServer(t.root, new URL("/api/feedback", site.url).href);
+  fakes = await makeFakeAgents();
+
+  // Agents that are up to date, so the notices below do not depend on what is installed here.
+  await fakes.bin("claude", 'echo "99.0.0 (Claude Code)"\n');
+  await fakes.bin("codex", 'echo "codex-cli 99.0.0"\n');
+  server = startServer(t.root, new URL("/api/feedback", site.url).href, withAgents(fakes));
 
   await server.initialize();
   // The server is a fresh Bun process; on a busy machine it takes seconds to start.
@@ -184,6 +196,7 @@ afterAll(async () => {
   server.child.kill();
   await server.child.exited;
   await site.stop();
+  await fakes.remove();
   await t.remove();
 });
 
@@ -260,6 +273,27 @@ test("sends feedback with the agent that asked and the version of this build", a
   expect(sent?.get("agent")).toBe("test 0");
   expect(sent?.get("version")).toEndWith("-dev");
 }, 20_000);
+
+test("tells the agent when an installed agent is too old, and how to update it", async () => {
+  const old = await makeFakeAgents();
+
+  await old.bin("claude", 'echo "2.1.1 (Claude Code)"\n');
+  await old.bin("codex", 'echo "codex-cli 99.0.0"\n');
+  const other = startServer(t.root, new URL("/api/feedback", site.url).href, withAgents(old));
+
+  try {
+    await other.initialize();
+    const { notices } = await other.call("workspace_overview", {}, Overview);
+
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain("Claude Code 2.1.1");
+    expect(notices[0]).toContain("`claude update`");
+  } finally {
+    other.child.kill();
+    await other.child.exited;
+    await old.remove();
+  }
+}, 30_000);
 
 test("keeps the workspace skill current and tells the agent about an edited copy", async () => {
   const bundled = await readFile(join(import.meta.dir, "../skills/cutfac/SKILL.md"), "utf8");

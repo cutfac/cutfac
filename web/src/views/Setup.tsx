@@ -2,6 +2,7 @@ import { CheckCircle2Icon, CheckIcon, FolderOpenIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { ErrorAlert, Page } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -154,6 +155,7 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
               ? t.setup.agentFound
               : t.setup.agentMissing}
         </ItemDescription>
+        <OutdatedAgentNote status={status} className="text-xs text-muted-foreground" />
         {outcome ? (
           <p className={`text-xs ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}>
             {outcome.detail}

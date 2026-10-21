@@ -1,5 +1,6 @@
 import { Config, Effect, Option, Path, Schema } from "effect";
 
+import { type OutdatedAgent, detectAgentRelease, outdatedAgent } from "./agentVersion.ts";
 import { CommandFailed, WorkspaceError } from "./errors.ts";
 import {
   type AgentModels,
@@ -10,7 +11,7 @@ import {
   codexDefaultModel,
   codexModels,
 } from "./models.ts";
-import { isInstalled, run, which } from "./process.ts";
+import { run, which } from "./process.ts";
 import type { AgentName } from "./schema.ts";
 import { Workspace, slugify } from "./workspace.ts";
 
@@ -36,6 +37,10 @@ export interface AgentStatus extends AgentModels {
   readonly agent: AgentName;
   readonly installed: boolean;
   readonly connected: boolean;
+  /** The release the CLI reports, when it does. */
+  readonly version?: string | undefined;
+  /** Set when that release is older than Cutfac supports, with how to update it. */
+  readonly outdated?: OutdatedAgent | undefined;
 }
 
 export const SERVER_NAME = "cutfac";
@@ -385,10 +390,11 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
     Effect.orElseSucceed(() => false),
   );
 
+  const claude = yield* which("claude");
   const codex = yield* which("codex");
 
-  const [codexConnected, codexOffers] = yield* Option.match(codex, {
-    onNone: () => Effect.succeed([false, NO_MODELS] as const),
+  const codexStatus = Option.match(codex, {
+    onNone: () => Effect.succeed([false, NO_MODELS, undefined] as const),
     onSome: (bin) =>
       Effect.all(
         [
@@ -406,20 +412,38 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
             ...offers,
             defaultModel: codexDefaultModel(offers, configured),
           })),
+          detectAgentRelease(bin),
         ],
         { concurrency: "unbounded" },
       ),
   });
 
+  const [[codexConnected, codexOffers, codexRelease], claudeRelease] = yield* Effect.all(
+    [
+      codexStatus,
+      Option.match(claude, { onNone: () => Effect.undefined, onSome: detectAgentRelease }),
+    ],
+    { concurrency: "unbounded" },
+  );
+
   const status: ReadonlyArray<AgentStatus> = [
     {
       agent: "claude",
-      installed: yield* isInstalled("claude"),
+      installed: Option.isSome(claude),
       connected: claudeConnected,
+      version: claudeRelease?.version,
+      outdated: outdatedAgent("claude", claudeRelease),
       ...CLAUDE_MODELS,
       defaultModel: yield* claudeDefaultModel(),
     },
-    { agent: "codex", installed: Option.isSome(codex), connected: codexConnected, ...codexOffers },
+    {
+      agent: "codex",
+      installed: Option.isSome(codex),
+      connected: codexConnected,
+      version: codexRelease?.version,
+      outdated: outdatedAgent("codex", codexRelease),
+      ...codexOffers,
+    },
   ];
 
   return status;

@@ -285,6 +285,12 @@ export const ko: Messages = {
     connecting: "연결하는 중…",
     connect: "연결",
     notInstalled: "설치 안 됨",
+    agentOutdated: (agent, version, minimum, command) => (
+      <>
+        {agent} {version}은(는) 컷팩이 지원하는 최소 버전인 {minimum}보다 낮아서 일부 기능이 제대로
+        동작하지 않을 수 있어요. 터미널에서 {command}을(를) 실행해 업데이트해 주세요.
+      </>
+    ),
   },
   item: {
     openError: "이 아이템을 열 수 없어요",
