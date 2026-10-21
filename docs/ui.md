@@ -58,3 +58,56 @@ Sources:
   window drag regions conflict with text selection.
 - MDN, [user-select](https://developer.mozilla.org/en-US/docs/Web/CSS/user-select): how `auto`
   inherits `none` from its parent and how an explicit `text` opts back in.
+
+## Cursor and hover
+
+Native apps keep the arrow over what you click: a button, a tab, a sidebar row, a menu item, a card.
+The hand means one thing there, a link to a page or a document, usually set in text. A hand over
+every button reads as a web page.
+
+So the cursor doesn't tell people what they can click; the hover does. Everything that acts on a
+click changes when the pointer reaches it. The cursor changes only where the pointer does something
+other than click: drag a thing, select text, aim at a spot, resize an edge.
+
+| Cursor              | Over                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Arrow               | Buttons, toggles, tabs, menu items, sidebar rows, the cards and tiles that open on a click, and links outside of prose |
+| Hand                | Links inside prose (`.typeset`: chat messages, guides), and that prose's disclosure toggles                            |
+| Text                | Text that selects, text fields, and the timeline, where a drag marks a range                                           |
+| Crosshair           | The stage, where a drag marks a spot in the frame                                                                      |
+| Grab, then grabbing | What moves with a drag: board cards, the editor's panel grips, a drawer's handle                                       |
+| Resize              | Edges that resize, such as the sidebar's                                                                               |
+| Zoom in             | An image that opens full size, such as a check's sheet of frames                                                       |
+| Not allowed         | Disabled fields. A disabled button fades instead and lets the pointer through.                                         |
+
+How it is built:
+
+- `a` is `cursor: default` (`web/src/styles.css`), and `web/src/typeset.css` gives links in prose
+  their hand back. Tailwind v4 already leaves buttons on the arrow. Don't add `cursor-pointer`.
+- The shared controls in `web/src/components/ui/` already change on hover: buttons, sidebar rows,
+  menu items. Build with them and the hover comes along.
+- Something clickable built by hand, such as a card or a tile, tints with `bg-muted/50`, the ghost
+  button's hover. Cards and tiles also lift with `shadow-md`.
+- The same tint shows under keyboard focus (`focus-visible:`, or `has-focus-visible:` when the focus
+  lands on a link inside) and while the thing's menu is open (`data-popup-open:`). The keyboard and
+  a right click then show what the pointer would.
+- A component from `web/src/components/ui/` owns its colors, and the lint rejects a tint passed to
+  it. Tint a plain wrapper instead: the gallery tile's wrapper reaches 8px past the tile, and the
+  board card's wrapper tints the card inside it with `hover:*:bg-muted/50`.
+- Where a special cursor already names what a click does, it can stand in for the tint, as the zoom
+  cursor does on a check's image.
+
+Sources:
+
+- Apple, Human Interface Guidelines, [Pointing devices](https://developer.apple.com/design/human-interface-guidelines/pointing-devices):
+  on macOS the pointing hand means the content under it links to a webpage, a document or another
+  item.
+- Microsoft, [Mouse and pointers](https://learn.microsoft.com/en-us/windows/win32/uxguide/inter-mouse):
+  the hand is for text and graphic links only. Command buttons don't need it, and secondary
+  controls may show that they're clickable on hover.
+- Tailwind CSS, [Upgrade guide](https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor):
+  v4 moved buttons to the default cursor, as the browser has it.
+- Radix Themes, [Cursors](https://www.radix-ui.com/themes/docs/theme/cursors): controls that don't
+  link to another page keep the arrow by default; disabled ones get an explicit disabled cursor.
+- Adam Silver, [Buttons shouldn't have a hand cursor](https://adamsilver.io/blog/buttons-shouldnt-have-a-hand-cursor/):
+  the hand marks links, and a button already looks clickable.

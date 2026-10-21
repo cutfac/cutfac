@@ -33,6 +33,8 @@ Engineering:
 - Keep `src/core` free of HTTP and MCP concerns; MCP tools and API routes are thin adapters.
 - Board text doesn't select by default, as in a native app. Content people would copy (chat, guides,
   errors, paths) opts in by wrapping it in `<SelectionArea>`; see `docs/ui.md`.
+- Clickable things keep the arrow cursor, as in a native app, and show that they're clickable with a
+  hover tint instead. Don't add `cursor-pointer`; see `docs/ui.md`.
 - Workspace files are the source of truth. Do not add a database without a demonstrated need.
 - The core must stay domain-agnostic; product- or niche-specific logic belongs in a workspace.
 - Add a focused `bun:test` for parsing, status mapping, verification, and persistence changes.
