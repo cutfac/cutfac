@@ -27,6 +27,11 @@
 @theme {
   /* Dims everything around the marked box, so the area the agent will edit stands out. */
   --shadow-spotlight: 0 0 0 9999px oklch(0 0 0 / 0.35);
+  /* Body text at 13px, the size desktop apps use, instead of the web's 14px. */
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: calc(1.125 / 0.8125);
+  /* Hovers and state changes settle quickly instead of easing in and out. */
+  --default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
 
 @theme inline {
@@ -65,13 +70,15 @@
   --color-selection: var(--selection);
   --color-selection-foreground: var(--selection-foreground);
   --color-dock: var(--dock);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Tighter than the style's own scale, closer to a desktop app's: rows and menu items 6px,
+     buttons, fields and menus 8px, and cards, popovers and dialogs 10px. */
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.625);
+  --radius-lg: calc(var(--radius) * 0.75);
+  --radius-xl: calc(var(--radius) * 0.75);
+  --radius-2xl: var(--radius);
+  --radius-3xl: calc(var(--radius) * 1.25);
+  --radius-4xl: calc(var(--radius) * 1.25);
 }
 
 :root {
@@ -98,7 +105,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);

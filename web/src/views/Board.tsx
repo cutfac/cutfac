@@ -369,7 +369,7 @@ function BoardColumns({
       onDragCancel={() => setDragged(undefined)}
       onDragEnd={drop}
     >
-      <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-6">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-6">
         {columns.map(({ status, cards }) => (
           <Column
             key={status}
@@ -416,11 +416,11 @@ function BoardColumns({
 
 function BoardSkeleton() {
   return (
-    <div className="flex min-h-0 flex-1 gap-4 overflow-hidden pb-6" aria-busy="true">
+    <div className="flex min-h-0 flex-1 gap-3 overflow-hidden pb-6" aria-busy="true">
       {[3, 2, 1].map((count) => (
         <div
           key={count}
-          className="flex max-w-96 min-w-72 flex-1 flex-col gap-3 rounded-3xl bg-muted/40 p-3"
+          className="flex max-w-96 min-w-72 flex-1 flex-col gap-2 rounded-3xl bg-muted/40 p-2"
         >
           <Skeleton className="h-5 w-24" />
           {Array.from({ length: count }, (_, n) => (
@@ -452,13 +452,13 @@ function Column({
       ref={setNodeRef}
       aria-label={t.status[status]}
       data-over={isOver}
-      className="flex max-w-96 min-w-72 flex-1 flex-col gap-3 rounded-3xl bg-muted/40 p-3 transition-colors data-[over=true]:bg-muted data-[over=true]:ring-2 data-[over=true]:ring-ring/40"
+      className="flex max-w-96 min-w-72 flex-1 flex-col gap-2 rounded-3xl bg-muted/40 p-2 transition-colors data-[over=true]:bg-muted data-[over=true]:ring-2 data-[over=true]:ring-ring/40"
     >
       <h2 className="flex items-center justify-between px-1 text-sm font-medium">
         {t.status[status]}
         <Badge variant="secondary">{count}</Badge>
       </h2>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <div className="-m-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-1">
         {count === 0 ? (
           <p className="px-1 py-6 text-center text-xs text-muted-foreground">
             {t.board.emptyColumn}
