@@ -52,7 +52,10 @@ export const ko: Messages = {
     moveTo: "옮기기",
     showFolder: "폴더 보기",
     archive: "보관",
-    archived: (title) => `"${title}"을(를) 보관했어요`,
+    archived: (titles) =>
+      titles.length === 1
+        ? `"${titles[0]}"을(를) 보관했어요`
+        : `영상 ${titles.length}개를 보관했어요`,
     undo: "실행 취소",
   },
   language: {
@@ -75,6 +78,8 @@ export const ko: Messages = {
     emptyBody: "제목을 정하고 템플릿을 고르세요. 결과는 여기서 검토하고 수정을 요청하면 돼요.",
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,
+    selected: "선택됨",
+    selectedCount: (count) => `영상 ${count}개 선택됨`,
     learnHint: {
       title: "에이전트에게 제품을 알려 주세요",
       body: "앱이나 사이트 링크를 붙여 넣거나 프로젝트 폴더를 가리키면, 다음 영상부터 제품에 더 잘 맞춰 만들어요.",

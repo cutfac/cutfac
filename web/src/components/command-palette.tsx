@@ -21,7 +21,7 @@ import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { APP_KEYS, onAppCommand, type AppCommand } from "../lib/app-commands.ts";
 import { MOD_KEY } from "../lib/edit-commands.ts";
-import { archiveItem } from "../lib/items.ts";
+import { archiveItems } from "../lib/items.ts";
 
 function go(view: string, id?: string) {
   location.hash = href(view, id);
@@ -80,7 +80,7 @@ function PaletteCommands({ editing, onChoose }: PaletteCommandsProps) {
         {/* After the actions, so ⌘K then Enter never archives. */}
         {current !== undefined && current.status !== "archived" ? (
           <CommandGroup heading={t.palette.thisVideo}>
-            <CommandItem onSelect={choose(() => void archiveItem(current, t))}>
+            <CommandItem onSelect={choose(() => void archiveItems([current], t))}>
               <ArchiveIcon />
               {t.itemActions.archive}
             </CommandItem>

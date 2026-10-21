@@ -16,12 +16,15 @@ export const moveItem = (id: string, status: Status) =>
     },
   );
 
-/** Archive a video, with a toast that puts it back where it was. */
-export const archiveItem = (item: ItemSummary, t: Messages) =>
-  api.updateItem(item.id, { status: "archived" }).then(
+/** Archive videos, with a toast that puts them back where they were. */
+export const archiveItems = (items: readonly ItemSummary[], t: Messages) =>
+  Promise.all(items.map((item) => api.updateItem(item.id, { status: "archived" }))).then(
     () =>
-      void toast.success(t.itemActions.archived(item.title), {
-        action: { label: t.itemActions.undo, onClick: () => void moveItem(item.id, item.status) },
+      void toast.success(t.itemActions.archived(items.map((item) => item.title)), {
+        action: {
+          label: t.itemActions.undo,
+          onClick: () => void Promise.all(items.map((item) => moveItem(item.id, item.status))),
+        },
       }),
     sendFailed,
   );

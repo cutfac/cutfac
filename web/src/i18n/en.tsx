@@ -64,7 +64,8 @@ export const en = {
     moveTo: "Move to",
     showFolder: "Show folder",
     archive: "Archive",
-    archived: (title: string) => `Archived "${title}"`,
+    archived: (titles: readonly string[]) =>
+      titles.length === 1 ? `Archived "${titles[0]}"` : `Archived ${titles.length} videos`,
     undo: "Undo",
   },
   language: {
@@ -88,6 +89,8 @@ export const en = {
       "Give it a title and pick a template. You review the result here and ask for changes.",
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
+    selected: "selected",
+    selectedCount: (count: number) => `${count} videos selected`,
     learnHint: {
       title: "Teach your agent about your product",
       body: "Paste a link to your app or site, or point at a project folder. The next videos will fit it better.",

@@ -20,7 +20,7 @@ import {
   PlusIcon,
   SquarePenIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 
 import { StatusDot } from "@/components/app-sidebar";
 import { NewItemTrigger } from "@/components/new-item-dialog";
@@ -32,7 +32,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuRadioGroup,
   ContextMenuRadioItem,
   ContextMenuSeparator,
@@ -63,8 +65,10 @@ import { api, fileUrl, STATUSES, type ItemSummary, type Status } from "../api.ts
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { stepCard, stepOf } from "../lib/board-keys.ts";
 import { QUIET_DRAG } from "../lib/drag.ts";
-import { archiveItem, moveItem, revealItem } from "../lib/items.ts";
+import { modHeld } from "../lib/edit-commands.ts";
+import { archiveItems, moveItem, revealItem } from "../lib/items.ts";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
@@ -127,9 +131,6 @@ export function Board() {
   const { data: formats } = useLive("formats", api.formats);
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
-  const [dragged, setDragged] = useState<ItemSummary>();
-  // A press that moves a little is still a click on the card.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   if (error) {
     return (
@@ -151,18 +152,15 @@ export function Board() {
   const visible = items?.filter((i) => format === null || i.format === format) ?? [];
   const columns = STATUSES.filter((s) => showArchived || s !== "archived");
 
-  function drop({ active, over }: DragEndEvent) {
-    setDragged(undefined);
+  /** Videos go on top of their new column at once; the board loads them again once their files have changed. */
+  function move(moving: readonly ItemSummary[], status: Status) {
+    const ids = new Set(moving.flatMap((i) => (i.status === status ? [] : [i.id])));
 
-    const item = items?.find((i) => i.id === active.id);
-    const status = STATUSES.find((s) => s === over?.id);
+    if (items === undefined || ids.size === 0) return;
 
-    if (items === undefined || item === undefined || status === undefined) return;
-
-    // On top of its new column at once; the board loads it again once its file has changed.
-    setData(items.map((i) => (i.id === item.id ? { ...i, status, updatedAt: Date.now() } : i)));
-    void moveItem(item.id, status).then((moved) => {
-      if (!moved) reload();
+    setData(items.map((i) => (ids.has(i.id) ? { ...i, status, updatedAt: Date.now() } : i)));
+    void Promise.all([...ids].map((id) => moveItem(id, status))).then((moved) => {
+      if (moved.includes(false)) reload();
     });
   }
 
@@ -234,50 +232,185 @@ export function Board() {
           </Empty>
         </div>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={pointerWithin}
-          // A card's menu moves it without a mouse.
-          accessibility={QUIET_DRAG}
-          onDragStart={({ active }: DragStartEvent) =>
-            setDragged(items.find((i) => i.id === active.id))
-          }
-          onDragCancel={() => setDragged(undefined)}
-          onDragEnd={drop}
-        >
-          <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-6">
-            {columns.map((status) => {
-              const cards = visible
-                .filter((i) => i.status === status)
-                .toSorted((a, b) => b.updatedAt - a.updatedAt);
-
-              return (
-                <Column
-                  key={status}
-                  status={status}
-                  count={cards.length}
-                  // A card let go over its own column stays put.
-                  disabled={dragged?.status === status}
-                >
-                  {cards.map((item) => (
-                    <ItemCard key={item.id} item={item} formatTitle={formatTitle} />
-                  ))}
-                </Column>
-              );
-            })}
-          </div>
-          <DragOverlay dropAnimation={null}>
-            {dragged ? (
-              <div className="cursor-grabbing *:shadow-lg">
-                <Card size="sm">
-                  <CardBody item={dragged} formatTitle={formatTitle} overlay />
-                </Card>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        <BoardColumns items={visible} statuses={columns} formatTitle={formatTitle} onMove={move} />
       )}
     </div>
+  );
+}
+
+/** The card an element is on, by its id. */
+const cardOf = (element: Element | null) =>
+  element?.closest<HTMLElement>("[data-card]")?.dataset.card;
+
+/** Focus a card's link, and scroll the card into view. */
+function focusCard(id: string) {
+  const card = document.querySelector(`[data-card="${CSS.escape(id)}"]`);
+
+  card?.querySelector<HTMLElement>("[data-card-link]")?.focus({ preventScroll: true });
+  card?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/**
+ * The columns of cards. A card drags to another column. The arrow keys, or J and K, step through
+ * the cards; Shift with them, or Shift or ⌘ with a click, picks several, and a drag or a right
+ * click on a picked card takes all of them.
+ */
+function BoardColumns({
+  items,
+  statuses,
+  formatTitle,
+  onMove,
+}: {
+  items: ItemSummary[];
+  statuses: Status[];
+  formatTitle: (id: string) => string;
+  onMove: (items: readonly ItemSummary[], status: Status) => void;
+}) {
+  const t = useMessages();
+  const [dragged, setDragged] = useState<ItemSummary>();
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  // A press that moves a little is still a click on the card.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const columns = statuses.map((status) => ({
+    status,
+    cards: items.filter((i) => i.status === status).toSorted((a, b) => b.updatedAt - a.updatedAt),
+  }));
+
+  const picked = items.filter((i) => selected.has(i.id));
+  // A drag or a menu on a picked card takes all the picked ones; on any other card, that card.
+  const takenBy = (item: ItemSummary) => (selected.has(item.id) ? picked : [item]);
+  const moving = dragged === undefined ? [] : takenBy(dragged);
+
+  const onKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || dragged) return;
+
+    const focused = document.activeElement;
+    const from = cardOf(focused);
+
+    // Only from a card or from nowhere, so fields, menus and dialogs keep their keys.
+    if (from === undefined && focused !== null && focused !== document.body) return;
+
+    if (event.code === "Escape") {
+      if (selected.size === 0) return;
+
+      event.preventDefault();
+      setSelected(new Set());
+
+      return;
+    }
+
+    const step = stepOf(event.code);
+
+    if (step === undefined) return;
+
+    event.preventDefault();
+
+    const to = stepCard(
+      columns.map(({ cards }) => cards.map((i) => i.id)),
+      from,
+      step,
+    );
+
+    if (to === undefined) return;
+
+    if (event.shiftKey)
+      setSelected((current) => new Set([...current, ...(from ? [from] : []), to]));
+
+    focusCard(to);
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey(event);
+
+    addEventListener("keydown", listener);
+
+    return () => removeEventListener("keydown", listener);
+  }, []);
+
+  function toggle(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+
+      if (!next.delete(id)) next.add(id);
+
+      return next;
+    });
+  }
+
+  function startDrag({ active }: DragStartEvent) {
+    const item = items.find((i) => i.id === active.id);
+
+    if (item !== undefined && !selected.has(item.id)) setSelected(new Set());
+
+    setDragged(item);
+  }
+
+  function drop({ over }: DragEndEvent) {
+    const status = STATUSES.find((s) => s === over?.id);
+
+    setDragged(undefined);
+
+    if (status !== undefined) onMove(moving, status);
+  }
+
+  function archive(archiving: readonly ItemSummary[]) {
+    setSelected(new Set());
+    void archiveItems(archiving, t);
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={pointerWithin}
+      // A card's menu moves it without a mouse.
+      accessibility={QUIET_DRAG}
+      onDragStart={startDrag}
+      onDragCancel={() => setDragged(undefined)}
+      onDragEnd={drop}
+    >
+      <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-6">
+        {columns.map(({ status, cards }) => (
+          <Column
+            key={status}
+            status={status}
+            count={cards.length}
+            // Cards let go over the column they are all in stay put.
+            disabled={moving.length > 0 && moving.every((i) => i.status === status)}
+          >
+            {cards.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                formatTitle={formatTitle}
+                selected={selected.has(item.id)}
+                faded={moving.includes(item)}
+                onToggle={() => toggle(item.id)}
+                // A right click outside the picked cards is about that card alone.
+                onMenu={() => {
+                  if (!selected.has(item.id)) setSelected(new Set());
+                }}
+                menu={<ItemMenu items={takenBy(item)} onMove={onMove} onArchive={archive} />}
+              />
+            ))}
+          </Column>
+        ))}
+      </div>
+      <DragOverlay dropAnimation={null}>
+        {dragged ? (
+          <div className="relative cursor-grabbing">
+            <div className="*:shadow-lg">
+              <Card size="sm">
+                <CardBody item={dragged} formatTitle={formatTitle} overlay />
+              </Card>
+            </div>
+            {moving.length > 1 ? (
+              <Badge className="absolute -top-2 -right-2">{moving.length}</Badge>
+            ) : null}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -405,10 +538,12 @@ function CardBody({
   item,
   formatTitle,
   overlay = false,
+  selected = false,
 }: {
   item: ItemSummary;
   formatTitle: (id: string) => string;
   overlay?: boolean;
+  selected?: boolean;
 }) {
   const t = useMessages();
   const title = "line-clamp-2 text-sm leading-snug font-medium";
@@ -424,9 +559,11 @@ function CardBody({
             // The link's ::after stretches over the whole card, so the card is one click target.
             <a
               href={href("item", item.id)}
+              data-card-link
               className={`${title} outline-none after:absolute after:inset-0 after:rounded-3xl`}
             >
               {item.title}
+              {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
             </a>
           )}
           {item.hook ? (
@@ -447,14 +584,26 @@ function CardBody({
   );
 }
 
+/** A card on the board, with its menu; a picked card has a ring, and the focused one an outline. */
 function ItemCard({
   item,
   formatTitle,
+  selected,
+  faded,
+  onToggle,
+  onMenu,
+  menu,
 }: {
   item: ItemSummary;
   formatTitle: (id: string) => string;
+  selected: boolean;
+  /** On its way to another column, in a drag. */
+  faded: boolean;
+  onToggle: () => void;
+  onMenu: () => void;
+  menu: ReactNode;
 }) {
-  const { listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
+  const { listeners, setNodeRef } = useDraggable({ id: item.id });
 
   return (
     <ContextMenu>
@@ -463,28 +612,59 @@ function ItemCard({
       <div
         ref={setNodeRef}
         {...listeners}
-        data-dragging={isDragging}
-        className="relative rounded-3xl transition hover:*:shadow-md has-focus-visible:*:shadow-md *:data-popup-open:shadow-md data-[dragging=true]:opacity-40"
+        data-card={item.id}
+        data-selected={selected}
+        data-faded={faded}
+        className="relative rounded-3xl transition hover:*:shadow-md has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
       >
-        <ContextMenuTrigger render={<Card size="sm" />}>
-          <CardBody item={item} formatTitle={formatTitle} />
+        <ContextMenuTrigger
+          render={<Card size="sm" />}
+          onClick={(event) => {
+            // Shift or ⌘ picks the card, or puts it back, instead of opening it.
+            if (!(event.shiftKey || modHeld(event))) return;
+
+            event.preventDefault();
+            onToggle();
+          }}
+          onContextMenu={onMenu}
+        >
+          <CardBody item={item} formatTitle={formatTitle} selected={selected} />
         </ContextMenuTrigger>
       </div>
-      <ItemMenu item={item} />
+      {menu}
     </ContextMenu>
   );
 }
 
-/** What a right click on a card offers: open it, move it to another column, find its files. */
-function ItemMenu({ item }: { item: ItemSummary }) {
+/**
+ * What a right click on a card offers: open it, move it to another column, find its files. For
+ * several picked cards, moving and archiving take them all.
+ */
+function ItemMenu({
+  items,
+  onMove,
+  onArchive,
+}: {
+  items: readonly ItemSummary[];
+  onMove: (items: readonly ItemSummary[], status: Status) => void;
+  onArchive: (items: readonly ItemSummary[]) => void;
+}) {
   const t = useMessages();
+  const single = items.length === 1 ? items[0] : undefined;
+  const archivable = items.filter((i) => i.status !== "archived");
 
   return (
     <ContextMenuContent>
-      <ContextMenuItem onClick={() => (location.hash = href("item", item.id))}>
-        <SquarePenIcon />
-        {t.itemActions.open}
-      </ContextMenuItem>
+      {single ? (
+        <ContextMenuItem onClick={() => (location.hash = href("item", single.id))}>
+          <SquarePenIcon />
+          {t.itemActions.open}
+        </ContextMenuItem>
+      ) : (
+        <ContextMenuGroup>
+          <ContextMenuLabel>{t.board.selectedCount(items.length)}</ContextMenuLabel>
+        </ContextMenuGroup>
+      )}
       <ContextMenuSub>
         <ContextMenuSubTrigger>
           <ArrowRightLeftIcon />
@@ -492,8 +672,9 @@ function ItemMenu({ item }: { item: ItemSummary }) {
         </ContextMenuSubTrigger>
         <ContextMenuSubContent>
           <ContextMenuRadioGroup
-            value={item.status}
-            onValueChange={(status: Status) => void moveItem(item.id, status)}
+            // Several cards can be in several columns, so none is marked.
+            value={single?.status ?? null}
+            onValueChange={(status: Status) => onMove(items, status)}
           >
             {STATUSES.map((status) => (
               <ContextMenuRadioItem key={status} value={status}>
@@ -504,16 +685,16 @@ function ItemMenu({ item }: { item: ItemSummary }) {
           </ContextMenuRadioGroup>
         </ContextMenuSubContent>
       </ContextMenuSub>
-      {desktop ? (
-        <ContextMenuItem onClick={() => void revealItem(item)}>
+      {desktop && single ? (
+        <ContextMenuItem onClick={() => void revealItem(single)}>
           <FolderOpenIcon />
           {t.itemActions.showFolder}
         </ContextMenuItem>
       ) : null}
-      {item.status !== "archived" ? (
+      {archivable.length > 0 ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => void archiveItem(item, t)}>
+          <ContextMenuItem onClick={() => onArchive(archivable)}>
             <ArchiveIcon />
             {t.itemActions.archive}
           </ContextMenuItem>

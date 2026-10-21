@@ -9,6 +9,10 @@ export const SHIFT_KEY = APPLE ? "⇧" : "Shift+";
 
 export const MOD_KEY = APPLE ? "⌘" : "Ctrl+";
 
+/** Whether ⌘, or Ctrl off Apple keyboards, is held; on a Mac Ctrl and a click is a right click. */
+export const modHeld = (event: { metaKey: boolean; ctrlKey: boolean }) =>
+  APPLE ? event.metaKey : event.ctrlKey;
+
 export const EDIT_KEYS: Record<EditCommand, string> = {
   undo: `${MOD_KEY}Z`,
   redo: APPLE ? "⇧⌘Z" : "Ctrl+Y",
