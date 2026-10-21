@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { stepCard, stepOf } from "../web/src/lib/board-keys.ts";
+import { gridColumns, stepCard, stepOf } from "../web/src/lib/board-keys.ts";
 
 // Drafting has three cards, review none, done two.
 const BOARD = [["a", "b", "c"], [], ["x", "y"]];
@@ -40,5 +40,25 @@ describe("stepping through the board", () => {
     expect(stepOf("KeyK")).toBe("up");
     expect(stepOf("ArrowLeft")).toBe("left");
     expect(stepOf("KeyH")).toBeUndefined();
+  });
+});
+
+describe("stepping through the gallery", () => {
+  // Five cards, three to a row: a b c / d e.
+  const GRID = gridColumns(["a", "b", "c", "d", "e"], 3);
+
+  test("cards go down their column row by row", () => {
+    expect(GRID).toEqual([["a", "d"], ["b", "e"], ["c"]]);
+  });
+
+  test("up and down go a row, left and right along it", () => {
+    expect(stepCard(GRID, "a", "down")).toBe("d");
+    expect(stepCard(GRID, "e", "up")).toBe("b");
+    expect(stepCard(GRID, "b", "right")).toBe("c");
+    expect(stepCard(GRID, "d", "left")).toBe("d");
+  });
+
+  test("a gallery that cannot be measured is one column", () => {
+    expect(gridColumns(["a", "b"], 0)).toEqual([["a", "b"]]);
   });
 });

@@ -351,7 +351,7 @@ export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
         </SidebarGroup>
         {videos.length > 0 ? (
           <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-            <SidebarGroupLabel>{t.nav.videos}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t.nav.inProgress}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {videos.map((video) => (

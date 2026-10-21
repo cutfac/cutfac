@@ -26,12 +26,13 @@ export const ko: Messages = {
     openWorkspace: "워크스페이스 열기…",
     newVideo: "새 영상",
     main: "메인",
-    board: "보드",
+    board: "영상",
     learn: "학습",
     templates: "템플릿",
     setup: "설정",
     sendFeedback: "피드백 보내기",
     videos: "영상",
+    inProgress: "진행 중",
     allVideos: "모든 영상",
     toggle: "사이드바 열고 닫기",
     openFeedback: (count) => `처리 안 된 피드백 ${count}개`,
@@ -68,8 +69,11 @@ export const ko: Messages = {
     archived: "보관",
   },
   board: {
-    title: "보드",
-    loadError: "보드를 불러오지 못했어요",
+    title: "영상",
+    loadError: "영상을 불러오지 못했어요",
+    layout: "보기 방식",
+    gallery: "갤러리",
+    board: "보드",
     count: (count) => `${count}개`,
     allFormats: "모든 템플릿",
     filterByFormat: "템플릿으로 거르기",
@@ -287,7 +291,7 @@ export const ko: Messages = {
     readyTitle: "준비됐어요",
     readyBody: (board, learn) => (
       <>
-        {board("보드")}에서 첫 영상을 만들어 보세요. 원할 때 {learn("제품을 알려 주면")} 영상이
+        {board("영상")} 화면에서 첫 영상을 만들어 보세요. 원할 때 {learn("제품을 알려 주면")} 영상이
         제품에 더 잘 맞아요.
       </>
     ),

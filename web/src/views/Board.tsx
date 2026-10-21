@@ -16,11 +16,13 @@ import {
   BookOpenIcon,
   ClapperboardIcon,
   FolderOpenIcon,
+  KanbanIcon,
+  LayoutGridIcon,
   MessageSquareIcon,
   PlusIcon,
   SquarePenIcon,
 } from "lucide-react";
-import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { StatusDot } from "@/components/app-sidebar";
 import { NewItemTrigger } from "@/components/new-item-dialog";
@@ -60,12 +62,13 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { api, fileUrl, STATUSES, type ItemSummary, type Status } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
-import { stepCard, stepOf } from "../lib/board-keys.ts";
+import { gridColumns, stepCard, stepOf } from "../lib/board-keys.ts";
 import { QUIET_DRAG } from "../lib/drag.ts";
 import { modHeld } from "../lib/edit-commands.ts";
 import { archiveItems, moveItem, revealItem } from "../lib/items.ts";
@@ -86,6 +89,28 @@ function writeHintDismissed() {
     localStorage.setItem(LEARN_HINT_KEY, "true");
   } catch {
     // The hint may come back after a reload.
+  }
+}
+
+/** The videos as a gallery, newest first, or as a board of status columns. */
+type Layout = "gallery" | "board";
+
+const LAYOUT_KEY = "cutfac.videos.layout";
+
+function readLayout(): Layout {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === "board" ? "board" : "gallery";
+  } catch {
+    // Storage can be blocked; the gallery is the plainer start.
+    return "gallery";
+  }
+}
+
+function writeLayout(layout: Layout) {
+  try {
+    localStorage.setItem(LAYOUT_KEY, layout);
+  } catch {
+    // The choice just won't survive a reload.
   }
 }
 
@@ -131,6 +156,7 @@ export function Board() {
   const { data: formats } = useLive("formats", api.formats);
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
+  const [layout, setLayout] = useState(readLayout);
 
   if (error) {
     return (
@@ -149,8 +175,21 @@ export function Board() {
     ...usedFormats.map((id) => ({ value: id, label: formatTitle(id) })),
   ];
 
-  const visible = items?.filter((i) => format === null || i.format === format) ?? [];
   const columns = STATUSES.filter((s) => showArchived || s !== "archived");
+
+  const visible =
+    items?.filter((i) => (format === null || i.format === format) && columns.includes(i.status)) ??
+    [];
+
+  function chooseLayout(chosen: readonly string[]) {
+    // Pressing the shown layout again leaves it shown.
+    const next = chosen.find((l): l is Layout => l === "gallery" || l === "board");
+
+    if (next === undefined) return;
+
+    writeLayout(next);
+    setLayout(next);
+  }
 
   /** Videos go on top of their new column at once; the board loads them again once their files have changed. */
   function move(moving: readonly ItemSummary[], status: Status) {
@@ -178,6 +217,23 @@ export function Board() {
         actions={
           items?.length ? (
             <>
+              <ToggleGroup
+                variant="outline"
+                size="sm"
+                spacing={0}
+                aria-label={t.board.layout}
+                value={[layout]}
+                onValueChange={chooseLayout}
+              >
+                <ToggleGroupItem value="gallery">
+                  <LayoutGridIcon data-icon="inline-start" />
+                  {t.board.gallery}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="board">
+                  <KanbanIcon data-icon="inline-start" />
+                  {t.board.board}
+                </ToggleGroupItem>
+              </ToggleGroup>
               {usedFormats.length > 0 ? (
                 <Select items={formatItems} value={format} onValueChange={setFormat}>
                   <SelectTrigger size="sm" aria-label={t.board.filterByFormat} className="w-40">
@@ -215,7 +271,11 @@ export function Board() {
       />
       {items?.length ? <LearnHint /> : null}
       {items === undefined ? (
-        <BoardSkeleton />
+        layout === "gallery" ? (
+          <GallerySkeleton />
+        ) : (
+          <BoardSkeleton />
+        )
       ) : items.length === 0 ? (
         <div className="mb-6 flex min-h-0 flex-1 rounded-3xl border border-dashed">
           <Empty>
@@ -231,6 +291,8 @@ export function Board() {
             </EmptyContent>
           </Empty>
         </div>
+      ) : layout === "gallery" ? (
+        <Gallery items={visible} formatTitle={formatTitle} onMove={move} />
       ) : (
         <BoardColumns items={visible} statuses={columns} formatTitle={formatTitle} onMove={move} />
       )}
@@ -251,39 +313,21 @@ function focusCard(id: string) {
 }
 
 /**
- * The columns of cards. A card drags to another column. The arrow keys, or J and K, step through
- * the cards; Shift with them, or Shift or ⌘ with a click, picks several, and a drag or a right
- * click on a picked card takes all of them.
+ * The cards picked, and the keys that step through them. The arrow keys, or J and K, step through
+ * the cards in `columns()`, their ids as {@link stepCard} takes them; Shift with them, or Shift or
+ * ⌘ with a click, picks several, and a right click on a picked card takes all of them. No key
+ * steps while `held`, as in a drag.
  */
-function BoardColumns({
-  items,
-  statuses,
-  formatTitle,
-  onMove,
-}: {
-  items: ItemSummary[];
-  statuses: Status[];
-  formatTitle: (id: string) => string;
-  onMove: (items: readonly ItemSummary[], status: Status) => void;
-}) {
+function usePicks(items: readonly ItemSummary[], columns: () => string[][], held = false) {
   const t = useMessages();
-  const [dragged, setDragged] = useState<ItemSummary>();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  // A press that moves a little is still a click on the card.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
-  const columns = statuses.map((status) => ({
-    status,
-    cards: items.filter((i) => i.status === status).toSorted((a, b) => b.updatedAt - a.updatedAt),
-  }));
 
   const picked = items.filter((i) => selected.has(i.id));
   // A drag or a menu on a picked card takes all the picked ones; on any other card, that card.
   const takenBy = (item: ItemSummary) => (selected.has(item.id) ? picked : [item]);
-  const moving = dragged === undefined ? [] : takenBy(dragged);
 
   const onKey = useEffectEvent((event: KeyboardEvent) => {
-    if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || dragged) return;
+    if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || held) return;
 
     const focused = document.activeElement;
     const from = cardOf(focused);
@@ -306,11 +350,7 @@ function BoardColumns({
 
     event.preventDefault();
 
-    const to = stepCard(
-      columns.map(({ cards }) => cards.map((i) => i.id)),
-      from,
-      step,
-    );
+    const to = stepCard(columns(), from, step);
 
     if (to === undefined) return;
 
@@ -338,6 +378,104 @@ function BoardColumns({
     });
   }
 
+  // A right click outside the picked cards is about that card alone.
+  function menuOn(item: ItemSummary) {
+    if (!selected.has(item.id)) setSelected(new Set());
+  }
+
+  function archive(archiving: readonly ItemSummary[]) {
+    setSelected(new Set());
+    void archiveItems(archiving, t);
+  }
+
+  return { selected, setSelected, takenBy, toggle, menuOn, archive };
+}
+
+/** The tracks a grid lays out across, from its computed style. */
+const trackCount = (grid: HTMLElement | null) =>
+  grid === null ? 1 : getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+
+/** The gallery's tiles, more to a row as its container widens. */
+const GALLERY_GRID =
+  "grid grid-cols-2 gap-x-4 gap-y-6 @xl:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5 @6xl:grid-cols-6 @7xl:grid-cols-7";
+
+/** Every video as a tile, newest first; a tile's menu moves it to another status. */
+function Gallery({
+  items,
+  formatTitle,
+  onMove,
+}: {
+  items: ItemSummary[];
+  formatTitle: (id: string) => string;
+  onMove: (items: readonly ItemSummary[], status: Status) => void;
+}) {
+  const t = useMessages();
+  const grid = useRef<HTMLDivElement>(null);
+  const tiles = items.toSorted((a, b) => b.updatedAt - a.updatedAt);
+
+  const picks = usePicks(items, () =>
+    gridColumns(
+      tiles.map((i) => i.id),
+      trackCount(grid.current),
+    ),
+  );
+
+  return (
+    <div className="@container -mx-2 min-h-0 flex-1 overflow-y-auto px-2 pt-1 pb-6">
+      {tiles.length === 0 ? (
+        <p className="py-6 text-center text-xs text-muted-foreground">{t.board.emptyColumn}</p>
+      ) : null}
+      <div ref={grid} className={GALLERY_GRID}>
+        {tiles.map((item) => (
+          <Tile
+            key={item.id}
+            item={item}
+            formatTitle={formatTitle}
+            selected={picks.selected.has(item.id)}
+            onToggle={() => picks.toggle(item.id)}
+            onMenu={() => picks.menuOn(item)}
+            menu={
+              <ItemMenu items={picks.takenBy(item)} onMove={onMove} onArchive={picks.archive} />
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The columns of cards, one for each status. A card drags to another column, and a drag on a
+ * picked card takes all of them.
+ */
+function BoardColumns({
+  items,
+  statuses,
+  formatTitle,
+  onMove,
+}: {
+  items: ItemSummary[];
+  statuses: Status[];
+  formatTitle: (id: string) => string;
+  onMove: (items: readonly ItemSummary[], status: Status) => void;
+}) {
+  const [dragged, setDragged] = useState<ItemSummary>();
+  // A press that moves a little is still a click on the card.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const columns = statuses.map((status) => ({
+    status,
+    cards: items.filter((i) => i.status === status).toSorted((a, b) => b.updatedAt - a.updatedAt),
+  }));
+
+  const { selected, setSelected, takenBy, toggle, menuOn, archive } = usePicks(
+    items,
+    () => columns.map(({ cards }) => cards.map((i) => i.id)),
+    dragged !== undefined,
+  );
+
+  const moving = dragged === undefined ? [] : takenBy(dragged);
+
   function startDrag({ active }: DragStartEvent) {
     const item = items.find((i) => i.id === active.id);
 
@@ -352,11 +490,6 @@ function BoardColumns({
     setDragged(undefined);
 
     if (status !== undefined) onMove(moving, status);
-  }
-
-  function archive(archiving: readonly ItemSummary[]) {
-    setSelected(new Set());
-    void archiveItems(archiving, t);
   }
 
   return (
@@ -386,10 +519,7 @@ function BoardColumns({
                 selected={selected.has(item.id)}
                 faded={moving.includes(item)}
                 onToggle={() => toggle(item.id)}
-                // A right click outside the picked cards is about that card alone.
-                onMenu={() => {
-                  if (!selected.has(item.id)) setSelected(new Set());
-                }}
+                onMenu={() => menuOn(item)}
                 menu={<ItemMenu items={takenBy(item)} onMove={onMove} onArchive={archive} />}
               />
             ))}
@@ -411,6 +541,18 @@ function BoardColumns({
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+function GallerySkeleton() {
+  return (
+    <div className="@container min-h-0 flex-1 overflow-hidden pb-6" aria-busy="true">
+      <div className={GALLERY_GRID}>
+        {Array.from({ length: 4 }, (_, n) => (
+          <Skeleton key={n} className="aspect-9/16 w-full" />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -471,20 +613,31 @@ function Column({
 }
 
 /**
- * The card's picture: its first video, else its first image. Dragging it moves the card like the
- * rest of it; in the desktop app, an ⌥-drag takes the file out of the app instead, to drop a copy
+ * The card's picture: its first video, else its first image. On the board, dragging it moves the
+ * card like the rest of it; in the desktop app, an ⌥-drag takes the file out of the app instead, to drop a copy
  * in Finder or another app.
  */
-function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
+function Thumbnail({
+  item,
+  overlay = false,
+  large = false,
+}: {
+  item: ItemSummary;
+  overlay?: boolean;
+  /** As wide as its place, as in the gallery, rather than a card's small one. */
+  large?: boolean;
+}) {
   const media =
     item.media.find((m) => m.kind === "video") ?? item.media.find((m) => m.kind === "image");
 
-  const box = "aspect-9/16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted";
+  const box = large
+    ? "aspect-9/16 w-full overflow-hidden rounded-2xl bg-muted"
+    : "aspect-9/16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted";
 
   if (media === undefined) {
     return (
       <div className={`${box} flex items-center justify-center text-muted-foreground`}>
-        <ClapperboardIcon className="size-5" />
+        <ClapperboardIcon className={large ? "size-8" : "size-5"} />
       </div>
     );
   }
@@ -494,7 +647,7 @@ function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
   const picture =
     media.kind === "video" ? (
       <video
-        className={`${box} object-cover`}
+        className={`${box} block object-cover`}
         // The fragment makes browsers paint a frame instead of a blank box.
         src={`${fileUrl(path, media.mtime)}#t=0.1`}
         muted
@@ -503,7 +656,7 @@ function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
       />
     ) : (
       <img
-        className={`${box} object-cover`}
+        className={`${box} block object-cover`}
         src={fileUrl(path, media.mtime)}
         alt=""
         loading="lazy"
@@ -520,7 +673,7 @@ function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
       tabIndex={-1}
       aria-hidden
       draggable={false}
-      className="relative z-10 shrink-0"
+      className="relative z-10 block shrink-0"
       onPointerDown={(event) => {
         // Only an ⌥-drag leaves the card's drag for the page's own, which carries the file.
         event.currentTarget.draggable = event.altKey;
@@ -586,6 +739,75 @@ function CardBody({
         </div>
       </div>
     </CardContent>
+  );
+}
+
+/**
+ * A video in the gallery, with its menu: its picture large, then its title and where it stands. A
+ * picked tile has a ring, and the focused one an outline.
+ */
+function Tile({
+  item,
+  formatTitle,
+  selected,
+  onToggle,
+  onMenu,
+  menu,
+}: {
+  item: ItemSummary;
+  formatTitle: (id: string) => string;
+  selected: boolean;
+  onToggle: () => void;
+  onMenu: () => void;
+  menu: ReactNode;
+}) {
+  const t = useMessages();
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger
+        data-card={item.id}
+        data-selected={selected}
+        className="group/tile relative min-w-0"
+        onClick={(event) => {
+          // Shift or ⌘ picks the tile, or puts it back, instead of opening it.
+          if (!(event.shiftKey || modHeld(event))) return;
+
+          event.preventDefault();
+          onToggle();
+        }}
+        onContextMenu={onMenu}
+      >
+        <div className="rounded-2xl transition group-hover/tile:shadow-md group-has-focus-visible/tile:shadow-md group-has-focus-visible/tile:outline-2 group-has-focus-visible/tile:outline-offset-2 group-has-focus-visible/tile:outline-ring group-data-popup-open/tile:shadow-md group-data-[selected=true]/tile:ring-2 group-data-[selected=true]/tile:ring-primary">
+          <Thumbnail item={item} large />
+        </div>
+        <div className="mt-2 flex flex-col gap-1.5 px-1">
+          {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
+          <a
+            href={href("item", item.id)}
+            data-card-link
+            className="line-clamp-2 text-sm leading-snug font-medium outline-none after:absolute after:inset-0"
+          >
+            {item.title}
+            {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
+          </a>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline">
+              <StatusDot status={item.status} />
+              {t.status[item.status]}
+            </Badge>
+            {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
+            {item.openFeedback > 0 ? (
+              <Badge variant="destructive">
+                <MessageSquareIcon data-icon="inline-start" />
+                {t.board.openFeedback(item.openFeedback)}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+      </ContextMenuTrigger>
+      {menu}
+    </ContextMenu>
   );
 }
 

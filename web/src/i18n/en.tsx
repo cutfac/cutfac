@@ -38,12 +38,13 @@ export const en = {
     openWorkspace: "Open workspace…",
     newVideo: "New video",
     main: "Main",
-    board: "Board",
+    board: "Videos",
     learn: "Learn",
     templates: "Templates",
     setup: "Setup",
     sendFeedback: "Send feedback",
     videos: "Videos",
+    inProgress: "In progress",
     allVideos: "All videos",
     toggle: "Toggle sidebar",
     openFeedback: (count: number) => `${count} open feedback`,
@@ -78,8 +79,11 @@ export const en = {
     archived: "Archived",
   } satisfies Record<Status, string>,
   board: {
-    title: "Board",
-    loadError: "Could not load the board",
+    title: "Videos",
+    loadError: "Could not load the videos",
+    layout: "Layout",
+    gallery: "Gallery",
+    board: "Board",
     count: (count: number) => (count === 1 ? "1 item" : `${count} items`),
     allFormats: "All templates",
     filterByFormat: "Filter by template",
@@ -301,7 +305,7 @@ export const en = {
     readyTitle: "You're set",
     readyBody: (board: Link, learn: Link) => (
       <>
-        Make your first video on the {board("board")}. Whenever you like,{" "}
+        Make your first video in {board("Videos")}. Whenever you like,{" "}
         {learn("teach it about your product")} so the videos fit it.
       </>
     ),

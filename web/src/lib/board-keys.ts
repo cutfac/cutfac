@@ -53,3 +53,15 @@ export function stepCard(
 
   return columns.find((cards) => cards.length > 0)?.[0];
 }
+
+/**
+ * A gallery's cards, read row by row, as the columns {@link stepCard} steps through, so up and
+ * down go a row at a time and left and right along the row.
+ */
+export function gridColumns(ids: readonly string[], count: number): string[][] {
+  const width = Math.max(count, 1);
+
+  return [...Array.from({ length: width }).keys()].map((column) =>
+    ids.filter((_, index) => index % width === column),
+  );
+}
