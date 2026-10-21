@@ -309,6 +309,10 @@ bun test && bun run typecheck && bun run lint
 itself when `src/` changes, and the app restarts when `electron/` changes. A server restart cuts
 off any agent run in progress. Closing the app or Ctrl+C stops everything.
 
+On macOS it runs as Cutfac Dev (`com.cutfac.dev`), a copy of Electron under its own bundle id, so
+the permissions you grant it, such as an agent's computer use, stay with it and not with every app
+built on Electron.
+
 See [docs/architecture.md](docs/architecture.md) for the design and the hosted roadmap, and
 [docs/templates.md](docs/templates.md) for the template spec.
 

@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import type { Subprocess } from "bun";
 
+import { DEV_APP, devElectron } from "./devApp.ts";
 import { probePort } from "./ports.ts";
 
 const root = path.resolve(import.meta.dir, "..");
@@ -84,8 +85,28 @@ async function buildElectron(): Promise<boolean> {
   return (await spawnLogged(["bun", "run", "build:electron"]).exited) === 0;
 }
 
-function launch(): void {
-  const child = spawnLogged([bin("electron"), "."]);
+// A failed copy is no reason to stop working: run stock Electron instead.
+async function electronExecutable(): Promise<string> {
+  if (process.platform !== "darwin") return bin("electron");
+
+  try {
+    return await devElectron(root);
+  } catch (error) {
+    log(`Could not set up ${DEV_APP.name}, running stock Electron: ${String(error)}`);
+
+    return bin("electron");
+  }
+}
+
+// Built while Vite starts.
+const executable = electronExecutable();
+
+async function launch(): Promise<void> {
+  const command = [await executable, "."];
+
+  if (stopping) return;
+
+  const child = spawnLogged(command);
 
   electron = child;
 
@@ -110,15 +131,18 @@ async function restart(): Promise<void> {
   // The app holds a single-instance lock and the server port until it has quit.
   await previous?.exited;
 
-  if (!stopping) launch();
+  if (!stopping) await launch();
 }
 
 let restarts = Promise.resolve();
 
 let pending: ReturnType<typeof setTimeout> | undefined;
 
+// The app does not run these, so a change to them is no reason to restart it.
+const devScripts = new Set([path.basename(import.meta.path), "devApp.ts"]);
+
 watch(path.join(root, "electron"), { recursive: true }, (_event, file) => {
-  if (!file?.endsWith(".ts") || file === path.basename(import.meta.path)) return;
+  if (!file?.endsWith(".ts") || devScripts.has(file)) return;
 
   clearTimeout(pending);
   pending = setTimeout(() => {
@@ -132,4 +156,4 @@ if (!(await buildElectron())) await stop(1);
 
 log(`Board on ${devUrl}, server on port ${serverPort}.`);
 
-launch();
+await launch();
