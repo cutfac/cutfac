@@ -40,7 +40,7 @@ export function TitleBar({ children }: { children: ReactNode }) {
                 "fixed inset-x-0 top-0 z-20 transition-all duration-200 ease-linear [-webkit-app-region:drag]",
                 // Over the open content's own padding (the 14rem sidebar, then 1.5rem), or past the
                 // window controls, the toggle and the divider.
-                state === "collapsed" ? "pl-34" : "pl-62",
+                state === "collapsed" ? "pl-37" : "pl-62",
               ),
         )}
       >
@@ -51,7 +51,7 @@ export function TitleBar({ children }: { children: ReactNode }) {
             aria-hidden
             className={cn(
               "absolute top-4 h-4 w-px bg-border transition-all duration-200 ease-linear",
-              state === "collapsed" ? "left-31" : "left-56",
+              state === "collapsed" ? "left-34" : "left-56",
             )}
           />
         ) : (
@@ -59,7 +59,7 @@ export function TitleBar({ children }: { children: ReactNode }) {
         )}
         <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         {/* Last in the bar, so the area it keeps from dragging is not dragged again over it. */}
-        {insetTitleBar ? <div className="fixed top-2.5 left-21 z-20">{toggle}</div> : null}
+        {insetTitleBar ? <div className="fixed top-2.5 left-24 z-20">{toggle}</div> : null}
       </header>
       {children}
     </Slot>
