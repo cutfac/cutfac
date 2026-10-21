@@ -44,7 +44,18 @@ export function TitleBar({ children }: { children: ReactNode }) {
               ),
         )}
       >
-        {insetTitleBar ? null : toggle}
+        {insetTitleBar ? (
+          // A faint line over the open sidebar's edge, down to the content card.
+          <div
+            aria-hidden
+            className={cn(
+              "absolute top-2 bottom-0 left-56 w-px bg-border transition-opacity duration-200 ease-linear",
+              state === "collapsed" && "opacity-0",
+            )}
+          />
+        ) : (
+          toggle
+        )}
         <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />
         {/* Last in the bar, so the area it keeps from dragging is not dragged again over it. */}
         {insetTitleBar ? <div className="fixed top-2.5 left-21 z-20">{toggle}</div> : null}
