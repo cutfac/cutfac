@@ -30,6 +30,7 @@
     "desktop": "bun run build && bun run build:electron && electron .",
     "desktop:dev": "bun electron/dev.ts",
     "dist:desktop": "bun run build && bun run build:sidecar && bun run build:electron && electron-builder --mac dir -c.mac.identity=null",
+    "check:agents": "bun electron/checkAgents.ts",
     "release": "bun --env-file=.env.release electron/release.ts",
     "lint": "oxlint src web/src test electron",
     "format": "oxfmt --write src web/src test electron",

@@ -6,6 +6,7 @@ import {
   feedVersion,
   incrementFrom,
   missingEnv,
+  releaseArgs,
   releaseNotes,
   REQUIRED_ENV,
   signingProblem,
@@ -31,6 +32,32 @@ describe("the release command", () => {
   test("shows how to use it when given more, or a flag", () => {
     expect(() => incrementFrom(["patch", "minor"])).toThrow("Usage: bun run release");
     expect(() => incrementFrom(["--help"])).toThrow("Usage: bun run release");
+  });
+
+  test("checks the agent CLIs first, unless told to skip it", () => {
+    expect(releaseArgs([])).toEqual({ increment: undefined, checkAgents: true });
+    expect(releaseArgs(["minor"])).toEqual({ increment: "minor", checkAgents: true });
+    expect(releaseArgs(["--skip-agent-check"])).toEqual({
+      increment: undefined,
+      checkAgents: false,
+    });
+
+    expect(releaseArgs(["patch", "--skip-agent-check"])).toEqual({
+      increment: "patch",
+      checkAgents: false,
+    });
+
+    expect(releaseArgs(["--skip-agent-check", "1.2.3"])).toEqual({
+      increment: "1.2.3",
+      checkAgents: false,
+    });
+  });
+
+  test("still refuses other flags and extra words, and the usage names the skip", () => {
+    expect(() => releaseArgs(["--help"])).toThrow("[--skip-agent-check]");
+    expect(() => releaseArgs(["patch", "minor", "--skip-agent-check"])).toThrow(
+      "Usage: bun run release",
+    );
   });
 });
 

@@ -1,11 +1,12 @@
 /**
- * `bun run release [patch | minor | major | <version>]` ships the Mac app in one command. It first
- * checks everything the release needs, so nothing turns up missing after the long build. Then it
- * bumps the version with `bun pm version` when given one, runs CI's checks, builds, signs and
- * notarizes the app, and uploads it to the private release bucket, the update feed last. Apps and
- * the download page reach it through short-lived cutfac.com links, with no license key. Last, it
- * pushes main with a `v<version>` tag and publishes a source-only GitHub release. Credentials come
- * from .env.release; nothing here prints their values.
+ * `bun run release [patch | minor | major | <version>] [--skip-agent-check]` ships the Mac app in
+ * one command. It first checks everything the release needs, so nothing turns up missing after the
+ * long build. Then it bumps the version with `bun pm version` when given one, runs CI's checks, and
+ * checks that the installed claude and codex CLIs still work with Cutfac, which the flag leaves
+ * out. It builds, signs and notarizes the app, and uploads it to the private release bucket, the
+ * update feed last. Apps and the download page reach it through short-lived cutfac.com links, with
+ * no license key. Last, it pushes main with a `v<version>` tag and publishes a source-only GitHub
+ * release. Credentials come from .env.release; nothing here prints their values.
  */
 import { readdir } from "node:fs/promises";
 import path from "node:path";
@@ -21,7 +22,9 @@ const packageFile = path.join(root, "package.json");
 /** The branch releases are made from, and pushed to with their tag. */
 const BRANCH = "main";
 
-const USAGE = "Usage: bun run release [patch | minor | major | <version>]";
+const USAGE = "Usage: bun run release [patch | minor | major | <version>] [--skip-agent-check]";
+
+const SKIP_AGENT_CHECK = "--skip-agent-check";
 
 const BUMP = "Bump it with `bun run release patch` (or minor, major).";
 
@@ -32,6 +35,13 @@ const CHECKS = [
   ["bun", "run", "lint"],
   ["bun", "run", "format:check"],
 ];
+
+/**
+ * The agent CLIs against Cutfac's parsers, which makes real model calls and needs both CLIs
+ * installed and signed in. A release that cannot run it, or does not need to, skips it. It saves
+ * nothing, so the tree stays what the release is tagged at.
+ */
+const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"];
 
 export const REQUIRED_ENV = [
   "APPLE_ID",
@@ -68,6 +78,20 @@ export function incrementFrom(args: readonly string[]): string | undefined {
   if (rest.length > 0 || increment?.startsWith("-")) throw new Error(USAGE);
 
   return increment;
+}
+
+/** What `bun run release` was asked to do: the version bump, and whether to check the agent CLIs. */
+export interface ReleaseArgs {
+  readonly increment: string | undefined;
+  readonly checkAgents: boolean;
+}
+
+/** `incrementFrom` for the arguments that are left once `--skip-agent-check` is taken out. */
+export function releaseArgs(args: readonly string[]): ReleaseArgs {
+  return {
+    increment: incrementFrom(args.filter((arg) => arg !== SKIP_AGENT_CHECK)),
+    checkAgents: !args.includes(SKIP_AGENT_CHECK),
+  };
 }
 
 /** The names in `REQUIRED_ENV` that are unset or empty. */
@@ -316,7 +340,7 @@ async function refuseReleased(version: string, releases: Bun.S3Client): Promise<
  * failure puts package.json back, so the next try starts from the same tree.
  */
 async function checkedVersion(
-  increment: string | undefined,
+  { increment, checkAgents }: ReleaseArgs,
   releases: Bun.S3Client,
 ): Promise<string> {
   const original = await Bun.file(packageFile).text();
@@ -332,6 +356,11 @@ async function checkedVersion(
     console.log(`[release] Running CI's checks on ${version}.`);
 
     for (const check of CHECKS) await run(check);
+
+    if (checkAgents) {
+      console.log("[release] Checking the installed agent CLIs against Cutfac's parsers.");
+      await run(AGENT_CHECK);
+    }
 
     if (increment !== undefined) {
       await run([
@@ -399,13 +428,13 @@ async function publishSource(version: string, commit: string, notes: string): Pr
   console.log(`[release] Pushed ${BRANCH} with ${tag} and published its GitHub release.`);
 }
 
-async function release(increment: string | undefined): Promise<void> {
+async function release(args: ReleaseArgs): Promise<void> {
   const problems = await preflight();
 
   if (problems.length > 0) throw new Error(`Fix these first:\n  - ${problems.join("\n  - ")}`);
 
   const releases = bucket();
-  const version = await checkedVersion(increment, releases);
+  const version = await checkedVersion(args, releases);
   const commit = await output(["git", "rev-parse", "HEAD"]);
 
   if (commit === undefined) throw new Error("Couldn't read the commit to release.");
@@ -446,7 +475,7 @@ async function release(increment: string | undefined): Promise<void> {
 
 if (import.meta.main) {
   try {
-    await release(incrementFrom(Bun.argv.slice(2)));
+    await release(releaseArgs(Bun.argv.slice(2)));
   } catch (error) {
     console.error(`[release] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
