@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemDialog } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
+import { TitleBarStrip } from "@/components/title-bar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -296,6 +297,7 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
 
   return (
     <Sidebar collapsible="icon">
+      <TitleBarStrip />
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

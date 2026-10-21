@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DesktopLicense } from "@/components/desktop-license";
 import { ErrorAlert } from "@/components/page";
+import { TitleBarStrip } from "@/components/title-bar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 import { api } from "./api.ts";
@@ -33,6 +34,7 @@ export function App() {
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-dvh min-h-0">
       <AppSidebar ws={ws} view={view} id={id} />
       <SidebarInset className="min-h-0 min-w-0">
+        <TitleBarStrip />
         {/* Below the tablet breakpoint the sidebar is a sheet, so its trigger moves up here. */}
         <div className="flex h-12 shrink-0 items-center border-b px-2 md:hidden">
           <SidebarTrigger />
