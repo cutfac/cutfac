@@ -10,6 +10,9 @@ export const PICK_PATH_CHANNEL = "cutfac:pick-path";
 /** Undo and Redo from the app menu, for the board to route to a text field or the open item. */
 export const EDIT_COMMAND_CHANNEL = "cutfac:edit-command";
 
+/** The palette, a new video, the sidebar or a page from the app menu, for the board to open. */
+export const APP_COMMAND_CHANNEL = "cutfac:app-command";
+
 /** Check a license key from the board's dialog and keep it to unlock the paid plan. */
 export const SET_LICENSE_KEY_CHANNEL = "cutfac:set-license-key";
 

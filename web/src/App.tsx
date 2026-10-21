@@ -1,14 +1,16 @@
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { CommandPalette } from "@/components/command-palette";
 import { DesktopLicense } from "@/components/desktop-license";
+import { NewItemDialog } from "@/components/new-item-dialog";
 import { ErrorAlert } from "@/components/page";
 import { TitleBar } from "@/components/title-bar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { api } from "./api.ts";
 import { desktop } from "./desktop.ts";
-import { href, useAgentStatuses, useHashRoute, useLive, useSidebarOpen } from "./hooks.ts";
+import { href, useAgentStatuses, useHashRoute, useLive, usePlan, useSidebarOpen } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
 import { Board } from "./views/Board.tsx";
 import { ItemView } from "./views/ItemView.tsx";
@@ -20,6 +22,7 @@ export function App() {
   const t = useMessages();
   const [view, id] = useHashRoute();
   const { data: ws, error } = useLive("workspace", api.workspace);
+  const plan = usePlan();
   const agents = useAgentStatuses();
   const needsSetup = agents !== undefined && !agents.some((agent) => agent.connected);
   const editing = view === "item" && id ? id : undefined;
@@ -32,7 +35,7 @@ export function App() {
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-dvh min-h-0">
-      <AppSidebar ws={ws} view={view} id={id} />
+      <AppSidebar ws={ws} plan={plan} view={view} id={id} />
       <SidebarInset className="min-h-0 min-w-0">
         <TitleBar>
           {error ? (
@@ -51,6 +54,8 @@ export function App() {
           )}
         </TitleBar>
       </SidebarInset>
+      <NewItemDialog formats={ws?.formats} plan={plan} />
+      <CommandPalette editing={editing} />
       {desktop ? <DesktopLicense desktop={desktop} /> : null}
     </SidebarProvider>
   );

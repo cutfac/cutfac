@@ -50,6 +50,17 @@ export const en = {
     videoTitle: (title: string, status: string, open: number) =>
       open > 0 ? `${title} (${status}, ${open} open feedback)` : `${title} (${status})`,
   },
+  palette: {
+    title: "Command palette",
+    description: "Find a video, a page or a command.",
+    placeholder: "Search videos and commands…",
+    empty: "Nothing matches.",
+    thisVideo: "This video",
+    archive: "Archive",
+    archived: (title: string) => `Archived "${title}"`,
+    actions: "Actions",
+    goTo: "Go to",
+  },
   language: {
     label: "Language",
   },

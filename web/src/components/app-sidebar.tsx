@@ -15,7 +15,7 @@ import { useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
-import { NewItemDialog } from "@/components/new-item-dialog";
+import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
 import { TitleBarStrip } from "@/components/title-bar";
 import {
@@ -26,6 +26,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Sidebar,
   SidebarContent,
@@ -41,9 +42,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-import { api, type ItemSummary, type Status, type WorkspaceInfo } from "../api.ts";
+import { api, type ItemSummary, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop } from "../desktop.ts";
-import { href, useLive, usePlan } from "../hooks.ts";
+import { href, useLive, type Live } from "../hooks.ts";
 import {
   isLocale,
   LOCALE_NAMES,
@@ -52,13 +53,14 @@ import {
   useLocale,
   useMessages,
 } from "../i18n/index.ts";
+import { APP_KEYS } from "../lib/app-commands.ts";
 
 interface MainNavItem {
   view: "board" | "learn" | "templates";
   icon: LucideIcon;
 }
 
-const MAIN_NAV: ReadonlyArray<MainNavItem> = [
+export const MAIN_NAV: ReadonlyArray<MainNavItem> = [
   { view: "board", icon: ClapperboardIcon },
   { view: "learn", icon: BookOpenIcon },
   { view: "templates", icon: LayoutTemplateIcon },
@@ -98,7 +100,7 @@ function statusDot(status: Status): string {
 }
 
 /** An svg so the menu button spaces it exactly like the nav icons. */
-function StatusDot({ status }: { status: Status }) {
+export function StatusDot({ status }: { status: Status }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <circle cx="8" cy="8" r="4" strokeWidth="1.5" className={statusDot(status)} />
@@ -106,7 +108,7 @@ function StatusDot({ status }: { status: Status }) {
   );
 }
 
-function openWorkspace() {
+export function openWorkspace() {
   // The desktop shell reloads the window itself once the new workspace is serving.
   desktop?.openWorkspace().catch((cause: Error) => toast.error(cause.message));
 }
@@ -114,7 +116,7 @@ function openWorkspace() {
 interface LinkRowProps {
   to: string;
   active: boolean;
-  tooltip?: string | undefined;
+  tooltip?: ReactNode;
   title?: string | undefined;
   /** Open feedback to show at the row's right edge; nothing when zero or missing. */
   badge?: number | undefined;
@@ -276,17 +278,28 @@ function LanguageMenu() {
   );
 }
 
+/** A collapsed row's name, and its shortcut where it has one. */
+function withKeys(label: string, keys: string | undefined): ReactNode {
+  if (keys === undefined) return label;
+
+  return (
+    <>
+      {label} <Kbd>{keys}</Kbd>
+    </>
+  );
+}
+
 interface AppSidebarProps {
   ws: WorkspaceInfo | undefined;
+  plan: Live<Plan>;
   view: string;
   /** The open item or template, from the second part of the route. */
   id: string | undefined;
 }
 
-export function AppSidebar({ ws, view, id }: AppSidebarProps) {
+export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
   const t = useMessages();
   const { data: items } = useLive("items", api.items);
-  const plan = usePlan();
   const videos = sidebarVideos(items ?? []);
   const editing = view === "item" && id ? id : undefined;
 
@@ -303,11 +316,9 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
             <WorkspaceMenu ws={ws} />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <NewItemDialog
-              formats={ws?.formats}
-              plan={plan}
-              trigger={
-                <SidebarMenuButton tooltip={t.nav.newVideo}>
+            <NewItemTrigger
+              render={
+                <SidebarMenuButton tooltip={withKeys(t.nav.newVideo, APP_KEYS.newVideo)}>
                   <PlusIcon />
                   <span>{t.nav.newVideo}</span>
                 </SidebarMenuButton>
@@ -325,7 +336,7 @@ export function AppSidebar({ ws, view, id }: AppSidebarProps) {
                   key={target}
                   to={href(target)}
                   active={target === "board" ? boardActive : view === target}
-                  tooltip={t.nav[target]}
+                  tooltip={withKeys(t.nav[target], APP_KEYS[target])}
                   badge={target === "board" ? ws?.openFeedback : undefined}
                 >
                   <Icon />

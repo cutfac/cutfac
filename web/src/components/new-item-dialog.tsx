@@ -1,3 +1,4 @@
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { FileVideoIcon, ImageIcon, PlusIcon, UploadIcon, XIcon } from "lucide-react";
 import { useState, type DragEvent, type ReactElement, type SubmitEvent } from "react";
 import { toast } from "sonner";
@@ -138,16 +139,42 @@ function FreeLimit({ limit, onClose }: { limit: number; onClose: () => void }) {
   );
 }
 
+/** The one new item dialog, which buttons anywhere open without each having one of their own. */
+const handle = DialogPrimitive.createHandle();
+
+/** Open the new item dialog, as from a shortcut or the command palette. */
+export const openNewItem = (): void => handle.open(null);
+
+/** A button that opens the new item dialog. Defaults to a "New item" button. */
+export function NewItemTrigger({ render }: { render?: ReactElement }) {
+  const t = useMessages();
+
+  return (
+    <DialogTrigger
+      handle={handle}
+      render={
+        render ?? (
+          <Button size="lg">
+            <PlusIcon data-icon="inline-start" />
+            {t.newItem.open}
+          </Button>
+        )
+      }
+    />
+  );
+}
+
 interface NewItemDialogProps {
   formats: Format[] | undefined;
   /** The free version says when this is its last video, and past that, how to make more. */
   plan: Live<Plan>;
-  /** The element that opens the dialog, with its own label. Defaults to a "New item" button. */
-  trigger?: ReactElement;
 }
 
-/** Create an item from a title, an optional template and its inputs, and optionally a clip to start from. */
-export function NewItemDialog({ formats, plan, trigger }: NewItemDialogProps) {
+/**
+ * Create an item from a title, an optional template and its inputs, and optionally a clip to
+ * start from. Mount it once; {@link NewItemTrigger} and {@link openNewItem} open it.
+ */
+export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
   const t = useMessages();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -237,6 +264,7 @@ export function NewItemDialog({ formats, plan, trigger }: NewItemDialogProps) {
 
   return (
     <Dialog
+      handle={handle}
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -248,16 +276,6 @@ export function NewItemDialog({ formats, plan, trigger }: NewItemDialogProps) {
         }
       }}
     >
-      <DialogTrigger
-        render={
-          trigger ?? (
-            <Button size="lg">
-              <PlusIcon data-icon="inline-start" />
-              {t.newItem.open}
-            </Button>
-          )
-        }
-      />
       <DialogContent
         data-drop-target=""
         onDragOver={(e) => {

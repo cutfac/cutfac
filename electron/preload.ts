@@ -1,7 +1,8 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import type { CutfacDesktop } from "../web/src/desktop.ts";
+import type { AppCommand, CutfacDesktop } from "../web/src/desktop.ts";
 import {
+  APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
@@ -19,6 +20,19 @@ const SYSTEM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
   win32: "Windows",
 };
 
+/** Every command the menu may send, to check what arrives by name. */
+const APP_COMMANDS: Record<AppCommand, true> = {
+  palette: true,
+  newVideo: true,
+  toggleSidebar: true,
+  board: true,
+  learn: true,
+  templates: true,
+};
+
+const isAppCommand = (command: string): command is AppCommand =>
+  Object.hasOwn(APP_COMMANDS, command);
+
 const bridge = {
   openWorkspace: (): Promise<boolean> => ipcRenderer.invoke(OPEN_WORKSPACE_CHANNEL),
   revealPath: (target: string): Promise<void> => ipcRenderer.invoke(REVEAL_PATH_CHANNEL, target),
@@ -34,6 +48,17 @@ const bridge = {
 
     return () => {
       ipcRenderer.removeListener(EDIT_COMMAND_CHANNEL, forward);
+    };
+  },
+  onAppCommand: (listener) => {
+    const forward = (_event: IpcRendererEvent, command: string) => {
+      if (isAppCommand(command)) listener(command);
+    };
+
+    ipcRenderer.on(APP_COMMAND_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(APP_COMMAND_CHANNEL, forward);
     };
   },
   setLicenseKey: (key) => ipcRenderer.invoke(SET_LICENSE_KEY_CHANNEL, key),

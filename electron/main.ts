@@ -16,9 +16,10 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 
-import type { EditCommand } from "../web/src/desktop.ts";
+import type { AppCommand, EditCommand } from "../web/src/desktop.ts";
 import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
 import {
+  APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
@@ -200,6 +201,10 @@ function sendEditCommand(command: EditCommand): void {
   window?.webContents.send(EDIT_COMMAND_CHANNEL, command);
 }
 
+function sendAppCommand(command: AppCommand): void {
+  window?.webContents.send(APP_COMMAND_CHANNEL, command);
+}
+
 function bringToFront(): void {
   if (!window) return;
 
@@ -249,6 +254,7 @@ function menuTemplate(): MenuItemConstructorOptions[] {
     {
       label: t.file,
       submenu: [
+        { label: t.newVideo, accelerator: "CmdOrCtrl+N", click: () => sendAppCommand("newVideo") },
         { label: t.openWorkspace, accelerator: "CmdOrCtrl+O", click: () => void chooseWorkspace() },
         separator,
         isMac ? { role: "close", label: t.closeWindow } : { role: "quit", label: t.quit },
@@ -276,6 +282,25 @@ function menuTemplate(): MenuItemConstructorOptions[] {
     {
       label: t.view,
       submenu: [
+        {
+          label: t.commandPalette,
+          accelerator: "CmdOrCtrl+K",
+          click: () => sendAppCommand("palette"),
+        },
+        {
+          label: t.toggleSidebar,
+          accelerator: "CmdOrCtrl+B",
+          click: () => sendAppCommand("toggleSidebar"),
+        },
+        separator,
+        { label: t.board, accelerator: "CmdOrCtrl+1", click: () => sendAppCommand("board") },
+        { label: t.learn, accelerator: "CmdOrCtrl+2", click: () => sendAppCommand("learn") },
+        {
+          label: t.templates,
+          accelerator: "CmdOrCtrl+3",
+          click: () => sendAppCommand("templates"),
+        },
+        separator,
         { role: "reload", label: t.reload },
         { role: "forceReload", label: t.forceReload },
         { role: "toggleDevTools", label: t.toggleDevTools },

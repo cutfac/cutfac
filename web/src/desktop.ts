@@ -2,6 +2,9 @@ import type { Locale } from "./i18n/locale.ts";
 
 export type EditCommand = "undo" | "redo";
 
+/** What the app menu asks of the board, beyond Undo and Redo: a dialog, the sidebar, or a page. */
+export type AppCommand = "palette" | "newVideo" | "toggleSidebar" | "board" | "learn" | "templates";
+
 /**
  * What cutfac.com said about a license key: `granted` unlocks the paid plan, `invalid` names no
  * license, `ended` names one whose plan has ended, and `unavailable` means it couldn't be asked.
@@ -23,6 +26,8 @@ export interface CutfacDesktop {
   setLocale: (locale: Locale) => void;
   /** Undo and Redo chosen from the app menu or its shortcuts. Returns an unsubscribe. */
   onEditCommand: (listener: (command: EditCommand) => void) => () => void;
+  /** A command chosen from the app menu or its shortcuts. Returns an unsubscribe. */
+  onAppCommand: (listener: (command: AppCommand) => void) => () => void;
   /**
    * Check a license key with cutfac.com and keep it to unlock the paid plan, unless it is invalid.
    * Resolves what cutfac.com said.

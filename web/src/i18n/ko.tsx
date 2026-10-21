@@ -38,6 +38,17 @@ export const ko: Messages = {
     videoTitle: (title, status, open) =>
       open > 0 ? `${title} (${status}, 처리 안 된 피드백 ${open}개)` : `${title} (${status})`,
   },
+  palette: {
+    title: "명령 팔레트",
+    description: "영상, 페이지, 명령을 찾아요.",
+    placeholder: "영상과 명령 검색…",
+    empty: "맞는 항목이 없어요.",
+    thisVideo: "이 영상",
+    archive: "보관",
+    archived: (title) => `"${title}"을(를) 보관했어요`,
+    actions: "작업",
+    goTo: "이동",
+  },
   language: {
     label: "언어",
   },
