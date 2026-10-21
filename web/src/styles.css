@@ -158,14 +158,14 @@
   }
   /* The board runs as a desktop app, so it skips the web's habits: focus halos (focused controls
      tint like hovered ones instead), the hand cursor on links, dragging images and links around,
-     and the page bouncing past its edges. */
+     and the page bouncing past its edges. A link marked draggable still drags. */
   :focus-visible {
     outline: none;
   }
   a {
     cursor: default;
   }
-  a,
+  a:not([draggable="true"]),
   img {
     -webkit-user-drag: none;
   }

@@ -24,3 +24,6 @@ export const OPEN_LICENSE_KEY_CHANNEL = "cutfac:open-license-key";
 
 /** License Key… from the app menu, or asked for by the board, for the board to open its dialog. */
 export const LICENSE_KEY_REQUEST_CHANNEL = "cutfac:license-key-request";
+
+/** Drag a workspace file out of the board, to drop a copy of it in Finder or another app. */
+export const START_DRAG_CHANNEL = "cutfac:start-drag";

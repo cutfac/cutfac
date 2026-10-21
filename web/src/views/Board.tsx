@@ -1,4 +1,16 @@
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
   ArchiveIcon,
   ArrowRightLeftIcon,
   BookOpenIcon,
@@ -8,7 +20,7 @@ import {
   PlusIcon,
   SquarePenIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { StatusDot } from "@/components/app-sidebar";
 import { NewItemTrigger } from "@/components/new-item-dialog";
@@ -51,6 +63,7 @@ import { api, fileUrl, STATUSES, type ItemSummary, type Status } from "../api.ts
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { QUIET_DRAG } from "../lib/drag.ts";
 import { archiveItem, moveItem, revealItem } from "../lib/items.ts";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
@@ -110,10 +123,13 @@ function LearnHint() {
 
 export function Board() {
   const t = useMessages();
-  const { data: items, error } = useLive("items", api.items);
+  const { data: items, error, reload, setData } = useLive("items", api.items);
   const { data: formats } = useLive("formats", api.formats);
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
+  const [dragged, setDragged] = useState<ItemSummary>();
+  // A press that moves a little is still a click on the card.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   if (error) {
     return (
@@ -134,6 +150,21 @@ export function Board() {
 
   const visible = items?.filter((i) => format === null || i.format === format) ?? [];
   const columns = STATUSES.filter((s) => showArchived || s !== "archived");
+
+  function drop({ active, over }: DragEndEvent) {
+    setDragged(undefined);
+
+    const item = items?.find((i) => i.id === active.id);
+    const status = STATUSES.find((s) => s === over?.id);
+
+    if (items === undefined || item === undefined || status === undefined) return;
+
+    // On top of its new column at once; the board loads it again once its file has changed.
+    setData(items.map((i) => (i.id === item.id ? { ...i, status, updatedAt: Date.now() } : i)));
+    void moveItem(item.id, status).then((moved) => {
+      if (!moved) reload();
+    });
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pt-2">
@@ -203,36 +234,48 @@ export function Board() {
           </Empty>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-6">
-          {columns.map((status) => {
-            const cards = visible
-              .filter((i) => i.status === status)
-              .toSorted((a, b) => b.updatedAt - a.updatedAt);
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          // A card's menu moves it without a mouse.
+          accessibility={QUIET_DRAG}
+          onDragStart={({ active }: DragStartEvent) =>
+            setDragged(items.find((i) => i.id === active.id))
+          }
+          onDragCancel={() => setDragged(undefined)}
+          onDragEnd={drop}
+        >
+          <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-6">
+            {columns.map((status) => {
+              const cards = visible
+                .filter((i) => i.status === status)
+                .toSorted((a, b) => b.updatedAt - a.updatedAt);
 
-            return (
-              <section
-                key={status}
-                aria-label={t.status[status]}
-                className="flex max-w-96 min-w-72 flex-1 flex-col gap-3 rounded-3xl bg-muted/40 p-3"
-              >
-                <h2 className="flex items-center justify-between px-1 text-sm font-medium">
-                  {t.status[status]}
-                  <Badge variant="secondary">{cards.length}</Badge>
-                </h2>
-                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-                  {cards.length === 0 ? (
-                    <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                      {t.board.emptyColumn}
-                    </p>
-                  ) : null}
+              return (
+                <Column
+                  key={status}
+                  status={status}
+                  count={cards.length}
+                  // A card let go over its own column stays put.
+                  disabled={dragged?.status === status}
+                >
                   {cards.map((item) => (
                     <ItemCard key={item.id} item={item} formatTitle={formatTitle} />
                   ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+                </Column>
+              );
+            })}
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {dragged ? (
+              <div className="cursor-grabbing *:shadow-lg">
+                <Card size="sm">
+                  <CardBody item={dragged} formatTitle={formatTitle} overlay />
+                </Card>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
     </div>
   );
@@ -256,39 +299,151 @@ function BoardSkeleton() {
   );
 }
 
-function Thumbnail({ item }: { item: ItemSummary }) {
-  const video = item.media.find((m) => m.kind === "video");
-  const image = item.media.find((m) => m.kind === "image");
+/** A status column, where a card dragged from another column can be let go. */
+function Column({
+  status,
+  count,
+  disabled,
+  children,
+}: {
+  status: Status;
+  count: number;
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  const t = useMessages();
+  const { setNodeRef, isOver } = useDroppable({ id: status, disabled });
+
+  return (
+    <section
+      ref={setNodeRef}
+      aria-label={t.status[status]}
+      data-over={isOver}
+      className="flex max-w-96 min-w-72 flex-1 flex-col gap-3 rounded-3xl bg-muted/40 p-3 transition-colors data-[over=true]:bg-muted data-[over=true]:ring-2 data-[over=true]:ring-ring/40"
+    >
+      <h2 className="flex items-center justify-between px-1 text-sm font-medium">
+        {t.status[status]}
+        <Badge variant="secondary">{count}</Badge>
+      </h2>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        {count === 0 ? (
+          <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+            {t.board.emptyColumn}
+          </p>
+        ) : null}
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The card's picture: its first video, else its first image. In the desktop app the picture drags
+ * the file out of the app, to drop a copy in Finder or another app; the rest of the card moves it
+ * to another column.
+ */
+function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
+  const media =
+    item.media.find((m) => m.kind === "video") ?? item.media.find((m) => m.kind === "image");
+
   const box = "aspect-9/16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted";
 
-  if (video) {
+  if (media === undefined) {
     return (
+      <div className={`${box} flex items-center justify-center text-muted-foreground`}>
+        <ClapperboardIcon className="size-5" />
+      </div>
+    );
+  }
+
+  const path = `${item.dir}/${media.name}`;
+
+  const picture =
+    media.kind === "video" ? (
       <video
         className={`${box} object-cover`}
         // The fragment makes browsers paint a frame instead of a blank box.
-        src={`${fileUrl(`${item.dir}/${video.name}`, video.mtime)}#t=0.1`}
+        src={`${fileUrl(path, media.mtime)}#t=0.1`}
         muted
         playsInline
         preload="metadata"
       />
-    );
-  }
-
-  if (image) {
-    return (
+    ) : (
       <img
         className={`${box} object-cover`}
-        src={fileUrl(`${item.dir}/${image.name}`, image.mtime)}
+        src={fileUrl(path, media.mtime)}
         alt=""
         loading="lazy"
       />
     );
-  }
+
+  if (!desktop || overlay) return picture;
 
   return (
-    <div className={`${box} flex items-center justify-center text-muted-foreground`}>
-      <ClapperboardIcon className="size-5" />
-    </div>
+    // Above the card's link and out of the card's drag, so a drag here takes the file. The card's
+    // link is the one to focus and read out.
+    <a
+      href={href("item", item.id)}
+      tabIndex={-1}
+      aria-hidden
+      draggable
+      className="relative z-10 shrink-0"
+      onPointerDown={(event) => event.stopPropagation()}
+      onDragStart={(event) => {
+        // The page's own drag gives way to one that carries the file.
+        event.preventDefault();
+        desktop?.startDrag(path);
+      }}
+    >
+      {picture}
+    </a>
+  );
+}
+
+/** What a card shows; the copy that follows a drag shows it without the links. */
+function CardBody({
+  item,
+  formatTitle,
+  overlay = false,
+}: {
+  item: ItemSummary;
+  formatTitle: (id: string) => string;
+  overlay?: boolean;
+}) {
+  const t = useMessages();
+  const title = "line-clamp-2 text-sm leading-snug font-medium";
+
+  return (
+    <CardContent>
+      <div className="flex gap-3">
+        <Thumbnail item={item} overlay={overlay} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {overlay ? (
+            <span className={title}>{item.title}</span>
+          ) : (
+            // The link's ::after stretches over the whole card, so the card is one click target.
+            <a
+              href={href("item", item.id)}
+              className={`${title} outline-none after:absolute after:inset-0 after:rounded-3xl`}
+            >
+              {item.title}
+            </a>
+          )}
+          {item.hook ? (
+            <p className="line-clamp-2 text-xs text-muted-foreground">{item.hook}</p>
+          ) : null}
+          <div className="mt-auto flex flex-wrap items-center gap-1.5">
+            {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
+            {item.openFeedback > 0 ? (
+              <Badge variant="destructive">
+                <MessageSquareIcon data-icon="inline-start" />
+                {t.board.openFeedback(item.openFeedback)}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </CardContent>
   );
 }
 
@@ -299,40 +454,20 @@ function ItemCard({
   item: ItemSummary;
   formatTitle: (id: string) => string;
 }) {
-  const t = useMessages();
+  const { listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
 
   return (
     <ContextMenu>
-      <div className="relative rounded-3xl transition-shadow hover:*:shadow-md has-focus-visible:*:shadow-md *:data-popup-open:shadow-md">
+      {/* Without dnd-kit's attributes, which would make the card a button of its own: the card's
+          link and menu stand for it. */}
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        data-dragging={isDragging}
+        className="relative rounded-3xl transition hover:*:shadow-md has-focus-visible:*:shadow-md *:data-popup-open:shadow-md data-[dragging=true]:opacity-40"
+      >
         <ContextMenuTrigger render={<Card size="sm" />}>
-          <CardContent>
-            <div className="flex gap-3">
-              <Thumbnail item={item} />
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                {/* The link's ::after stretches over the whole card, so the card is one click target. */}
-                <a
-                  href={href("item", item.id)}
-                  className="line-clamp-2 text-sm leading-snug font-medium outline-none after:absolute after:inset-0 after:rounded-3xl"
-                >
-                  {item.title}
-                </a>
-                {item.hook ? (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{item.hook}</p>
-                ) : null}
-                <div className="mt-auto flex flex-wrap items-center gap-1.5">
-                  {item.format ? (
-                    <Badge variant="secondary">{formatTitle(item.format)}</Badge>
-                  ) : null}
-                  {item.openFeedback > 0 ? (
-                    <Badge variant="destructive">
-                      <MessageSquareIcon data-icon="inline-start" />
-                      {t.board.openFeedback(item.openFeedback)}
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </CardContent>
+          <CardBody item={item} formatTitle={formatTitle} />
         </ContextMenuTrigger>
       </div>
       <ItemMenu item={item} />

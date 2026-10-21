@@ -22,6 +22,12 @@ export interface CutfacDesktop {
    * cancelled.
    */
   pickPath: () => Promise<string | undefined>;
+  /**
+   * Drag a workspace file out of the window, to drop a copy of it in Finder or another app. Call
+   * it from a `dragstart` handler that cancels the page's own drag. `path` is from the workspace's
+   * root.
+   */
+  startDrag: (path: string) => void;
   /** Tell the app which language the board shows, so its menus and dialogs match. */
   setLocale: (locale: Locale) => void;
   /** Undo and Redo chosen from the app menu or its shortcuts. Returns an unsubscribe. */

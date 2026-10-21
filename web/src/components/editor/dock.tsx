@@ -52,6 +52,7 @@ import {
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 import { useMessages, type Messages } from "../../i18n/index.ts";
+import { QUIET_DRAG } from "../../lib/drag.ts";
 import {
   arrange,
   columnsOf,
@@ -618,7 +619,8 @@ export function EditorDock({ stage, strips, chat }: EditorDockProps) {
             collisionDetection={pointerWithin}
             measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
             autoScroll={false}
-            accessibility={QUIET}
+            // The grip's menu moves a section without a mouse.
+            accessibility={QUIET_DRAG}
             onDragStart={({ active }: DragStartEvent) => setDragging(sectionOf(active.id))}
             onDragCancel={() => setDragging(undefined)}
             onDragEnd={drop}
@@ -642,20 +644,6 @@ export function EditorDock({ stage, strips, chat }: EditorDockProps) {
     </div>
   );
 }
-
-/**
- * A section drag says nothing aloud: the grip's menu is the way to move a section without a mouse,
- * and it names the places itself.
- */
-const QUIET = {
-  announcements: {
-    onDragStart: () => undefined,
-    onDragOver: () => undefined,
-    onDragEnd: () => undefined,
-    onDragCancel: () => undefined,
-  },
-  screenReaderInstructions: { draggable: "" },
-};
 
 interface ColumnsProps {
   arrangement: Arrangement;

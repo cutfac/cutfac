@@ -8,6 +8,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   nativeTheme,
   session,
   shell,
@@ -15,6 +16,7 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
+  type WebContents,
 } from "electron";
 
 import type { AppCommand, EditCommand } from "../web/src/desktop.ts";
@@ -30,6 +32,7 @@ import {
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
+  START_DRAG_CHANNEL,
 } from "./ipc.ts";
 import { startLicense, type License } from "./license.ts";
 import { MESSAGES } from "./messages.ts";
@@ -113,6 +116,12 @@ if (!app.requestSingleInstanceLock()) {
     assertFromApp(event);
 
     return revealInWorkspace(target);
+  });
+  ipcMain.on(START_DRAG_CHANNEL, (event, target: string) => {
+    if (!isFromApp(event)) return;
+
+    // A file gone since the board showed it just doesn't drag.
+    dragOut(event.sender, target).catch(() => undefined);
   });
   ipcMain.handle(PICK_PATH_CHANNEL, (event) => {
     assertFromApp(event);
@@ -543,18 +552,42 @@ function handleCrash(message: string): void {
     .then(() => app.quit());
 }
 
-async function revealInWorkspace(target: string): Promise<void> {
+/** A path in the open workspace, absolute or from its root, with links resolved. */
+async function resolveInWorkspace(target: string): Promise<string> {
   if (!workspaceRoot) throw new Error("No workspace is open");
 
-  if (!path.isAbsolute(target)) throw new Error("Path must be absolute");
-
   // Resolve symlinks on both sides so /tmp/x and /private/tmp/x compare equal and links cannot escape.
-  const [root, resolved] = await Promise.all([realpath(workspaceRoot), realpath(target)]);
+  const [root, resolved] = await Promise.all([
+    realpath(workspaceRoot),
+    realpath(path.resolve(workspaceRoot, target)),
+  ]);
+
   const relative = path.relative(root, resolved);
 
   if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error("Path is outside the workspace");
   }
 
-  shell.showItemInFolder(resolved);
+  return resolved;
+}
+
+async function revealInWorkspace(target: string): Promise<void> {
+  if (!path.isAbsolute(target)) throw new Error("Path must be absolute");
+
+  shell.showItemInFolder(await resolveInWorkspace(target));
+}
+
+/** How big the picture under the pointer is when a file is dragged out. */
+const DRAG_ICON_SIZE = { width: 96, height: 96 };
+
+/** Drag a workspace file out of the window as a copy, under a thumbnail of it. */
+async function dragOut(sender: WebContents, target: string): Promise<void> {
+  const file = await resolveInWorkspace(target);
+
+  // No thumbnails on Linux, or for some files; their icon will do.
+  const icon = await nativeImage
+    .createThumbnailFromPath(file, DRAG_ICON_SIZE)
+    .catch(() => app.getFileIcon(file));
+
+  sender.startDrag({ file, icon });
 }

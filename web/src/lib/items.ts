@@ -5,9 +5,16 @@ import { desktop } from "../desktop.ts";
 import type { Messages } from "../i18n/index.ts";
 import { sendFailed } from "./notify.ts";
 
-/** Move a video to another column of the board. */
+/** Move a video to another column of the board. Resolves whether it moved. */
 export const moveItem = (id: string, status: Status) =>
-  api.updateItem(id, { status }).then(() => undefined, sendFailed);
+  api.updateItem(id, { status }).then(
+    () => true,
+    (cause: unknown) => {
+      sendFailed(cause);
+
+      return false;
+    },
+  );
 
 /** Archive a video, with a toast that puts it back where it was. */
 export const archiveItem = (item: ItemSummary, t: Messages) =>
