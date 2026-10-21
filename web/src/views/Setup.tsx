@@ -87,7 +87,7 @@ export function Setup() {
             <Skeleton className="h-24 w-full" />
           ) : (
             <div className="flex flex-col gap-4">
-              <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm select-text">
                 <dt className="text-muted-foreground">{t.setup.name}</dt>
                 <dd>{ws.name}</dd>
                 <dt className="text-muted-foreground">{t.setup.folder}</dt>
@@ -157,7 +157,9 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
         </ItemDescription>
         <OutdatedAgentNote status={status} className="text-xs text-muted-foreground" />
         {outcome ? (
-          <p className={`text-xs ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}>
+          <p
+            className={`text-xs select-text ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}
+          >
             {outcome.detail}
           </p>
         ) : null}

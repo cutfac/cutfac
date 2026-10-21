@@ -274,7 +274,7 @@ function LearnedCard({
   const image = doc.images[0];
 
   return (
-    <Card>
+    <Card className="select-text">
       {doc.video ? (
         // Saved clips come without caption tracks.
         // oxlint-disable-next-line jsx-a11y/media-has-caption
@@ -391,7 +391,7 @@ export function Learn() {
             ) : null}
           </CardHeader>
           <CardContent>
-            <div className="typeset typeset-docs">
+            <div className="typeset typeset-docs select-text">
               {/* about.md marks each learned section with an HTML comment, which is for agents only. */}
               <Markdown remarkPlugins={[remarkGfm]} skipHtml>
                 {about.text}

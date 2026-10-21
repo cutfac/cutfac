@@ -470,7 +470,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 />
               </TabsContent>
               <TabsContent value="checks" className="min-h-0 overflow-y-auto">
-                <div className="p-4">
+                <div className="p-4 select-text">
                   <Checks item={item} />
                 </div>
               </TabsContent>
@@ -486,7 +486,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 </div>
               </TabsContent>
               <TabsContent value="details" className="min-h-0 overflow-y-auto">
-                <div className="p-4">
+                <div className="p-4 select-text">
                   <Details item={item} onItem={setData} />
                 </div>
               </TabsContent>

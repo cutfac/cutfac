@@ -230,7 +230,7 @@ export function Chat({
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport>
             {/* The content owns its gaps; margins give the messages room at the panel's edges. */}
-            <MessageScrollerContent className="mx-4">
+            <MessageScrollerContent className="mx-4 select-text">
               {requests.length === 0 ? (
                 <Welcome hasMedia={media !== undefined} />
               ) : (
@@ -293,7 +293,7 @@ function Welcome({ hasMedia }: { hasMedia: boolean }) {
   const t = useMessages();
 
   return (
-    <Empty className="my-auto">
+    <Empty className="my-auto select-none">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CrosshairIcon />

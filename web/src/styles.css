@@ -204,8 +204,11 @@
     color-scheme: dark;
     overscroll-behavior: none;
   }
+  /* As in a native app, the board's own words (labels, buttons, rows, headings) don't select as
+     text. What the user reads or copies, such as chat, guides and errors, opts back in with
+     select-text; text fields always select. See docs/ui.md. */
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground select-none;
   }
   /* The page leaves its background off over the macOS sidebar material; the board paints its own. */
   [data-vibrancy] body {

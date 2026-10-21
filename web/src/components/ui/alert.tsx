@@ -28,7 +28,7 @@ function Alert({
     <div
       data-slot="alert"
       role="alert"
-      className={cn(alertVariants({ variant }), className)}
+      className={cn(alertVariants({ variant }), "select-text", className)}
       {...props}
     />
   );

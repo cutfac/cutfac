@@ -200,7 +200,7 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
         <MessageScrollerProvider autoScroll>
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
-              <MessageScrollerContent className="mx-5">
+              <MessageScrollerContent className="mx-5 select-text">
                 {doc.turns.map((turn) => (
                   <MessageScrollerItem key={turn.id} messageId={turn.id}>
                     <Turn detail={detail} turn={turn} live={run} onStop={stop}>

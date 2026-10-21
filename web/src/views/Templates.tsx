@@ -499,7 +499,7 @@ function TemplateDetail({ status, root }: { status: FormatStatus; root: string |
   const doc = format?.doc;
 
   return (
-    <Card>
+    <Card className="select-text">
       <CardHeader>
         <CardTitle>{doc?.title ?? status.id}</CardTitle>
         <CardDescription>{doc?.summary || `formats/${status.id}`}</CardDescription>

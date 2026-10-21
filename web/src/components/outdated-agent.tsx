@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 import type { AgentStatus } from "../api.ts";
 import { useMessages } from "../i18n/index.ts";
 
@@ -18,7 +20,7 @@ export function OutdatedAgentNote({
   if (outdated === undefined || version === undefined) return null;
 
   return (
-    <p className={className}>
+    <p className={cn("select-text", className)}>
       {t.setup.agentOutdated(
         t.setup.agents[status.agent],
         version,
