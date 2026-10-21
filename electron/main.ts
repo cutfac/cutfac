@@ -9,6 +9,7 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  session,
   shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -44,12 +45,16 @@ import {
 import { startSidecar, type Sidecar } from "./sidecar.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 
-// Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to.
-const devUrl = process.env.CUTFAC_DEV_URL || undefined;
+// Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
+// packaged app ignores it, so another program can't open the app on a page of its choosing.
+const devUrl = app.isPackaged ? undefined : process.env.CUTFAC_DEV_URL || undefined;
 
 const devPort = Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10);
 
 const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
+
+/** What the board asks for: the clipboard for its copy buttons, and full screen for its videos. */
+const PAGE_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"]);
 
 let window: BrowserWindow | undefined;
 
@@ -145,7 +150,26 @@ function assertFromApp(event: IpcMainInvokeEvent): void {
   if (!isFromApp(event)) throw new Error("Untrusted IPC sender");
 }
 
+function isAllowedPermission(permission: string, url: string): boolean {
+  return PAGE_PERMISSIONS.has(permission) && URL.parse(url)?.origin === appOrigin;
+}
+
+/**
+ * Only the board, on the app's origin, gets the permissions it uses. Everything else a page can
+ * ask for, such as the camera, microphone, location or notifications, is refused, so nothing
+ * shown in the window can use what macOS lets the app do.
+ */
+function limitPermissions(): void {
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
+    callback(isAllowedPermission(permission, details.requestingUrl)),
+  );
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, origin) =>
+    isAllowedPermission(permission, origin),
+  );
+}
+
 async function boot(): Promise<void> {
+  limitPermissions();
   // The board is dark only; this keeps the title bar, menus and dialogs dark with it.
   nativeTheme.themeSource = "dark";
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
