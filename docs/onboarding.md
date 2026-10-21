@@ -117,13 +117,28 @@ what it knows. The agent may ask when a guess would likely make the wrong thing,
 product on a website to promote; the question shows in step 6 next to the title, and the import
 already takes replies. The request leans it toward deciding: ask only what it can't settle
 reasonably, one question at a time so each is quick to answer, keep them few, and otherwise pick a
-sensible default. That is guidance in the request, not a hard limit. What it settled without asking goes in
-the template's README, where the user can change it.
+sensible default. That is guidance in the request, not a hard limit. What it settled without asking
+goes in the template's README, where the user can change it.
 
-The purpose, platforms and material are saved in the workspace as `brief.md` at its root, which the
-user can edit on the board. Every later agent run and the MCP tools read it, so the next template
-and every video start from the same context. The front matter holds what the app reads, the body is
-the user's own words:
+The user never sees the request itself. In outline it says:
+
+- make one template for the person `brief.md` describes, reading its material;
+- start from this reference, or from what you know when there is none;
+- fit the aspect ratios and lengths to the platforms;
+- ask only what you can't settle reasonably, one question at a time, each with two or three likely
+  answers to pick from; settle the rest with sensible defaults and list them in the README;
+- finish when `check_format` passes;
+- reply and ask in the user's language.
+
+The wording is tuned against real agent runs when it is built.
+
+### The brief
+
+The purpose, platforms and material are saved as `brief.md` at the workspace root, so each workspace
+has its own: one for promoting an app and one for a personal brand keep separate briefs, as they
+keep separate templates. A new workspace asks for its brief with the same form as step 5. Every
+later agent run and the MCP tools read it, so the next template and every video start from the same
+context. The front matter holds what the app reads, the body is the user's own words:
 
 ```markdown
 ---
@@ -135,6 +150,16 @@ material:
 
 Short videos that promote my app. Light and friendly.
 ```
+
+The person and the agent edit the same file:
+
+- **On the board**, the top of the sidebar, under the workspace name, sums the brief up in a line
+  ("Promote my app · TikTok, Shorts"). Clicking it opens a sheet with the step 5 form: purpose and
+  platforms to pick, material to add or remove, and the body as free text. Saving writes
+  `brief.md`. No menu item or settings page of its own.
+- **In words**, the user tells the agent while working ("I'm doing Reels now too"), and the agent
+  updates `brief.md` through an MCP tool and says what changed in one line. The sheet shows the
+  change at once.
 
 The gallery is a list of links hosted on cutfac.com, which the app fetches, so it changes without a
 release as new examples appear. Each entry carries a title, a preview clip, a link and its license.
@@ -159,7 +184,16 @@ niche.
 
 A template can take the agent a few minutes, so the user doesn't wait on it. Start moves straight
 to the title, with the run's progress above the field and its Allow, when it asks for one, in
-place. Create is ready once the title is in and the template is; it makes the item with
+place:
+
+- **Progress** is one line that moves through the run: reading the reference, picking the style,
+  checking.
+- **A question** shows as one bubble above the title field, with the agent's suggested answers as
+  buttons and a field for its own answer. Answering one brings the next or lets the run go on.
+- **When it is done**, what the agent settled without asking shows as a short list ("30 seconds",
+  "large captions"), the same as the README. Clicking one lets the user change it in words.
+
+Create is ready once the title is in and the template is; it makes the item with
 that template and opens its detail view. The agent doesn't start on its own: the first run is the
 user's to start, from the detail view, as every later one is.
 
@@ -173,8 +207,3 @@ what is missing, and how to fix it, from the tools it already calls.
 
 - The license key stays in the menu. The free plan reaches the first video without one.
 - No path for upgrading users: there are none yet with a workspace to carry over.
-
-## Open questions
-
-- Where the board shows `brief.md` for editing.
-- The exact request the import sends for a brief and a reference.
