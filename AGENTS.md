@@ -29,6 +29,9 @@ Engineering:
 
 - Runtime and packages: Bun only (`bun`, `bun run`). Lint with `oxlint`, format with `oxfmt`.
 - Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
+- Keep each source file under 500 lines. When one grows past that, split it by responsibility into
+  cohesive modules, not at arbitrary line boundaries. Split large intermediate work, such as
+  generator scripts and generated files, the same way.
 - All filesystem access goes through `Workspace` in `src/core/workspace.ts`; never bypass its root guard.
 - Keep `src/core` free of HTTP and MCP concerns; MCP tools and API routes are thin adapters.
 - Board text doesn't select by default, as in a native app. Content people would copy (chat, guides,
