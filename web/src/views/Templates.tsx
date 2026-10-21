@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { HeldChips, useHeldFiles } from "@/components/editor/attachments";
 import { ImportChat } from "@/components/import-chat";
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
+import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -499,7 +500,7 @@ function TemplateDetail({ status, root }: { status: FormatStatus; root: string |
   const doc = format?.doc;
 
   return (
-    <Card className="select-text">
+    <SelectionArea render={<Card />}>
       <CardHeader>
         <CardTitle>{doc?.title ?? status.id}</CardTitle>
         <CardDescription>{doc?.summary || `formats/${status.id}`}</CardDescription>
@@ -537,7 +538,7 @@ function TemplateDetail({ status, root }: { status: FormatStatus; root: string |
           {format === undefined ? null : <FormatBody format={format} status={status} />}
         </div>
       </CardContent>
-    </Card>
+    </SelectionArea>
   );
 }
 

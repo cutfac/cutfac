@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { SelectionArea } from "@/components/selection-area";
 
 import type { AgentStatus } from "../api.ts";
 import { useMessages } from "../i18n/index.ts";
@@ -20,13 +20,13 @@ export function OutdatedAgentNote({
   if (outdated === undefined || version === undefined) return null;
 
   return (
-    <p className={cn("select-text", className)}>
+    <SelectionArea render={<p className={className} />}>
       {t.setup.agentOutdated(
         t.setup.agents[status.agent],
         version,
         outdated.minimum,
         <code className="font-mono">{outdated.update}</code>,
       )}
-    </p>
+    </SelectionArea>
   );
 }

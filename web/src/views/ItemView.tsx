@@ -10,6 +10,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
+import { SelectionArea } from "@/components/selection-area";
 import { InTitleBar } from "@/components/title-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -470,9 +471,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 />
               </TabsContent>
               <TabsContent value="checks" className="min-h-0 overflow-y-auto">
-                <div className="p-4 select-text">
+                <SelectionArea className="p-4">
                   <Checks item={item} />
-                </div>
+                </SelectionArea>
               </TabsContent>
               <TabsContent value="history" className="min-h-0 overflow-y-auto">
                 <div className="p-4">
@@ -486,9 +487,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 </div>
               </TabsContent>
               <TabsContent value="details" className="min-h-0 overflow-y-auto">
-                <div className="p-4 select-text">
+                <SelectionArea className="p-4">
                   <Details item={item} onItem={setData} />
-                </div>
+                </SelectionArea>
               </TabsContent>
             </Tabs>
           </aside>

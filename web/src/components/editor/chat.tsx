@@ -17,6 +17,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { SelectionArea } from "@/components/selection-area";
 import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -230,7 +231,7 @@ export function Chat({
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport>
             {/* The content owns its gaps; margins give the messages room at the panel's edges. */}
-            <MessageScrollerContent className="mx-4 select-text">
+            <SelectionArea render={<MessageScrollerContent className="mx-4" />}>
               {requests.length === 0 ? (
                 <Welcome hasMedia={media !== undefined} />
               ) : (
@@ -252,7 +253,7 @@ export function Chat({
                   </MessageScrollerItem>
                 ))
               )}
-            </MessageScrollerContent>
+            </SelectionArea>
           </MessageScrollerViewport>
           <MessageScrollerButton />
         </MessageScroller>

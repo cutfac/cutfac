@@ -19,6 +19,7 @@ import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
 import { ErrorAlert, ListSkeleton } from "@/components/page";
+import { SelectionArea } from "@/components/selection-area";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -200,7 +201,7 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
         <MessageScrollerProvider autoScroll>
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
-              <MessageScrollerContent className="mx-5 select-text">
+              <SelectionArea render={<MessageScrollerContent className="mx-5" />}>
                 {doc.turns.map((turn) => (
                   <MessageScrollerItem key={turn.id} messageId={turn.id}>
                     <Turn detail={detail} turn={turn} live={run} onStop={stop}>
@@ -208,7 +209,7 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
                     </Turn>
                   </MessageScrollerItem>
                 ))}
-              </MessageScrollerContent>
+              </SelectionArea>
             </MessageScrollerViewport>
             <MessageScrollerButton />
           </MessageScroller>

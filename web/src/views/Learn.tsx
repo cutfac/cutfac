@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
+import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -274,7 +275,7 @@ function LearnedCard({
   const image = doc.images[0];
 
   return (
-    <Card className="select-text">
+    <SelectionArea render={<Card />}>
       {doc.video ? (
         // Saved clips come without caption tracks.
         // oxlint-disable-next-line jsx-a11y/media-has-caption
@@ -332,7 +333,7 @@ function LearnedCard({
           ) : null}
         </div>
       </CardContent>
-    </Card>
+    </SelectionArea>
   );
 }
 
@@ -391,12 +392,12 @@ export function Learn() {
             ) : null}
           </CardHeader>
           <CardContent>
-            <div className="typeset typeset-docs select-text">
+            <SelectionArea className="typeset typeset-docs">
               {/* about.md marks each learned section with an HTML comment, which is for agents only. */}
               <Markdown remarkPlugins={[remarkGfm]} skipHtml>
                 {about.text}
               </Markdown>
-            </div>
+            </SelectionArea>
           </CardContent>
         </Card>
       ) : null}

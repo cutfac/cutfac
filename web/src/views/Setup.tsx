@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { ErrorAlert, Page } from "@/components/page";
+import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,14 +88,16 @@ export function Setup() {
             <Skeleton className="h-24 w-full" />
           ) : (
             <div className="flex flex-col gap-4">
-              <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm select-text">
+              <SelectionArea
+                render={<dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm" />}
+              >
                 <dt className="text-muted-foreground">{t.setup.name}</dt>
                 <dd>{ws.name}</dd>
                 <dt className="text-muted-foreground">{t.setup.folder}</dt>
                 <dd className="font-mono text-xs break-all">{ws.root}</dd>
                 <dt className="text-muted-foreground">{t.setup.defaultAgent}</dt>
                 <dd>{t.setup.agents[ws.config.agent.default]}</dd>
-              </dl>
+              </SelectionArea>
               {desktop ? (
                 <div>
                   <Button
@@ -157,11 +160,15 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
         </ItemDescription>
         <OutdatedAgentNote status={status} className="text-xs text-muted-foreground" />
         {outcome ? (
-          <p
-            className={`text-xs select-text ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}
+          <SelectionArea
+            render={
+              <p
+                className={`text-xs ${outcome.ok ? "text-muted-foreground" : "text-destructive"}`}
+              />
+            }
           >
             {outcome.detail}
-          </p>
+          </SelectionArea>
         ) : null}
       </ItemContent>
       <ItemActions>
