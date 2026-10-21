@@ -31,6 +31,8 @@ Engineering:
 - Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
 - All filesystem access goes through `Workspace` in `src/core/workspace.ts`; never bypass its root guard.
 - Keep `src/core` free of HTTP and MCP concerns; MCP tools and API routes are thin adapters.
+- Board text doesn't select by default, as in a native app. Content people would copy (chat, guides,
+  errors, paths) opts in with `select-text`; see `docs/ui.md`.
 - Workspace files are the source of truth. Do not add a database without a demonstrated need.
 - The core must stay domain-agnostic; product- or niche-specific logic belongs in a workspace.
 - Add a focused `bun:test` for parsing, status mapping, verification, and persistence changes.
