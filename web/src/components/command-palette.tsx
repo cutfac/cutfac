@@ -1,6 +1,5 @@
 import { ArchiveIcon, FolderOpenIcon, PanelLeftIcon, PlugZapIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
-import { toast } from "sonner";
 
 import { MAIN_NAV, openWorkspace, StatusDot } from "@/components/app-sidebar";
 import { openNewItem } from "@/components/new-item-dialog";
@@ -16,12 +15,13 @@ import {
 } from "@/components/ui/command";
 import { useSidebar } from "@/components/ui/sidebar";
 
-import { api, type ItemSummary } from "../api.ts";
+import { api } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { APP_KEYS, onAppCommand, type AppCommand } from "../lib/app-commands.ts";
 import { MOD_KEY } from "../lib/edit-commands.ts";
+import { archiveItem } from "../lib/items.ts";
 
 function go(view: string, id?: string) {
   location.hash = href(view, id);
@@ -53,12 +53,6 @@ function PaletteCommands({ editing, onChoose }: PaletteCommandsProps) {
     action();
   };
 
-  const archive = (item: ItemSummary) =>
-    api.updateItem(item.id, { status: "archived" }).then(
-      () => toast.success(t.palette.archived(item.title)),
-      (cause: Error) => toast.error(cause.message),
-    );
-
   return (
     <>
       <CommandInput placeholder={t.palette.placeholder} />
@@ -86,9 +80,9 @@ function PaletteCommands({ editing, onChoose }: PaletteCommandsProps) {
         {/* After the actions, so ⌘K then Enter never archives. */}
         {current !== undefined && current.status !== "archived" ? (
           <CommandGroup heading={t.palette.thisVideo}>
-            <CommandItem onSelect={choose(() => void archive(current))}>
+            <CommandItem onSelect={choose(() => void archiveItem(current, t))}>
               <ArchiveIcon />
-              {t.palette.archive}
+              {t.itemActions.archive}
             </CommandItem>
           </CommandGroup>
         ) : null}

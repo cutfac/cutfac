@@ -1,18 +1,34 @@
 import {
   ArchiveIcon,
+  ArrowRightLeftIcon,
   BookOpenIcon,
   ClapperboardIcon,
+  FolderOpenIcon,
   MessageSquareIcon,
   PlusIcon,
+  SquarePenIcon,
 } from "lucide-react";
 import { useState } from "react";
 
+import { StatusDot } from "@/components/app-sidebar";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Empty,
   EmptyContent,
@@ -31,9 +47,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
 
-import { api, fileUrl, STATUSES, type ItemSummary } from "../api.ts";
+import { api, fileUrl, STATUSES, type ItemSummary, type Status } from "../api.ts";
+import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { archiveItem, moveItem, revealItem } from "../lib/items.ts";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
@@ -284,35 +302,88 @@ function ItemCard({
   const t = useMessages();
 
   return (
-    <div className="relative rounded-3xl transition-shadow select-none hover:*:shadow-md has-focus-visible:*:shadow-md">
-      <Card size="sm">
-        <CardContent>
-          <div className="flex gap-3">
-            <Thumbnail item={item} />
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              {/* The link's ::after stretches over the whole card, so the card is one click target. */}
-              <a
-                href={href("item", item.id)}
-                className="line-clamp-2 text-sm leading-snug font-medium outline-none after:absolute after:inset-0 after:rounded-3xl"
-              >
-                {item.title}
-              </a>
-              {item.hook ? (
-                <p className="line-clamp-2 text-xs text-muted-foreground">{item.hook}</p>
-              ) : null}
-              <div className="mt-auto flex flex-wrap items-center gap-1.5">
-                {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
-                {item.openFeedback > 0 ? (
-                  <Badge variant="destructive">
-                    <MessageSquareIcon data-icon="inline-start" />
-                    {t.board.openFeedback(item.openFeedback)}
-                  </Badge>
+    <ContextMenu>
+      <div className="relative rounded-3xl transition-shadow hover:*:shadow-md has-focus-visible:*:shadow-md *:data-popup-open:shadow-md">
+        <ContextMenuTrigger render={<Card size="sm" />}>
+          <CardContent>
+            <div className="flex gap-3">
+              <Thumbnail item={item} />
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                {/* The link's ::after stretches over the whole card, so the card is one click target. */}
+                <a
+                  href={href("item", item.id)}
+                  className="line-clamp-2 text-sm leading-snug font-medium outline-none after:absolute after:inset-0 after:rounded-3xl"
+                >
+                  {item.title}
+                </a>
+                {item.hook ? (
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{item.hook}</p>
                 ) : null}
+                <div className="mt-auto flex flex-wrap items-center gap-1.5">
+                  {item.format ? (
+                    <Badge variant="secondary">{formatTitle(item.format)}</Badge>
+                  ) : null}
+                  {item.openFeedback > 0 ? (
+                    <Badge variant="destructive">
+                      <MessageSquareIcon data-icon="inline-start" />
+                      {t.board.openFeedback(item.openFeedback)}
+                    </Badge>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </ContextMenuTrigger>
+      </div>
+      <ItemMenu item={item} />
+    </ContextMenu>
+  );
+}
+
+/** What a right click on a card offers: open it, move it to another column, find its files. */
+function ItemMenu({ item }: { item: ItemSummary }) {
+  const t = useMessages();
+
+  return (
+    <ContextMenuContent>
+      <ContextMenuItem onClick={() => (location.hash = href("item", item.id))}>
+        <SquarePenIcon />
+        {t.itemActions.open}
+      </ContextMenuItem>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <ArrowRightLeftIcon />
+          {t.itemActions.moveTo}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuRadioGroup
+            value={item.status}
+            onValueChange={(status: Status) => void moveItem(item.id, status)}
+          >
+            {STATUSES.map((status) => (
+              <ContextMenuRadioItem key={status} value={status}>
+                <StatusDot status={status} />
+                {t.status[status]}
+              </ContextMenuRadioItem>
+            ))}
+          </ContextMenuRadioGroup>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      {desktop ? (
+        <ContextMenuItem onClick={() => void revealItem(item)}>
+          <FolderOpenIcon />
+          {t.itemActions.showFolder}
+        </ContextMenuItem>
+      ) : null}
+      {item.status !== "archived" ? (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => void archiveItem(item, t)}>
+            <ArchiveIcon />
+            {t.itemActions.archive}
+          </ContextMenuItem>
+        </>
+      ) : null}
+    </ContextMenuContent>
   );
 }

@@ -11,6 +11,7 @@ import {
   nativeTheme,
   session,
   shell,
+  type ContextMenuParams,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
@@ -485,8 +486,42 @@ function createWindow(): BrowserWindow {
 
   webContents.on("will-navigate", keepInsideApp);
   webContents.on("will-redirect", keepInsideApp);
+  webContents.on("context-menu", (_event, params) => showTextMenu(created, params));
 
   return created;
+}
+
+/**
+ * Text fields and selected text get the usual spelling fixes, Cut, Copy and Paste. Chromium leaves
+ * out a right click the board answered with its own menu, such as a card's.
+ */
+function showTextMenu(owner: BrowserWindow, params: ContextMenuParams): void {
+  const { isEditable, selectionText, editFlags, dictionarySuggestions } = params;
+
+  if (!isEditable && selectionText.trim() === "") return;
+
+  const t = MESSAGES[locale];
+  const separator = { type: "separator" } as const;
+
+  const template: MenuItemConstructorOptions[] = dictionarySuggestions
+    .slice(0, 3)
+    .map((word) => ({ label: word, click: () => owner.webContents.replaceMisspelling(word) }));
+
+  if (template.length > 0) template.push(separator);
+
+  if (isEditable) {
+    template.push(
+      { role: "cut", label: t.cut, enabled: editFlags.canCut },
+      { role: "copy", label: t.copy, enabled: editFlags.canCopy },
+      { role: "paste", label: t.paste, enabled: editFlags.canPaste },
+      separator,
+      { role: "selectAll", label: t.selectAll, enabled: editFlags.canSelectAll },
+    );
+  } else {
+    template.push({ role: "copy", label: t.copy });
+  }
+
+  Menu.buildFromTemplate(template).popup({ window: owner });
 }
 
 /** Page-initiated navigation (links, redirects) may not leave the app origin; web links open in the browser. */

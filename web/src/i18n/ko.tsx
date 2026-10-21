@@ -44,10 +44,16 @@ export const ko: Messages = {
     placeholder: "영상과 명령 검색…",
     empty: "맞는 항목이 없어요.",
     thisVideo: "이 영상",
-    archive: "보관",
-    archived: (title) => `"${title}"을(를) 보관했어요`,
     actions: "작업",
     goTo: "이동",
+  },
+  itemActions: {
+    open: "열기",
+    moveTo: "옮기기",
+    showFolder: "폴더 보기",
+    archive: "보관",
+    archived: (title) => `"${title}"을(를) 보관했어요`,
+    undo: "실행 취소",
   },
   language: {
     label: "언어",

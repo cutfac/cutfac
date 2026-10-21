@@ -56,10 +56,16 @@ export const en = {
     placeholder: "Search videos and commands…",
     empty: "Nothing matches.",
     thisVideo: "This video",
-    archive: "Archive",
-    archived: (title: string) => `Archived "${title}"`,
     actions: "Actions",
     goTo: "Go to",
+  },
+  itemActions: {
+    open: "Open",
+    moveTo: "Move to",
+    showFolder: "Show folder",
+    archive: "Archive",
+    archived: (title: string) => `Archived "${title}"`,
+    undo: "Undo",
   },
   language: {
     label: "Language",
