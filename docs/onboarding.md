@@ -116,8 +116,8 @@ template for this person, starting from this reference". Without a reference the
 what it knows. The agent may ask when a guess would likely make the wrong thing, such as which
 product on a website to promote; the question shows in step 6 next to the title, and the import
 already takes replies. The request leans it toward deciding: ask only what it can't settle
-reasonably, gather it into one message rather than a back-and-forth, and otherwise pick a sensible
-default. That is guidance in the request, not a hard limit. What it settled without asking goes in
+reasonably, one question at a time so each is quick to answer, keep them few, and otherwise pick a
+sensible default. That is guidance in the request, not a hard limit. What it settled without asking goes in
 the template's README, where the user can change it.
 
 The purpose, platforms and material are saved in the workspace as `brief.md` at its root, which the
