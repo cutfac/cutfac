@@ -7,7 +7,9 @@ directories:
 
 # The app bundle ships only the bundled Electron main and preload. Everything else is self-contained:
 # the server is a compiled binary and the board is a static build, both added as extraResources.
-# So no node_modules goes into the asar.
+# So no node_modules goes into the asar. `build:sidecar` signs the binary ad-hoc right away: Bun
+# appends the program after the linker signed it, and macOS kills it until it is signed again. A
+# signed build signs over that.
 files:
   - dist/electron/**
   - package.json

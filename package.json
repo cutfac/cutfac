@@ -26,7 +26,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:electron": "bun build ./electron/main.ts --target node --format esm --external electron --outfile dist/electron/main.js && bun build ./electron/preload.ts --target node --format cjs --external electron --outfile dist/electron/preload.cjs",
-    "build:sidecar": "bun build --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig src/cli.ts --outfile dist/sidecar/cutfac",
+    "build:sidecar": "bun build --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig src/cli.ts --outfile dist/sidecar/cutfac && codesign --force --sign - dist/sidecar/cutfac",
     "desktop": "bun run build && bun run build:electron && electron .",
     "desktop:dev": "bun electron/dev.ts",
     "dist:desktop": "bun run build && bun run build:sidecar && bun run build:electron && electron-builder --mac dir -c.mac.identity=null",
