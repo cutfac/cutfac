@@ -5,6 +5,9 @@ release/
 .env.*
 .DS_Store
 
-# Internal notes and local agent settings
-docs/pricing.md
+# Business notes (pricing, marketing, launch plans) stay on this machine, because this repository
+# is open source and will be public. See AGENTS.md.
+docs/business/
+
+# Local agent settings
 .claude/

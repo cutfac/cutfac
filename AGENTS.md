@@ -16,6 +16,15 @@ Product:
   possible; the product's job is well-defined, sensible primitives and a fitting frame, not
   step-by-step control.
 
+Open source:
+
+- This repository is the open-source app and will be public. Keep business information out of it:
+  pricing rationale, marketing and launch plans, revenue and customer data, and notes on other
+  companies. That covers files, code comments, tests, commit messages, and PR text. What
+  cutfac.com already shows publicly, such as plan prices, is fine.
+- Write business notes in `docs/business/`, which `.gitignore` keeps out of the repository. Tracked
+  files never link to them, since the public copy won't have them.
+
 Engineering:
 
 - Runtime and packages: Bun only (`bun`, `bun run`). Lint with `oxlint`, format with `oxfmt`.
