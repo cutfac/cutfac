@@ -9,23 +9,13 @@ import { insetTitleBar } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 import { MOD_KEY } from "../lib/edit-commands.ts";
 
-/**
- * The sidebar's share of the macOS title bar: empty, under the window controls, and dragging the
- * window like a title bar does. Nothing in a browser or on other systems.
- */
-export function TitleBarStrip() {
-  if (!insetTitleBar) return null;
-
-  return <div aria-hidden="true" className="h-12 shrink-0 [-webkit-app-region:drag]" />;
-}
-
 const Slot = createContext<HTMLElement | null>(null);
 
 /**
  * The bar atop the content, then the content: the sidebar toggle, and room the open view fills
- * with its title and actions through {@link InTitleBar}. On macOS it is the window's title bar: it
- * drags the window, and the toggle sits by the window controls and stays there as the sidebar
- * opens and closes.
+ * with its title and actions through {@link InTitleBar}. On macOS it is the window's title bar,
+ * across the whole window above the sidebar and the content: it drags the window, the toggle sits
+ * by the window controls, and the title lines up with the content as the sidebar opens and closes.
  */
 export function TitleBar({ children }: { children: ReactNode }) {
   const t = useMessages();
@@ -46,10 +36,11 @@ export function TitleBar({ children }: { children: ReactNode }) {
           "flex h-12 shrink-0 items-center gap-2 pr-6",
           !insetTitleBar
             ? "pl-4"
-            : // Clear the window controls and the toggle while the sidebar is too narrow to.
-              cn(
-                "transition-all duration-200 ease-linear [-webkit-app-region:drag]",
-                state === "collapsed" ? "pl-19" : "pl-6",
+            : cn(
+                "fixed inset-x-0 top-0 z-20 transition-all duration-200 ease-linear [-webkit-app-region:drag]",
+                // Over the open content's own padding (the 14rem sidebar, then 1.5rem), or past the
+                // window controls and the toggle.
+                state === "collapsed" ? "pl-30" : "pl-62",
               ),
         )}
       >

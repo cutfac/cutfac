@@ -7,9 +7,10 @@ import { NewItemDialog } from "@/components/new-item-dialog";
 import { ErrorAlert } from "@/components/page";
 import { TitleBar } from "@/components/title-bar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 import { api } from "./api.ts";
-import { desktop } from "./desktop.ts";
+import { desktop, insetTitleBar } from "./desktop.ts";
 import { href, useAgentStatuses, useHashRoute, useLive, usePlan, useSidebarOpen } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
 import { Board } from "./views/Board.tsx";
@@ -34,7 +35,12 @@ export function App() {
   }, [needsSetup]);
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-dvh min-h-0">
+    <SidebarProvider
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
+      // On macOS the title bar runs across the window above the sidebar and the content.
+      className={cn("min-h-0", insetTitleBar ? "mt-10 h-[calc(100dvh-2.5rem)]" : "h-dvh")}
+    >
       <AppSidebar ws={ws} plan={plan} view={view} id={id} />
       <SidebarInset className="min-h-0 min-w-0">
         <TitleBar>

@@ -17,7 +17,6 @@ import { toast } from "sonner";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
-import { TitleBarStrip } from "@/components/title-bar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +42,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { api, type ItemSummary, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
-import { desktop } from "../desktop.ts";
+import { desktop, insetTitleBar } from "../desktop.ts";
 import { href, useLive, type Live } from "../hooks.ts";
 import {
   isLocale,
@@ -308,8 +307,12 @@ export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
     view === "board" || (editing !== undefined && !videos.some((v) => v.id === editing));
 
   return (
-    <Sidebar collapsible="icon">
-      <TitleBarStrip />
+    <Sidebar
+      collapsible="icon"
+      // On macOS it sits under the title bar, on the window's sidebar material, and the content
+      // beside it is a card.
+      {...(insetTitleBar && { variant: "inset", className: "top-10 h-[calc(100svh-2.5rem)]" })}
+    >
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
