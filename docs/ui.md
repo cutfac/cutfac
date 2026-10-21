@@ -23,12 +23,13 @@ terminal, a search box. If they would, it selects. If not, it doesn't.
 How it is built:
 
 - `body` is `select-none` (`web/src/styles.css`), so new UI starts out as chrome.
-- Content opts back in with `select-text` on the wrapper that holds it (the message list, the
-  guide, the checks panel), not on each line, so it selects like a document, its own headings
-  included. Keep it off anything that acts on a click or a drag: a double-click there should open
-  the thing, not highlight a word.
-- Alerts, dialog descriptions and toasts opt in themselves (`web/src/components/ui/`), since they
-  carry errors and often render outside any page.
+- Content opts back in by wrapping what holds it (the message list, the guide, the checks panel)
+  in `<SelectionArea>` (`web/src/components/selection-area.tsx`), not each line, so it selects like
+  a document, its own headings included. To make an existing element the area instead of adding a
+  `div`, pass it as `render`: `<SelectionArea render={<Card />}>`. Keep it off anything that acts
+  on a click or a drag: a double-click there should open the thing, not highlight a word.
+- Alerts, dialog descriptions and toasts opt in themselves with the `select-text` class
+  (`web/src/components/ui/`), since they carry errors and often render outside any page.
 - Controls inside a selectable region stay unselectable. The shared buttons, badges and menu items
   already are.
 - Inputs, text areas and contenteditable elements always select and edit; they need nothing.
