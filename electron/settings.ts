@@ -7,6 +7,13 @@ import { app } from "electron";
 
 import { decodeLicenseRecord, type LicenseRecord } from "../src/license.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
+import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
+
+/** The board page last shown, for the workspace it belongs to. */
+const Page = Schema.Struct({
+  workspace: Schema.NonEmptyString,
+  hash: Schema.String.check(Schema.isPattern(/^#\//)),
+});
 
 interface Settings {
   workspace: string;
@@ -14,6 +21,8 @@ interface Settings {
   locale: Locale;
   licenseKey: string;
   license: LicenseRecord | undefined;
+  window: WindowPlace;
+  page: typeof Page.Type;
 }
 
 function settingsFile(): string {
@@ -29,6 +38,8 @@ const decodePort = Schema.decodeUnknownOption(
 );
 
 const decodeLocale = Schema.decodeUnknownOption(Schema.Literals(LOCALES));
+
+const decodePage = Schema.decodeUnknownOption(Page);
 
 /**
  * Whatever was saved. Each loader decodes only the field it reads, so a value written by another
@@ -46,7 +57,7 @@ async function readSettings(): Promise<Schema.JsonObject> {
  * The app's agent tools read the license from this file whenever they make a video, so it is
  * replaced whole and never seen half written.
  */
-async function writeSettings(patch: Partial<Settings>): Promise<void> {
+async function replaceSettings(patch: Partial<Settings>): Promise<void> {
   const settings = { ...(await readSettings()), ...patch };
   const file = settingsFile();
   const draft = `${file}.${randomUUID()}.tmp`;
@@ -55,6 +66,19 @@ async function writeSettings(patch: Partial<Settings>): Promise<void> {
   await writeFile(draft, `${JSON.stringify(settings, null, 2)}\n`);
   await rename(draft, file);
 }
+
+let writing = Promise.resolve();
+
+/** One save at a time, so two close together, such as a move and a page change, keep both. */
+function writeSettings(patch: Partial<Settings>): Promise<void> {
+  const next = writing.then(() => replaceSettings(patch));
+  writing = next.catch(() => undefined);
+
+  return next;
+}
+
+/** Settles once every save asked for so far is on disk, or has failed. */
+export const settingsWritten = (): Promise<void> => writing;
 
 /** The last workspace the user opened, or undefined if none is saved or its folder is gone. */
 export async function loadWorkspace(): Promise<string | undefined> {
@@ -107,3 +131,20 @@ export async function loadLicense(): Promise<{
 /** Saves both together; an undefined record drops the old one. */
 export const saveLicense = (licenseKey: string, license: LicenseRecord | undefined) =>
   writeSettings({ licenseKey, license });
+
+/** Where the window last was, at its normal size, and whether it filled the screen. */
+export async function loadWindowPlace(): Promise<WindowPlace | undefined> {
+  return Option.getOrUndefined(decodeWindowPlace((await readSettings()).window));
+}
+
+export const saveWindowPlace = (place: WindowPlace) => writeSettings({ window: place });
+
+/** The page last shown in `workspace`, such as `#/item/…`, or undefined if that was elsewhere. */
+export async function loadPage(workspace: string): Promise<string | undefined> {
+  const page = Option.getOrUndefined(decodePage((await readSettings()).page));
+
+  return page?.workspace === workspace ? page.hash : undefined;
+}
+
+export const savePage = (workspace: string, hash: string) =>
+  writeSettings({ page: { workspace, hash } });

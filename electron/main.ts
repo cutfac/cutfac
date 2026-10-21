@@ -10,6 +10,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  screen,
   session,
   shell,
   type ContextMenuParams,
@@ -40,15 +41,21 @@ import { probePort } from "./ports.ts";
 import {
   loadLicense,
   loadLocale,
+  loadPage,
   loadPort,
+  loadWindowPlace,
   loadWorkspace,
   saveLicense,
   saveLocale,
+  savePage,
   savePort,
+  saveWindowPlace,
   saveWorkspace,
+  settingsWritten,
 } from "./settings.ts";
 import { startSidecar, type Sidecar } from "./sidecar.ts";
 import { startUpdates, type Updates } from "./updates.ts";
+import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
 // packaged app ignores it, so another program can't open the app on a page of its choosing.
@@ -78,6 +85,9 @@ let switching = false;
 
 let quitting = false;
 
+/** A move or resize waiting to be saved, so a drag saves once when it stops. */
+let placeTimer: ReturnType<typeof setTimeout> | undefined;
+
 let locale: Locale = "en";
 
 // Keeps the same userData folder whether packaged or not, so the saved workspace is shared.
@@ -94,9 +104,13 @@ if (!app.requestSingleInstanceLock()) {
 
     if (!sidecar) return;
 
-    // Hold the quit until the server is gone, then quit again with nothing left to stop.
+    // The window closes only after this, too late for its place to reach the disk.
+    if (window) rememberPlace(window);
+
+    // Hold the quit until the server is gone and the settings saved, then quit again with nothing
+    // left to stop.
     event.preventDefault();
-    void sidecar.stop().finally(() => {
+    void Promise.allSettled([sidecar.stop(), settingsWritten()]).then(() => {
       sidecar = undefined;
       app.quit();
     });
@@ -413,7 +427,9 @@ async function activate(workspace: string): Promise<boolean> {
 
     if (!devUrl) await savePort(port);
 
-    await show(devUrl ?? started.url, path.basename(workspace));
+    const page = (await loadPage(workspace)) ?? "";
+
+    await show(new URL(page, devUrl ?? started.url).href, path.basename(workspace));
 
     return true;
   } catch (error) {
@@ -446,7 +462,7 @@ async function freePort(): Promise<number> {
 
 async function show(url: string, title: string): Promise<void> {
   appOrigin = new URL(url).origin;
-  window ??= createWindow();
+  window ??= createWindow(await loadWindowPlace());
   window.setTitle(title);
 
   try {
@@ -457,10 +473,11 @@ async function show(url: string, title: string): Promise<void> {
   }
 }
 
-function createWindow(): BrowserWindow {
+function createWindow(place: WindowPlace | undefined): BrowserWindow {
+  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
+
   const created = new BrowserWindow({
-    width: 1280,
-    height: 860,
+    ...(place ? placeWindow(place, workAreas) : { width: 1280, height: 860 }),
     minWidth: 960,
     minHeight: 640,
     show: false,
@@ -479,8 +496,26 @@ function createWindow(): BrowserWindow {
 
   const { webContents } = created;
 
-  created.once("ready-to-show", () => created.show());
+  created.once("ready-to-show", () => {
+    if (place?.maximized) created.maximize();
+
+    created.show();
+  });
   created.on("focus", () => license?.refresh());
+
+  const rememberSoon = () => {
+    clearTimeout(placeTimer);
+    placeTimer = setTimeout(() => rememberPlace(created), 500);
+  };
+
+  created.on("move", rememberSoon);
+  created.on("resize", rememberSoon);
+  created.on("maximize", () => rememberPlace(created));
+  created.on("unmaximize", () => rememberPlace(created));
+  // Quitting saved it already, before the window closed.
+  created.on("close", () => {
+    if (!quitting) rememberPlace(created);
+  });
   created.on("closed", () => {
     window = undefined;
   });
@@ -495,9 +530,33 @@ function createWindow(): BrowserWindow {
 
   webContents.on("will-navigate", keepInsideApp);
   webContents.on("will-redirect", keepInsideApp);
+  webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
+    if (isMainFrame) rememberPage(url);
+  });
   webContents.on("context-menu", (_event, params) => showTextMenu(created, params));
 
   return created;
+}
+
+/** Saves where the window is, so the next launch opens it there; one that fails is just forgotten. */
+function rememberPlace(target: BrowserWindow): void {
+  clearTimeout(placeTimer);
+
+  if (target.isDestroyed()) return;
+
+  saveWindowPlace({ ...target.getNormalBounds(), maximized: target.isMaximized() }).catch(
+    () => undefined,
+  );
+}
+
+/** Saves the board page just opened, so the workspace opens on it next time. */
+function rememberPage(url: string): void {
+  const { origin, hash } = new URL(url);
+
+  // While switching, the page still shown belongs to the other workspace.
+  if (origin !== appOrigin || workspaceRoot === undefined || switching) return;
+
+  savePage(workspaceRoot, hash).catch(() => undefined);
 }
 
 /**
