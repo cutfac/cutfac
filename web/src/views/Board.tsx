@@ -615,7 +615,7 @@ function ItemCard({
         data-card={item.id}
         data-selected={selected}
         data-faded={faded}
-        className="relative rounded-3xl transition hover:*:shadow-md has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
+        className="relative cursor-grab rounded-3xl transition **:cursor-grab hover:*:shadow-md has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
       >
         <ContextMenuTrigger
           render={<Card size="sm" />}
