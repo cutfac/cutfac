@@ -471,9 +471,9 @@ function Column({
 }
 
 /**
- * The card's picture: its first video, else its first image. In the desktop app the picture drags
- * the file out of the app, to drop a copy in Finder or another app; the rest of the card moves it
- * to another column.
+ * The card's picture: its first video, else its first image. Dragging it moves the card like the
+ * rest of it; in the desktop app, an ⌥-drag takes the file out of the app instead, to drop a copy
+ * in Finder or another app.
  */
 function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
   const media =
@@ -513,15 +513,20 @@ function Thumbnail({ item, overlay }: { item: ItemSummary; overlay: boolean }) {
   if (!desktop || overlay) return picture;
 
   return (
-    // Above the card's link and out of the card's drag, so a drag here takes the file. The card's
-    // link is the one to focus and read out.
+    // Above the card's link, so an ⌥-drag here can take the file. The card's link is the one to
+    // focus and read out.
     <a
       href={href("item", item.id)}
       tabIndex={-1}
       aria-hidden
-      draggable
+      draggable={false}
       className="relative z-10 shrink-0"
-      onPointerDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => {
+        // Only an ⌥-drag leaves the card's drag for the page's own, which carries the file.
+        event.currentTarget.draggable = event.altKey;
+
+        if (event.altKey) event.stopPropagation();
+      }}
       onDragStart={(event) => {
         // The page's own drag gives way to one that carries the file.
         event.preventDefault();
