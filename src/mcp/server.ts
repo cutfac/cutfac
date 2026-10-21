@@ -372,7 +372,7 @@ const ReviewMedia = tool("review_media", {
     ),
     safeZones: Schema.optional(
       Schema.Boolean.annotate(
-        describe("false renders frames without the dimmed platform UI bands; defaults to true"),
+        describe("false renders frames without the dimmed platform UI margins; defaults to true"),
       ),
     ),
   }),
@@ -383,7 +383,9 @@ const ReviewMedia = tool("review_media", {
     strips: Schema.Array(ReviewShot),
     safeZone: Schema.optional(
       SafeZone.annotate(
-        describe("the bands dimmed on the frames, as fractions of the height from top and bottom"),
+        describe(
+          "the margins dimmed on the frames: top and bottom as fractions of the height, left and right of the width",
+        ),
       ),
     ),
     notes: Schema.Array(Schema.String).annotate(describe("what could not be made or was left out")),

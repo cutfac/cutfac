@@ -371,6 +371,14 @@ export interface ReviewShot {
   file: string;
 }
 
+/** How far platform UI reaches in from each edge: top and bottom of the height, sides of the width. */
+export interface SafeZone {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 /** The frames an agent last rendered to judge one of the item's videos. */
 export interface MediaReview {
   /** Workspace-relative folder holding the files below. */
@@ -383,8 +391,8 @@ export interface MediaReview {
   frames: ReviewShot[];
   /** Frames across each transition, where half-finished motion shows. */
   strips: ReviewShot[];
-  /** The bands dimmed on the frames, where platform UI covers the video, as fractions of its height. */
-  safeZone?: { top: number; bottom: number };
+  /** The margins dimmed on the frames, where platform UI covers the video. */
+  safeZone?: SafeZone;
   /** What could not be made, and what was left out. */
   notes: string[];
 }

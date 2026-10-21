@@ -34,36 +34,42 @@ export interface ReviewOptions {
   readonly times?: ReadonlyArray<number> | undefined;
   /** Seconds to show the motion around; defaults to the detected cuts. */
   readonly transitions?: ReadonlyArray<number> | undefined;
-  /** Shade the bands platform UI covers, on video that has them; on unless false. */
+  /** Shade the margins platform UI covers, on video that has them; on unless false. */
   readonly safeZones?: boolean | undefined;
 }
 
 /**
  * Where Reels, Shorts, and TikTok lay their captions, buttons, and progress bar over full-screen
- * vertical video, as fractions of its height. Wider frames show in a feed with nothing on top.
+ * vertical video: the furthest any of them reaches in from each edge, so a frame clear of it suits
+ * all three. Shorts covers the most at the top, Reels at the bottom, and both their button columns
+ * on the right. Matches the combined zone of the safe zone checker on cutfac.com; change both
+ * together. Wider frames show in a feed with nothing on top.
  */
-export const VERTICAL_SAFE_ZONE: SafeZone = { top: 0.12, bottom: 0.2 };
+export const VERTICAL_SAFE_ZONE: SafeZone = { top: 0.15, bottom: 0.35, left: 0.06, right: 0.15 };
 
-/** The bands platform UI covers on a `width`×`height` video, if it has any. */
+/** The margins platform UI covers on a `width`×`height` video, if it has any. */
 export const safeZoneOf = (width: number, height: number): SafeZone | undefined =>
   aspectOf(width, height) === "9x16" ? VERTICAL_SAFE_ZONE : undefined;
 
-const band = (y: string, h: string) => `drawbox=x=0:y=${y}:w=iw:h=${h}:color=black@0.45:t=fill`;
+const box = (x: string, y: string, w: string, h: string, look: string) =>
+  `drawbox=x=${x}:y=${y}:w=${w}:h=${h}:${look}`;
 
-const edge = (y: string) => `drawbox=x=0:y=${y}:w=iw:h=2:color=yellow@0.9:t=fill`;
+const DIM = "color=black@0.45:t=fill";
 
 /**
- * ffmpeg filters that dim the bands and line their inner edges, so text or a subject inside them
- * stands out without being hidden. Run after scaling, so the lines stay two pixels thick.
+ * ffmpeg filters that dim the margins and outline the clear area between them, so text or a
+ * subject in a margin stands out without being hidden. Run after scaling, so the outline stays two
+ * pixels thick.
  */
-export function safeZoneFilters(zone: SafeZone): string[] {
-  const bottom = 1 - zone.bottom;
+export function safeZoneFilters({ top, bottom, left, right }: SafeZone): string[] {
+  const middle = `ih*(1-${top}-${bottom})`;
 
   return [
-    band("0", `ih*${zone.top}`),
-    band(`ih*${bottom}`, `ih*${zone.bottom}`),
-    edge(`ih*${zone.top}`),
-    edge(`ih*${bottom}-2`),
+    box("0", "0", "iw", `ih*${top}`, DIM),
+    box("0", `ih*(1-${bottom})`, "iw", `ih*${bottom}`, DIM),
+    box("0", `ih*${top}`, `iw*${left}`, middle, DIM),
+    box(`iw*(1-${right})`, `ih*${top}`, `iw*${right}`, middle, DIM),
+    box(`iw*${left}`, `ih*${top}`, `iw*(1-${left}-${right})`, middle, "color=yellow@0.9:t=2"),
   ];
 }
 
@@ -291,7 +297,7 @@ export function reviewChecklist(review: ReviewDoc): string[] {
     ...(safeZone === undefined
       ? []
       : [
-          `The dimmed bands, the top ${percent(safeZone.top)} and bottom ${percent(safeZone.bottom)} between the yellow lines, are where platform captions and buttons cover the video. Text, a face, or the thing a frame is about inside them is a defect, even when it looks fine here.`,
+          `The dimmed margins outside the yellow box, ${percent(safeZone.top)} at the top, ${percent(safeZone.bottom)} at the bottom, ${percent(safeZone.left)} on the left, and ${percent(safeZone.right)} on the right, are where platform captions and buttons cover the video. Text, a face, or the thing a frame is about inside them is a defect, even when it looks fine here.`,
         ]),
     "In each strip, check that motion lands cleanly and that nothing shows for only a frame or two. A line of text has to stay up long enough to read twice; sample its first and last frames with `times` when unsure.",
     "Never call a frame clean without naming what it shows. Report the three largest defects with their times, or say why there are none.",

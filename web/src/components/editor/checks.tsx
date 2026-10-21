@@ -22,12 +22,21 @@ import {
   type Media,
   type MediaReport,
   type MediaReview,
+  type SafeZone,
 } from "../../api.ts";
 import { href, useLive } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
 import { fixPrompt, templateState } from "../../lib/templates.ts";
 import { formatAgo, formatTime } from "../../lib/time.ts";
 import { copyPrompt } from "./composer.tsx";
+
+/** A safe zone's margins in whole percent, the way the copy states them. */
+const inPercent = (zone: SafeZone): SafeZone => ({
+  top: Math.round(zone.top * 100),
+  bottom: Math.round(zone.bottom * 100),
+  left: Math.round(zone.left * 100),
+  right: Math.round(zone.right * 100),
+});
 
 const showError = (cause: Error) => {
   toast.error(cause.message);
@@ -190,10 +199,7 @@ function FrameReview({ review, video }: { review: MediaReview; video: Media }) {
       )}
       {review.safeZone === undefined ? null : (
         <p className="text-xs text-muted-foreground">
-          {t.checks.safeZone(
-            Math.round(review.safeZone.top * 100),
-            Math.round(review.safeZone.bottom * 100),
-          )}
+          {t.checks.safeZone(inPercent(review.safeZone))}
         </p>
       )}
       {review.strips.map((strip) => (

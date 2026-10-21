@@ -85,7 +85,9 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    leaves, and why it is there. Cut a beat you cannot justify. The hook comes first, and the first
    2–3 seconds must be understandable without sound. Give each kind of object (text, app captures,
    backgrounds) one way of moving, and put the sound beats on the same timeline so cuts land on
-   them. Each aspect is its own composition, not a crop of another.
+   them. Each aspect is its own composition, not a crop of another. On 9:16, keep text and the
+   subject inside the safe area, 15% in from the top, 35% from the bottom, 6% from the left, and
+   15% from the right; Reels, Shorts, and TikTok cover the margins with captions and buttons.
 5. Show the user the brief and shot list in a few lines and wait for their okay before you render,
    unless they asked you to go ahead without checking.
 6. Build media with the format's `render` command or template. Name files with the aspect prefix:
@@ -97,8 +99,8 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    For each frame, name what it is meant to show before you judge it. Check that:
    - every line of text is readable at phone size and nothing covers it (a band, a box, another
      layer);
-   - text and the subject stay out of the safe zone: on 9:16 frames `review_media` dims the top 12%
-     and bottom 20%, which platform UI covers;
+   - text and the subject stay inside the safe area: on 9:16 frames `review_media` outlines it in
+     yellow and dims the margins platform UI covers;
    - each line of text stays up long enough to read twice;
    - only real assets appear, and type and color stay consistent with the brief;
    - no frame catches a transition half done in a way that looks broken;

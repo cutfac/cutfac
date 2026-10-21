@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { AgentChoice, DetailField, LearnedKind, Status } from "../api.ts";
+import type { AgentChoice, DetailField, LearnedKind, SafeZone, Status } from "../api.ts";
 import type { ImportState } from "../lib/imports.ts";
 import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
@@ -353,8 +353,9 @@ export const en = {
     stale: "The video changed after this review.",
     sheet: (file: string) => `Frames of ${file}`,
     strip: (time: string) => `Motion around ${time}`,
-    safeZone: (top: number, bottom: number) =>
-      `The dimmed top ${top}% and bottom ${bottom}% are where Reels, Shorts, and TikTok put captions and buttons. Nothing important should sit there.`,
+    /** Each margin in whole percent. */
+    safeZone: ({ top, bottom, left, right }: SafeZone) =>
+      `The dimmed margins, ${top}% at the top, ${bottom}% at the bottom, ${left}% on the left, and ${right}% on the right, are where Reels, Shorts, and TikTok put captions and buttons. Nothing important should sit there.`,
     rules: "Upload rules",
     rulesBody: "Check the videos against what the platforms accept.",
     run: "Run checks",

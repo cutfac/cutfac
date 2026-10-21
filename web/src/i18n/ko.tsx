@@ -336,8 +336,8 @@ export const ko: Messages = {
     stale: "검토한 뒤에 영상이 바뀌었어요.",
     sheet: (file) => `${file}의 프레임`,
     strip: (time) => `${time} 전후의 움직임`,
-    safeZone: (top, bottom) =>
-      `어둡게 칠한 위쪽 ${top}%와 아래쪽 ${bottom}%는 릴스, 쇼츠, 틱톡이 캡션과 버튼을 올리는 곳이에요. 중요한 내용은 여기에 두지 않아요.`,
+    safeZone: ({ top, bottom, left, right }) =>
+      `어둡게 칠한 가장자리(위 ${top}%, 아래 ${bottom}%, 왼쪽 ${left}%, 오른쪽 ${right}%)는 릴스, 쇼츠, 틱톡이 캡션과 버튼을 올리는 곳이에요. 중요한 내용은 여기에 두지 않아요.`,
     rules: "업로드 기준",
     rulesBody: "영상이 각 플랫폼의 업로드 기준에 맞는지 확인해요.",
     run: "점검하기",
