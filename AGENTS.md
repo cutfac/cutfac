@@ -35,5 +35,6 @@ Engineering:
 - The core must stay domain-agnostic; product- or niche-specific logic belongs in a workspace.
 - Add a focused `bun:test` for parsing, status mapping, verification, and persistence changes.
 - Before finishing: `bun test`, `bun run typecheck`, `bun run lint`, `bun run format:check`, and `bun run build` for web changes.
+- Work directly in this checkout. Do not create git worktrees unless the user explicitly asks.
 - Commits use Conventional Commits and stay atomic.
 - New dependencies need a quick license, maintenance, and adoption check.
