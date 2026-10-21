@@ -786,7 +786,7 @@ function Tile({
           <a
             href={href("item", item.id)}
             data-card-link
-            className="line-clamp-2 text-sm leading-snug font-medium outline-none after:absolute after:inset-0"
+            className="line-clamp-2 text-sm leading-snug font-medium break-keep outline-none after:absolute after:inset-0"
           >
             {item.title}
             {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
