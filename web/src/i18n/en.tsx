@@ -474,6 +474,10 @@ export const en = {
     showTarget: "Show this part on the video",
     newMedia: "New media",
     working: "Working on it…",
+    compacting: "Compacting the conversation…",
+    compacted: "Conversation compacted",
+    compactedHint:
+      "The conversation grew long, so the agent summarized the earlier part to keep going.",
     stop: "Stop",
     failed: "The agent failed.",
     stopped: "Stopped before it finished.",

@@ -8,7 +8,7 @@ import {
   agentInvocation,
   toolsFor,
 } from "./agentCommand.ts";
-import { parseClaudeLine, parseCodexLine } from "./agentParse.ts";
+import { type RunEvent, parseClaudeLine, parseCodexLine } from "./agentParse.ts";
 import {
   CLAUDE_MCP_TOOLS,
   type CliEntry,
@@ -67,6 +67,29 @@ const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
       effort: undefined,
     })),
   );
+
+/** Where a run stands, as each save of it says. */
+type RunState = Pick<AgentRun, "status" | "reply" | "error">;
+
+/** Saves the run as it stands now, with what every save of it carries. */
+type RecordRun = (state: RunState) => ReturnType<typeof setRun>;
+
+/**
+ * `emit`, keeping track of whether the agent compacted the conversation on the way, so the run's
+ * record can say so once the streamed steps are gone.
+ */
+export const noteCompaction = (emit: Emit) =>
+  Effect.map(Ref.make(false), (compacted) => ({
+    emit: (event: RunEvent) =>
+      Effect.andThen(
+        event.type === "compaction" && event.state === "done"
+          ? Ref.set(compacted, true)
+          : Effect.void,
+        emit(event),
+      ),
+    /** For the record: true once it has, left out until then. */
+    compacted: Effect.map(Ref.get(compacted), (done) => done || undefined),
+  }));
 
 const saveSession = (itemId: string, agent: AgentName, sessionId: string | undefined) =>
   mutateItem(itemId, (doc) =>
@@ -278,7 +301,7 @@ const performEdit = Effect.fnUntraced(function* (
   cli: CliEntry | undefined,
   input: RunInput,
   emit: Emit,
-  startedAt: string,
+  record: RecordRun,
 ) {
   const ws = yield* Workspace;
   const { itemId, feedbackId, agent, model, effort } = input;
@@ -294,7 +317,7 @@ const performEdit = Effect.fnUntraced(function* (
   const servers = yield* runServers(cli, agent, bin);
   const images = yield* editImages(item, f);
 
-  yield* setRun(itemId, feedbackId, { ...pick, status: "running", startedAt });
+  yield* record({ status: "running" });
 
   const { reply, failure } = yield* converse({
     agent,
@@ -320,23 +343,14 @@ const performEdit = Effect.fnUntraced(function* (
     emit,
   });
 
-  const finishedAt = yield* nowIso;
-
   if (failure !== undefined) {
-    yield* setRun(itemId, feedbackId, {
-      ...pick,
-      status: "failed",
-      startedAt,
-      finishedAt,
-      error: failure,
-      reply: reply === "" ? undefined : reply,
-    });
+    yield* record({ status: "failed", error: failure, reply: reply === "" ? undefined : reply });
 
     return yield* emit({ type: "error", error: failure });
   }
 
   yield* settleFeedback(input, reply);
-  yield* setRun(itemId, feedbackId, { ...pick, status: "done", startedAt, finishedAt, reply });
+  yield* record({ status: "done", reply });
   yield* emit({ type: "done", reply });
 });
 
@@ -346,31 +360,31 @@ const performEdit = Effect.fnUntraced(function* (
  * already wrote as the "after" side.
  */
 export const runEdit = (cli: CliEntry | undefined) =>
-  Effect.fn("agentRun.runEdit")(function* (input: RunInput, emit: Emit) {
+  Effect.fn("agentRun.runEdit")(function* (input: RunInput, report: Emit) {
     const { itemId, feedbackId, agent, model, effort } = input;
-    const pick: AgentPick = { agent, model, effort };
     const startedAt = yield* nowIso;
+    const { emit, compacted } = yield* noteCompaction(report);
 
-    const recordFailure = (error: CutfacError) =>
+    const record: RecordRun = (state) =>
       Effect.gen(function* () {
-        const finishedAt = yield* nowIso;
-        yield* setRun(itemId, feedbackId, {
-          ...pick,
-          status: "failed",
-          startedAt,
-          finishedAt,
-          error: error.message,
-        }).pipe(Effect.ignore({ log: true }));
-        yield* emit({ type: "error", error: error.message });
+        const finishedAt = state.status === "running" ? undefined : yield* nowIso;
+        const run = { agent, model, effort, startedAt, ...state, finishedAt };
+
+        return yield* setRun(itemId, feedbackId, { ...run, compacted: yield* compacted });
       });
 
-    const recordStop = Effect.gen(function* () {
-      yield* snapshotAfter(itemId, feedbackId);
-      const finishedAt = yield* nowIso;
-      yield* setRun(itemId, feedbackId, { ...pick, status: "stopped", startedAt, finishedAt });
-    }).pipe(Effect.ignore({ log: true }));
+    const recordFailure = (error: CutfacError) =>
+      Effect.andThen(
+        record({ status: "failed", error: error.message }).pipe(Effect.ignore({ log: true })),
+        emit({ type: "error", error: error.message }),
+      );
 
-    yield* performEdit(cli, input, emit, startedAt).pipe(
+    const recordStop = Effect.andThen(
+      snapshotAfter(itemId, feedbackId),
+      record({ status: "stopped" }),
+    ).pipe(Effect.ignore({ log: true }));
+
+    yield* performEdit(cli, input, emit, record).pipe(
       Effect.catch(recordFailure),
       Effect.onInterrupt(() => recordStop),
     );

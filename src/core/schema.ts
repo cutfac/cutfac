@@ -198,6 +198,8 @@ export const AgentRun = Schema.Struct({
   finishedAt: Schema.optional(Schema.String),
   reply: Schema.optional(Schema.String),
   error: Schema.optional(Schema.String),
+  /** The agent compacted the conversation during the run, so it goes on from a summary. */
+  compacted: Schema.optional(Schema.Boolean),
 });
 
 export type AgentRun = typeof AgentRun.Type;

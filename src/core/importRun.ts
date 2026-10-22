@@ -7,7 +7,7 @@ import {
   codexConfig,
   codexImageFlags,
 } from "./agentCommand.ts";
-import { type TurnResult, converse } from "./agentRun.ts";
+import { type TurnResult, converse, noteCompaction } from "./agentRun.ts";
 import {
   CLAUDE_MCP_TOOLS,
   MCP_READ_TOOLS,
@@ -295,20 +295,24 @@ const finishTurn = Effect.fnUntraced(function* (
  * sees both when it hears the run ended. Only the agent's part can be stopped; once it is over,
  * the turn is always recorded.
  */
-export const runImportTurn = (input: ImportInput, emit: Emit) =>
+export const runImportTurn = (input: ImportInput, report: Emit) =>
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const settle = settleInstalls(input.importId).pipe(Effect.ignore({ log: true }));
+      const { emit, compacted } = yield* noteCompaction(report);
+
+      const finish = (end: Omit<RunEnd, "finishedAt" | "compacted">) =>
+        Effect.flatMap(compacted, (done) => finishTurn(input, { ...end, compacted: done }));
 
       const { reply, failure } = yield* restore(performTurn(input, emit)).pipe(
         Effect.catch((error) => Effect.succeed<TurnResult>({ reply: "", failure: error.message })),
-        Effect.onInterrupt(() => Effect.andThen(settle, finishTurn(input, { status: "stopped" }))),
+        Effect.onInterrupt(() => Effect.andThen(settle, finish({ status: "stopped" }))),
       );
 
       yield* settle;
 
       if (failure !== undefined) {
-        yield* finishTurn(input, {
+        yield* finish({
           status: "failed",
           error: failure,
           reply: reply === "" ? undefined : reply,
@@ -317,7 +321,7 @@ export const runImportTurn = (input: ImportInput, emit: Emit) =>
         return yield* emit({ type: "error", error: failure });
       }
 
-      yield* finishTurn(input, { status: "done", reply });
+      yield* finish({ status: "done", reply });
       yield* emit({ type: "done", reply });
     }),
   ).pipe(Effect.withSpan("importRun.runImportTurn"));

@@ -166,6 +166,7 @@ describe("run transcript", () => {
       effort: "high",
       status: "done",
       running: false,
+      compacting: false,
       steps: [],
       reply: "Saved reply.",
       error: undefined,

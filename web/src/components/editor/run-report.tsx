@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { MessageHeader } from "@/components/ui/message";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { AgentStatus } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -49,7 +50,7 @@ export function RunReport({
       {run.running ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />
-          {t.chat.working}
+          {run.compacting ? t.chat.compacting : t.chat.working}
           <Button variant="ghost" size="xs" onClick={onStop}>
             <CircleStopIcon data-icon="inline-start" />
             {t.chat.stop}
@@ -80,11 +81,17 @@ function Steps({ steps, running }: { steps: ReadonlyArray<RunStep>; running: boo
   const segments = groupSteps(steps);
 
   if (!running && segments.length > FOLD_STEPS && !expanded) {
+    const taken = steps.filter((step) => step.kind !== "compaction").length;
+
+    // A saved run keeps only that it compacted, so the folded one still shows it too.
     return (
-      <Button variant="ghost" size="xs" className="self-start" onClick={() => setExpanded(true)}>
-        <WrenchIcon data-icon="inline-start" />
-        {t.chat.showSteps(steps.length)}
-      </Button>
+      <>
+        <Button variant="ghost" size="xs" className="self-start" onClick={() => setExpanded(true)}>
+          <WrenchIcon data-icon="inline-start" />
+          {t.chat.showSteps(taken)}
+        </Button>
+        {segments.some((segment) => segment.kind === "compaction") ? <CompactionLine /> : null}
+      </>
     );
   }
 
@@ -92,6 +99,8 @@ function Steps({ steps, running }: { steps: ReadonlyArray<RunStep>; running: boo
     <div className="flex flex-col gap-1.5">
       {segments.map((segment, index) => {
         if (segment.kind === "text") return <Reply key={segment.key} text={segment.text} />;
+
+        if (segment.kind === "compaction") return <CompactionLine key={segment.key} />;
 
         const [only] = segment.tools;
 
@@ -138,6 +147,25 @@ function ToolGroup({ tools, active }: { tools: ReadonlyArray<ToolStep>; active: 
         </div>
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+/**
+ * Where the agent compacted the conversation and went on from a summary of it, drawn across the
+ * steps as Claude Code marks it in its own transcript.
+ */
+function CompactionLine() {
+  const t = useMessages();
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div aria-hidden className="h-px flex-1 bg-border" />
+      <Tooltip>
+        <TooltipTrigger render={<span />}>{t.chat.compacted}</TooltipTrigger>
+        <TooltipContent>{t.chat.compactedHint}</TooltipContent>
+      </Tooltip>
+      <div aria-hidden className="h-px flex-1 bg-border" />
+    </div>
   );
 }
 

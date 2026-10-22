@@ -180,6 +180,8 @@ export interface AgentRun extends ModelSettings {
   finishedAt?: string;
   reply?: string;
   error?: string;
+  /** The agent compacted the conversation during the run, so it goes on from a summary. */
+  compacted?: boolean;
 }
 
 export interface Feedback {
@@ -217,7 +219,8 @@ export type RunEvent =
   | { type: "tool"; name: string; detail?: string }
   | { type: "done"; reply: string }
   | { type: "stopped" }
-  | { type: "error"; error: string };
+  | { type: "error"; error: string }
+  | { type: "compaction"; state: "running" | "done" | "failed" };
 
 /**
  * What a run stream says: what the run is about (first on every connect), then its events. On an

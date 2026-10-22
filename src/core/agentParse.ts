@@ -22,6 +22,11 @@ export const RunEvent = Schema.Union([
   Schema.Struct({ type: Schema.Literal("done"), reply: Schema.String }),
   Schema.Struct({ type: Schema.Literal("stopped") }),
   Schema.Struct({ type: Schema.Literal("error"), error: Schema.String }),
+  /** The agent's own compaction of a long conversation: under way, done, or given up on. */
+  Schema.Struct({
+    type: Schema.Literal("compaction"),
+    state: Schema.Literals(["running", "done", "failed"]),
+  }),
 ]);
 
 export type RunEvent = typeof RunEvent.Type;
@@ -86,7 +91,12 @@ const ClaudeEnvelope = Schema.Struct({
   session_id: Schema.optional(Schema.String),
   is_error: Schema.optional(Schema.Boolean),
   result: Schema.optional(Schema.String),
+  /** On a `system` `status` line: what Claude Code is busy with, or null once it is not. */
+  status: Schema.optional(Schema.NullOr(Schema.String)),
+  compact_result: Schema.optional(Schema.String),
 });
+
+type ClaudeEnvelope = typeof ClaudeEnvelope.Type;
 
 const decodeClaudeEnvelope = Schema.decodeUnknownOption(ClaudeEnvelope);
 
@@ -121,6 +131,22 @@ const claudeEvents = (json: Schema.JsonObject, root: string | undefined): Readon
   });
 
 /**
+ * Claude Code compacting the conversation on its own, as it does when the context fills up: a
+ * `compacting` status while it works, then a boundary where the summary starts, or a failed result.
+ */
+function claudeCompaction(msg: ClaudeEnvelope): ReadonlyArray<RunEvent> {
+  if (msg.type !== "system") return [];
+
+  if (msg.subtype === "compact_boundary") return [{ type: "compaction", state: "done" }];
+
+  if (msg.subtype !== "status") return [];
+
+  if (msg.status === "compacting") return [{ type: "compaction", state: "running" }];
+
+  return msg.compact_result === "failed" ? [{ type: "compaction", state: "failed" }] : [];
+}
+
+/**
  * One line of `claude -p --output-format stream-json`. Paths under `root`, the workspace the agent
  * runs in, show relative to it.
  */
@@ -132,7 +158,7 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
 
   if (Option.isNone(envelope)) return NOTHING;
   const msg = envelope.value;
-  const events = msg.type === "assistant" ? claudeEvents(json.value, root) : [];
+  const events = msg.type === "assistant" ? claudeEvents(json.value, root) : claudeCompaction(msg);
 
   if (msg.type !== "result") return { events, sessionId: msg.session_id };
   const failed = msg.is_error === true || msg.subtype !== "success";

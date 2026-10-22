@@ -11,7 +11,11 @@ import type {
 
 export type RunStep =
   | { readonly kind: "text"; readonly text: string }
-  | { readonly kind: "tool"; readonly name: string; readonly detail?: string };
+  | { readonly kind: "tool"; readonly name: string; readonly detail?: string }
+  /** The agent compacted the conversation here, and went on from a summary of it. */
+  | { readonly kind: "compaction" };
+
+const COMPACTION: RunStep = { kind: "compaction" };
 
 /** The agent's latest run, as the chat shows it while it streams. */
 export interface LiveRun {
@@ -23,6 +27,8 @@ export interface LiveRun {
   readonly effort?: string | undefined;
   readonly status: AgentRun["status"];
   readonly steps: ReadonlyArray<RunStep>;
+  /** The agent is compacting the conversation right now. */
+  readonly compacting?: boolean;
   readonly reply?: string;
   readonly error?: string;
   /** A request on its way to an agent that the server has not answered yet. */
@@ -85,6 +91,11 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
 
     case "error":
       return { ...run, status: "failed", error: message.error };
+
+    case "compaction":
+      if (message.state === "running") return { ...run, compacting: true };
+
+      return { ...(message.state === "done" ? append(run, COMPACTION) : run), compacting: false };
   }
 }
 
@@ -164,10 +175,14 @@ export function closingReply(steps: ReadonlyArray<RunStep>, reply: string | unde
 
 export type ToolStep = Extract<RunStep, { kind: "tool" }>;
 
-/** A stretch of a run as the chat lays it out: something the agent said, or tool calls in a row. */
+/**
+ * A stretch of a run as the chat lays it out: something the agent said, tool calls in a row, or
+ * where it compacted the conversation.
+ */
 export type StepSegment =
   | { readonly kind: "text"; readonly key: number; readonly text: string }
-  | { readonly kind: "tools"; readonly key: number; readonly tools: ReadonlyArray<ToolStep> };
+  | { readonly kind: "tools"; readonly key: number; readonly tools: ReadonlyArray<ToolStep> }
+  | { readonly kind: "compaction"; readonly key: number };
 
 /**
  * Gather tool calls in a row, so a run reads as what the agent said with what it did in between.
@@ -176,7 +191,9 @@ export type StepSegment =
 export function groupSteps(steps: ReadonlyArray<RunStep>): StepSegment[] {
   // Built in place: each call joins the segment before it when that one holds calls too.
   const segments: Array<
-    { kind: "text"; key: number; text: string } | { kind: "tools"; key: number; tools: ToolStep[] }
+    | { kind: "text"; key: number; text: string }
+    | { kind: "tools"; key: number; tools: ToolStep[] }
+    | { kind: "compaction"; key: number }
   > = [];
 
   for (const [key, step] of steps.entries()) {
@@ -185,7 +202,8 @@ export function groupSteps(steps: ReadonlyArray<RunStep>): StepSegment[] {
     // Blank text between two calls shows nothing, so it should not split them either.
     if (step.kind === "text") {
       if (step.text.trim() !== "") segments.push({ kind: "text", key, text: step.text });
-    } else if (last?.kind === "tools") last.tools.push(step);
+    } else if (step.kind === "compaction") segments.push({ kind: "compaction", key });
+    else if (last?.kind === "tools") last.tools.push(step);
     else segments.push({ kind: "tools", key, tools: [step] });
   }
 
@@ -239,6 +257,8 @@ export interface RunView {
   readonly effort: string | undefined;
   readonly status: AgentRun["status"] | undefined;
   readonly running: boolean;
+  /** The agent is compacting the conversation right now. */
+  readonly compacting: boolean;
   readonly steps: ReadonlyArray<RunStep>;
   readonly reply: string | undefined;
   readonly error: string | undefined;
@@ -247,7 +267,7 @@ export interface RunView {
 /**
  * Where a run stands: the streamed one when it is about this message, else the saved one. A saved
  * run still marked running with no agent behind it (`alive` false) was cut off, by a server restart
- * say, so it shows as stopped.
+ * say, so it shows as stopped. A saved run keeps no steps, only whether it compacted.
  */
 export function runView(
   saved: AgentRun | undefined,
@@ -256,6 +276,7 @@ export function runView(
 ): RunView {
   const status = live?.status ?? saved?.status;
   const interrupted = live === undefined && status === "running" && !alive;
+  const running = status === "running" && !interrupted;
 
   return {
     agent: live?.agent ?? saved?.agent,
@@ -263,8 +284,9 @@ export function runView(
     model: live === undefined ? saved?.model : live.model,
     effort: live === undefined ? saved?.effort : live.effort,
     status: interrupted ? "stopped" : status,
-    running: status === "running" && !interrupted,
-    steps: live?.steps ?? [],
+    running,
+    compacting: running && live?.compacting === true,
+    steps: live?.steps ?? (saved?.compacted === true ? [COMPACTION] : []),
     reply: live?.reply ?? saved?.reply,
     error: live?.error ?? saved?.error,
   };
