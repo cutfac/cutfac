@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { AnnouncementDialog } from "@/components/announcement-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
 import { DesktopLicense } from "@/components/desktop-license";
@@ -105,6 +106,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
       <NewItemDialog formats={ws?.formats} plan={plan} />
       <CommandPalette editing={editing} />
       {desktop ? <DesktopLicense desktop={desktop} /> : null}
+      <AnnouncementDialog />
     </SidebarProvider>
   );
 }

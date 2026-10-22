@@ -1,4 +1,4 @@
-import { CopyIcon, FolderOpenIcon, RotateCcwIcon, UndoIcon } from "lucide-react";
+import { CopyIcon, FolderOpenIcon, MegaphoneIcon, RotateCcwIcon, UndoIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ import {
   type DevState,
   type OnboardingStep,
 } from "../desktop.ts";
+import { ANNOUNCEMENTS, showNewestAgain } from "../lib/announcements.ts";
 
 /** A choice's values in the order shown, each with its label. */
 type Options<T extends string> = ReadonlyArray<readonly [T, string]>;
@@ -179,6 +180,27 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
               description="To have the access step ask for real, take the access back from this build in a terminal. If the step still finds it, quit and reopen the app."
             >
               <Command command={`tccutil reset SystemPolicyAllFiles ${state.bundleId}`} />
+            </Section>
+            <Separator />
+            <Section
+              title="Announcements"
+              description="The board shows each new announcement once. This forgets you saw the newest, so the board shows it again."
+            >
+              <div>
+                <Button
+                  variant="outline"
+                  disabled={ANNOUNCEMENTS.length === 0}
+                  onClick={showNewestAgain}
+                >
+                  <MegaphoneIcon data-icon="inline-start" />
+                  Show the newest again
+                </Button>
+              </div>
+              {ANNOUNCEMENTS.length === 0 ? (
+                <Note>
+                  There are none yet. Add one to ANNOUNCEMENTS in web/src/lib/announcements.ts.
+                </Note>
+              ) : null}
             </Section>
           </>
         )}
