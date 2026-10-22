@@ -4,6 +4,15 @@ import type { Messages } from "../i18n/index.ts";
 /** The model and effort picked for each agent; one left out runs on the agent's own default. */
 export type ModelPicks = Partial<Record<AgentName, ModelSettings>>;
 
+export const AGENTS: ReadonlyArray<{ agent: AgentName; label: string }> = [
+  { agent: "claude", label: "Claude" },
+  { agent: "codex", label: "Codex" },
+];
+
+/** The agent's product name, or undefined when a run has not said which agent it is. */
+export const agentLabel = (agent: AgentName | undefined) =>
+  AGENTS.find((entry) => entry.agent === agent)?.label;
+
 /** The model and effort a run or request names, as the chat shows them. */
 export interface NamedSettings {
   readonly model?: string | undefined;
@@ -80,3 +89,15 @@ export function settingsLabels(
 
   return labels;
 }
+
+/** Who answers a message: the agent, with the model and effort when the request picked them. */
+export const answerer = (
+  agent: AgentName | undefined,
+  settings: NamedSettings,
+  statuses: ReadonlyArray<AgentStatus> | undefined,
+  t: Messages,
+) =>
+  [
+    agentLabel(agent) ?? t.chat.agent,
+    ...settingsLabels(statusOf(statuses, agent), settings, t),
+  ].join(" · ");

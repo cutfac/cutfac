@@ -62,11 +62,13 @@ import { href, useLive } from "../hooks.ts";
 import { useLocale, useMessages } from "../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../lib/feedback.ts";
 import { importState, isWorking, turnRun, type ImportState } from "../lib/imports.ts";
+import { agentLabel } from "../lib/models.ts";
 import { replyMarkdown } from "../lib/replyBlocks.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
+import { clockTime } from "../lib/time.ts";
 import { HeldChips, SentAttachments, useHeldFiles, type HeldFiles } from "./editor/attachments.tsx";
-import { agentLabel, clockTime, RunReport } from "./editor/chat.tsx";
 import { composing } from "./editor/composer.tsx";
+import { RunReport } from "./editor/run-report.tsx";
 import { ImportName, ImportRequest } from "./import-source.tsx";
 
 const ENDED = new Set<RunMessage["type"]>(["done", "stopped", "error"]);

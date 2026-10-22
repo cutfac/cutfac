@@ -14,9 +14,9 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 import type { AgentChoice, ItemDetail } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { typingFeedbackCommand } from "../../lib/feedback.ts";
+import { agentLabel } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
-import { agentLabel } from "./chat.tsx";
 import { composing, type SentTo, VersionsPicker } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */

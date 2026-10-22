@@ -26,3 +26,7 @@ export function formatAgo(at: string, locale: string, now: number = Date.now()):
 
   return format.format(0, "second");
 }
+
+/** When a message was sent, as the chat shows it under the message. */
+export const clockTime = (at: string, locale: string) =>
+  new Date(at).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });

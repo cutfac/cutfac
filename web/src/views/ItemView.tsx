@@ -45,7 +45,7 @@ import {
   type Status,
 } from "../api.ts";
 import { FileStrip, ReferenceStrip, useAttachments } from "../components/editor/attachments.tsx";
-import { agentLabel, Chat } from "../components/editor/chat.tsx";
+import { Chat } from "../components/editor/chat.tsx";
 import { Checks } from "../components/editor/checks.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
@@ -60,7 +60,7 @@ import { href, useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EDIT_KEYS, onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { redoable, undoable } from "../lib/history.ts";
-import { pickedSettings } from "../lib/models.ts";
+import { agentLabel, pickedSettings } from "../lib/models.ts";
 import { Player } from "../lib/player.ts";
 import { pinsOn } from "../lib/requests.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";

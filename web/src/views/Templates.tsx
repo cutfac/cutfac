@@ -80,10 +80,10 @@ import {
   type InputField,
   type WorkspaceInfo,
 } from "../api.ts";
-import { AGENTS } from "../components/editor/chat.tsx";
 import { agentInstalled, href, useAgentStatuses, useLive } from "../hooks.ts";
 import { messages, useLocale, useMessages } from "../i18n/index.ts";
 import { importAgent, importIdOf, importRouteId, importState, isWorking } from "../lib/imports.ts";
+import { AGENTS } from "../lib/models.ts";
 import { NO_RUN } from "../lib/run.ts";
 import {
   coverOf,
