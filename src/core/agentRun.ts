@@ -6,6 +6,7 @@ import {
   type SessionArgs,
   agentBin,
   agentInvocation,
+  isSessionId,
   toolsFor,
 } from "./agentCommand.ts";
 import { type RunEvent, parseClaudeLine, parseCodexLine } from "./agentParse.ts";
@@ -50,8 +51,6 @@ export interface RunInput extends AgentPick {
   readonly itemId: string;
   readonly feedbackId: string;
 }
-
-const MCP_FILE = ".mcp.json";
 
 /** SIGTERM first so the agent can stop its own children; SIGKILL if it is still there after this. */
 const STOP_GRACE = "3 seconds";
@@ -240,12 +239,14 @@ export const converse = Effect.fnUntraced(function* <R>(conversation: Conversati
     return yield* attemptAgent(agent, invocation, sessionId, emit, save);
   });
 
-  const first = yield* attempt(stored);
+  // Only a session the agent made goes back to it; anything else is replaced by a new one.
+  const resumed = stored !== undefined && isSessionId(stored) ? stored : undefined;
+  const first = yield* attempt(resumed);
 
   // A resumed session the agent no longer has fails before it reports any session: start fresh.
   const staleSession =
-    stored !== undefined &&
-    first.session === stored &&
+    resumed !== undefined &&
+    first.session === resumed &&
     !first.unreadable &&
     failureOf(agent, first) !== undefined;
 
@@ -282,10 +283,9 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 });
 
 /**
- * How the agent reaches this workspace's MCP server. With the CLI known, the server is always
- * started for this root, so a copied or moved workspace never acts on the one it came from.
- * Otherwise Claude gets the workspace's `.mcp.json` as it is. Codex, which loads every server in
- * the user's config, has the other workspaces' servers switched off.
+ * How the agent reaches this workspace's MCP server, the only one the run loads. With the CLI
+ * known, the server is always started for this root, so a copied or moved workspace never acts on
+ * the one it came from.
  */
 const runServers = Effect.fnUntraced(function* (
   cli: CliEntry | undefined,
@@ -299,10 +299,6 @@ const runServers = Effect.fnUntraced(function* (
     const ours = codexServerName(ws.config.name);
 
     return { codexServer: codexRunServers(ours, launch, yield* codexServerNames(bin)) };
-  }
-
-  if (launch === undefined) {
-    return { mcpConfig: (yield* ws.exists(MCP_FILE)) ? yield* ws.abs(MCP_FILE) : undefined };
   }
 
   return { mcpConfig: yield* runMcpConfig(launch) };

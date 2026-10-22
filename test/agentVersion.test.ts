@@ -299,6 +299,9 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
     (await readFile(join(fakes.calls, "runs"), "utf8").catch(() => "")).split("\n").filter(Boolean)
       .length;
 
+  /** A session from an earlier turn, made as Claude Code makes them. */
+  const STORED = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
+
   /** The line that makes the fake note each turn it runs. */
   const countRun = () => `echo run >> "${join(fakes.calls, "runs")}"`;
 
@@ -373,7 +376,7 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":""}'
       answeringVersion("99.0.0 (Claude Code)", `cat >/dev/null\n${countRun()}\n`),
     );
 
-    const { result, saved } = await turn("claude", bin, "stored-session");
+    const { result, saved } = await turn("claude", bin, STORED);
 
     expect(result.failure).toContain("Couldn't read claude 99.0.0's output");
     expect(saved).toEqual([]);
@@ -396,7 +399,7 @@ echo '{"type":"result","subtype":"success","session_id":"fresh","result":"ok"}'
       ),
     );
 
-    const { result, saved } = await turn("claude", bin, "gone");
+    const { result, saved } = await turn("claude", bin, STORED);
 
     expect(result).toEqual({ reply: "ok", failure: undefined });
     expect(saved).toEqual([undefined, "fresh"]);

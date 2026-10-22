@@ -15,7 +15,7 @@ export interface InvocationOptions extends SessionArgs {
   readonly bin: string;
   readonly prompt: string;
   readonly allowedTools: ReadonlyArray<string>;
-  /** Claude's `--mcp-config`: a file path or a JSON string. */
+  /** Claude's `--mcp-config` as a JSON string, the only MCP servers the run loads. */
   readonly mcpConfig?: string | undefined;
   /** Codex config entries that point its MCP server at this workspace. */
   readonly codexServer?: ReadonlyArray<string> | undefined;
@@ -35,6 +35,20 @@ export interface AgentInvocation {
   /** Added to the environment the agent inherits. */
   readonly env?: Readonly<Record<string, string>>;
 }
+
+/**
+ * Whether `id` is a session the agent made: Claude Code and Codex both name theirs with a UUID.
+ * Anything else, passed back to resume, could be read as one of the CLI's own flags.
+ */
+export const isSessionId = (id: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+/**
+ * Whether `rule` is one Claude Code permission rule, a tool name with an optional specifier, as in
+ * `Bash(uv:*)`. Rules go to Claude Code joined with commas, and a comma or a closing parenthesis
+ * where it does not belong would add rules nobody asked for.
+ */
+export const isToolRule = (rule: string) => /^[\w-]+(?:\([^(),\p{Cc}]*\))?$/u.test(rule);
 
 /** The workspace's allowed tools plus the ones the item's format asks for, each once. */
 export const toolsFor = (
@@ -149,9 +163,11 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
     agent === "claude"
       ? [
           "--allowedTools",
-          [...options.allowedTools, ...fetch].join(","),
+          [...options.allowedTools, ...fetch].filter(isToolRule).join(","),
           "--disallowedTools",
           MCP_USER_ONLY_TOOLS.map(claudeMcpTool).join(","),
+          // Only the servers in `mcpConfig`, none the user or the workspace set up elsewhere.
+          "--strict-mcp-config",
           ...flag("--mcp-config", mcpConfig),
           ...flag("--model", model),
           ...flag("--effort", effort),

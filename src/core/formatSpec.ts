@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import { isToolRule } from "./agentCommand.ts";
 import { InvalidRequest } from "./errors.ts";
 import { FORMAT_FILE, type Format, getFormat, isSimpleId } from "./library.ts";
 import { isInstalled } from "./process.ts";
@@ -108,6 +109,12 @@ export function specProblems(doc: FormatDoc): FormatProblem[] {
     if (!PROGRAM.test(program)) {
       problems.push(spec("requires", `"${program}" is not a program name; list just the name`));
     }
+  }
+
+  for (const rule of doc.tools.filter((tool) => !isToolRule(tool))) {
+    problems.push(
+      spec("tools", `"${rule}" is not one tool rule, such as Bash(uv:*); list each on its own`),
+    );
   }
 
   for (const id of duplicates(doc.inputs.map((input) => input.id))) {

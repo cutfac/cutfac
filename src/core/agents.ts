@@ -151,14 +151,33 @@ const withOurServer = (file: Schema.JsonObject, launch: McpLaunch): Schema.JsonO
   },
 });
 
-/**
- * The workspace's `.mcp.json` for a run, as a JSON string, with this server always started for
- * `launch`'s root whatever the file says. The file's other servers are kept.
- */
-export const runMcpConfig = Effect.fn("agents.runMcpConfig")(function* (launch: McpLaunch) {
-  const file = yield* readMcpFile().pipe(Effect.orElseSucceed(() => EMPTY));
+/** This workspace's entry in `file`, when it starts the server for `root`. */
+const ourEntry = (file: Schema.JsonObject, root: string) => {
+  const entry = serversOf(file)[SERVER_NAME];
 
-  return yield* encodeMcpFile(withOurServer(file, launch));
+  return Option.exists(decodeLaunchArgs(entry), ({ args }) => targetsRoot(args, root))
+    ? entry
+    : undefined;
+};
+
+/** Claude's `--mcp-config`, as a JSON string, with `server` as this workspace's and no other. */
+export const ourMcpConfig = (server: McpLaunch | Schema.Json) =>
+  JSON.stringify({ mcpServers: { [SERVER_NAME]: server } });
+
+/**
+ * Claude's `--mcp-config` for a run: this workspace's server alone, started for `launch`'s root, or
+ * without it, as `.mcp.json` has it when that starts the server for this root. The run loads no
+ * other server, so none the user or the workspace set up can act for it.
+ */
+export const runMcpConfig = Effect.fn("agents.runMcpConfig")(function* (
+  launch: McpLaunch | undefined,
+) {
+  if (launch !== undefined) return ourMcpConfig(launch);
+
+  const ws = yield* Workspace;
+  const entry = ourEntry(yield* readMcpFile().pipe(Effect.orElseSucceed(() => EMPTY)), ws.root);
+
+  return entry === undefined ? undefined : ourMcpConfig(entry);
 });
 
 /**
@@ -195,10 +214,6 @@ const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.s
 
 /** Where Codex's config keeps the MCP server `name`. */
 export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
-
-/** Whether `name` is how some workspace registered its server with Codex, now or before the rename. */
-const isCodexWorkspaceServer = (name: string) =>
-  [SERVER_NAME, LEGACY_SERVER_NAME].some((server) => name.startsWith(`${server}-`));
 
 /** The Codex config entry that takes the tools only the user's own session may call off `name`. */
 const codexUserOnlyOff = (name: string) =>
@@ -244,19 +259,22 @@ export const codexServerNames = Effect.fn("agents.codexServerNames")(function* (
 });
 
 /**
- * Codex config entries that keep a board run on this workspace's server, `ours`, out of the
- * servers Codex `listed`. Every other workspace's server is switched off, so the run never acts on
- * a workspace it was not started for, and ours goes without the tools only the user's own session
- * may call. With `launch`, ours is started for this root; without it, ours is used as registered.
+ * Codex config entries that keep a run on this workspace's server, `ours`, out of the servers Codex
+ * `listed`. Every other server is switched off, and plugins and apps with the ones they bring, so
+ * nothing the user or another workspace set up can act for the run, and ours goes without the
+ * tools only the user's own session may call. With `launch`, ours is started for this root;
+ * without it, ours is used as registered.
  */
 export function codexRunServers(
   ours: string,
   launch: McpLaunch | undefined,
   listed: ReadonlyArray<string>,
 ): string[] {
-  const others = listed.flatMap((name) =>
-    name !== ours && isCodexWorkspaceServer(name) ? [`${codexServerKey(name)}.enabled=false`] : [],
-  );
+  const others = [
+    "features.plugins=false",
+    "features.apps=false",
+    ...listed.flatMap((name) => (name === ours ? [] : [`${codexServerKey(name)}.enabled=false`])),
+  ];
 
   if (launch !== undefined) return [...others, ...codexServerLaunch(ours, launch)];
 
@@ -383,11 +401,7 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
   const ws = yield* Workspace;
 
   const claudeConnected = yield* readMcpFile().pipe(
-    Effect.map((file) =>
-      Option.exists(decodeLaunchArgs(serversOf(file)[SERVER_NAME]), ({ args }) =>
-        targetsRoot(args, ws.root),
-      ),
-    ),
+    Effect.map((file) => ourEntry(file, ws.root) !== undefined),
     Effect.orElseSucceed(() => false),
   );
 

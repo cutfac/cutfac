@@ -14,12 +14,12 @@ import {
   MCP_USER_ONLY_TOOLS,
   MCP_WRITE_TOOLS,
   type McpLaunch,
-  SERVER_NAME,
   claudeMcpTool,
+  codexRunServers,
   codexServerKey,
-  codexServerLaunch,
   codexServerName,
   codexServerNames,
+  ourMcpConfig,
 } from "./agents.ts";
 import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
 import { freshPrompt, turnMessage } from "./importPrompts.ts";
@@ -163,7 +163,7 @@ export function claudeImportFlags(
     claudeImportSettings(phase, link),
     "--strict-mcp-config",
     "--mcp-config",
-    JSON.stringify({ mcpServers: { [SERVER_NAME]: server } }),
+    ourMcpConfig(server),
   ];
 
   if (phase === "read") {
@@ -191,14 +191,14 @@ export function claudeImportFlags(
 
 /**
  * Codex's config for an import turn. Codex reads MCP servers only from its user config, so this
- * workspace's server is defined inline under `ours` and every other one (`others`) is switched
- * off. Plugins and apps are off too, so nothing else can act for the agent.
+ * workspace's server is defined inline under `ours` and every other one Codex `listed` is switched
+ * off, with plugins and apps, so nothing else can act for the agent.
  */
 export function codexImportConfig(
   phase: ImportPhase,
   server: McpLaunch,
   ours: string,
-  others: ReadonlyArray<string>,
+  listed: ReadonlyArray<string>,
 ): string[] {
   const key = codexServerKey(ours);
 
@@ -208,10 +208,7 @@ export function codexImportConfig(
       : ['sandbox_mode="workspace-write"', "sandbox_workspace_write.network_access=true"];
 
   return codexConfig([
-    "features.plugins=false",
-    "features.apps=false",
-    ...others.map((name) => `${codexServerKey(name)}.enabled=false`),
-    ...codexServerLaunch(ours, server),
+    ...codexRunServers(ours, server, listed),
     ...sandbox,
     'approval_policy="never"',
     'web_search="live"',
@@ -249,12 +246,7 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
     agent === "claude"
       ? claudeImportFlags(phase, server, doc.link)
       : [
-          ...codexImportConfig(
-            phase,
-            server,
-            ours,
-            (yield* codexServerNames(bin)).filter((name) => name !== ours),
-          ),
+          ...codexImportConfig(phase, server, ours, yield* codexServerNames(bin)),
           ...codexImageFlags((yield* pictures).map((path) => `${folder}/${path}`)),
         ];
 

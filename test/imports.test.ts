@@ -46,6 +46,12 @@ import {
 
 const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"] };
 
+/** The id the fake claude gives its conversation, made as Claude Code makes them. */
+const SESSION = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
+
+/** The id the fake codex gives its thread, made as Codex makes them. */
+const THREAD = "01a15cbb-ce4a-7520-952a-fe8655899d56";
+
 let t: TestWorkspace;
 
 beforeEach(async () => {
@@ -524,9 +530,9 @@ cat > "$call.stdin"
 case "$*" in
   *"Bash(git clone:*)"*) mkdir -p .agents/skills/stub && printf '# stub\\n' > .agents/skills/stub/SKILL.md ;;
 esac
-echo '{"type":"system","subtype":"init","session_id":"sess-1"}'
-echo '{"type":"assistant","session_id":"sess-1","message":{"content":[{"type":"text","text":"Done."}]}}'
-echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done."}'
+echo '{"type":"system","subtype":"init","session_id":"${SESSION}"}'
+echo '{"type":"assistant","session_id":"${SESSION}","message":{"content":[{"type":"text","text":"Done."}]}}'
+echo '{"type":"result","subtype":"success","session_id":"${SESSION}","result":"Done."}'
 `,
     );
 
@@ -579,7 +585,7 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
 
     const afterRead = await t.run(getImport(started.id));
 
-    expect(afterRead.doc.session).toBe("sess-1");
+    expect(afterRead.doc.session).toBe(SESSION);
     expect(afterRead.doc.turns[0]?.run).toMatchObject({ status: "done", reply: "Done." });
     expect(afterRead.doc.skills).toEqual([]);
 
@@ -591,7 +597,7 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
     expect(valueOf(first?.args ?? [], "--tools")).not.toContain("Write");
     expect(first?.args).toContain("--session-id");
     expect(first?.stdin).toContain("Write to the user in Korean.");
-    expect(valueOf(second?.args ?? [], "--resume")).toBe("sess-1");
+    expect(valueOf(second?.args ?? [], "--resume")).toBe(SESSION);
     expect(valueOf(second?.args ?? [], "--allowedTools")).toContain("Edit(./**)");
     expect(second?.stdin).toBe(ALLOW_RULES);
     expect([first?.scrub, second?.scrub]).toEqual(["1", "1"]);
@@ -616,7 +622,7 @@ call="$calls/$(ls "$calls" | grep -c 'args$')"
 printf '%s\n' "$@" > "$call.args"
 : > "$call.scrub"
 cat > "$call.stdin"
-echo '{"type":"thread.started","thread_id":"th-1"}'
+echo '{"type":"thread.started","thread_id":"${THREAD}"}'
 echo '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
 `,
     );
@@ -670,7 +676,7 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
     const [first, second] = await calls();
 
     expect(imageFlags(first?.args)).toEqual([]);
-    expect(second?.args).toContain("th-1");
+    expect(second?.args).toContain(THREAD);
     expect(imageFlags(second?.args)).toEqual([
       `--image=${await absolute(`${dir}/files/logo.png`)}`,
     ]);

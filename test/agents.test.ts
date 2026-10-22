@@ -9,6 +9,7 @@ import {
   codexServerLaunch,
   connectClaude,
   connectCodex,
+  type McpLaunch,
   mcpLaunch,
   runMcpConfig,
   targetsRoot,
@@ -173,15 +174,28 @@ exit 1
     expect(codex?.connected).toBe(true);
   });
 
-  test("runs claude with this root's server and keeps the other servers", async () => {
+  /** The servers a Claude run loads, from its `--mcp-config`. */
+  const runServers = async (server: McpLaunch | undefined) => {
+    const config = await t.run(runMcpConfig(server));
+
+    return config === undefined ? undefined : JSON.parse(config).mcpServers;
+  };
+
+  test("runs claude with this root's server alone", async () => {
     await writeMcp("/elsewhere");
 
-    const config = JSON.parse(await t.run(runMcpConfig(launch(t.root))));
+    expect(await runServers(launch(t.root))).toEqual({
+      cutfac: { command: "/opt/cutfac", args: ["mcp", "--workspace", t.root] },
+    });
+  });
 
-    expect(Object.keys(config.mcpServers).toSorted()).toEqual(["cutfac", "other"]);
-    expect(config.mcpServers["cutfac"]).toEqual({
-      command: "/opt/cutfac",
-      args: ["mcp", "--workspace", t.root],
+  test("without the CLI, runs claude with the workspace's entry only when it is for this root", async () => {
+    await writeMcp("/elsewhere");
+    expect(await runServers(undefined)).toBeUndefined();
+
+    await writeMcp(t.root);
+    expect(await runServers(undefined)).toEqual({
+      cutfac: { command: "/opt/cutfac", args: launch(t.root).args },
     });
   });
 
@@ -220,12 +234,16 @@ exit 1
     );
   });
 
-  test("a codex board run switches off the other workspaces' servers and keeps the rest", () => {
+  const PLUGINS_OFF = ["features.plugins=false", "features.apps=false"];
+
+  test("a codex board run switches off every other server, and plugins and apps", () => {
     const listed = ["cutfac-test", "cutfac-other", "content-factory-old", "github"];
 
     expect(codexRunServers("cutfac-test", launch("/here"), listed)).toEqual([
+      ...PLUGINS_OFF,
       "mcp_servers.cutfac-other.enabled=false",
       "mcp_servers.content-factory-old.enabled=false",
+      "mcp_servers.github.enabled=false",
       ...codexServerLaunch("cutfac-test", launch("/here")),
     ]);
   });
@@ -234,9 +252,13 @@ exit 1
     const off = 'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]';
 
     expect(codexRunServers("cutfac-test", undefined, ["cutfac-test", "cutfac-other"])).toEqual([
+      ...PLUGINS_OFF,
       "mcp_servers.cutfac-other.enabled=false",
       off,
     ]);
-    expect(codexRunServers("cutfac-test", undefined, ["github"])).toEqual([]);
+    expect(codexRunServers("cutfac-test", undefined, ["github"])).toEqual([
+      ...PLUGINS_OFF,
+      "mcp_servers.github.enabled=false",
+    ]);
   });
 });
