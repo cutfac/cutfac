@@ -10,6 +10,7 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Popover, PopoverContent } from "@/components/ui/popover";
+import { composing } from "@/lib/utils";
 
 import type { AgentChoice, ItemDetail } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -17,7 +18,7 @@ import { typingFeedbackCommand } from "../../lib/feedback.ts";
 import { agentLabel } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
-import { composing, type SentTo, VersionsPicker } from "./composer.tsx";
+import { type SentTo, VersionsPicker } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */
 export interface BoxAsk {

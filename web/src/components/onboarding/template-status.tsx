@@ -12,7 +12,7 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
+import { cn, composing } from "@/lib/utils";
 
 import type { ImportDetail } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -20,7 +20,6 @@ import { importState, isWorking, turnRun } from "../../lib/imports.ts";
 import { runPhase } from "../../lib/onboarding.ts";
 import { replyBlocks } from "../../lib/replyBlocks.ts";
 import type { LiveRun } from "../../lib/run.ts";
-import { composing } from "../editor/composer.tsx";
 import { StepDone } from "./frame.tsx";
 
 interface TemplateStatusProps {

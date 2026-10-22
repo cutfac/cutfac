@@ -48,6 +48,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
+import { composing } from "@/lib/utils";
 
 import {
   api,
@@ -67,7 +68,6 @@ import { replyMarkdown } from "../lib/replyBlocks.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import { clockTime } from "../lib/time.ts";
 import { HeldChips, SentAttachments, useHeldFiles, type HeldFiles } from "./editor/attachments.tsx";
-import { composing } from "./editor/composer.tsx";
 import { RunReport } from "./editor/run-report.tsx";
 import { ImportName, ImportRequest } from "./import-source.tsx";
 

@@ -15,6 +15,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message";
 import { Textarea } from "@/components/ui/textarea";
+import { composing } from "@/lib/utils";
 
 import type { AgentName, AgentStatus, Feedback, ItemDetail, Variant } from "../../api.ts";
 import { agentInstalled, href } from "../../hooks.ts";
@@ -27,7 +28,6 @@ import { describeTarget, isEmptyTarget, targetOf } from "../../lib/target.ts";
 import { clockTime } from "../../lib/time.ts";
 import { SentAttachments } from "./attachments.tsx";
 import { CompareDialog, VersionsDialog } from "./compare-dialog.tsx";
-import { composing } from "./composer.tsx";
 import { Reply, RunReport } from "./run-report.tsx";
 
 /** What the chat can do with a request; one object so each message takes one prop for it. */
