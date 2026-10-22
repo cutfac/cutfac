@@ -200,6 +200,11 @@ export const AgentRun = Schema.Struct({
   error: Schema.optional(Schema.String),
   /** The agent compacted the conversation during the run, so it goes on from a summary. */
   compacted: Schema.optional(Schema.Boolean),
+  /**
+   * Whether a change of effort alone keeps the agent's prompt cache for the conversation, as the
+   * agent said during the run; left out when it did not say.
+   */
+  effortKeepsCache: Schema.optional(Schema.Boolean),
 });
 
 export type AgentRun = typeof AgentRun.Type;

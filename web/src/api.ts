@@ -182,6 +182,8 @@ export interface AgentRun extends ModelSettings {
   error?: string;
   /** The agent compacted the conversation during the run, so it goes on from a summary. */
   compacted?: boolean;
+  /** Whether a change of effort alone keeps the conversation's prompt cache, if the agent said. */
+  effortKeepsCache?: boolean;
 }
 
 export interface Feedback {
@@ -284,6 +286,8 @@ export interface ItemDoc {
   /** What was picked for the format's inputs, by input id. */
   inputs?: Partial<Record<string, string>>;
   feedback: Feedback[];
+  /** The conversation each agent keeps about this item, resumed by every request to it. */
+  sessions?: Partial<Record<AgentName, string>>;
   created?: string;
   updated?: string;
 }
@@ -560,6 +564,8 @@ export interface ModelOption {
   label: string;
   efforts: string[];
   defaultEffort?: string;
+  /** Whether a change of effort alone keeps the agent's prompt cache; left out when unknown. */
+  effortKeepsCache?: boolean;
 }
 
 export interface AgentStatus {

@@ -69,7 +69,7 @@ const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
   );
 
 /** Where a run stands, as each save of it says. */
-type RunState = Pick<AgentRun, "status" | "reply" | "error">;
+type RunState = Pick<AgentRun, "status" | "reply" | "error" | "effortKeepsCache">;
 
 /** Saves the run as it stands now, with what every save of it carries. */
 type RecordRun = (state: RunState) => ReturnType<typeof setRun>;
@@ -103,6 +103,8 @@ interface Progress {
   readonly session: string | undefined;
   /** Whether any line gave a session or a reply, which says the output could be read at all. */
   readonly understood: boolean;
+  /** Whether a change of effort alone keeps the conversation's prompt cache, once the agent says. */
+  readonly effortKeepsCache: boolean | undefined;
 }
 
 interface Attempt extends Progress {
@@ -136,6 +138,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
     error: undefined,
     session: storedSession,
     understood: false,
+    effortKeepsCache: undefined,
   });
 
   const onLine = Effect.fnUntraced(function* (line: string) {
@@ -152,6 +155,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
       error: parsed.error ?? state.error,
       session: parsed.sessionId ?? state.session,
       understood: state.understood || parsed.sessionId !== undefined || parsed.reply !== undefined,
+      effortKeepsCache: parsed.effortKeepsCache ?? state.effortKeepsCache,
     }));
   });
 
@@ -220,6 +224,8 @@ export interface TurnResult {
   readonly reply: string;
   /** Why the turn failed, if it did. */
   readonly failure: string | undefined;
+  /** Whether a change of effort alone keeps the conversation's prompt cache, if the agent said. */
+  readonly effortKeepsCache?: boolean | undefined;
 }
 
 /** Run one turn, starting a fresh session when the stored one is gone. */
@@ -244,7 +250,12 @@ export const converse = Effect.fnUntraced(function* <R>(conversation: Conversati
     failureOf(agent, first) !== undefined;
 
   const final = staleSession ? yield* Effect.andThen(save(undefined), attempt(undefined)) : first;
-  const result: TurnResult = { reply: final.reply, failure: failureOf(agent, final) };
+
+  const result: TurnResult = {
+    reply: final.reply,
+    failure: failureOf(agent, final),
+    effortKeepsCache: final.effortKeepsCache,
+  };
 
   return result;
 });
@@ -319,7 +330,7 @@ const performEdit = Effect.fnUntraced(function* (
 
   yield* record({ status: "running" });
 
-  const { reply, failure } = yield* converse({
+  const { reply, failure, effortKeepsCache } = yield* converse({
     agent,
     stored: item.doc.sessions[agent],
     invocation: (session) =>
@@ -344,13 +355,18 @@ const performEdit = Effect.fnUntraced(function* (
   });
 
   if (failure !== undefined) {
-    yield* record({ status: "failed", error: failure, reply: reply === "" ? undefined : reply });
+    yield* record({
+      status: "failed",
+      error: failure,
+      reply: reply === "" ? undefined : reply,
+      effortKeepsCache,
+    });
 
     return yield* emit({ type: "error", error: failure });
   }
 
   yield* settleFeedback(input, reply);
-  yield* record({ status: "done", reply });
+  yield* record({ status: "done", reply, effortKeepsCache });
   yield* emit({ type: "done", reply });
 });
 

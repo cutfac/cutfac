@@ -597,6 +597,14 @@ export const en = {
         xhigh: "Extra high",
         max: "Max",
       },
+      /**
+       * The agent keeps this conversation cached for the model and effort it last ran with; a
+       * change it cannot carry over makes it read the whole conversation again.
+       */
+      cacheModel: (model: string) =>
+        `Switching to ${model} means the agent re-reads this whole conversation on your next request, so it will be slower and use more tokens.`,
+      cacheEffort: (effort: string) =>
+        `Changing the reasoning effort to ${effort} means the agent re-reads this whole conversation on your next request, so it will be slower and use more tokens.`,
     },
     /** Folders, files, and web pages agents read whenever they work on the item. */
     sources: {

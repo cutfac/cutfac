@@ -37,6 +37,8 @@ export interface ParsedLine {
   readonly sessionId?: string | undefined;
   readonly reply?: string | undefined;
   readonly error?: string | undefined;
+  /** Whether a change of effort alone keeps the conversation's prompt cache, when the line says. */
+  readonly effortKeepsCache?: boolean | undefined;
 }
 
 const NOTHING: ParsedLine = { events: [] };
@@ -94,6 +96,11 @@ const ClaudeEnvelope = Schema.Struct({
   /** On a `system` `status` line: what Claude Code is busy with, or null once it is not. */
   status: Schema.optional(Schema.NullOr(Schema.String)),
   compact_result: Schema.optional(Schema.String),
+  /**
+   * On `init`, and on a `per_turn_effort_changed` line when it turns false: whether the effort goes
+   * inside the conversation, so changing it keeps the prompt cache, or only with each request.
+   */
+  per_turn_effort_active: Schema.optional(Schema.Boolean),
 });
 
 type ClaudeEnvelope = typeof ClaudeEnvelope.Type;
@@ -160,7 +167,10 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
   const msg = envelope.value;
   const events = msg.type === "assistant" ? claudeEvents(json.value, root) : claudeCompaction(msg);
 
-  if (msg.type !== "result") return { events, sessionId: msg.session_id };
+  if (msg.type !== "result") {
+    return { events, sessionId: msg.session_id, effortKeepsCache: msg.per_turn_effort_active };
+  }
+
   const failed = msg.is_error === true || msg.subtype !== "success";
 
   return {

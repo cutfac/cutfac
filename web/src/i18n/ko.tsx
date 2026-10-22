@@ -554,6 +554,10 @@ export const ko: Messages = {
         xhigh: "매우 높음",
         max: "최대",
       },
+      cacheModel: (model) =>
+        `${model}(으)로 바꾸면 다음 요청 때 에이전트가 이 대화를 처음부터 다시 읽어요. 그만큼 느려지고 토큰을 더 써요.`,
+      cacheEffort: (effort) =>
+        `추론 강도를 ${effort}(으)로 바꾸면 다음 요청 때 에이전트가 이 대화를 처음부터 다시 읽어요. 그만큼 느려지고 토큰을 더 써요.`,
     },
     sources: {
       add: "에이전트가 읽을 폴더, 파일, 링크 추가",

@@ -48,6 +48,7 @@ import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
+import { CacheNote } from "./cache-note.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { AddSource, SourceChips } from "./sources.tsx";
 
@@ -430,6 +431,7 @@ export function Composer({
           </InputGroupAddon>
         </InputGroup>
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+        <CacheNote item={item} agent={agent} settings={settings} status={status} />
         {status === undefined ? null : (
           <OutdatedAgentNote status={status} className="px-1 text-xs text-muted-foreground" />
         )}

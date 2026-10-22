@@ -10,6 +10,11 @@ export interface ModelOption {
   readonly label: string;
   readonly efforts: ReadonlyArray<string>;
   readonly defaultEffort?: string | undefined;
+  /**
+   * Whether a change of effort alone keeps the agent's prompt cache for the conversation, as the
+   * agent says; left out when it does not.
+   */
+  readonly effortKeepsCache?: boolean | undefined;
 }
 
 /** The models an agent can run, and the efforts that suit whatever model it picks itself. */
@@ -126,6 +131,8 @@ const CodexCatalog = Schema.fromJsonString(
         supported_reasoning_levels: Schema.optional(
           Schema.Array(Schema.Struct({ effort: Schema.String })),
         ),
+        /** The effort can change mid-conversation without resending it, keeping the cache. */
+        supports_reasoning_effort_updates: Schema.optional(Schema.Boolean),
       }),
     ),
   }),
@@ -157,6 +164,7 @@ export function parseCodexModels(text: string): AgentModels {
       defaultEffort: Option.getOrUndefined(
         Option.filter(Option.fromNullishOr(m.default_reasoning_level), isEffort),
       ),
+      effortKeepsCache: m.supports_reasoning_effort_updates,
     }));
 
   const [first, ...rest] = models;

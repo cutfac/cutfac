@@ -27,6 +27,7 @@ const catalog = JSON.stringify({
       priority: 2,
       default_reasoning_level: "medium",
       supported_reasoning_levels: ["low", "medium", "high"].map(level),
+      supports_reasoning_effort_updates: false,
       context_window: 400000,
     },
     {
@@ -36,6 +37,7 @@ const catalog = JSON.stringify({
       priority: 1,
       default_reasoning_level: "low",
       supported_reasoning_levels: ["low", "medium", "high", "ultra"].map(level),
+      supports_reasoning_effort_updates: true,
     },
     { slug: "gpt-hidden", visibility: "hide", priority: 0, supported_reasoning_levels: [] },
     {
@@ -49,6 +51,9 @@ const catalog = JSON.stringify({
 
 describe("the models an agent can run", () => {
   test("codex lists its shown models in order, with the efforts each takes", () => {
+    // Whether a change of effort keeps the cache is checked with the property itself, which
+    // `toEqual` would let go missing.
+    expect(parseCodexModels(catalog).models.map((m) => m.effortKeepsCache)).toEqual([true, false]);
     expect(parseCodexModels(catalog)).toEqual({
       models: [
         {
@@ -56,12 +61,14 @@ describe("the models an agent can run", () => {
           label: "GPT-A",
           efforts: ["low", "medium", "high", "ultra"],
           defaultEffort: "low",
+          effortKeepsCache: true,
         },
         {
           id: "gpt-b",
           label: "GPT-B",
           efforts: ["low", "medium", "high"],
           defaultEffort: "medium",
+          effortKeepsCache: false,
         },
       ],
       efforts: ["low", "medium", "high"],
