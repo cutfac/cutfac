@@ -8,6 +8,8 @@ export interface RunOptions {
   readonly cwd?: string;
   /** Written to the process's stdin, which is then closed. */
   readonly stdin?: string;
+  /** Added to the environment the command inherits. */
+  readonly env?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface CommandResult {
@@ -54,10 +56,21 @@ export const spawnFailure = (command: string) => (error: PlatformError) =>
 
 const encoder = new TextEncoder();
 
+/**
+ * Variables a command doesn't inherit from the app. The Codex desktop app sets
+ * CODEX_APP_SERVER_USE_LOCAL_DAEMON for every app the user opens, and with it set to anything,
+ * `codex exec` and `codex mcp` refuse to run.
+ */
+export const UNINHERITED = {
+  CODEX_APP_SERVER_USE_LOCAL_DAEMON: undefined,
+} satisfies Readonly<Record<string, undefined>>;
+
 export function commandOptions(options: RunOptions): ChildProcess.CommandOptions {
   return {
     cwd: options.cwd,
     stdin: options.stdin === undefined ? "ignore" : Stream.make(encoder.encode(options.stdin)),
+    env: { ...UNINHERITED, ...options.env },
+    extendEnv: true,
   };
 }
 

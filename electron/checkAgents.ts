@@ -26,6 +26,7 @@ import {
   runMcpConfig,
 } from "../src/core/agents.ts";
 import { detectAgentRelease, outdatedAgent } from "../src/core/agentVersion.ts";
+import { UNINHERITED } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 
@@ -196,7 +197,7 @@ interface TurnOutput {
 async function runTurn(invocation: AgentInvocation, cwd: string): Promise<TurnOutput> {
   const child = Bun.spawn([invocation.command, ...invocation.args], {
     cwd,
-    env: { ...process.env, ...invocation.env },
+    env: { ...process.env, ...UNINHERITED, ...invocation.env },
     stdin: new Blob([invocation.stdin]),
     stdout: "pipe",
     stderr: "pipe",

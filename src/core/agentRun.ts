@@ -160,9 +160,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
   });
 
   const command = ChildProcess.make(invocation.command, invocation.args, {
-    ...commandOptions({ cwd: ws.root, stdin: invocation.stdin }),
-    env: invocation.env,
-    extendEnv: true,
+    ...commandOptions({ cwd: ws.root, stdin: invocation.stdin, env: invocation.env }),
     forceKillAfter: STOP_GRACE,
   });
 
