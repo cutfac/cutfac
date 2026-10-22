@@ -1,6 +1,14 @@
+import type { KeyObject } from "node:crypto";
+
 import { Option, Schema } from "effect";
 
-import { isPaid, type LicenseRecord } from "../src/license.ts";
+import {
+  LICENSE_PUBLIC_KEY,
+  isPaid,
+  openGrant,
+  type LicenseRecord,
+  type SavedLicense,
+} from "../src/license.ts";
 import type { LicenseCheck } from "../web/src/desktop.ts";
 
 /** Polar's keys are far shorter; anything longer is a paste gone wrong. */
@@ -19,10 +27,9 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 /** Coming back to the app asks again at most this often. */
 const REFRESH_MS = 60 * 1_000;
 
-// cutfac.com also says whether the license is a trial's, but any grant unlocks the same plan.
-const decodeGrant = Schema.decodeUnknownOption(
-  Schema.Struct({ expiresAt: Schema.NullOr(Schema.String) }),
-);
+// cutfac.com also says when the plan ends and whether it is a trial's, for apps from before grants
+// were signed. The signed token says when it ends, and any grant unlocks the same plan.
+const decodeGrant = Schema.decodeUnknownOption(Schema.Struct({ token: Schema.String }));
 
 /** The key as typed or pasted, without surrounding space, or undefined when it can't be one. */
 export function licenseKeyFrom(input: string): string | undefined {
@@ -33,13 +40,20 @@ export function licenseKeyFrom(input: string): string | undefined {
 
 type Request = (url: string, init: RequestInit) => Promise<Response>;
 
+/** How the app reaches cutfac.com and checks what it signs; tests stand in for both. */
+interface LicenseServer {
+  request?: Request;
+  publicKey?: KeyObject;
+}
+
 /**
  * Asks cutfac.com about `key`: a grant, or a refusal for a key that names no license or one whose
- * plan has ended. Undefined when it couldn't be asked or gave no clear answer.
+ * plan has ended. Undefined when it couldn't be asked or gave no clear answer, which a grant that
+ * isn't signed for the key is.
  */
 export async function fetchLicense(
   key: string,
-  request: Request = fetch,
+  { request = fetch, publicKey = LICENSE_PUBLIC_KEY }: LicenseServer = {},
 ): Promise<LicenseRecord | undefined> {
   try {
     const response = await request(LICENSE_URL, {
@@ -57,11 +71,9 @@ export async function fetchLicense(
 
     const grant = Option.getOrUndefined(decodeGrant(await response.json()));
 
-    if (grant === undefined) return undefined;
+    if (grant === undefined || openGrant(grant.token, publicKey)?.key !== key) return undefined;
 
-    const expiresAt = grant.expiresAt === null ? null : Date.parse(grant.expiresAt);
-
-    return Number.isNaN(expiresAt) ? undefined : { checkedAt, expiresAt };
+    return { token: grant.token };
   } catch {
     return undefined;
   }
@@ -74,15 +86,10 @@ function checkOf(record: LicenseRecord | undefined): LicenseCheck {
   return "refusal" in record ? record.refusal : "granted";
 }
 
-interface LicenseOptions {
-  /** The saved key, and cutfac.com's last answer about it. */
-  key: string | undefined;
-  record: LicenseRecord | undefined;
+interface LicenseOptions extends SavedLicense, LicenseServer {
   save: (key: string, record: LicenseRecord | undefined) => Promise<void>;
   /** The paid plan unlocked or ran out, once the settings that say so are saved. */
   onChange: () => void;
-  /** How to reach cutfac.com; tests answer for it. */
-  request?: Request;
 }
 
 export interface License {
@@ -98,16 +105,10 @@ export interface License {
  * when the user comes back to a key that doesn't unlock the paid plan, perhaps after renewing or
  * getting online. Without the paid plan the app is the free version; it never locks.
  */
-export function startLicense({
-  key,
-  record,
-  save,
-  onChange,
-  request = fetch,
-}: LicenseOptions): License {
-  let saved = { key, record };
+export function startLicense({ key, record, save, onChange, ...server }: LicenseOptions): License {
+  let saved: SavedLicense = { key, record };
 
-  let paid = isPaid(record, Date.now());
+  let paid = isPaid(saved, Date.now(), server.publicKey);
 
   let askedAt = Number.NEGATIVE_INFINITY;
 
@@ -115,7 +116,7 @@ export function startLicense({
 
   /** Tells the board when the plan changed, which a grant running out does on its own. */
   function publish() {
-    const next = isPaid(saved.record, Date.now());
+    const next = isPaid(saved, Date.now(), server.publicKey);
 
     if (next === paid) return;
 
@@ -132,7 +133,7 @@ export function startLicense({
     return next;
   }
 
-  async function keep(next: typeof saved) {
+  async function keep(next: SavedLicense) {
     saved = next;
 
     // The board's server reads the plan from the saved settings, so they go first.
@@ -147,7 +148,7 @@ export function startLicense({
     return serialize(async () => {
       if (saved.key === undefined) return;
 
-      const answer = await fetchLicense(saved.key, request);
+      const answer = await fetchLicense(saved.key, server);
 
       // No answer keeps the last one, which holds until its grace runs out.
       if (answer !== undefined) await keep({ key: saved.key, record: answer });
@@ -165,7 +166,7 @@ export function startLicense({
       if (next === undefined) return Promise.resolve("invalid");
 
       return serialize(async () => {
-        const answer = await fetchLicense(next, request);
+        const answer = await fetchLicense(next, server);
         const result = checkOf(answer);
 
         if (result === "invalid") return result;

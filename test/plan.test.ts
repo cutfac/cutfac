@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import {
   DesktopData,
   FREE_VIDEOS,
   FreeLimitReached,
+  LicensePublicKey,
   PRICING_URL,
   createCountedItem,
   freeVersionNote,
@@ -18,22 +20,36 @@ import {
   planStatus,
   type Plan,
 } from "../src/plan.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { licenseSigning, makeWorkspace, signedGrant, type TestWorkspace } from "./support.ts";
 
 const NOW = Date.parse("2026-10-20T00:00:00Z");
 
 const DAY = 24 * 60 * 60 * 1_000;
 
-const plan: LicenseRecord = { checkedAt: NOW - DAY, expiresAt: null };
+const { publicKey } = licenseSigning;
+
+/** cutfac.com's grant for KEY-1, heard at `checkedAt`. */
+const signed = (checkedAt: number, expiresAt: number | null = null): LicenseRecord => ({
+  token: signedGrant(checkedAt, expiresAt),
+});
+
+const plan = signed(NOW - DAY);
+
+/** Whether `record`, saved for KEY-1, unlocks the paid plan at `now`. */
+const paidAt = (record: LicenseRecord | undefined, now: number) =>
+  isPaid({ key: "KEY-1", record }, now, publicKey);
+
+/** Whether settings.json's `text` unlocks the paid plan now. */
+const paidIn = (text: string) => paidInSettings(text, NOW, publicKey);
 
 /** What settings.json may hold as cutfac.com's last answer: one, one from an older app, or junk. */
-type SavedLicense =
+type SavedRecord =
   | LicenseRecord
-  | (LicenseRecord & { readonly trial: boolean })
+  | { readonly checkedAt: number; readonly expiresAt: number | null }
   | { readonly checkedAt: string };
 
 /** The desktop app's settings.json, with `license` saved for the key. */
-const settings = (license?: SavedLicense, licenseKey = "KEY-1") =>
+const settings = (license?: SavedRecord, licenseKey = "KEY-1") =>
   JSON.stringify({ locale: "en", licenseKey, license });
 
 const free = (used: number): Plan => ({
@@ -45,54 +61,68 @@ const free = (used: number): Plan => ({
 
 describe("paid plan", () => {
   test("a grant unlocks the paid plan until it runs out", () => {
-    const ending: LicenseRecord = { checkedAt: NOW - DAY, expiresAt: NOW + 3 * DAY };
+    const ending = signed(NOW - DAY, NOW + 3 * DAY);
 
-    expect(isPaid(plan, NOW)).toBe(true);
-    expect(isPaid(ending, NOW + 3 * DAY - 1)).toBe(true);
-    expect(isPaid(ending, NOW + 3 * DAY)).toBe(false);
+    expect(paidAt(plan, NOW)).toBe(true);
+    expect(paidAt(ending, NOW + 3 * DAY - 1)).toBe(true);
+    expect(paidAt(ending, NOW + 3 * DAY)).toBe(false);
   });
 
   test("offline, a grant holds for the grace and then falls back to free", () => {
-    const heard: LicenseRecord = { checkedAt: NOW, expiresAt: null };
+    const heard = signed(NOW);
 
-    expect(isPaid(heard, NOW + OFFLINE_GRACE_MS)).toBe(true);
-    expect(isPaid(heard, NOW + OFFLINE_GRACE_MS + 1)).toBe(false);
+    expect(paidAt(heard, NOW + OFFLINE_GRACE_MS)).toBe(true);
+    expect(paidAt(heard, NOW + OFFLINE_GRACE_MS + 1)).toBe(false);
   });
 
-  test("a grant heard after now is the free version, so a later time can't stretch the grace", () => {
-    const ahead: LicenseRecord = { checkedAt: NOW + DAY, expiresAt: null };
-
-    expect(isPaid(ahead, NOW)).toBe(false);
-    expect(isPaid(ahead, NOW + DAY)).toBe(true);
-    expect(
-      paidInSettings(settings({ checkedAt: Date.parse("2100-01-01"), expiresAt: null }), NOW),
-    ).toBe(false);
+  test("a grant timed a day ahead of this Mac's clock holds, but not one further ahead", () => {
+    expect(paidAt(signed(NOW + DAY), NOW)).toBe(true);
+    expect(paidAt(signed(NOW + DAY + 1), NOW)).toBe(false);
+    expect(paidAt(signed(Date.parse("2100-01-01")), NOW)).toBe(false);
   });
 
-  test("a refusal, or no answer yet, is the free version", () => {
-    expect(isPaid({ checkedAt: NOW, refusal: "invalid" }, NOW)).toBe(false);
-    expect(isPaid({ checkedAt: NOW, refusal: "ended" }, NOW)).toBe(false);
-    expect(isPaid(undefined, NOW)).toBe(false);
+  test("only a grant cutfac.com signed for the saved key unlocks it", () => {
+    const [payload] = signedGrant(NOW).split(".");
+    const [, signature] = signedGrant(NOW - DAY).split(".");
+    const otherSigner = generateKeyPairSync("ed25519");
+
+    expect(isPaid({ key: "KEY-2", record: plan }, NOW, publicKey)).toBe(false);
+    expect(paidAt({ token: `${payload}.${signature}` }, NOW)).toBe(false);
+    expect(paidAt({ token: signedGrant(NOW, null, "KEY-1", otherSigner) }, NOW)).toBe(false);
+    expect(paidAt({ token: "not a token" }, NOW)).toBe(false);
+    // The app's own key, which no test holds the private half of.
+    expect(isPaid({ key: "KEY-1", record: plan }, NOW)).toBe(false);
   });
 
-  test("the app's settings unlock it only with a key and a grant", () => {
-    expect(paidInSettings(settings(plan), NOW)).toBe(true);
-    expect(paidInSettings(settings(plan, ""), NOW)).toBe(false);
-    expect(paidInSettings(JSON.stringify({ license: plan }), NOW)).toBe(false);
-    expect(paidInSettings(settings({ checkedAt: "yesterday" }), NOW)).toBe(false);
-    expect(paidInSettings(settings(undefined), NOW)).toBe(false);
-    expect(paidInSettings("not json", NOW)).toBe(false);
-    expect(paidInSettings("null", NOW)).toBe(false);
+  test("a refusal, or no answer or key yet, is the free version", () => {
+    expect(paidAt({ checkedAt: NOW, refusal: "invalid" }, NOW)).toBe(false);
+    expect(paidAt({ checkedAt: NOW, refusal: "ended" }, NOW)).toBe(false);
+    expect(paidAt(undefined, NOW)).toBe(false);
+    expect(isPaid({ key: undefined, record: plan }, NOW, publicKey)).toBe(false);
   });
 
-  test("a grant saved by an app that still told trials apart unlocks it too", () => {
-    expect(paidInSettings(settings({ ...plan, trial: true }), NOW)).toBe(true);
+  test("the app's settings unlock it only with a key and its grant", () => {
+    expect(paidIn(settings(plan))).toBe(true);
+    expect(paidIn(settings(plan, ""))).toBe(false);
+    expect(paidIn(settings(plan, "KEY-2"))).toBe(false);
+    expect(paidIn(JSON.stringify({ license: plan }))).toBe(false);
+    expect(paidIn(settings({ checkedAt: "yesterday" }))).toBe(false);
+    expect(paidIn(settings(undefined))).toBe(false);
+    expect(paidIn("not json")).toBe(false);
+    expect(paidIn("null")).toBe(false);
+  });
+
+  test("a grant saved before grants were signed, or written by hand, is the free version", () => {
+    expect(paidIn(settings({ checkedAt: NOW - DAY, expiresAt: null }))).toBe(false);
   });
 });
 
 describe("plan", () => {
   test("a paid plan has no count", () => {
-    expect(planOf(settings(plan), "a\nb\nc\nd\n", NOW)).toEqual({ edition: "desktop", paid: true });
+    expect(planOf(settings(plan), "a\nb\nc\nd\n", NOW, publicKey)).toEqual({
+      edition: "desktop",
+      paid: true,
+    });
   });
 
   test("the free version counts the videos made, up to its limit", () => {
@@ -130,7 +160,10 @@ describe("making videos on the desktop app", () => {
   });
 
   const onThisMac = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    Effect.provideService(effect, DesktopData, Option.some(data));
+    effect.pipe(
+      Effect.provideService(DesktopData, Option.some(data)),
+      Effect.provideService(LicensePublicKey, publicKey),
+    );
 
   const make = (title: string) => onThisMac(createCountedItem({ title }));
 
@@ -166,10 +199,7 @@ describe("making videos on the desktop app", () => {
   });
 
   test("a paid plan makes as many as it likes, and they still count", async () => {
-    await writeFile(
-      join(data, "settings.json"),
-      settings({ checkedAt: Date.now(), expiresAt: null }),
-    );
+    await writeFile(join(data, "settings.json"), settings(signed(Date.now())));
 
     for (const title of ["One", "Two", "Three", "Four"]) await t.run(make(title));
 

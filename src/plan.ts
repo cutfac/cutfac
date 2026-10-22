@@ -3,7 +3,7 @@ import { Clock, Config, Context, Effect, Layer, Option, Path, Schema } from "eff
 import { COMPILED } from "./core/build.ts";
 import { type NewItemInput, createItem } from "./core/items.ts";
 import { Workspace, appendAppRecord, nowIso } from "./core/workspace.ts";
-import { paidInSettings } from "./license.ts";
+import { LICENSE_PUBLIC_KEY, paidInSettings } from "./license.ts";
 
 /** How many videos the desktop app's free version makes on one Mac, with every feature open. */
 export const FREE_VIDEOS = 3;
@@ -30,6 +30,14 @@ const BUNDLED_BINARY = /\.app\/Contents\/Resources\/bin\/[^/]+$/;
 export const DesktopData = Context.Reference<Option.Option<string>>("cutfac/DesktopData", {
   defaultValue: () => Option.none(),
 });
+
+/** The key that verifies cutfac.com's license grants. Tests sign their own. */
+export const LicensePublicKey = Context.Reference<typeof LICENSE_PUBLIC_KEY>(
+  "cutfac/LicensePublicKey",
+  {
+    defaultValue: () => LICENSE_PUBLIC_KEY,
+  },
+);
 
 const env = (name: string) =>
   Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none<string>));
@@ -67,8 +75,13 @@ const OPEN_SOURCE: Plan = { edition: "open-source" };
 const PAID: Plan = { edition: "desktop", paid: true };
 
 /** What the desktop app's settings and video count say about the plan at `now`. */
-export function planOf(settings: string | undefined, videos: string, now: number): Plan {
-  if (settings !== undefined && paidInSettings(settings, now)) return PAID;
+export function planOf(
+  settings: string | undefined,
+  videos: string,
+  now: number,
+  publicKey = LICENSE_PUBLIC_KEY,
+): Plan {
+  if (settings !== undefined && paidInSettings(settings, now, publicKey)) return PAID;
 
   const made = videos.split("\n").filter((line) => line.trim() !== "").length;
 
@@ -93,7 +106,12 @@ export const planStatus = Effect.fn("plan.status")(function* () {
     { concurrency: "unbounded" },
   );
 
-  return planOf(Option.getOrUndefined(settings), videos, yield* Clock.currentTimeMillis);
+  return planOf(
+    Option.getOrUndefined(settings),
+    videos,
+    yield* Clock.currentTimeMillis,
+    yield* LicensePublicKey,
+  );
 });
 
 /** A new video refused because the desktop app's free version has made all of its videos. */

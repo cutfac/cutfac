@@ -1,3 +1,4 @@
+import { generateKeyPairSync, sign } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,4 +86,19 @@ export async function makeFakeAgents(): Promise<FakeAgents> {
   };
 
   return { dir, calls, layer, bin, remove };
+}
+
+/** A key pair to sign license grants with, as cutfac.com does, made for each run. */
+export const licenseSigning = generateKeyPairSync("ed25519");
+
+/** A grant's token for `key`, signed with `licenseSigning` as cutfac.com signs one. */
+export function signedGrant(
+  checkedAt: number,
+  expiresAt: number | null = null,
+  key = "KEY-1",
+  { privateKey } = licenseSigning,
+): string {
+  const payload = Buffer.from(JSON.stringify({ key, checkedAt, expiresAt }));
+
+  return `${payload.toString("base64url")}.${sign(null, payload, privateKey).toString("base64url")}`;
 }

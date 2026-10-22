@@ -5,7 +5,7 @@ import path from "node:path";
 import { Option, Schema } from "effect";
 import { app } from "electron";
 
-import { decodeLicenseRecord, type LicenseRecord } from "../src/license.ts";
+import { decodeLicenseRecord, type LicenseRecord, type SavedLicense } from "../src/license.ts";
 import type { OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 import { ONBOARDING_STEPS } from "./boardPages.ts";
@@ -133,10 +133,7 @@ export const saveLocale = (locale: Locale) => writeSettings({ locale });
  * The license key and cutfac.com's last answer about it, which the app's agent tools read too. The
  * key stays on this computer and goes only to cutfac.com.
  */
-export async function loadLicense(): Promise<{
-  key: string | undefined;
-  record: LicenseRecord | undefined;
-}> {
+export async function loadLicense(): Promise<SavedLicense> {
   const settings = await readSettings();
 
   return {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 
 import {
   LICENSE_URL,
@@ -8,6 +9,7 @@ import {
   type License,
 } from "../electron/license.ts";
 import type { LicenseRecord } from "../src/license.ts";
+import { licenseSigning, signedGrant } from "./support.ts";
 
 const NOW = Date.parse("2026-10-20T00:00:00Z");
 
@@ -28,54 +30,78 @@ describe("desktop license keys", () => {
   });
 });
 
+const { publicKey } = licenseSigning;
+
+type Request = (url: string, init: RequestInit) => Promise<Response>;
+
 /** cutfac.com, answering with `response`. */
 const answering = (response: Response) => () => Promise.resolve(response);
 
-describe("asking cutfac.com about a key", () => {
-  test("a grant says when it ends, trial or not", async () => {
-    const asked: { url: string; init: RequestInit }[] = [];
+/** Asks about KEY-1 through `request`, checking grants with the tests' key. */
+const ask = (request: Request) => fetchLicense("KEY-1", { request, publicKey });
 
-    const record = await fetchLicense("KEY-1", (url, init) => {
+/** cutfac.com's grant for `key`, as it answers now: the token and, for older apps, the end. */
+const grant = (key = "KEY-1", expiresAt: number | null = null) =>
+  Response.json({
+    expiresAt: expiresAt === null ? null : new Date(expiresAt).toISOString(),
+    trial: false,
+    token: signedGrant(Date.now(), expiresAt, key),
+  });
+
+describe("asking cutfac.com about a key", () => {
+  test("a grant is kept as the token cutfac.com signed", async () => {
+    const asked: { url: string; init: RequestInit }[] = [];
+    const token = signedGrant(Date.now());
+
+    const record = await ask((url, init) => {
       asked.push({ url, init });
 
-      return Promise.resolve(Response.json({ expiresAt: "2026-10-26T00:00:00.000Z", trial: true }));
+      return Promise.resolve(Response.json({ expiresAt: null, trial: true, token }));
     });
 
-    expect(record).toEqual({
-      checkedAt: expect.any(Number),
-      expiresAt: Date.parse("2026-10-26T00:00:00.000Z"),
-    });
+    expect(record).toEqual({ token });
     expect(asked).toHaveLength(1);
     expect(asked[0]?.url).toBe(LICENSE_URL);
     expect(asked[0]?.init.headers).toEqual({ Authorization: "Bearer KEY-1" });
-  });
-
-  test("a plan with no end date stays open", async () => {
-    const response = Response.json({ expiresAt: null, trial: false });
-
-    expect(await fetchLicense("KEY-1", answering(response))).toMatchObject({ expiresAt: null });
   });
 
   test("401 and 402 refuse the key", async () => {
     const invalid = new Response("Invalid license key", { status: 401 });
     const ended = new Response("Plan ended", { status: 402 });
 
-    expect(await fetchLicense("KEY-1", answering(invalid))).toMatchObject({ refusal: "invalid" });
-    expect(await fetchLicense("KEY-1", answering(ended))).toMatchObject({ refusal: "ended" });
+    expect(await ask(answering(invalid))).toMatchObject({ refusal: "invalid" });
+    expect(await ask(answering(ended))).toMatchObject({ refusal: "ended" });
   });
 
   test("an unclear answer, or none, is no answer", async () => {
     const answers = [
       answering(new Response("Unavailable", { status: 503 })),
       answering(new Response("not json")),
-      answering(Response.json({ expiresAt: "soon" })),
       answering(Response.json({ trial: true })),
       () => Promise.reject(new TypeError("fetch failed")),
     ];
 
-    const records = await Promise.all(answers.map((request) => fetchLicense("KEY-1", request)));
+    const records = await Promise.all(answers.map(ask));
 
     expect(records).toEqual(answers.map(() => undefined));
+  });
+
+  test("a grant that isn't signed for the key is no answer", async () => {
+    const otherSigner = generateKeyPairSync("ed25519");
+
+    const answers = [
+      // From a server too old to sign.
+      answering(Response.json({ expiresAt: null, trial: false })),
+      answering(grant("KEY-2")),
+      answering(Response.json({ token: signedGrant(Date.now(), null, "KEY-1", otherSigner) })),
+      answering(Response.json({ token: "not a token" })),
+    ];
+
+    const records = await Promise.all(answers.map(ask));
+
+    expect(records).toEqual(answers.map(() => undefined));
+    // The app's own key, which no test holds the private half of.
+    expect(await fetchLicense("KEY-1", { request: answering(grant()) })).toBeUndefined();
   });
 });
 
@@ -104,6 +130,7 @@ function start(key: string | undefined, record: LicenseRecord | undefined, answe
       events.push(`save ${saved} ${savedAs(answer)}`);
     },
     onChange: () => events.push("change"),
+    publicKey,
     request: (_url, init) => {
       events.push(`ask ${new Headers(init.headers).get("Authorization")}`);
       const answer = queue.shift();
@@ -119,8 +146,6 @@ function start(key: string | undefined, record: LicenseRecord | undefined, answe
 
 /** Lets the checks the app started run to the end. */
 const settle = () => Bun.sleep(10);
-
-const grant = (expiresAt: string | null = null) => Response.json({ expiresAt, trial: false });
 
 describe("keeping the desktop app's plan", () => {
   beforeEach(() => setSystemTime(NOW));
@@ -164,7 +189,7 @@ describe("keeping the desktop app's plan", () => {
   });
 
   test("a granted key unlocks the paid plan", async () => {
-    const { license, events } = start(undefined, undefined, [grant()]);
+    const { license, events } = start(undefined, undefined, [grant("KEY-2")]);
 
     expect(await license.setKey("KEY-2")).toBe("granted");
     expect(events).toEqual(["ask Bearer KEY-2", "save KEY-2 grant", "change"]);
@@ -188,7 +213,7 @@ describe("keeping the desktop app's plan", () => {
   });
 
   test("coming back doesn't ask about a paid key, or one that names no license", async () => {
-    const paid = start("KEY-1", { checkedAt: NOW, expiresAt: null }, [grant()]);
+    const paid = start("KEY-1", { token: signedGrant(NOW) }, [grant()]);
 
     const invalid = start("KEY-2", { checkedAt: NOW, refusal: "invalid" }, [
       new Response("", { status: 401 }),
@@ -205,10 +230,8 @@ describe("keeping the desktop app's plan", () => {
   });
 
   test("a grant running out moves the board to the free version", async () => {
-    const until = new Date(NOW + HOUR).toISOString();
-
-    const { license, events } = start("KEY-1", { checkedAt: NOW, expiresAt: NOW + HOUR }, [
-      grant(until),
+    const { license, events } = start("KEY-1", { token: signedGrant(NOW, NOW + HOUR) }, [
+      grant("KEY-1", NOW + HOUR),
     ]);
 
     await settle();
