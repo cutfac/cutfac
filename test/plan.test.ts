@@ -7,13 +7,7 @@ import { join } from "node:path";
 import { Effect, Option } from "effect";
 
 import { listItemIds } from "../src/core/items.ts";
-import {
-  OFFLINE_GRACE_MS,
-  UNSIGNED_GRANTS_UNTIL,
-  isPaid,
-  paidInSettings,
-  type LicenseRecord,
-} from "../src/license.ts";
+import { OFFLINE_GRACE_MS, isPaid, paidInSettings, type LicenseRecord } from "../src/license.ts";
 import {
   DesktopData,
   FREE_VIDEOS,
@@ -41,12 +35,6 @@ const signed = (checkedAt: number, expiresAt: number | null = null): LicenseReco
 
 const plan = signed(NOW - DAY);
 
-/** A grant an app from before grants were signed saved, heard at `checkedAt`. */
-const unsigned = (checkedAt: number, expiresAt: number | null = null): LicenseRecord => ({
-  checkedAt,
-  expiresAt,
-});
-
 /** Whether `record`, saved for KEY-1, unlocks the paid plan at `now`. */
 const paidAt = (record: LicenseRecord | undefined, now: number) =>
   isPaid({ key: "KEY-1", record }, now, publicKey);
@@ -54,8 +42,11 @@ const paidAt = (record: LicenseRecord | undefined, now: number) =>
 /** Whether settings.json's `text` unlocks the paid plan now. */
 const paidIn = (text: string) => paidInSettings(text, NOW, publicKey);
 
-/** What settings.json may hold as cutfac.com's last answer: one, or junk. */
-type SavedRecord = LicenseRecord | { readonly checkedAt: string };
+/** What settings.json may hold as cutfac.com's last answer: one, one from an older app, or junk. */
+type SavedRecord =
+  | LicenseRecord
+  | { readonly checkedAt: number; readonly expiresAt: number | null }
+  | { readonly checkedAt: string };
 
 /** The desktop app's settings.json, with `license` saved for the key. */
 const settings = (license?: SavedRecord, licenseKey = "KEY-1") =>
@@ -121,16 +112,8 @@ describe("paid plan", () => {
     expect(paidIn("null")).toBe(false);
   });
 
-  test("a grant saved before grants were signed counts as it did, until unsigned ones stop", () => {
-    const lastDay = UNSIGNED_GRANTS_UNTIL - DAY;
-
-    expect(paidIn(settings(unsigned(NOW - DAY)))).toBe(true);
-    expect(paidIn(settings(unsigned(NOW - DAY), "KEY-2"))).toBe(true);
-    expect(paidIn(settings(unsigned(NOW - DAY), ""))).toBe(false);
-    expect(paidAt(unsigned(NOW - DAY, NOW), NOW)).toBe(false);
-    expect(paidAt(unsigned(NOW - OFFLINE_GRACE_MS - 1), NOW)).toBe(false);
-    expect(paidAt(unsigned(lastDay), UNSIGNED_GRANTS_UNTIL - 1)).toBe(true);
-    expect(paidAt(unsigned(lastDay), UNSIGNED_GRANTS_UNTIL)).toBe(false);
+  test("a grant saved before grants were signed, or written by hand, is the free version", () => {
+    expect(paidIn(settings({ checkedAt: NOW - DAY, expiresAt: null }))).toBe(false);
   });
 });
 
