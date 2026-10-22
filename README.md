@@ -30,7 +30,7 @@
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
-  <a href="https://github.com/w00ing/cutfac/issues">Issues</a>
+  <a href="https://github.com/wyverselabs/cutfac/issues">Issues</a>
   ·
   <a href="https://wyverselabs.com">Wyverse Labs</a>
 </p>
