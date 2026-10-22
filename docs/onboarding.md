@@ -1,7 +1,7 @@
 # Onboarding
 
-Draft. The first launch of the Mac app takes someone from a fresh install to a board that is ready
-for their first video, in a few steps inside the app's own window.
+The first launch of the Mac app takes someone from a fresh install to a board that is ready for
+their first video, in a few steps inside the app's own window.
 
 ## Ready means
 
@@ -12,20 +12,23 @@ ready when:
 2. a workspace folder exists, with that agent connected to it, and
 3. the workspace has at least one template that is ready to use.
 
-## Today
+## What it replaced
 
-- With no saved workspace, the app opens the system folder dialog before any window, with one line
-  of text. Cancelling it quits the app.
-- Once a folder is picked, the board opens on Setup when no agent is connected. Setup lists the
-  agents with a Connect button; one that is missing gets a badge and no way forward.
-- A new workspace has no templates, and nothing in setup asks for one. The board's empty state
-  names templates, but the user has to find the Templates view and a link on their own.
+- With no saved workspace, the app opened the system folder dialog before any window, and
+  cancelling it quit the app.
+- Once a folder was picked, the board opened on Setup, which listed the agents with a Connect
+  button; one that was missing got a badge and no way forward.
+- A new workspace had no templates, and nothing asked for one. The user had to find the Templates
+  view and a link on their own.
 
 ## Steps
 
 Each step checks what is already true and passes on its own when it is: a second Mac, a reinstall
 or a workspace that already has templates goes straight to what is missing. Closing the window
-keeps the progress; the next launch opens on the same step.
+keeps the progress. Steps 1 to 4 save the step the user is on, and the next launch opens on it.
+From step 5 on the board opens on Start while the workspace has neither a template nor a brief,
+unless the user chose to continue on the board; each template run has its own page, so a reload
+keeps it.
 
 | Step            | Shows                                                                                                                                                                                                                   | Done when                         |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
@@ -38,8 +41,9 @@ keeps the progress; the next launch opens on the same step.
 
 ### Before the workspace
 
-Steps 1 to 3 run before there is a workspace, so before there is a server. Electron loads the built
-board without one and answers those steps itself over the preload bridge. Agent detection runs as a
+Steps 1 to 3 run before there is a workspace, so before there is a server. Electron serves the
+built board on its own `cutfac://` scheme, which keeps storage and fetch as a web origin does, and
+answers those steps itself over the preload bridge. Agent detection runs as a
 CLI command that needs no workspace (`cutfac agents --json`), so the server and Electron share one
 implementation. From step 4 on the app works as it does today: the server starts on the folder and
 the board talks to it.
@@ -105,24 +109,28 @@ writes the template from that. So step 5 asks for:
   brand, or their own words.
 - **Platforms**: TikTok, YouTube Shorts, Instagram Reels, any of them. They set the aspect ratios and
   lengths.
-- **Their material**, optional: a website link, or a local folder to read from (a brand kit, past
-  videos, a product folder). The folder is read where it is, not copied.
+- **Their material**, optional: website links, or local folders to read from (a brand kit, past
+  videos, a product folder). Start learns each one into the workspace with the Learn the board
+  already has, into `about.md`, so every later run reads it too. A folder is read where it is, not
+  copied.
 - **A reference**, optional: one card from a gallery of public examples (skills, starter kits,
   finished projects and collections of videos with their prompts), or another link pasted in.
 
-Start runs the agent on all of it through the import the Templates view already runs, with the
-same consent rules; only the request changes, from "make this link usable here" to "make a
-template for this person, starting from this reference". Without a reference the agent starts from
-what it knows. The agent may ask when a guess would likely make the wrong thing, such as which
-product on a website to promote; the question shows in step 6 next to the title, and the import
-already takes replies. The request leans it toward deciding: ask only what it can't settle
-reasonably, one question at a time so each is quick to answer, keep them few, and otherwise pick a
-sensible default. That is guidance in the request, not a hard limit. What it settled without asking
-goes in the template's README, where the user can change it.
+Start runs the agent on all of it through the import the Templates view already runs, with the same
+consent rules: a reference is read first and waits for Allow, while a run with no reference may
+write from the start, since there is nothing outside the workspace to bring in. The agent is the
+workspace's default when it is ready, and otherwise the one that is; only the request changes, from
+"make this link usable here" to "make a template for this person, starting from this reference".
+Without a reference the agent starts from what it knows. The agent may ask when a guess would likely
+make the wrong thing, such as which product on a website to promote; the question shows in step 6
+next to the title, and the import already takes replies. The request leans it toward deciding: ask
+only what it can't settle reasonably, one question at a time so each is quick to answer, keep them
+few, and otherwise pick a sensible default. That is guidance in the request, not a hard limit. What
+it settled without asking goes in the template's README, where the user can change it.
 
 The user never sees the request itself. In outline it says:
 
-- make one template for the person `brief.md` describes, reading its material;
+- make one template for the person `brief.md` describes, reading what was learned into `about.md`;
 - start from this reference, or from what you know when there is none;
 - fit the aspect ratios and lengths to the platforms;
 - ask only what you can't settle reasonably, one question at a time, each with two or three likely
@@ -134,18 +142,16 @@ The wording is tuned against real agent runs when it is built.
 
 ### The brief
 
-The purpose, platforms and material are saved as `brief.md` at the workspace root, so each workspace
-has its own: one for promoting an app and one for a personal brand keep separate briefs, as they
-keep separate templates. A new workspace asks for its brief with the same form as step 5. Every
-later agent run and the MCP tools read it, so the next template and every video start from the same
-context. The front matter holds what the app reads, the body is the user's own words:
+The purpose, platforms and the user's own words are saved as `brief.md` at the workspace root, so
+each workspace has its own: one for promoting an app and one for a personal brand keep separate
+briefs, as they keep separate templates. A new workspace asks for its brief with the same form as
+step 5. Every later agent run and the MCP tools read it, so the next template and every video start
+from the same context. The front matter holds what the app reads, the body is the user's own words:
 
 ```markdown
 ---
+purpose: promote
 platforms: [tiktok, shorts]
-material:
-  - https://example.com
-  - ~/Documents/Brand
 ---
 
 Short videos that promote my app. Light and friendly.
@@ -155,17 +161,18 @@ The person and the agent edit the same file:
 
 - **On the board**, the top of the sidebar, under the workspace name, sums the brief up in a line
   ("Promote my app · TikTok, Shorts"). Clicking it opens a sheet with the step 5 form: purpose and
-  platforms to pick, material to add or remove, and the body as free text. Saving writes
-  `brief.md`. No menu item or settings page of its own.
+  platforms to pick, and the body as free text. Saving writes `brief.md`. No menu item or settings
+  page of its own. Material isn't part of it; it lives in `about.md`, as anything learned does.
 - **In words**, the user tells the agent while working ("I'm doing Reels now too"), and the agent
-  updates `brief.md` through an MCP tool and says what changed in one line. The sheet shows the
-  change at once.
+  updates `brief.md` through the `update_brief` MCP tool and says what changed in one line. The
+  sheet shows the change at once.
 
-The gallery is a list of links hosted on cutfac.com, which the app fetches, so it changes without a
-release as new examples appear. Each entry carries a title, a preview clip, a link and its license.
-It lists only references with a license that allows reuse; a link pasted in is the user's call. The
-preview clips are short cuts of each reference's own demo, hosted on cutfac.com with the source and
-license beside them, so the gallery doesn't break when a repository moves its files.
+The gallery is a list of links, each with a title, a line on what it is and its license. It lists
+only references with a license that allows reuse; a link pasted in is the user's call. For now the
+list is built into the app. It is to move to cutfac.com, which the app fetches, so it grows without
+a release, and each entry is to gain a preview clip: a short cut of the reference's own demo, hosted
+with the source and license beside it, so the gallery doesn't break when a repository moves its
+files.
 
 It starts with references that are ready to use as they are, not collections the agent would have
 to search:
@@ -186,12 +193,16 @@ A template can take the agent a few minutes, so the user doesn't wait on it. Sta
 to the title, with the run's progress above the field and its Allow, when it asks for one, in
 place:
 
-- **Progress** is one line that moves through the run: reading the reference, picking the style,
-  checking.
-- **A question** shows as one bubble above the title field, with the agent's suggested answers as
-  buttons and a field for its own answer. Answering one brings the next or lets the run go on.
+- **Progress** is one line that moves through the run: reading the brief and the reference,
+  building the template, checking that it renders.
+- **A question** shows as one card above the title field, with the agent's suggested answers as
+  buttons and a field for the user's own answer. Answering one brings the next or lets the run go
+  on.
 - **When it is done**, what the agent settled without asking shows as a short list ("30 seconds",
-  "large captions"), the same as the README. Clicking one lets the user change it in words.
+  "large captions"), the same as the README. Clicking one opens a field, already focused, to change
+  it in words.
+- **When it fails**, one line says why, with Try again and, when a reference was picked, Make it
+  without a reference.
 
 Create is ready once the title is in and the template is; it makes the item with
 that template and opens its detail view. The agent doesn't start on its own: the first run is the
