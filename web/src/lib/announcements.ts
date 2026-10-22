@@ -46,8 +46,7 @@ export function unseen(
 }
 
 /** Every announcement so far, as seen. */
-const allSeen = (all: ReadonlyArray<Announcement>) =>
-  all.map((announcement) => announcement.id);
+const allSeen = (all: ReadonlyArray<Announcement>) => all.map((announcement) => announcement.id);
 
 /** What was seen, less the newest announcement, so the board shows it again. */
 export function forgetNewest(
