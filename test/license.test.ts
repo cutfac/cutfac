@@ -160,6 +160,18 @@ describe("keeping the desktop app's plan", () => {
     expect(events).toEqual(["ask Bearer KEY-1", "save KEY-1 grant", "change"]);
   });
 
+  test("after updating, a grant saved unsigned stays paid until a signed one replaces it", async () => {
+    const unsigned = { checkedAt: NOW - HOUR, expiresAt: null };
+    const online = start("KEY-1", unsigned, [grant()]);
+    const offline = start("KEY-1", unsigned, []);
+
+    await settle();
+
+    // The board never hears of a change, so it never shows the free version in between.
+    expect(online.events).toEqual(["ask Bearer KEY-1", "save KEY-1 grant"]);
+    expect(offline.events).toEqual(["ask Bearer KEY-1"]);
+  });
+
   test("with no key, nothing is asked", async () => {
     const { license, events } = start(undefined, undefined, []);
 

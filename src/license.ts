@@ -43,11 +43,21 @@ const LicenseRefusal = Schema.Struct({
   refusal: Schema.Literals(["invalid", "ended"]),
 });
 
+/** A grant an app from before grants were signed saved, with this Mac's time of the check. */
+const UnsignedGrant = Schema.Struct({
+  checkedAt: Schema.Finite,
+  expiresAt: Schema.NullOr(Schema.Finite),
+});
+
 /**
- * The last answer from cutfac.com about the saved key, kept next to it in the app's settings. A
- * grant saved before grants were signed reads as no answer, until the app asks again.
+ * Until then, an unsigned grant counts as it did in the app that saved it, so updating keeps a paid
+ * plan paid, even offline, until the app asks again and saves a signed one. Then it is no answer,
+ * as one written by hand is.
  */
-export const LicenseRecord = Schema.Union([LicenseGrant, LicenseRefusal]);
+export const UNSIGNED_GRANTS_UNTIL = Date.parse("2026-11-30T00:00:00Z");
+
+/** The last answer from cutfac.com about the saved key, kept next to it in the app's settings. */
+export const LicenseRecord = Schema.Union([LicenseGrant, LicenseRefusal, UnsignedGrant]);
 
 export type LicenseRecord = typeof LicenseRecord.Type;
 
@@ -76,10 +86,23 @@ export function openGrant(token: string, publicKey: KeyObject): SignedGrant | un
   return Option.getOrUndefined(decodeSignedGrant(bytes.toString()));
 }
 
+/** The grant for `key` in a saved one, if cutfac.com signed it or it may still go unsigned. */
+function grantFor(
+  key: string,
+  record: typeof LicenseGrant.Type | typeof UnsignedGrant.Type,
+  now: number,
+  publicKey: KeyObject,
+): SignedGrant | undefined {
+  if ("token" in record) return openGrant(record.token, publicKey);
+
+  return now < UNSIGNED_GRANTS_UNTIL ? { key, ...record } : undefined;
+}
+
 /**
- * Whether the saved key unlocks the paid plan at `now`: cutfac.com signed a grant for it that
- * hasn't run out, at a time within the offline grace. Anything else is the free version, including
- * a grant timed well after `now`, which a clock set back would show.
+ * Whether the saved key unlocks the paid plan at `now`: cutfac.com signed a grant for it, or an
+ * older app saved one in time, that hasn't run out, at a time within the offline grace. Anything
+ * else is the free version, including a grant timed well after `now`, which a clock set back would
+ * show.
  */
 export function isPaid(
   { key, record }: SavedLicense,
@@ -88,7 +111,7 @@ export function isPaid(
 ): boolean {
   if (key === undefined || record === undefined || "refusal" in record) return false;
 
-  const grant = openGrant(record.token, publicKey);
+  const grant = grantFor(key, record, now, publicKey);
 
   if (grant?.key !== key) return false;
 
