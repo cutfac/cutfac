@@ -18,6 +18,7 @@ import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts"
 import { stopFixes } from "./agents.ts";
 import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPages.ts";
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
+import { handleDevTools } from "./devTools.ts";
 import { pickSource, pickWorkspace } from "./dialogs.ts";
 import { stopWatching } from "./fullDiskAccess.ts";
 import {
@@ -97,6 +98,17 @@ let quitReady = false;
 let placeTimer: ReturnType<typeof setTimeout> | undefined;
 
 let locale: Locale = "en";
+
+// The Dev Panel, for trying the app as a new user would; never in the released app.
+const devTools = app.isPackaged
+  ? undefined
+  : handleDevTools({
+      boardUrl,
+      preload: preloadPath,
+      window: () => window,
+      showOnboarding,
+      activate,
+    });
 
 // Keeps the same userData folder whether packaged or not, so the saved workspace is shared.
 app.setName("Cutfac");
@@ -183,6 +195,7 @@ if (!app.requestSingleInstanceLock()) {
     openWorkspace: async (folder) => {
       if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
     },
+    checks: devTools?.checks,
   });
 
   void app.whenReady().then(boot);
@@ -254,6 +267,7 @@ function setMenu(): void {
     openWorkspace: () => void chooseWorkspace(),
     appCommand: sendAppCommand,
     editCommand: sendEditCommand,
+    openDevTools: devTools?.open,
   });
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -397,7 +411,7 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
       vibrancy: "sidebar",
       backgroundColor: "#00000000",
     }),
-    webPreferences: sandboxed(preloadPath),
+    webPreferences: sandboxed(preloadPath, devTools?.boardArguments),
   });
 
   const { webContents } = created;

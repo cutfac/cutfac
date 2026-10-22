@@ -60,3 +60,31 @@ export const CHOOSE_FOLDER_CHANNEL = "cutfac:choose-folder";
 
 /** Make the workspace folder and open the board on it. */
 export const CREATE_WORKSPACE_CHANNEL = "cutfac:create-workspace";
+
+/** Passed to the Dev Panel's page alone, for the preload script to add the dev tools to its bridge. */
+export const DEV_TOOLS_FLAG = "--cutfac-dev-tools";
+
+/**
+ * Passed to the board's window in the dev build, for the preload script to add a way into the Dev
+ * Panel.
+ */
+export const DEV_BUILD_FLAG = "--cutfac-dev-build";
+
+/** Open the Dev Panel, from the board's sidebar in the dev build. */
+export const OPEN_DEV_PANEL_CHANNEL = "cutfac:open-dev-panel";
+
+/** The Dev Panel's tools, in the dev build only: what it fakes and where things are kept. */
+export const DEV_STATE_CHANNEL = "cutfac:dev-state";
+
+/** Something the Dev Panel shows changed, such as a faked fix that left its agent ready. */
+export const DEV_STATE_CHANGED_CHANNEL = "cutfac:dev-state-changed";
+
+export const DEV_SET_FAKES_CHANNEL = "cutfac:dev-set-fakes";
+
+export const DEV_START_OVER_CHANNEL = "cutfac:dev-start-over";
+
+export const DEV_RESTORE_CHANNEL = "cutfac:dev-restore";
+
+export const DEV_OPEN_STEP_CHANNEL = "cutfac:dev-open-step";
+
+export const DEV_REVEAL_CHANNEL = "cutfac:dev-reveal";

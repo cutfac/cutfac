@@ -9,6 +9,7 @@ import {
   MessageSquareIcon,
   PlugZapIcon,
   PlusIcon,
+  WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useId, type ReactNode } from "react";
@@ -401,6 +402,15 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
               }
             />
           </SidebarMenuItem>
+          {desktop?.openDevPanel ? (
+            // Only in the dev build, so it isn't translated.
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Dev Panel" onClick={desktop.openDevPanel}>
+                <WrenchIcon />
+                <span>Dev Panel</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

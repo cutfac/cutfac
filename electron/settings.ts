@@ -9,6 +9,7 @@ import { decodeLicenseRecord, type LicenseRecord } from "../src/license.ts";
 import type { OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 import { ONBOARDING_STEPS } from "./boardPages.ts";
+import { isSetAside, restore, setAside } from "./settingsAside.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
 
 /** The board page last shown, for the workspace it belongs to. */
@@ -32,6 +33,9 @@ interface Settings {
 export function settingsFile(): string {
   return path.join(app.getPath("userData"), "settings.json");
 }
+
+/** Where the Dev Panel keeps the settings while the app runs as a new user. */
+const backupFile = () => path.join(app.getPath("userData"), "settings.dev-backup.json");
 
 const decodeFile = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
@@ -169,3 +173,11 @@ export async function loadOnboarding(): Promise<OnboardingStep | undefined> {
 
 /** Saves the first-launch step the window shows, to pick up there next time. */
 export const saveOnboarding = (onboarding: OnboardingStep) => writeSettings({ onboarding });
+
+/** Dev Panel: sets the settings aside, so the app runs as on a new Mac until they are restored. */
+export const setSettingsAside = () => queued(() => setAside(settingsFile(), backupFile()));
+
+/** Dev Panel: brings back the settings set aside. Resolves false if none were. */
+export const restoreSettings = () => queued(() => restore(settingsFile(), backupFile()));
+
+export const settingsSetAside = () => isSetAside(backupFile());

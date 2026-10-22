@@ -1,7 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 import type { AgentName } from "../src/core/schema.ts";
-import type { AppCommand, CutfacDesktop, CutfacOnboarding } from "../web/src/desktop.ts";
+import type {
+  AppCommand,
+  CutfacDesktop,
+  CutfacDevTools,
+  CutfacOnboarding,
+} from "../web/src/desktop.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   AGENTS_CHANNEL,
@@ -10,6 +15,15 @@ import {
   CHOOSE_FOLDER_CHANNEL,
   CREATE_WORKSPACE_CHANNEL,
   DEFAULT_FOLDER_CHANNEL,
+  DEV_BUILD_FLAG,
+  DEV_OPEN_STEP_CHANNEL,
+  DEV_RESTORE_CHANNEL,
+  DEV_REVEAL_CHANNEL,
+  DEV_SET_FAKES_CHANNEL,
+  DEV_START_OVER_CHANNEL,
+  DEV_STATE_CHANGED_CHANNEL,
+  DEV_STATE_CHANNEL,
+  DEV_TOOLS_FLAG,
   EDIT_COMMAND_CHANNEL,
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
@@ -17,6 +31,7 @@ import {
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
+  OPEN_DEV_PANEL_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
@@ -83,6 +98,25 @@ const onboarding = {
   createWorkspace: (folder) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, folder),
 } satisfies CutfacOnboarding;
 
+/** The Dev Panel's tools; the dev build passes the flag to that window alone. */
+const dev = {
+  state: () => ipcRenderer.invoke(DEV_STATE_CHANNEL),
+  setFakes: (fakes) => ipcRenderer.invoke(DEV_SET_FAKES_CHANNEL, fakes),
+  onStateChange: (listener) => {
+    const forward = () => listener();
+
+    ipcRenderer.on(DEV_STATE_CHANGED_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(DEV_STATE_CHANGED_CHANNEL, forward);
+    };
+  },
+  startOver: () => ipcRenderer.invoke(DEV_START_OVER_CHANNEL),
+  restore: () => ipcRenderer.invoke(DEV_RESTORE_CHANNEL),
+  openStep: (step) => ipcRenderer.invoke(DEV_OPEN_STEP_CHANNEL, step),
+  reveal: (target) => ipcRenderer.invoke(DEV_REVEAL_CHANNEL, target),
+} satisfies CutfacDevTools;
+
 const bridge = {
   openWorkspace: (): Promise<boolean> => ipcRenderer.invoke(OPEN_WORKSPACE_CHANNEL),
   revealPath: (target: string): Promise<void> => ipcRenderer.invoke(REVEAL_PATH_CHANNEL, target),
@@ -133,6 +167,10 @@ const bridge = {
     };
   },
   onboarding,
+  ...(process.argv.includes(DEV_TOOLS_FLAG) && { dev }),
+  ...(process.argv.includes(DEV_BUILD_FLAG) && {
+    openDevPanel: () => ipcRenderer.send(OPEN_DEV_PANEL_CHANNEL),
+  }),
   platform: `${SYSTEM_NAMES[process.platform] ?? process.platform} ${process.getSystemVersion()}`,
 } satisfies CutfacDesktop;
 

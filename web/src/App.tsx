@@ -16,6 +16,7 @@ import { href, useHashRoute, useLive, usePlan, useSidebarOpen } from "./hooks.ts
 import { useMessages } from "./i18n/index.ts";
 import { agentsToConnect, needsStart, startSkipped } from "./lib/onboarding.ts";
 import { Board } from "./views/Board.tsx";
+import { DevTools } from "./views/DevTools.tsx";
 import { DragHelper } from "./views/DragHelper.tsx";
 import { ItemView } from "./views/ItemView.tsx";
 import { Learn } from "./views/Learn.tsx";
@@ -35,6 +36,9 @@ export function App() {
 
   if (onboarding !== undefined && view === "drag-helper")
     return <DragHelper onboarding={onboarding} />;
+
+  // The dev build's Dev Panel; the bridge has its tools in that window alone.
+  if (desktop?.dev !== undefined && view === "dev") return <DevTools dev={desktop.dev} />;
 
   return <Shell view={view} id={id} />;
 }

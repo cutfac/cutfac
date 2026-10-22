@@ -19,6 +19,8 @@ export interface MenuActions {
   openWorkspace: () => void;
   appCommand: (command: AppCommand) => void;
   editCommand: (command: EditCommand) => void;
+  /** The dev build's Dev Panel; the released app has no Develop menu. */
+  openDevTools?: (() => void) | undefined;
 }
 
 /** The standard menus, spelled out so every label can follow the board's language. */
@@ -117,6 +119,21 @@ export function menuTemplate(actions: MenuActions): MenuItemConstructorOptions[]
         { role: "togglefullscreen", label: t.fullScreen },
       ],
     },
+    ...(actions.openDevTools
+      ? [
+          // Only in the dev build, so it isn't translated.
+          {
+            label: "Develop",
+            submenu: [
+              {
+                label: "Dev Panel…",
+                accelerator: "Alt+Shift+CmdOrCtrl+D",
+                click: actions.openDevTools,
+              },
+            ],
+          },
+        ]
+      : []),
     {
       role: "windowMenu",
       label: t.window,

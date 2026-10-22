@@ -75,6 +75,47 @@ export interface CutfacOnboarding {
   createWorkspace: (folder: string) => Promise<string | undefined>;
 }
 
+/** What the Dev Panel has an agent be, or `real` to check this Mac for it. */
+export type AgentFake = "real" | AgentSetup["state"];
+
+/** What the Dev Panel has the onboarding steps find, until the app quits. */
+export interface DevFakes {
+  agents: Record<AgentName, AgentFake>;
+  /** A faked agent's fix fails, to see what the step offers then. */
+  fixesFail: boolean;
+  access: "real" | "granted" | "denied";
+  /** Suggest a new folder for the workspace each time, so a run never opens a real one. */
+  freshFolder: boolean;
+}
+
+/** Where the dev build keeps things, and what it is faking. */
+export interface DevState {
+  fakes: DevFakes;
+  settingsFile: string;
+  /** The real settings are set aside while the app runs as a new user. */
+  setAside: boolean;
+  workspace: string | undefined;
+  defaultFolder: string;
+  /** The bundle id macOS keeps this build's Full Disk Access under. */
+  bundleId: string;
+}
+
+/** The dev build's own tools, for trying the first launch as a new user. Never in the released app. */
+export interface CutfacDevTools {
+  state: () => Promise<DevState>;
+  setFakes: (fakes: DevFakes) => Promise<DevState>;
+  /** What `state` resolves changed in the app, such as a faked fix that left its agent ready. */
+  onStateChange: (listener: () => void) => () => void;
+  /** Set the settings and the board's storage aside, and open the first launch from the start. */
+  startOver: () => Promise<void>;
+  /** Bring back the settings set aside, and the workspace they name. */
+  restore: () => Promise<void>;
+  /** Open the first launch on `step`, keeping the settings. */
+  openStep: (step: OnboardingStep) => Promise<void>;
+  /** Show a file or folder in Finder. */
+  reveal: (path: string) => Promise<void>;
+}
+
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
 export interface CutfacDesktop {
   /** Ask for a workspace folder and restart the local server on it. Resolves false if cancelled. */
@@ -117,6 +158,10 @@ export interface CutfacDesktop {
   onLicenseKeyRequest: (listener: (saved: boolean) => void) => () => void;
   /** The first launch, before there is a workspace. */
   onboarding: CutfacOnboarding;
+  /** Only in the dev build's Dev Panel window. */
+  dev?: CutfacDevTools;
+  /** Open the Dev Panel, or bring it to the front. Only in the dev build's board window. */
+  openDevPanel?: () => void;
   /** The operating system and its version, such as `macOS 15.4.0`. */
   platform: string;
 }
