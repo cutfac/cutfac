@@ -2,10 +2,11 @@
 // Each command handler is an entry point: the workspace layer depends on the parsed --workspace.
 // @effect-diagnostics strictEffectProvide:off
 import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Cause, Console, Effect, FileSystem, Layer, Option, Path } from "effect";
+import { Cause, Console, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
+import { AgentSetupJson } from "./core/agentReadiness.ts";
 import {
   type CliEntry,
   SERVER_NAME,
@@ -13,6 +14,7 @@ import {
   connectAgent,
   mcpLaunch,
 } from "./core/agents.ts";
+import { agentSetup } from "./core/agentSetup.ts";
 import { COMPILED } from "./core/build.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { syncSkill } from "./core/skill.ts";
@@ -236,7 +238,7 @@ const learnCommand = Command.make(
   }),
 ).pipe(Command.withDescription("Learn a link, file, or folder into about.md for agents to read"));
 
-const agentSetup = Command.make(
+const agentSetupCommand = Command.make(
   "agent-setup",
   {
     workspace: workspaceFlag,
@@ -253,9 +255,38 @@ const agentSetup = Command.make(
   Command.withDescription("Connect Claude Code and Codex, or print the commands to do it yourself"),
 );
 
+const READINESS = {
+  ready: "ready",
+  outdated: "needs an update",
+  signedOut: "needs a sign-in",
+  missing: "not installed",
+};
+
+/** The agent CLIs on this machine, before any workspace; the desktop app reads `--json`. */
+const agents = Command.make(
+  "agents",
+  {
+    json: Flag.Boolean("json").pipe(
+      Flag.withDescription("Print the agents as JSON"),
+      Flag.withDefault(false),
+    ),
+  },
+  Effect.fn("cli.agents")(function* ({ json }) {
+    const setups = yield* agentSetup();
+
+    if (json) return yield* Console.log(yield* Schema.encodeEffect(AgentSetupJson)(setups));
+
+    for (const { agent, state, version, fix } of setups) {
+      const named = version === undefined ? agent : `${agent} ${version}`;
+      const line = `  ${state === "ready" ? "✓" : "–"} ${named.padEnd(16)} ${READINESS[state]}`;
+      yield* Console.log(fix === undefined ? line : `${line}: ${fix}`);
+    }
+  }),
+).pipe(Command.withDescription("Check that Claude Code and Codex are installed and signed in"));
+
 const cutfac = Command.make("cutfac").pipe(
   Command.withDescription("Cutfac — make short-form videos with your own agent"),
-  Command.withSubcommands([init, serve, mcp, learnCommand, agentSetup]),
+  Command.withSubcommands([init, serve, mcp, learnCommand, agentSetupCommand, agents]),
 );
 
 /**

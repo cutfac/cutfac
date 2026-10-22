@@ -50,6 +50,9 @@ const HOMEBREW = /\/(Caskroom|Cellar)\/([^/]+)\//;
 /** The first Codex with `codex update`, which updates through whatever installed it. */
 const CODEX_UPDATES_ITSELF = "0.126.0";
 
+/** Codex's official installer, which also updates a copy it put there. */
+export const CODEX_INSTALLER = "curl -fsSL https://chatgpt.com/codex/install.sh | sh";
+
 /**
  * What to run to bring an installed agent up to date. A Homebrew install is upgraded as the cask or
  * formula it came from. Otherwise Claude Code updates itself, and so does Codex from 0.126.0; an
@@ -67,7 +70,7 @@ export function updateCommand(agent: AgentName, release: AgentRelease): string {
   if (!isOlderVersion(release.version, CODEX_UPDATES_ITSELF)) return "codex update";
 
   if (release.installedAt.includes("/.codex/packages/standalone/")) {
-    return "curl -fsSL https://chatgpt.com/codex/install.sh | sh";
+    return CODEX_INSTALLER;
   }
 
   if (release.installedAt.includes("/.bun/")) return "bun install -g @openai/codex@latest";
