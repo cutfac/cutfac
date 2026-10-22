@@ -175,8 +175,8 @@ export const findRoot = Effect.fnUntraced(function* (start: string) {
 
 /**
  * Write cutfac.yaml into `dir` unless it is a workspace already. Returns whether it wrote one. This
- * and `appendAppRecord` are the only writes outside an opened workspace: this one is what makes
- * `dir` a workspace.
+ * and the app's own records in `appData.ts` are the only writes outside an opened workspace: this
+ * one is what makes `dir` a workspace.
  */
 export const initWorkspace = Effect.fn("Workspace.init")(function* (
   dir: string,
@@ -202,24 +202,6 @@ export const initWorkspace = Effect.fn("Workspace.init")(function* (
     .pipe(Effect.mapError(failed));
 
   return true;
-});
-
-/**
- * Add a line to one of the desktop app's own records, which live in its data folder rather than in
- * any workspace, making the folder if it is missing.
- */
-export const appendAppRecord = Effect.fn("Workspace.appendAppRecord")(function* (
-  file: string,
-  line: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-
-  const failed = (error: PlatformError) =>
-    new WorkspaceError({ message: `Could not write ${file}: ${error.message}` });
-
-  yield* fs.makeDirectory(path.dirname(file), { recursive: true }).pipe(Effect.mapError(failed));
-  yield* fs.writeFileString(file, `${line}\n`, { flag: "a" }).pipe(Effect.mapError(failed));
 });
 
 /** Give a file from before the rename its current name, unless something already has it. */

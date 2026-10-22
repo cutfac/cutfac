@@ -79,6 +79,7 @@ import {
 import { sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
+import { requireTrust, trustProblem, trustStatus, trustWorkspace } from "../core/workspaceTrust.ts";
 import { createCountedItem, planStatus } from "../plan.ts";
 import { briefRoutes } from "./brief.ts";
 import { requestGuard } from "./guard.ts";
@@ -173,6 +174,8 @@ const CancelBody = Schema.Struct({ feedbackId: Schema.optional(Schema.NonEmptySt
 const RewordBody = Schema.Struct({ feedbackId: Schema.NonEmptyString, body: Schema.String });
 
 const ConnectBody = Schema.Struct({ agent: AgentName });
+
+const TrustBody = Schema.Struct({ fingerprint: Schema.NonEmptyString });
 
 const NewImportBody = Schema.Struct({
   /** Optional only for a brief import, which may start from no reference. */
@@ -340,13 +343,19 @@ const queuedInstead = (reason: string): Dispatch => ({
   warnings: [`${reason}; the request is queued instead`],
 });
 
-const missingCli = (agent: AgentName) => `${agent} CLI not found on PATH`;
+/** Why `agent` can't start in this workspace now, if it can't. */
+const cannotStart = Effect.fnUntraced(function* (agent: AgentName) {
+  if (Option.isNone(yield* which(agent))) return `${agent} CLI not found on PATH`;
+
+  return yield* trustProblem(agent);
+});
 
 /** Start the agent on a recorded request, or leave it queued when the agent cannot start. */
 const dispatch = Effect.fnUntraced(function* (itemId: string, feedbackId: string, pick: AgentPick) {
   const runs = yield* RunRegistry;
+  const problem = yield* cannotStart(pick.agent);
 
-  if (Option.isNone(yield* which(pick.agent))) return queuedInstead(missingCli(pick.agent));
+  if (problem !== undefined) return queuedInstead(problem);
 
   return yield* runs.start({ itemId, feedbackId, ...pick }).pipe(
     Effect.as<Dispatch>({ sent: pick.agent, warnings: [] }),
@@ -381,8 +390,10 @@ const sendEdit = Effect.fnUntraced(function* (
     return { requested, dispatched: yield* dispatch(id, requested.feedback.id, pick) };
   }
 
-  if (Option.isNone(yield* which(via))) {
-    return { requested: yield* requestEdit(id, input), dispatched: queuedInstead(missingCli(via)) };
+  const problem = yield* cannotStart(via);
+
+  if (problem !== undefined) {
+    return { requested: yield* requestEdit(id, input), dispatched: queuedInstead(problem) };
   }
 
   const waiting: Dispatch = { sent: via, warnings: [] };
@@ -429,6 +440,7 @@ const runRoute = Effect.gen(function* () {
   const body = yield* HttpServerRequest.schemaBodyJson(RunBody);
   const { feedbackId, agent = defaultAgent(ws), ...settings } = body;
   yield* agentBin(agent);
+  yield* requireTrust(agent);
   yield* findFeedback(yield* getItem(id), feedbackId);
   yield* runs.exclusive(id, runs.start({ itemId: id, feedbackId, agent, ...settings }));
 
@@ -450,6 +462,7 @@ const continueRoute = withId((id) =>
         }
 
         yield* agentBin(first.waiting);
+        yield* requireTrust(first.waiting);
         yield* runs.start({ itemId: id, feedbackId: first.id, ...waitingPick(first) });
 
         return { ok: true };
@@ -696,6 +709,14 @@ const apiRoutes = (options: ServerOptions) =>
     json("GET", "/api/workspace", workspaceInfo),
     json("GET", "/api/plan", planStatus()),
     json("GET", "/api/agents", agentStatus()),
+    json("GET", "/api/trust", trustStatus()),
+    json(
+      "POST",
+      "/api/trust",
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(TrustBody), (body) =>
+        trustWorkspace(body.fingerprint),
+      ),
+    ),
     json(
       "POST",
       "/api/agents/connect",

@@ -66,6 +66,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
+import { TrustNote } from "@/components/workspace-trust";
 import { safeHttpUrl } from "@/lib/utils";
 
 import {
@@ -260,6 +261,9 @@ function AddTemplateForm({
                 </SelectContent>
               </Select>
             </Field>
+          )}
+          {agent === undefined ? null : (
+            <TrustNote agent={agent} className="text-sm text-muted-foreground" />
           )}
         </FieldGroup>
         <DialogFooter>

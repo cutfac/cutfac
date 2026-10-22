@@ -2,6 +2,7 @@ import type { ToolKind } from "../lib/run.ts";
 import type { Messages } from "./en.tsx";
 import { onboardingKo } from "./onboarding-ko.tsx";
 import { startKo } from "./start-ko.tsx";
+import { trustKo } from "./trust-ko.tsx";
 
 const TOOL_PHRASES: Record<ToolKind, (count: number) => string> = {
   read: (count) => `파일 ${count}개 읽음`,
@@ -650,4 +651,5 @@ export const ko: Messages = {
   },
   onboarding: onboardingKo,
   start: startKo,
+  trust: trustKo,
 };

@@ -56,6 +56,7 @@ import {
 import { MAX_TEAM_FEEDBACK_CHARS, sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
+import { trustNotices } from "../core/workspaceTrust.ts";
 import { createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
 import { BriefToolkit, briefHandlers } from "./brief.ts";
 import { asJson, describe, tool } from "./tool.ts";
@@ -573,6 +574,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 ...briefNotices(brief, briefPath),
                 ...learnNotices(learned, about),
                 ...(yield* agentVersionNotices()),
+                ...(yield* trustNotices()),
               ],
               freeVersion: freeVersionNote(plan),
             };

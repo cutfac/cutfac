@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { TrustCard } from "@/components/workspace-trust";
 
 import { api, type AgentStatus } from "../api.ts";
 import { desktop } from "../desktop.ts";
@@ -34,6 +35,7 @@ export function Setup() {
 
   return (
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
+      <TrustCard />
       <Card>
         <CardHeader>
           <CardTitle>{t.setup.connectTitle}</CardTitle>

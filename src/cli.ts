@@ -19,8 +19,9 @@ import { COMPILED } from "./core/build.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { syncSkill } from "./core/skill.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
+import { trustCreated } from "./core/workspaceTrust.ts";
 import { MCP_VERSION, mcpLayer } from "./mcp/server.ts";
-import { desktopData } from "./plan.ts";
+import { appData } from "./plan.ts";
 import { serverLayer } from "./server/app.ts";
 
 const DEFAULT_PORT = 4317;
@@ -144,12 +145,15 @@ const init = Command.make(
     );
 
     yield* Effect.gen(function* () {
+      // A workspace that works without the record still beats none: Claude asks on the board.
+      if (created)
+        yield* trustCreated().pipe(Effect.catch((error) => Console.error(error.message)));
       yield* scaffold();
       // Agents come first: everything after this is done through them.
       yield* connect ? connectAgents() : printAgentSetup();
 
       if (connect) yield* Console.log(`\nOpen the board:  ${cliLine} serve --workspace ${root}`);
-    }).pipe(Effect.provide(Workspace.layer(root)));
+    }).pipe(Effect.provide([appData, Workspace.layer(root)]));
   }),
 ).pipe(Command.withDescription("Create a workspace and connect your agents"));
 
@@ -203,13 +207,13 @@ const serve = Command.make(
       );
 
       return yield* Effect.never;
-    }).pipe(Effect.scoped, Effect.provide([desktopData, Workspace.layer(workspace)]));
+    }).pipe(Effect.scoped, Effect.provide([appData, Workspace.layer(workspace)]));
   }),
 ).pipe(Command.withDescription("Serve the web board and local API"));
 
 const mcp = Command.make("mcp", { workspace: workspaceFlag }, ({ workspace }) =>
   // stdout carries the protocol, so nothing here may print to it.
-  Layer.launch(mcpLayer.pipe(Layer.provide([desktopData, Workspace.layer(workspace)]))),
+  Layer.launch(mcpLayer.pipe(Layer.provide([appData, Workspace.layer(workspace)]))),
 ).pipe(Command.withDescription("Run the MCP server over stdio for Claude Code and Codex"));
 
 const learnCommand = Command.make(

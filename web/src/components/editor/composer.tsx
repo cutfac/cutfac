@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TrustNote } from "@/components/workspace-trust";
 import { composing } from "@/lib/utils";
 
 import {
@@ -431,6 +432,7 @@ export function Composer({
           </InputGroupAddon>
         </InputGroup>
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+        <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
         <CacheNote item={item} agent={agent} settings={settings} status={status} />
         {status === undefined ? null : (
           <OutdatedAgentNote status={status} className="px-1 text-xs text-muted-foreground" />

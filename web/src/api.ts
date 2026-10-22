@@ -583,6 +583,19 @@ export interface AgentStatus {
   outdated?: { minimum: string; update: string };
 }
 
+/** A setting the workspace has Claude Code act on by itself, or a whole file that is not JSON. */
+export type TrustItem =
+  | { file: string; key: string; value: unknown }
+  | { file: string; value: string };
+
+/** Whether Claude waits for the user to trust the workspace's settings before it runs. */
+export interface TrustStatus {
+  needed: boolean;
+  items: TrustItem[];
+  /** Names exactly these settings; trusting it doesn't trust ones changed since. */
+  fingerprint: string;
+}
+
 export interface AgentConnection {
   agent: AgentName;
   ok: boolean;
@@ -750,6 +763,9 @@ export const api = {
   agents: () => request<AgentStatus[]>("/api/agents"),
   connectAgent: (agent: AgentName) =>
     send<AgentConnection, { agent: AgentName }>("POST", "/api/agents/connect", { agent }),
+  trust: () => request<TrustStatus>("/api/trust"),
+  trustWorkspace: (fingerprint: string) =>
+    send<TrustStatus, { fingerprint: string }>("POST", "/api/trust", { fingerprint }),
   feedback: () => request<OpenFeedback[]>("/api/feedback"),
   /** Feedback for the Cutfac team, which the server passes on to cutfac.com. */
   teamFeedback: (feedback: TeamFeedback) =>

@@ -48,6 +48,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
+import { TrustNote } from "@/components/workspace-trust";
 import { composing } from "@/lib/utils";
 
 import {
@@ -467,6 +468,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
         </InputGroupAddon>
       </InputGroup>
       {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
+      <TrustNote agent={agent} className="text-xs text-muted-foreground" />
     </div>
   );
 }

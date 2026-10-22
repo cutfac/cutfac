@@ -44,6 +44,7 @@ import { type ReferenceUpload, addReferences } from "./references.ts";
 import { type Emit, type RunSpec, type Runner, type Runs, runsLayer } from "./runRegistry.ts";
 import type { ImportDoc } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
+import { requireTrust } from "./workspaceTrust.ts";
 
 /**
  * Until the user presses Allow the agent may only read; after, it may install and write. The
@@ -230,6 +231,7 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
   yield* emit({ type: "start", subject: turnId, agent });
 
   const bin = yield* agentBin(agent);
+  yield* requireTrust(agent);
   const phase = importPhase(doc);
   const ours = codexServerName(ws.config.name);
   const { owner } = importFiles(importId);
@@ -361,6 +363,7 @@ export const startTurn = Effect.fn("importRun.startTurn")(function* (
       if (problem !== undefined) return yield* new InvalidRequest({ message: problem });
 
       yield* agentBin(doc.agent);
+      yield* requireTrust(doc.agent);
 
       const added =
         uploads.length === 0 ? [] : yield* addReferences(importFiles(importId), uploads);
@@ -412,6 +415,7 @@ export const startImport = Effect.fn("importRun.startImport")(function* (
   uploads: ReadonlyArray<ReferenceUpload> = [],
 ) {
   yield* agentBin(input.agent);
+  yield* requireTrust(input.agent);
   const created = yield* createImport(input);
   const turn: TurnInput = { id: yield* shortId, kind: "start", body: created.doc.link ?? "" };
 

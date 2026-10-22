@@ -6,6 +6,7 @@ import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
 import { onboardingEn } from "./onboarding-en.tsx";
 import { startEn } from "./start-en.tsx";
+import { trustEn } from "./trust-en.tsx";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
@@ -707,6 +708,7 @@ export const en = {
   },
   onboarding: onboardingEn,
   start: startEn,
+  trust: trustEn,
 };
 
 export type Messages = typeof en;

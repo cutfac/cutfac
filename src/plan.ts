@@ -1,8 +1,9 @@
 import { Clock, Config, Context, Effect, Layer, Option, Path, Schema } from "effect";
 
+import { AppData, appendAppRecord } from "./core/appData.ts";
 import { COMPILED } from "./core/build.ts";
 import { type NewItemInput, createItem } from "./core/items.ts";
-import { Workspace, appendAppRecord, nowIso } from "./core/workspace.ts";
+import { Workspace, nowIso } from "./core/workspace.ts";
 import { LICENSE_PUBLIC_KEY, paidInSettings } from "./license.ts";
 
 /** How many videos the desktop app's free version makes on one Mac, with every feature open. */
@@ -58,6 +59,35 @@ export const desktopData = Layer.effect(
     );
   }),
 );
+
+/**
+ * Where the app keeps its own records: the desktop app's data folder, or, for the CLI, the folder
+ * the desktop app uses on this platform, so the two agree on which workspaces the user trusts.
+ */
+export const appData = Layer.effect(
+  AppData,
+  Effect.gen(function* () {
+    const desktop = yield* DesktopData;
+
+    if (Option.isSome(desktop)) return desktop;
+    const path = yield* Path.Path;
+    const home = yield* env("HOME");
+
+    if (process.platform === "win32") {
+      return Option.map(yield* env("APPDATA"), (dir) => path.join(dir, "Cutfac"));
+    }
+
+    if (process.platform === "darwin") {
+      return Option.map(home, (dir) => path.join(dir, "Library", "Application Support", "Cutfac"));
+    }
+
+    const config = Option.orElse(yield* env("XDG_CONFIG_HOME"), () =>
+      Option.map(home, (dir) => path.join(dir, ".config")),
+    );
+
+    return Option.map(config, (dir) => path.join(dir, "Cutfac"));
+  }),
+).pipe(Layer.provideMerge(desktopData));
 
 /** The open-source CLI; the desktop app on a paid plan; or its free version, with videos made. */
 export type Plan =

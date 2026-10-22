@@ -46,6 +46,7 @@ import {
 import type { AgentName, AgentPick, AgentRun } from "./schema.ts";
 import { sourceHosts } from "./sources.ts";
 import { Workspace, nowIso } from "./workspace.ts";
+import { requireTrust } from "./workspaceTrust.ts";
 
 export interface RunInput extends AgentPick {
   readonly itemId: string;
@@ -318,6 +319,7 @@ const performEdit = Effect.fnUntraced(function* (
   // First write, so a request that waited leaves the line before anything else can change it.
   const { item, feedback: f } = yield* beginEdit(itemId, feedbackId);
   const bin = yield* agentBin(agent);
+  yield* requireTrust(agent);
   const prompt = yield* buildEditPrompt(item, f);
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
