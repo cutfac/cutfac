@@ -59,6 +59,16 @@ describe("paid plan", () => {
     expect(isPaid(heard, NOW + OFFLINE_GRACE_MS + 1)).toBe(false);
   });
 
+  test("a grant heard after now is the free version, so a later time can't stretch the grace", () => {
+    const ahead: LicenseRecord = { checkedAt: NOW + DAY, expiresAt: null };
+
+    expect(isPaid(ahead, NOW)).toBe(false);
+    expect(isPaid(ahead, NOW + DAY)).toBe(true);
+    expect(
+      paidInSettings(settings({ checkedAt: Date.parse("2100-01-01"), expiresAt: null }), NOW),
+    ).toBe(false);
+  });
+
   test("a refusal, or no answer yet, is the free version", () => {
     expect(isPaid({ checkedAt: NOW, refusal: "invalid" }, NOW)).toBe(false);
     expect(isPaid({ checkedAt: NOW, refusal: "ended" }, NOW)).toBe(false);

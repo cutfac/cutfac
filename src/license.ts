@@ -31,14 +31,17 @@ const decodeKey = Schema.decodeUnknownOption(Schema.NonEmptyString);
 
 /**
  * Whether the key's last answer unlocks the paid plan at `now`: a grant that hasn't run out, heard
- * within the offline grace. Anything else is the free version.
+ * within the offline grace. Anything else is the free version, including a grant heard after `now`,
+ * which a clock set back or a record written by hand would show.
  */
 export function isPaid(record: LicenseRecord | undefined, now: number): boolean {
   if (record === undefined || "refusal" in record) return false;
 
   if (record.expiresAt !== null && record.expiresAt <= now) return false;
 
-  return now - record.checkedAt <= OFFLINE_GRACE_MS;
+  const age = now - record.checkedAt;
+
+  return age >= 0 && age <= OFFLINE_GRACE_MS;
 }
 
 /** Whether the desktop app's settings.json holds a key that unlocks the paid plan at `now`. */
