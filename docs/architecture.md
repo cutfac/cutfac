@@ -42,7 +42,9 @@ with ffmpeg and the skill.
    relative when inside the workspace and absolute outside it (`src/core/sources.ts`). Nothing is
    read when they are saved; the agent says when one is gone.
 3. **Run.** `src/core/agentRun.ts` runs `claude -p` or `codex exec` headless in the workspace, one
-   session per item, and streams its steps over SSE (`/api/item/run`). A request may name the model
+   session per item, and streams its steps over SSE (`/api/item/run`). The command lines are built
+   in `agentCommand.ts`, their output is read in `agentParse.ts`, and `runRegistry.ts` keeps one run
+   per item. A request may name the model
    and effort (`claude --model --effort`, `codex -m` with `model_reasoning_effort`); left out, each
    CLI uses its own default. Claude Code may fetch from the hosts of the item's source links. Without
    an agent the request stays queued; the chat offers "Copy prompt" so any agent can pick it up.

@@ -4,7 +4,8 @@ import { join } from "node:path";
 
 import { Effect } from "effect";
 
-import { agentInvocation, converse } from "../src/core/agentRun.ts";
+import { agentInvocation } from "../src/core/agentCommand.ts";
+import { converse } from "../src/core/agentRun.ts";
 import { agentStatus } from "../src/core/agents.ts";
 import {
   type AgentRelease,

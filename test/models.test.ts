@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { ConfigProvider, Schema } from "effect";
 
-import { agentInvocation } from "../src/core/agentRun.ts";
+import { agentInvocation } from "../src/core/agentCommand.ts";
 import { agentStatus } from "../src/core/agents.ts";
 import {
   CLAUDE_MODELS,

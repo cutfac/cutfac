@@ -11,7 +11,9 @@ import {
   Multipart,
 } from "effect/http";
 
-import { RunEvent, RunRegistry, type Runs, agentBin } from "../core/agentRun.ts";
+import { agentBin } from "../core/agentCommand.ts";
+import { RunEvent } from "../core/agentParse.ts";
+import { RunRegistry } from "../core/agentRun.ts";
 import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
 import {
   approveEdit,
@@ -64,6 +66,7 @@ import {
   removeReference,
 } from "../core/references.ts";
 import { listReviews } from "../core/review.ts";
+import type { Runs } from "../core/runRegistry.ts";
 import {
   AgentChoice,
   AgentName,

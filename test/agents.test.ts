@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { agentInvocation } from "../src/core/agentRun.ts";
+import { agentInvocation } from "../src/core/agentCommand.ts";
 import {
   agentStatus,
   codexRunServers,

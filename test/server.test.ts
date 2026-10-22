@@ -9,7 +9,8 @@ import { BunHttpPlatform } from "@effect/platform-bun";
 import { Effect, Layer, ManagedRuntime, Option, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
-import { type RunEvent, RunRegistry } from "../src/core/agentRun.ts";
+import type { RunEvent } from "../src/core/agentParse.ts";
+import { RunRegistry } from "../src/core/agentRun.ts";
 import { ImportRuns } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
 import type { Feedback } from "../src/core/schema.ts";

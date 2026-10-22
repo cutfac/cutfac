@@ -4,19 +4,14 @@ import { join } from "node:path";
 
 import { Crypto, Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
 
+import { agentInvocation, toolsFor } from "../src/core/agentCommand.ts";
 import {
   type RunEvent,
-  type RunInput,
-  type RunSpec,
-  type Runner,
-  agentInvocation,
-  editRuns,
-  makeRunRegistry,
   parseClaudeLine,
   parseCodexLine,
   relativeToRoot,
-  toolsFor,
-} from "../src/core/agentRun.ts";
+} from "../src/core/agentParse.ts";
+import { type RunInput, editRuns } from "../src/core/agentRun.ts";
 import {
   approveEdit,
   baselineMillis,
@@ -40,6 +35,7 @@ import { Conflict, InvalidRequest } from "../src/core/errors.ts";
 import { readHistory } from "../src/core/history.ts";
 import { addFeedback, createItem, getItem, resolveFeedback } from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";
+import { type RunSpec, type Runner, makeRunRegistry } from "../src/core/runRegistry.ts";
 import {
   type AgentPick,
   Feedback,
