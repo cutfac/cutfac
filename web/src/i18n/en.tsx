@@ -4,6 +4,7 @@ import type { AgentChoice, DetailField, LearnedKind, SafeZone, Status } from "..
 import type { ImportState } from "../lib/imports.ts";
 import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
+import { mcpEn } from "./mcp-en.tsx";
 import { onboardingEn } from "./onboarding-en.tsx";
 import { startEn } from "./start-en.tsx";
 import { trustEn } from "./trust-en.tsx";
@@ -709,6 +710,7 @@ export const en = {
   onboarding: onboardingEn,
   start: startEn,
   trust: trustEn,
+  mcp: mcpEn,
 };
 
 export type Messages = typeof en;

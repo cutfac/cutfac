@@ -2,6 +2,7 @@ import { CheckCircle2Icon, CheckIcon, FolderOpenIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { McpServersCard } from "@/components/mcp-servers";
 import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { ErrorAlert, Page } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
@@ -36,6 +37,7 @@ export function Setup() {
   return (
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
       <TrustCard />
+      <McpServersCard />
       <Card>
         <CardHeader>
           <CardTitle>{t.setup.connectTitle}</CardTitle>

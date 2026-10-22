@@ -19,6 +19,8 @@ export interface InvocationOptions extends SessionArgs {
   readonly mcpConfig?: string | undefined;
   /** Codex config entries that point its MCP server at this workspace. */
   readonly codexServer?: ReadonlyArray<string> | undefined;
+  /** Added to the environment the agent inherits, such as the secrets `mcpConfig` names. */
+  readonly env?: Readonly<Record<string, string>> | undefined;
   /** Pictures the agent should see: the marked frame and any the user attached. */
   readonly images?: ReadonlyArray<string> | undefined;
   /** Hosts of the web pages the user pointed the item at, which the agent may read. */
@@ -148,6 +150,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
     prompt,
     mcpConfig,
     codexServer = [],
+    env,
     images = [],
     hosts = [],
     model,
@@ -184,5 +187,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
           ...codexImageFlags(images),
         ];
 
-  return agentCommand(agent, bin, prompt, flags, options);
+  const invocation = agentCommand(agent, bin, prompt, flags, options);
+
+  return env === undefined ? invocation : { ...invocation, env };
 }

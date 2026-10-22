@@ -66,10 +66,20 @@ const ItemInputs = Schema.Struct({
   doc: Schema.Struct({ inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)) }),
 });
 
+/** A home with no agent config, so the MCP servers set up on this machine stay out of notices. */
+let home: string;
+
 /** A newline-delimited JSON-RPC client for `cutfac mcp`, the way Claude Code talks to it. */
 function startServer(root: string, feedbackUrl: string, env: Record<string, string> = {}) {
   const child = Bun.spawn(["bun", CLI, "mcp", "--workspace", root], {
-    env: { ...process.env, CUTFAC_FEEDBACK_URL: feedbackUrl, ...env },
+    env: {
+      ...process.env,
+      HOME: home,
+      CLAUDE_CONFIG_DIR: home,
+      CODEX_HOME: home,
+      CUTFAC_FEEDBACK_URL: feedbackUrl,
+      ...env,
+    },
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -180,6 +190,7 @@ const site = Bun.serve({
 });
 
 beforeAll(async () => {
+  home = await mkdtemp(join(tmpdir(), "cutfac-mcp-home-"));
   t = await makeWorkspace("mcp");
   fakes = await makeFakeAgents();
 
@@ -198,6 +209,7 @@ afterAll(async () => {
   await site.stop();
   await fakes.remove();
   await t.remove();
+  await rm(home, { recursive: true, force: true });
 });
 
 test("lists the workspace tools", async () => {

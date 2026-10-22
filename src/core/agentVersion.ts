@@ -19,7 +19,7 @@ export const MIN_AGENT_VERSION: Readonly<Record<AgentName, string>> = {
 };
 
 /** How each agent is named to the people reading a warning. */
-const AGENT_TITLE: Readonly<Record<AgentName, string>> = {
+export const AGENT_TITLE: Readonly<Record<AgentName, string>> = {
   claude: "Claude Code",
   codex: "Codex",
 };

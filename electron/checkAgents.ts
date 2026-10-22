@@ -21,11 +21,11 @@ import {
   SERVER_NAME,
   codexRunServers,
   codexServerName,
-  codexServerNames,
   mcpLaunch,
   runMcpConfig,
 } from "../src/core/agents.ts";
 import { detectAgentRelease, outdatedAgent } from "../src/core/agentVersion.ts";
+import { codexServerNames } from "../src/core/mcpServers.ts";
 import { UNINHERITED } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";

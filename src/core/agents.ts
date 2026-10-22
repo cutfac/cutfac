@@ -1,7 +1,7 @@
 import { Config, Effect, Option, Path, Schema } from "effect";
 
 import { type OutdatedAgent, detectAgentRelease, outdatedAgent } from "./agentVersion.ts";
-import { CommandFailed, WorkspaceError } from "./errors.ts";
+import { WorkspaceError } from "./errors.ts";
 import {
   type AgentModels,
   CLAUDE_MODELS,
@@ -46,7 +46,7 @@ export interface AgentStatus extends AgentModels {
 export const SERVER_NAME = "cutfac";
 
 /** What agents knew the server as before Content Factory was renamed to Cutfac. */
-const LEGACY_SERVER_NAME = "content-factory";
+export const LEGACY_SERVER_NAME = "content-factory";
 
 /** Claude Code's `--allowedTools` entry for every tool this server offers. */
 export const CLAUDE_MCP_TOOLS = `mcp__${SERVER_NAME}`;
@@ -160,24 +160,35 @@ const ourEntry = (file: Schema.JsonObject, root: string) => {
     : undefined;
 };
 
-/** Claude's `--mcp-config`, as a JSON string, with `server` as this workspace's and no other. */
-export const ourMcpConfig = (server: McpLaunch | Schema.Json) =>
-  JSON.stringify({ mcpServers: { [SERVER_NAME]: server } });
+/**
+ * Claude's `--mcp-config`, as a JSON string, with `server` as this workspace's, and `others` the
+ * user turned on for runs.
+ */
+export const ourMcpConfig = (server: McpLaunch | Schema.Json, others: Schema.JsonObject = EMPTY) =>
+  JSON.stringify({ mcpServers: { ...others, [SERVER_NAME]: server } });
+
+/** Claude's `--mcp-config` with only the servers the user turned on, or none without any. */
+const othersMcpConfig = (others: Schema.JsonObject) =>
+  Object.keys(others).length === 0 ? undefined : JSON.stringify({ mcpServers: others });
 
 /**
- * Claude's `--mcp-config` for a run: this workspace's server alone, started for `launch`'s root, or
- * without it, as `.mcp.json` has it when that starts the server for this root. The run loads no
- * other server, so none the user or the workspace set up can act for it.
+ * Claude's `--mcp-config` for a run: this workspace's server, started for `launch`'s root, or
+ * without it, as `.mcp.json` has it when that starts the server for this root; and `others`, the
+ * servers the user turned on for runs. The run loads no other server, so none the user or the
+ * workspace set up can act for it unasked.
  */
 export const runMcpConfig = Effect.fn("agents.runMcpConfig")(function* (
   launch: McpLaunch | undefined,
+  others: Schema.JsonObject = EMPTY,
 ) {
-  if (launch !== undefined) return ourMcpConfig(launch);
+  if (launch !== undefined) return ourMcpConfig(launch, others);
 
   const ws = yield* Workspace;
   const entry = ourEntry(yield* readMcpFile().pipe(Effect.orElseSucceed(() => EMPTY)), ws.root);
 
-  return entry === undefined ? undefined : ourMcpConfig(entry);
+  if (entry !== undefined) return ourMcpConfig(entry, others);
+
+  return othersMcpConfig(others);
 });
 
 /**
@@ -229,51 +240,25 @@ export const codexServerLaunch = (name: string, launch: McpLaunch) => [
   codexUserOnlyOff(name),
 ];
 
-const CodexServers = Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String })));
-
-const decodeCodexServers = Schema.decodeUnknownOption(CodexServers);
-
-/** Listing servers reads a config file; a Codex that takes longer is stuck, not slow. */
-const LIST_TIMEOUT = "15 seconds";
-
 /**
- * The MCP servers in the user's Codex config, which a run loads unless it switches them off.
- * Without this list a run could reach a server that writes, so it fails when Codex cannot give it.
- */
-export const codexServerNames = Effect.fn("agents.codexServerNames")(function* (bin: string) {
-  const ws = yield* Workspace;
-
-  const failed = new CommandFailed({
-    message: "Could not list Codex's MCP servers to switch off the ones this run must not reach",
-  });
-
-  const listed = yield* run(bin, ["mcp", "list", "--json", "-c", "features.plugins=false"], {
-    cwd: ws.root,
-  }).pipe(Effect.timeoutOrElse({ duration: LIST_TIMEOUT, orElse: () => Effect.fail(failed) }));
-
-  const servers = listed.code === 0 ? decodeCodexServers(listed.stdout) : Option.none();
-
-  if (Option.isNone(servers)) return yield* failed;
-
-  return servers.value.map((server) => server.name);
-});
-
-/**
- * Codex config entries that keep a run on this workspace's server, `ours`, out of the servers Codex
- * `listed`. Every other server is switched off, and plugins and apps with the ones they bring, so
- * nothing the user or another workspace set up can act for the run, and ours goes without the
- * tools only the user's own session may call. With `launch`, ours is started for this root;
- * without it, ours is used as registered.
+ * Codex config entries that keep a run on this workspace's server, `ours`, and the ones the user
+ * turned on for runs, `kept`, out of the servers Codex `listed`. Every other server is switched
+ * off, and plugins and apps with the ones they bring, so nothing the user or another workspace set
+ * up can act for the run unasked, and ours goes without the tools only the user's own session may
+ * call. With `launch`, ours is started for this root; without it, ours is used as registered.
  */
 export function codexRunServers(
   ours: string,
   launch: McpLaunch | undefined,
   listed: ReadonlyArray<string>,
+  kept: ReadonlyArray<string> = [],
 ): string[] {
   const others = [
     "features.plugins=false",
     "features.apps=false",
-    ...listed.flatMap((name) => (name === ours ? [] : [`${codexServerKey(name)}.enabled=false`])),
+    ...listed.flatMap((name) =>
+      name === ours || kept.includes(name) ? [] : [`${codexServerKey(name)}.enabled=false`],
+    ),
   ];
 
   if (launch !== undefined) return [...others, ...codexServerLaunch(ours, launch)];
@@ -335,12 +320,23 @@ const ModelSetting = Schema.fromJsonString(
 
 const decodeModelSetting = Schema.decodeUnknownOption(ModelSetting);
 
-const env = (name: string) =>
+/** The environment variable `name`, or none. */
+export const envVar = (name: string) =>
   Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none));
 
 /** A file outside the workspace, or nothing when it is missing or unreadable. */
 const peek = (full: string) =>
   Effect.flatMap(Workspace, (ws) => ws.peekText(full, SETTINGS_BYTES)).pipe(Effect.option);
+
+/** Codex's own folder, which holds the user's `config.toml`. */
+export const codexHome = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const home = yield* envVar("HOME");
+
+  return Option.orElse(yield* envVar("CODEX_HOME"), () =>
+    Option.map(home, (dir) => path.join(dir, ".codex")),
+  );
+});
 
 /**
  * The model Claude Code runs when none is picked, as its own settings set it: the environment,
@@ -349,13 +345,13 @@ const peek = (full: string) =>
 const claudeDefaultModel = Effect.fn("agents.claudeDefaultModel")(function* () {
   const ws = yield* Workspace;
   const path = yield* Path.Path;
-  const fromEnv = yield* env("ANTHROPIC_MODEL");
+  const fromEnv = yield* envVar("ANTHROPIC_MODEL");
 
   if (Option.isSome(fromEnv)) return claudeModelName(fromEnv.value);
 
-  const home = yield* env("HOME");
+  const home = yield* envVar("HOME");
 
-  const configDir = Option.orElse(yield* env("CLAUDE_CONFIG_DIR"), () =>
+  const configDir = Option.orElse(yield* envVar("CLAUDE_CONFIG_DIR"), () =>
     Option.map(home, (dir) => path.join(dir, ".claude")),
   );
 
@@ -379,15 +375,11 @@ const claudeDefaultModel = Effect.fn("agents.claudeDefaultModel")(function* () {
 /** The model Codex's own `config.toml` sets, if any. */
 const codexConfiguredModel = Effect.fn("agents.codexConfiguredModel")(function* () {
   const path = yield* Path.Path;
-  const home = yield* env("HOME");
+  const dir = yield* codexHome;
 
-  const codexHome = Option.orElse(yield* env("CODEX_HOME"), () =>
-    Option.map(home, (dir) => path.join(dir, ".codex")),
-  );
+  if (Option.isNone(dir)) return undefined;
 
-  if (Option.isNone(codexHome)) return undefined;
-
-  const config = yield* peek(path.join(codexHome.value, "config.toml"));
+  const config = yield* peek(path.join(dir.value, "config.toml"));
 
   return Option.isSome(config) ? codexConfigModel(config.value) : undefined;
 });

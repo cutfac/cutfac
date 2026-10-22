@@ -1,7 +1,8 @@
-import { Effect, Option, Path, Predicate, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
-import { AppData, readAppFile, writeAppFile } from "./appData.ts";
-import { Conflict, InvalidRequest, WorkspaceError } from "./errors.ts";
+import { appStoreFile, peekAppStore, updateAppStore } from "./appStore.ts";
+import { Conflict } from "./errors.ts";
+import { byName, canonicalJson, isEmptyJson, isJsonObject } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import type { AgentName } from "./schema.ts";
 import { sha256 } from "./skill.ts";
@@ -32,11 +33,8 @@ const PLAIN_SETTINGS = new Set([
 /** Permission settings that only hold tools back. */
 const PLAIN_PERMISSIONS = new Set(["deny", "ask", "disableBypassPermissionsMode"]);
 
-/** The app's record of the workspaces the user trusts, in its own folder. */
+/** The app's record of the workspaces the user trusts, by root, in its own folder. */
 const STORE_FILE = "workspaces.json";
-
-/** Far more than a record per workspace needs; past this, the file isn't the app's. */
-const STORE_BYTES = 4 * 1024 * 1024;
 
 /**
  * A setting in the workspace that Claude Code would act on without asking, such as a hook or an
@@ -71,20 +69,7 @@ type TrustRecord = typeof TrustRecord.Type;
 
 const decodeSettings = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
-/** Every workspace's record, by its root; others' are kept as they are. */
-const TrustStore = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json), { space: 2 });
-
-const decodeStore = Schema.decodeUnknownOption(TrustStore);
-
 const decodeRecord = Schema.decodeUnknownOption(TrustRecord);
-
-const isObject = (value: Schema.Json): value is Schema.JsonObject => Predicate.isObject(value);
-
-/** Null, `[]` and `{}`, which turn nothing on. */
-const isEmpty = (value: Schema.Json) =>
-  value === null ||
-  (Array.isArray(value) && value.length === 0) ||
-  (isObject(value) && Object.keys(value).length === 0);
 
 /** The settings in `text`, the settings file `file`, that Claude Code acts on by itself. */
 export function trustItems(file: string, text: string): ReadonlyArray<TrustItem> {
@@ -94,44 +79,22 @@ export function trustItems(file: string, text: string): ReadonlyArray<TrustItem>
   if (Option.isNone(settings)) return [{ file, value: text }];
 
   return Object.entries(settings.value).flatMap(([key, value]): ReadonlyArray<TrustItem> => {
-    if (PLAIN_SETTINGS.has(key) || isEmpty(value)) return [];
+    if (PLAIN_SETTINGS.has(key) || isEmptyJson(value)) return [];
 
-    if (key !== "permissions" || !isObject(value)) return [{ file, key, value }];
+    if (key !== "permissions" || !isJsonObject(value)) return [{ file, key, value }];
 
     return Object.entries(value)
-      .filter(([name, rule]) => !PLAIN_PERMISSIONS.has(name) && !isEmpty(rule))
+      .filter(([name, rule]) => !PLAIN_PERMISSIONS.has(name) && !isEmptyJson(rule))
       .map(([name, rule]) => ({ file, key: `permissions.${name}`, value: rule }));
   });
 }
-
-/** Code-unit order, the same on every machine, unlike a locale's. */
-const byName =
-  <A>(name: (a: A) => string) =>
-  (a: A, b: A) => {
-    const [x, y] = [name(a), name(b)];
-
-    return x < y ? -1 : x > y ? 1 : 0;
-  };
-
-/** `value` with every object's keys in order, so the same settings always read the same. */
-const canonical = (value: Schema.Json): Schema.Json => {
-  if (Array.isArray(value)) return value.map(canonical);
-
-  if (!isObject(value)) return value;
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .toSorted(byName(([key]) => key))
-      .map(([key, entry]) => [key, canonical(entry)]),
-  );
-};
 
 /** A name for exactly these settings, whatever order their files list them in. */
 export const fingerprintOf = (items: ReadonlyArray<TrustItem>) =>
   sha256(
     JSON.stringify(
       items
-        .map((item) => [item.file, item.key ?? "", canonical(item.value)] as const)
+        .map((item) => [item.file, item.key ?? "", canonicalJson(item.value)] as const)
         .toSorted(byName(([file, key]) => `${file}\0${key}`)),
     ),
   );
@@ -158,28 +121,6 @@ const workspaceItems = Effect.map(
   (files) => files.flat(),
 );
 
-/** The app's trust record file, or why there is none to keep trust in. */
-const storeFile = Effect.gen(function* () {
-  const dir = yield* AppData;
-  const path = yield* Path.Path;
-
-  return Option.map(dir, (found) => path.join(found, STORE_FILE));
-});
-
-/** Every workspace's record as the file has it; none while there is no file. */
-const readStore = Effect.fnUntraced(function* (file: string) {
-  const text = yield* readAppFile(file, STORE_BYTES);
-
-  if (Option.isNone(text)) return {} satisfies Schema.JsonObject;
-  const store = decodeStore(text.value);
-
-  if (Option.isNone(store)) {
-    return yield* new WorkspaceError({ message: `${file} is not a list Cutfac can read` });
-  }
-
-  return store.value;
-});
-
 const NO_RECORD: TrustRecord = {};
 
 const recordIn = (store: Schema.JsonObject, root: string) =>
@@ -188,43 +129,18 @@ const recordIn = (store: Schema.JsonObject, root: string) =>
 /** This workspace's record; none when there is no store, or it can't be read. */
 const ownRecord = Effect.gen(function* () {
   const ws = yield* Workspace;
-  const file = yield* storeFile;
 
-  if (Option.isNone(file)) return NO_RECORD;
-
-  return yield* readStore(file.value).pipe(
-    Effect.map((store) => recordIn(store, ws.root)),
-    Effect.tapError((error) => Effect.logWarning("Could not read the trusted workspaces", error)),
-    Effect.orElseSucceed(() => NO_RECORD),
-  );
+  return recordIn(yield* peekAppStore(STORE_FILE), ws.root);
 });
 
-/** Change this workspace's record, one change at a time. */
+/** Change this workspace's record, keeping every other workspace's as it was. */
 const updateRecord = Effect.fnUntraced(function* (change: (record: TrustRecord) => TrustRecord) {
   const ws = yield* Workspace;
-  const file = yield* storeFile;
 
-  if (Option.isNone(file)) {
-    return yield* new InvalidRequest({
-      message: "There is no app data folder to keep the trust in",
-    });
-  }
-
-  yield* ws.exclusive(
-    "app:workspaces",
-    Effect.gen(function* () {
-      const store = yield* readStore(file.value);
-      const record = change(recordIn(store, ws.root));
-
-      const text = yield* Schema.encodeEffect(TrustStore)({ ...store, [ws.root]: record }).pipe(
-        Effect.mapError(
-          (error) => new WorkspaceError({ message: `${file.value}: ${error.message}` }),
-        ),
-      );
-
-      yield* writeAppFile(file.value, `${text}\n`);
-    }),
-  );
+  yield* updateAppStore(STORE_FILE, "the trust", (store) => ({
+    ...store,
+    [ws.root]: change(recordIn(store, ws.root)),
+  }));
 });
 
 /** Whether Claude may run in this workspace, with the settings that decide it. */
@@ -286,7 +202,7 @@ export const trustWorkspace = Effect.fn("workspaceTrust.trust")(function* (finge
  * own, which the user looks over first. Does nothing where there is no app data folder.
  */
 export const trustCreated = Effect.fn("workspaceTrust.trustCreated")(function* () {
-  if (Option.isNone(yield* storeFile) || (yield* workspaceItems).length > 0) return;
+  if (Option.isNone(yield* appStoreFile(STORE_FILE)) || (yield* workspaceItems).length > 0) return;
 
   yield* updateRecord((record) => ({ ...record, created: true }));
 });

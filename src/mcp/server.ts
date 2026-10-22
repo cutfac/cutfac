@@ -22,6 +22,7 @@ import { updateDetails } from "../core/history.ts";
 import { getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats, saveFormat } from "../core/library.ts";
+import { mcpNotices } from "../core/mcpApprovals.ts";
 import { itemReferences, listReferences } from "../core/references.ts";
 import {
   DEFAULT_FRAMES,
@@ -575,6 +576,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 ...learnNotices(learned, about),
                 ...(yield* agentVersionNotices()),
                 ...(yield* trustNotices()),
+                ...(yield* mcpNotices()),
               ],
               freeVersion: freeVersionNote(plan),
             };

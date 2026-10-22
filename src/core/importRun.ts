@@ -18,7 +18,6 @@ import {
   codexRunServers,
   codexServerKey,
   codexServerName,
-  codexServerNames,
   ourMcpConfig,
 } from "./agents.ts";
 import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
@@ -39,6 +38,7 @@ import {
   turnProblem,
 } from "./imports.ts";
 import { shortId } from "./items.ts";
+import { codexServerNames } from "./mcpServers.ts";
 import { mediaKind } from "./media.ts";
 import { type ReferenceUpload, addReferences } from "./references.ts";
 import { type Emit, type RunSpec, type Runner, type Runs, runsLayer } from "./runRegistry.ts";

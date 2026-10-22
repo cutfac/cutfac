@@ -7,12 +7,7 @@ import { dirname, join } from "node:path";
 import { Context, Effect, Layer, ManagedRuntime, Result, Stream } from "effect";
 import { Tool } from "effect/ai";
 
-import {
-  MCP_READ_TOOLS,
-  MCP_WRITE_TOOLS,
-  type McpLaunch,
-  codexServerNames,
-} from "../src/core/agents.ts";
+import { MCP_READ_TOOLS, MCP_WRITE_TOOLS, type McpLaunch } from "../src/core/agents.ts";
 import { ALLOW_RULES, freshPrompt, languageName, turnMessage } from "../src/core/importPrompts.ts";
 import {
   ImportRuns,
@@ -32,6 +27,7 @@ import {
   listImports,
   settleInstalls,
 } from "../src/core/imports.ts";
+import { codexServerNames } from "../src/core/mcpServers.ts";
 import { listReferences } from "../src/core/references.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";

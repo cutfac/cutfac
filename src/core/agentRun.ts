@@ -15,7 +15,6 @@ import {
   type CliEntry,
   codexRunServers,
   codexServerName,
-  codexServerNames,
   mcpLaunch,
   runMcpConfig,
 } from "./agents.ts";
@@ -34,6 +33,8 @@ import {
 import type { CutfacError } from "./errors.ts";
 import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
+import { approvedClaudeServers, approvedCodexServers } from "./mcpApprovals.ts";
+import { codexServers } from "./mcpServers.ts";
 import { commandOptions, spawnFailure, tail } from "./process.ts";
 import {
   type Emit,
@@ -282,9 +283,9 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 });
 
 /**
- * How the agent reaches this workspace's MCP server, the only one the run loads. With the CLI
- * known, the server is always started for this root, so a copied or moved workspace never acts on
- * the one it came from.
+ * The MCP servers the run loads: this workspace's, and the ones the user turned on in Setup, with
+ * the tools Claude may call on them. With the CLI known, this workspace's server is always started
+ * for this root, so a copied or moved workspace never acts on the one it came from.
  */
 const runServers = Effect.fnUntraced(function* (
   cli: CliEntry | undefined,
@@ -296,11 +297,20 @@ const runServers = Effect.fnUntraced(function* (
 
   if (agent === "codex") {
     const ours = codexServerName(ws.config.name);
+    const listed = yield* codexServers(bin);
+    const names = listed.map((server) => server.name);
+    const kept = yield* approvedCodexServers(listed);
 
-    return { codexServer: codexRunServers(ours, launch, yield* codexServerNames(bin)) };
+    return { codexServer: codexRunServers(ours, launch, names, kept), tools: [] };
   }
 
-  return { mcpConfig: yield* runMcpConfig(launch) };
+  const approved = yield* approvedClaudeServers();
+
+  return {
+    mcpConfig: yield* runMcpConfig(launch, approved.servers),
+    env: approved.env,
+    tools: approved.tools,
+  };
 });
 
 const performEdit = Effect.fnUntraced(function* (
@@ -321,7 +331,7 @@ const performEdit = Effect.fnUntraced(function* (
   const prompt = yield* buildEditPrompt(item, f);
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
-  const servers = yield* runServers(cli, agent, bin);
+  const { tools: serverTools, ...servers } = yield* runServers(cli, agent, bin);
   const images = yield* editImages(item, f);
 
   yield* record({ status: "running" });
@@ -336,7 +346,7 @@ const performEdit = Effect.fnUntraced(function* (
           bin,
           prompt,
           allowedTools: toolsFor(
-            [...ws.config.agent.claudeAllowedTools, CLAUDE_MCP_TOOLS],
+            [...ws.config.agent.claudeAllowedTools, CLAUDE_MCP_TOOLS, ...serverTools],
             formatTools,
           ),
           ...servers,
