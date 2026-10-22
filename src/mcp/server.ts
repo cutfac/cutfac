@@ -8,22 +8,15 @@ import {
   type Path,
   Schema,
 } from "effect";
-import { McpProtocol, McpSchema, McpServer, Tool, Toolkit } from "effect/ai";
+import { McpProtocol, McpSchema, McpServer, Toolkit } from "effect/ai";
 import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 
 import { version } from "../../package.json" with { type: "json" };
 import { SERVER_NAME } from "../core/agents.ts";
 import { agentVersionNotices } from "../core/agentVersion.ts";
+import { BRIEF_FILE, briefNotices, readBrief } from "../core/brief.ts";
 import { resolveEdit, saveVariant } from "../core/edits.ts";
-import {
-  CommandFailed,
-  Conflict,
-  FetchFailed,
-  InvalidRequest,
-  NotFound,
-  WorkspaceError,
-} from "../core/errors.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { getItem, listItems, openFeedback } from "../core/items.ts";
@@ -63,14 +56,16 @@ import {
 import { MAX_TEAM_FEEDBACK_CHARS, sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
-import { FreeLimitReached, createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
+import { createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
+import { BriefToolkit, briefHandlers } from "./brief.ts";
+import { asJson, describe, tool } from "./tool.ts";
 
 export const MCP_VERSION = version;
 
 const INSTRUCTIONS =
   "Cutfac workspace tools. Start with workspace_overview and act on its notices first. Items, learned sources, and formats are folders on disk; " +
   "write media into an item's absDir with [9x16]-style filename prefixes, then call verify_item and review_media. " +
-  "Read about.md (its path is in workspace_overview) before writing copy. Resolve each open feedback entry after addressing it. " +
+  "Read brief.md and about.md (their paths are in workspace_overview) before writing copy; when the user changes what the videos are for or where they go, save it with update_brief. Resolve each open feedback entry after addressing it. " +
   "Formats are templates: to turn a link into one, follow the cutfac skill's import steps, then call check_format until it is ready. " +
   "When a Cutfac tool fails in a way that looks like a bug in Cutfac rather than in the request, say so and offer to report it with send_feedback_to_cutfac; " +
   "where that tool is not offered, as in a run from the board, tell the user they can report it by typing /feedback in the chat. " +
@@ -79,19 +74,6 @@ const INSTRUCTIONS =
 
 /** How long a markdown doc in get_item may be before it is cut. */
 const DOC_PREVIEW_CHARS = 8000;
-
-const describe = (description: string) => ({ description });
-
-/** Every error the core raises. Each carries a message, which the agent sees as the tool error. */
-const CutfacFailure = Schema.Union([
-  WorkspaceError,
-  NotFound,
-  InvalidRequest,
-  Conflict,
-  CommandFailed,
-  FetchFailed,
-  FreeLimitReached,
-]);
 
 const Id = Schema.String.annotate(describe("item id, such as hooks/first-try"));
 
@@ -184,45 +166,20 @@ const FormatProblem = Schema.Struct({
   message: Schema.String,
 });
 
-const tool = <
-  const Name extends string,
-  Parameters extends Schema.Constraint = typeof Tool.EmptyParams,
-  Success extends Schema.Constraint = typeof Schema.Void,
->(
-  name: Name,
-  options: {
-    readonly description: string;
-    readonly parameters?: Parameters | undefined;
-    readonly success: Success;
-    /** Only reads the workspace. */
-    readonly readonly?: boolean | undefined;
-    /** Replaces something the agent or user wrote before, rather than adding to it. */
-    readonly overwrites?: boolean | undefined;
-    /** Calling it again with the same arguments changes nothing further. */
-    readonly idempotent?: boolean | undefined;
-    /** Reaches the network (store listings, yt-dlp downloads). */
-    readonly network?: boolean | undefined;
-  },
-) =>
-  Tool.make(name, {
-    description: options.description,
-    parameters: options.parameters,
-    success: options.success,
-    failure: CutfacFailure,
-  })
-    .annotate(Tool.Readonly, options.readonly === true)
-    .annotate(Tool.Destructive, options.overwrites === true)
-    .annotate(Tool.Idempotent, options.readonly === true || options.idempotent === true)
-    .annotate(Tool.OpenWorld, options.network === true);
-
 const WorkspaceOverview = tool("workspace_overview", {
   description:
-    "Workspace config, about.md and what was learned for it, item counts by status, formats, and open feedback count.",
+    "Workspace config, its brief and about.md and what was learned for it, item counts by status, formats, " +
+    "and open feedback count.",
   success: Schema.Struct({
     root: Schema.String,
     config: WorkspaceConfig,
     items: Schema.Record(Schema.String, Schema.Finite).annotate(describe("item count by status")),
     formats: Schema.Array(Schema.Struct({ id: Schema.String, title: Schema.String })),
+    brief: Schema.String.annotate(
+      describe(
+        "absolute path of brief.md, what the videos are for and where they go in the user's words; it may not exist yet",
+      ),
+    ),
     about: Schema.String.annotate(
       describe(
         "absolute path of about.md, what this workspace makes videos about; it may not exist yet",
@@ -515,7 +472,7 @@ const SendFeedbackToCutfac = tool("send_feedback_to_cutfac", {
   network: true,
 });
 
-export const CutfacToolkit = Toolkit.make(
+const WorkspaceToolkit = Toolkit.make(
   WorkspaceOverview,
   Learn,
   ListItems,
@@ -535,6 +492,8 @@ export const CutfacToolkit = Toolkit.make(
   SendFeedbackToCutfac,
 );
 
+export const CutfacToolkit = Toolkit.merge(WorkspaceToolkit, BriefToolkit);
+
 /** What the core needs to run a tool; captured once when the server starts. */
 type ToolServices =
   | Workspace
@@ -552,17 +511,11 @@ const countBy = <A>(values: ReadonlyArray<A>, key: (value: A) => string) => {
   return Object.fromEntries(counts);
 };
 
-/**
- * The result as JSON carries it, without fields left undefined (a format with no README yet). The
- * MCP result check rejects undefined, and the agent would see only an internal error.
- */
-const asJson = <A>(value: A): A => JSON.parse(JSON.stringify(value));
-
 /** The agent on the other end of the connection, as it names itself, such as "claude-code 2.1.0". */
 const clientName = ({ clientInfo }: McpSchema.McpRequestContext["Service"]) =>
   clientInfo === undefined ? undefined : `${clientInfo.name} ${clientInfo.version}`.trim();
 
-const handlers = CutfacToolkit.toLayer(
+const handlers = WorkspaceToolkit.toLayer(
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolServices>();
     const ws = yield* Workspace;
@@ -578,11 +531,11 @@ const handlers = CutfacToolkit.toLayer(
         Effect.map(ws.abs(copy.path), (path) => ({ ...copy, path })),
       );
 
-    return CutfacToolkit.of({
+    return WorkspaceToolkit.of({
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
-            const [items, formats, feedback, copies, learned, plan] = yield* Effect.all(
+            const [items, formats, feedback, copies, learned, plan, brief] = yield* Effect.all(
               [
                 listItems(),
                 listFormats(),
@@ -590,10 +543,12 @@ const handlers = CutfacToolkit.toLayer(
                 skillCopies(),
                 listLearned(),
                 planStatus(),
+                readBrief(),
               ],
               { concurrency: "unbounded" },
             );
 
+            const briefPath = yield* ws.abs(BRIEF_FILE);
             const about = yield* ws.abs(ABOUT_FILE);
 
             return {
@@ -601,6 +556,7 @@ const handlers = CutfacToolkit.toLayer(
               config: ws.config,
               items: countBy(items, (item) => item.doc.status),
               formats: formats.map((format) => ({ id: format.id, title: format.doc.title })),
+              brief: briefPath,
               about,
               learned: yield* Effect.forEach(learned, (entry) =>
                 Effect.map(ws.abs(entry.dir), (absDir) => ({
@@ -614,6 +570,7 @@ const handlers = CutfacToolkit.toLayer(
               openFeedback: feedback.length,
               notices: [
                 ...skillNotices(yield* absCopies(copies)),
+                ...briefNotices(brief, briefPath),
                 ...learnNotices(learned, about),
                 ...(yield* agentVersionNotices()),
               ],
@@ -865,7 +822,7 @@ const FeedbackPrompt = McpServer.prompt({
  * Needs the workspace, Stdio, and the platform services the core uses.
  */
 export const mcpLayer = Layer.mergeAll(McpServer.toolkit(CutfacToolkit), FeedbackPrompt).pipe(
-  Layer.provide(handlers),
+  Layer.provide(Layer.mergeAll(handlers, briefHandlers)),
   Layer.provide(
     McpServer.layerStdio({
       name: SERVER_NAME,

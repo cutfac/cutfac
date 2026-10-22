@@ -69,6 +69,7 @@ import {
   AgentName,
   type AgentPick,
   FeedbackInput,
+  IMPORT_KINDS,
   ItemPatch,
   ModelSettings,
 } from "../core/schema.ts";
@@ -76,7 +77,9 @@ import { sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
 import { createCountedItem, planStatus } from "../plan.ts";
+import { briefRoutes } from "./brief.ts";
 import { requestGuard } from "./guard.ts";
+import { failureResponse, json } from "./respond.ts";
 
 export interface ServerOptions {
   /** The built board, served at `/`. Without it the server is API-only. */
@@ -119,43 +122,6 @@ const PING_EVERY = "25 seconds";
 
 // ---------------------------------------------------------------------------------------------
 // Responses
-
-/** Every error a route can fail with carries a tag and a message for the board to show. */
-interface Failure {
-  readonly _tag: string;
-  readonly message: string;
-}
-
-const STATUS_BY_TAG = new Map([
-  ["NotFound", 404],
-  ["InvalidRequest", 400],
-  ["SchemaError", 400],
-  ["MultipartError", 400],
-  // Request bodies that are not JSON; route misses never reach the JSON routes.
-  ["HttpServerError", 400],
-  ["Conflict", 409],
-  // The desktop app's free version made all of its videos; the board offers the paid plan.
-  ["FreeLimitReached", 402],
-  ["FetchFailed", 502],
-]);
-
-const failureResponse = (error: Failure) => {
-  const status = STATUS_BY_TAG.get(error._tag) ?? 500;
-
-  const response = HttpServerResponse.jsonUnsafe(
-    { error: error.message || error._tag },
-    { status },
-  );
-
-  return status >= 500 ? Effect.as(Effect.logError(error), response) : Effect.succeed(response);
-};
-
-/** Encode a route's result as JSON, and any failure as `{ error }` with a matching status. */
-const respond = <A, E extends Failure, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.flatMap((body) => HttpServerResponse.json(body)),
-    Effect.catch(failureResponse),
-  );
 
 const notFound = HttpServerResponse.jsonUnsafe({ error: "No such API route" }, { status: 404 });
 
@@ -206,7 +172,9 @@ const RewordBody = Schema.Struct({ feedbackId: Schema.NonEmptyString, body: Sche
 const ConnectBody = Schema.Struct({ agent: AgentName });
 
 const NewImportBody = Schema.Struct({
-  link: Schema.NonEmptyString,
+  /** Optional only for a brief import, which may start from no reference. */
+  link: Schema.optional(Schema.String),
+  kind: Schema.optional(Schema.Literals(IMPORT_KINDS)),
   agent: Schema.optional(AgentName),
   /** The board's language, for the agent to write in. */
   locale: Schema.optional(Schema.NonEmptyString),
@@ -524,7 +492,10 @@ const ownLaunch = (options: ServerOptions, instead: string) =>
 
 const COPY_INSTEAD = "copy the import prompt to your agent instead";
 
-/** Start the user's agent on a link and any files sent with it, read-only until installs are allowed. */
+/**
+ * Start the user's agent on a link, or on the brief, and any files sent with it, read-only until
+ * installs are allowed.
+ */
 const newImportRoute = (options: ServerOptions) =>
   Effect.gen(function* () {
     const ws = yield* Workspace;
@@ -538,7 +509,7 @@ const newImportRoute = (options: ServerOptions) =>
     const uploads = form === undefined ? [] : yield* uploadsOf(form);
     const server = yield* ownLaunch(options, COPY_INSTEAD);
     const agent = body.agent ?? defaultAgent(ws);
-    const input = { link: body.link, agent, locale: body.locale };
+    const input = { link: body.link, kind: body.kind, agent, locale: body.locale };
     const started = yield* startImport(input, server, uploads);
 
     return yield* importDetail(started);
@@ -715,12 +686,6 @@ const fileRoute = Effect.gen(function* () {
 
 // ---------------------------------------------------------------------------------------------
 // Routes
-
-const json = <A, E extends Failure, R>(
-  method: "GET" | "POST" | "PATCH",
-  path: HttpRouter.PathInput,
-  handler: Effect.Effect<A, E, R>,
-) => HttpRouter.route(method, path, respond(handler));
 
 /** The board's API and the workspace files it loads. */
 const apiRoutes = (options: ServerOptions) =>
@@ -1016,8 +981,14 @@ const staticRoutes = Layer.mergeAll(
 /** Every route of the board's API, the workspace files, and the board itself. */
 export const routes = (options: ServerOptions) =>
   options.webDir === undefined
-    ? Layer.mergeAll(staticRoutes, apiRoutes(options), historyRoutes)
-    : Layer.mergeAll(staticRoutes, apiRoutes(options), historyRoutes, boardRoutes(options.webDir));
+    ? Layer.mergeAll(staticRoutes, apiRoutes(options), briefRoutes, historyRoutes)
+    : Layer.mergeAll(
+        staticRoutes,
+        apiRoutes(options),
+        briefRoutes,
+        historyRoutes,
+        boardRoutes(options.webDir),
+      );
 
 /** The board and its API on a local port. Needs the workspace; brings everything else. */
 export const serverLayer = (options: ListenOptions) =>

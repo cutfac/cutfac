@@ -13,6 +13,7 @@ import {
   type McpLaunch,
   codexServerNames,
 } from "../src/core/agents.ts";
+import { ALLOW_RULES, freshPrompt, languageName, turnMessage } from "../src/core/importPrompts.ts";
 import {
   ImportRuns,
   claudeImportFlags,
@@ -22,18 +23,14 @@ import {
   stopAndCloseImport,
 } from "../src/core/importRun.ts";
 import {
-  ALLOW_RULES,
   beginTurn,
   closeImport,
   createImport,
   endTurn,
-  freshPrompt,
   getImport,
   importFiles,
-  languageName,
   listImports,
   settleInstalls,
-  turnMessage,
 } from "../src/core/imports.ts";
 import { listReferences } from "../src/core/references.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
@@ -337,6 +334,7 @@ test("before Allow, settling records nothing", async () => {
 // --- What the agent is told -------------------------------------------------------------------
 
 const docWith = (overrides: Partial<ImportDoc>): ImportDoc => ({
+  kind: "link",
   link: "https://example.com/pack",
   agent: "claude",
   allowed: false,

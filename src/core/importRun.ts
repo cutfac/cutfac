@@ -28,6 +28,7 @@ import {
   codexServerNames,
 } from "./agents.ts";
 import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
+import { freshPrompt, turnMessage } from "./importPrompts.ts";
 import {
   type NewImport,
   type RunEnd,
@@ -37,12 +38,10 @@ import {
   closeUnstarted,
   createImport,
   endTurn,
-  freshPrompt,
   getImport,
   importFiles,
   saveImportSession,
   settleInstalls,
-  turnMessage,
   turnProblem,
 } from "./imports.ts";
 import { shortId } from "./items.ts";
@@ -130,12 +129,12 @@ const CODE_HOSTS = [
  * they write only in the workspace (never its `.claude` settings, skills or hooks), reach only the
  * link's host and code hosts, and fail rather than run outside it.
  */
-function claudeImportSettings(phase: ImportPhase, link: string): string {
+function claudeImportSettings(phase: ImportPhase, link: string | undefined): string {
   const permissions = { blockReadsOutsideWorkingDirectories: true };
 
   if (phase === "read") return JSON.stringify({ permissions });
 
-  const host = URL.parse(link)?.hostname;
+  const host = link === undefined ? undefined : URL.parse(link)?.hostname;
 
   return JSON.stringify({
     permissions,
@@ -155,11 +154,15 @@ function claudeImportSettings(phase: ImportPhase, link: string): string {
 }
 
 /**
- * Claude's flags for an import of `link`. `--tools` is what Claude can see at all, and
+ * Claude's flags for an import of `link`, if it has one. `--tools` is what Claude can see at all, and
  * `--allowedTools` what it may use without asking, which a headless run cannot do. Only this
  * workspace's MCP server is loaded, so the user's other servers cannot act for it.
  */
-export function claudeImportFlags(phase: ImportPhase, server: McpLaunch, link: string): string[] {
+export function claudeImportFlags(
+  phase: ImportPhase,
+  server: McpLaunch,
+  link: string | undefined,
+): string[] {
   const shared = [
     "--settings",
     claudeImportSettings(phase, link),
@@ -408,7 +411,10 @@ export const stopAndCloseImport = Effect.fn("importRun.stopAndCloseImport")(func
   );
 });
 
-/** Record a new import and start the agent on its link and the files the user gave with it. */
+/**
+ * Record a new import and start the agent on its link, or the brief, and the files the user gave
+ * with it.
+ */
 export const startImport = Effect.fn("importRun.startImport")(function* (
   input: NewImport,
   server: McpLaunch,
@@ -416,7 +422,7 @@ export const startImport = Effect.fn("importRun.startImport")(function* (
 ) {
   yield* agentBin(input.agent);
   const created = yield* createImport(input);
-  const turn: TurnInput = { id: yield* shortId, kind: "start", body: created.doc.link };
+  const turn: TurnInput = { id: yield* shortId, kind: "start", body: created.doc.link ?? "" };
 
   return yield* startTurn(created.id, turn, server, uploads).pipe(
     // Files that could not be kept leave an import with no message; set it aside.

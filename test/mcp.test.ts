@@ -212,6 +212,38 @@ test("lists the workspace tools", async () => {
   expect(names).toContain("get_skill");
   expect(names).toContain("review_media");
   expect(names).toContain("send_feedback_to_cutfac");
+  expect(names).toContain("update_brief");
+}, 20_000);
+
+const Brief = Schema.Struct({
+  path: Schema.String,
+  purpose: Schema.optional(Schema.String),
+  platforms: Schema.Array(Schema.String),
+  body: Schema.String,
+});
+
+test("points agents at a missing brief, and lets them write it from what the user says", async () => {
+  const before = await server.call("workspace_overview", {}, Overview);
+
+  expect(before.notices).toHaveLength(1);
+  expect(before.notices[0]).toContain(join(t.root, "brief.md"));
+  expect(before.notices[0]).toContain("update_brief");
+
+  await server.call(
+    "update_brief",
+    { purpose: "promote", platforms: ["tiktok"], body: "Videos for my app." },
+    Brief,
+  );
+  const brief = await server.call("update_brief", { platforms: ["tiktok", "reels"] }, Brief);
+
+  expect(brief).toEqual({
+    path: join(t.root, "brief.md"),
+    purpose: "promote",
+    platforms: ["tiktok", "reels"],
+    body: "Videos for my app.",
+  });
+  expect(await readFile(brief.path, "utf8")).toContain("platforms:\n  - tiktok\n  - reels");
+  expect((await server.call("workspace_overview", {}, Overview)).notices).toEqual([]);
 }, 20_000);
 
 test("offers /feedback as a prompt that drafts before sending", async () => {

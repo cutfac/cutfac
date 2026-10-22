@@ -1,5 +1,6 @@
 import { DateTime, Effect, Option, Path } from "effect";
 
+import { BRIEF_FILE, briefLines, readBrief } from "./brief.ts";
 import { InvalidRequest, type NotFound } from "./errors.ts";
 import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
 import { type MediaCapture, putBack, recordMedia } from "./history.ts";
@@ -758,6 +759,16 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
     lines.push(
       "Sources the user pointed this item at. Read what helps with the request, and never change them:",
       ...sources,
+      "",
+    );
+  }
+
+  const workspaceBrief = yield* readBrief();
+
+  if (workspaceBrief !== undefined) {
+    lines.push(
+      `What the videos are for and where they go, in the user's words: ${yield* ws.abs(BRIEF_FILE)}.`,
+      ...briefLines(workspaceBrief),
       "",
     );
   }

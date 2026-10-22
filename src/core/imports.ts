@@ -10,6 +10,7 @@ import {
   type AgentRun,
   ImportDoc,
   type ImportTurn,
+  IMPORT_KINDS,
   IMPORT_TURN_KINDS,
 } from "./schema.ts";
 import { installedSkills, mirrorSkills } from "./skill.ts";
@@ -22,6 +23,8 @@ export interface Import {
   readonly id: string;
   readonly doc: ImportDoc;
 }
+
+export type ImportKind = (typeof IMPORT_KINDS)[number];
 
 export type ImportTurnKind = (typeof IMPORT_TURN_KINDS)[number];
 
@@ -90,16 +93,9 @@ const webLink = (text: string) => {
   return url?.protocol === "http:" || url?.protocol === "https:" ? url : undefined;
 };
 
-export interface NewImport {
-  readonly link: string;
-  readonly agent: AgentName;
-  readonly locale?: string | undefined;
-}
-
-/** Record a new import. Its first turn is added when the run for it starts. */
-export const createImport = Effect.fn("imports.createImport")(function* (input: NewImport) {
-  const ws = yield* Workspace;
-  const link = webLink(input.link);
+/** The link as an import keeps it: as the URL parser writes it, which drops stray whitespace. */
+const importLink = Effect.fnUntraced(function* (text: string) {
+  const link = webLink(text);
 
   if (link === undefined) {
     return yield* new InvalidRequest({ message: "The link must be an http(s) URL" });
@@ -113,12 +109,50 @@ export const createImport = Effect.fn("imports.createImport")(function* (input: 
     });
   }
 
+  return link.href;
+});
+
+const formatIds = Effect.gen(function* () {
+  const ws = yield* Workspace;
+
+  return yield* foldersWith(ws.config.paths.formats, FORMAT_FILE);
+});
+
+/** What the workspace holds now, to tell what an import adds. */
+const currentBaseline = Effect.gen(function* () {
+  return { skills: yield* installedSkills(), formats: yield* formatIds };
+});
+
+/**
+ * A brief import with no link brings in nothing from elsewhere: the agent writes its own template,
+ * so it may write from the start and its first message carries the rules.
+ */
+export const allowedFromStart = (doc: ImportDoc) => doc.kind === "brief" && doc.link === undefined;
+
+export interface NewImport {
+  /** Where the template comes from. Only a brief import may go without one. */
+  readonly link?: string | undefined;
+  readonly agent: AgentName;
+  readonly locale?: string | undefined;
+  readonly kind?: ImportKind | undefined;
+}
+
+/** Record a new import. Its first turn is added when the run for it starts. */
+export const createImport = Effect.fn("imports.createImport")(function* (input: NewImport) {
+  const ws = yield* Workspace;
+  const kind = input.kind ?? "link";
+
+  const link =
+    kind === "brief" && (input.link ?? "").trim() === ""
+      ? undefined
+      : yield* importLink(input.link ?? "");
+
   const id = yield* shortId;
   const now = yield* nowIso;
 
-  const doc: ImportDoc = {
-    // As the URL parser writes it, which drops stray whitespace.
-    link: link.href,
+  const draft: ImportDoc = {
+    kind,
+    link,
     agent: input.agent,
     locale: input.locale,
     allowed: false,
@@ -129,6 +163,10 @@ export const createImport = Effect.fn("imports.createImport")(function* (input: 
     created: now,
     updated: now,
   };
+
+  const doc: ImportDoc = allowedFromStart(draft)
+    ? { ...draft, allowed: true, baseline: yield* currentBaseline }
+    : draft;
 
   yield* ws.writeYaml(importPath(id), ImportDoc, doc);
 
@@ -176,12 +214,6 @@ export function turnProblem(doc: ImportDoc, kind: ImportTurnKind): string | unde
   return undefined;
 }
 
-const formatIds = Effect.gen(function* () {
-  const ws = yield* Workspace;
-
-  return yield* foldersWith(ws.config.paths.formats, FORMAT_FILE);
-});
-
 /**
  * Add the user's message with its run marked running. Allowing records what the workspace holds,
  * so what the import adds can be told apart from what was there.
@@ -203,10 +235,7 @@ export const beginTurn = Effect.fn("imports.beginTurn")(function* (
 
       if (turn.kind !== "allow") return { ...doc, turns };
 
-      const baseline = doc.baseline ?? {
-        skills: yield* installedSkills(),
-        formats: yield* formatIds,
-      };
+      const baseline = doc.baseline ?? (yield* currentBaseline);
 
       return { ...doc, turns, allowed: true, baseline };
     }),
@@ -258,143 +287,3 @@ export const settleInstalls = Effect.fn("imports.settleInstalls")(function* (id:
   const formats = (yield* formatIds).filter((name) => !baseline.formats.includes(name));
   yield* mutateImport(id, (current) => Effect.succeed({ ...current, skills, formats }));
 });
-
-/** The English name of a locale's language, such as "Korean" for `ko-KR`. */
-export function languageName(locale: string): string | undefined {
-  try {
-    const { language } = new Intl.Locale(locale);
-
-    return new Intl.DisplayNames(["en"], { type: "language" }).of(language);
-  } catch {
-    return undefined;
-  }
-}
-
-const SKILL_SECTION = '"Import a template from a link" in the cutfac skill';
-
-/**
- * The lines that hand the agent the files a turn carries, after a blank line; none without any.
- * `folder` is the import's folder, as an absolute path.
- */
-function attachedLines(turn: ImportTurn | undefined, folder: string): string[] {
-  const attachments = turn?.attachments ?? [];
-
-  if (attachments.length === 0) return [];
-
-  return [
-    "",
-    "Files the user attached. Open them and never change them; if the template needs any, copy them into the folder save_format returns:",
-    ...attachments.map((path) => `- ${folder}/${path}`),
-  ];
-}
-
-/**
- * The first message: read the link and any files the user attached, report what the template
- * needs, and wait for the user to allow it. `folder` is the import's folder, as an absolute path.
- */
-export function startPrompt(doc: ImportDoc, folder: string): string {
-  const language = doc.locale === undefined ? undefined : languageName(doc.locale);
-  const start = doc.turns.find((turn) => turn.kind === "start");
-
-  return [
-    `The user wants to bring in a template from ${doc.link}. You are running from the Cutfac board, which shows the user your replies and sends you theirs.`,
-    `Follow ${SKILL_SECTION}; call get_skill if you do not have it.`,
-    ...attachedLines(start, folder),
-    "",
-    "For now you can only read: the link, the web, and the workspace. Installing, downloading, and writing stay blocked until the user presses Allow on the board.",
-    "Read the link and what it points to, then end your reply with:",
-    "- what the template makes, and whether it becomes one format or several;",
-    "- every skill, package, and program it needs: where it comes from, what it is for, its license, and how it gets installed;",
-    "- the files you will write in the workspace.",
-    "After Allow you may fetch skills only with `git clone` or `curl` on the raw URL, into `.agents/skills/<name>/`; the board copies them to `.claude/skills/`. Packages and programs are the user's to install, so give them the exact commands.",
-    "Then ask the user to press Allow. If you cannot read the link, say so and ask the user to paste what it shows.",
-    "",
-    ...(language === undefined ? [] : [`Write to the user in ${language}.`]),
-    "Keep replies short and plain; the user may not be a developer.",
-  ].join("\n");
-}
-
-/** What the agent may do once the user pressed Allow. */
-export const ALLOW_RULES = [
-  "The user pressed Allow on the board. Go ahead with what you listed, and nothing more:",
-  "- Install skills in the workspace under `.agents/skills/<name>/`; the board copies each new skill folder to `.claude/skills/`. If you cannot write there, use `.claude/skills/<name>/`.",
-  "- Copy files byte for byte with `git clone` or with `curl` on the raw URL. Never retype them from a summary.",
-  "- Programs and system packages (brew, apt, pip, npm -g, uv tool) are the user's to install. Give the exact commands and keep the programs in the format's `requires`.",
-  "- If a download, command, or write is refused, do not look for a way around it: tell the user what it was for and give them the command to run themselves.",
-  "- Then call save_format, write the README, choice files, and previews into the folder it returns, and call check_format until the template is ready or only the user's steps are left.",
-  "End with what you installed, what the template makes, and what the user still has to do.",
-].join("\n");
-
-const BLOCKED_NOTE =
-  "(Installing and writing are still blocked. When you are ready, ask the user to press Allow.)";
-
-/** Whether the session has the allow rules: a run that answered Allow finished. */
-const rulesHeard = (doc: ImportDoc) =>
-  doc.turns.some((turn) => turn.kind === "allow" && turn.run?.status === "done");
-
-const withRules = (body: string) =>
-  body === "" ? ALLOW_RULES : `${ALLOW_RULES}\n\nThe user added: ${body}`;
-
-/**
- * The message for one turn, in a session that already has the ones before it, with the files the
- * turn carries in `folder`, the import's folder as an absolute path. Once allowed, the rules go
- * with every message until a run that answered Allow finished, so a failed or stopped one does
- * not leave the agent without them.
- */
-export function turnMessage(
-  doc: ImportDoc,
-  turn: ImportTurn,
-  folder: string,
-  heard = rulesHeard(doc),
-): string {
-  if (turn.kind === "start") return startPrompt(doc, folder);
-
-  const files = attachedLines(turn, folder);
-
-  if (turn.kind === "allow") return [withRules(turn.body), ...files].join("\n");
-
-  if (!doc.allowed) return [turn.body, ...files, "", BLOCKED_NOTE].join("\n");
-
-  return [heard ? turn.body : withRules(turn.body), ...files].join("\n");
-}
-
-/** One earlier turn, as the user and the agent said it. The first message is the start prompt. */
-const transcriptLines = (turn: ImportTurn, folder: string): string[] => {
-  const said =
-    turn.kind === "allow" ? `User: (pressed Allow) ${turn.body}`.trimEnd() : `User: ${turn.body}`;
-
-  const attachments = turn.attachments ?? [];
-  const reply = turn.run?.reply;
-
-  return [
-    ...(turn.kind === "start" ? [] : [said]),
-    ...(turn.kind === "start" || attachments.length === 0
-      ? []
-      : ["User attached:", ...attachments.map((path) => `- ${folder}/${path}`)]),
-    ...(reply === undefined ? [] : [`You: ${reply}`]),
-  ];
-};
-
-/**
- * The message for `turn` when the agent has no session to resume: the first turn, or one after the
- * session was lost. It carries the conversation so far.
- */
-export function freshPrompt(doc: ImportDoc, turn: ImportTurn, folder: string): string {
-  const earlier = doc.turns.slice(
-    0,
-    doc.turns.findIndex((entry) => entry.id === turn.id),
-  );
-
-  if (turn.kind === "start" || earlier.length === 0) return turnMessage(doc, turn, folder);
-
-  // A new session has heard no rules, so the message carries them once allowed.
-  return [
-    startPrompt(doc, folder),
-    "",
-    "Your earlier session is gone. The conversation so far:",
-    "",
-    ...earlier.flatMap((entry) => transcriptLines(entry, folder)),
-    "",
-    turnMessage(doc, turn, folder, false),
-  ].join("\n");
-}

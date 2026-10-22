@@ -1,0 +1,63 @@
+import { Schema } from "effect";
+import { Tool } from "effect/ai";
+
+import {
+  CommandFailed,
+  Conflict,
+  FetchFailed,
+  InvalidRequest,
+  NotFound,
+  WorkspaceError,
+} from "../core/errors.ts";
+import { FreeLimitReached } from "../plan.ts";
+
+export const describe = (description: string) => ({ description });
+
+/** Every error the core raises. Each carries a message, which the agent sees as the tool error. */
+const CutfacFailure = Schema.Union([
+  WorkspaceError,
+  NotFound,
+  InvalidRequest,
+  Conflict,
+  CommandFailed,
+  FetchFailed,
+  FreeLimitReached,
+]);
+
+/** A Cutfac MCP tool, with the hints a client shows the user before it runs. */
+export const tool = <
+  const Name extends string,
+  Parameters extends Schema.Constraint = typeof Tool.EmptyParams,
+  Success extends Schema.Constraint = typeof Schema.Void,
+>(
+  name: Name,
+  options: {
+    readonly description: string;
+    readonly parameters?: Parameters | undefined;
+    readonly success: Success;
+    /** Only reads the workspace. */
+    readonly readonly?: boolean | undefined;
+    /** Replaces something the agent or user wrote before, rather than adding to it. */
+    readonly overwrites?: boolean | undefined;
+    /** Calling it again with the same arguments changes nothing further. */
+    readonly idempotent?: boolean | undefined;
+    /** Reaches the network (store listings, yt-dlp downloads). */
+    readonly network?: boolean | undefined;
+  },
+) =>
+  Tool.make(name, {
+    description: options.description,
+    parameters: options.parameters,
+    success: options.success,
+    failure: CutfacFailure,
+  })
+    .annotate(Tool.Readonly, options.readonly === true)
+    .annotate(Tool.Destructive, options.overwrites === true)
+    .annotate(Tool.Idempotent, options.readonly === true || options.idempotent === true)
+    .annotate(Tool.OpenWorld, options.network === true);
+
+/**
+ * The result as JSON carries it, without fields left undefined (a format with no README yet). The
+ * MCP result check rejects undefined, and the agent would see only an internal error.
+ */
+export const asJson = <A>(value: A): A => JSON.parse(JSON.stringify(value));

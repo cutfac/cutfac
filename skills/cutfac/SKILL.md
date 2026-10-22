@@ -12,9 +12,11 @@ into folders.
 
 ## Start of every task
 
-1. `workspace_overview` — config, what was learned, item counts, formats, open feedback.
-2. Read `about.md` (its path is in `workspace_overview`) when it exists: what the user taught the
-   workspace about their product, audience, and voice. A section marked `> Not read yet` was only
+1. `workspace_overview` — config, the brief, what was learned, item counts, formats, open feedback.
+2. Read the workspace brief and `about.md` (their paths are in `workspace_overview`) when they
+   exist. The brief (`brief.md` at the workspace root, not an item's `brief.md`) says what the
+   videos are for and where they go; `about.md` is what the user taught the workspace about their
+   product, audience, and voice. A section marked `> Not read yet` was only
    scraped; read its source and rewrite it before you rely on it (see Learn). Never invent product
    features or UI; only show screens and footage the user provided or pointed you at.
 3. If there is open feedback, ask whether to handle it first (`list_open_feedback`).
@@ -156,6 +158,28 @@ user.
    first item.
 
 Never write API keys or tokens into the format; they stay in the user's environment.
+
+## Make a template from the brief
+
+The workspace has no template yet, or the user asks for one that fits them. Make one format for the
+person the workspace brief describes:
+
+1. Read the brief and `about.md`. The brief's `purpose` is what the videos are for (`promote` their
+   own product or service, share `tips`, build a personal `brand`, or `own`: in their words), its
+   `platforms` where they go, and its body the user's own words.
+2. If the user picked a reference (a skill, a starter kit, a finished video), read it and take what
+   it needs as in "Import a template from a link" steps 1–3. Without one, start from what you know
+   and the brief.
+3. Fit `aspects` and `duration` to the platforms.
+4. Ask only what you cannot settle reasonably, such as which product on their website to promote:
+   one question at a time, each with two or three likely answers, and few in all. Settle the rest
+   with sensible defaults.
+5. Save, write, and check the format as in "Import a template from a link" steps 4–6. List what
+   you settled without asking in the README, so the user can change it.
+6. Tell the user what the template makes and what you settled, a few words each.
+
+When the user says something that changes the brief ("I'm doing Reels now too"), call
+`update_brief` and say what changed in one line.
 
 ## Handle feedback
 
