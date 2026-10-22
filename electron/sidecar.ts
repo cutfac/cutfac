@@ -11,6 +11,7 @@ import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.
 import { HOST } from "./ports.ts";
 
 const limits = {
+  cliTimeoutMs: 30_000,
   healthTimeoutMs: 20_000,
   healthPollMs: 150,
   stopGraceMs: 3_000,
@@ -62,7 +63,7 @@ let launchEnv: Promise<NodeJS.ProcessEnv> | undefined;
  * the app was started from the developer's own terminal or editor, so that is kept and only the
  * PATH is widened.
  */
-function resolveServerEnv(): Promise<NodeJS.ProcessEnv> {
+export function resolveServerEnv(): Promise<NodeJS.ProcessEnv> {
   launchEnv ??= readServerEnv();
 
   return launchEnv;
@@ -92,6 +93,13 @@ function findExecutable(name: string, searchPath: string): string {
   throw new Error(`\`${name}\` is not on PATH. Install Bun (https://bun.sh) to run from source.`);
 }
 
+/** The built board, which the server serves and the first launch loads before there is one. */
+export function boardDir(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "web")
+    : path.join(app.getAppPath(), "dist", "web");
+}
+
 /**
  * The compiled binary in the packaged app, `bun src/cli.ts` from a checkout. From a checkout,
  * CUTFAC_SIDECAR points at any executable that speaks the sidecar CLI (used to test the shell
@@ -104,13 +112,13 @@ function resolveLaunch(env: NodeJS.ProcessEnv): Launch {
     return {
       command: path.join(resources, "bin", "cutfac"),
       args: [],
-      webDir: path.join(resources, "web"),
+      webDir: boardDir(),
       watchFlags: [],
     };
   }
 
   const root = app.getAppPath();
-  const webDir = path.join(root, "dist", "web");
+  const webDir = boardDir();
   const override = process.env.CUTFAC_SIDECAR;
 
   if (override) return { command: override, args: [], webDir, watchFlags: [] };
@@ -220,6 +228,40 @@ async function terminate(running: Running): Promise<void> {
 
   await running.ended;
   clearTimeout(timer);
+}
+
+/**
+ * Runs a command that needs no workspace, such as `agents --json`, and resolves what it printed.
+ * One that hangs is killed, and resolves with what it printed so far.
+ */
+export async function runCli(args: string[]): Promise<{ code: number | null; stdout: string }> {
+  const env = await resolveServerEnv();
+  const launch = resolveLaunch(env);
+
+  const child = spawn(launch.command, [...launch.args, ...args], {
+    cwd: app.getPath("home"),
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const timer = setTimeout(() => child.kill("SIGKILL"), limits.cliTimeoutMs);
+  let stdout = "";
+
+  child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  forward(child.stderr, console.error, []);
+
+  return new Promise((resolve, reject) => {
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout });
+    });
+  });
 }
 
 /** Initialises the workspace if needed, starts the server on it and resolves once it is healthy. */

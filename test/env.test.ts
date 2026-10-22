@@ -43,7 +43,7 @@ describe("the server's environment in the packaged app", () => {
       LOGNAME: "ada",
       SHELL: "/bin/zsh",
       TMPDIR: "/var/folders/xy/T/",
-      PATH: "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/Users/ada/.bun/bin",
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/Users/ada/.bun/bin:/Users/ada/.local/bin",
       SSH_AUTH_SOCK: "/private/tmp/com.apple.launchd.abc/Listeners",
     });
     expect(cleanEnv({ ...ACCOUNT, shell: undefined, tmpdir: undefined }, {})).not.toContainKeys([

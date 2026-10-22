@@ -1,3 +1,4 @@
+import type { AgentName } from "./api.ts";
 import type { Locale } from "./i18n/locale.ts";
 
 export type EditCommand = "undo" | "redo";
@@ -10,6 +11,69 @@ export type AppCommand = "palette" | "newVideo" | "toggleSidebar" | "board" | "l
  * license, `ended` names one whose plan has ended, and `unavailable` means it couldn't be asked.
  */
 export type LicenseCheck = "granted" | "invalid" | "ended" | "unavailable";
+
+/**
+ * An agent CLI as the first launch finds it on this computer, before there is a workspace: missing,
+ * too old, signed out, or ready to run.
+ */
+export interface AgentSetup {
+  agent: AgentName;
+  state: "missing" | "outdated" | "signedOut" | "ready";
+  /** The release the CLI reports, when it is installed and says. */
+  version?: string;
+  /** What fixes it: the installer, the update or the sign-in. None when it is ready. */
+  fix?: string;
+}
+
+/** How fixing an agent went, with the command it ran for the user to run themselves if it failed. */
+export interface AgentFix {
+  ok: boolean;
+  command: string;
+}
+
+/** The first-launch steps that come before there is a workspace. */
+export type OnboardingStep = "welcome" | "agent" | "access" | "folder";
+
+/** A folder as the workspace step shows it: its path, and the same shortened from the home folder. */
+export interface Folder {
+  path: string;
+  label: string;
+}
+
+/** What the first launch asks of the app before there is a workspace, and so a server. */
+export interface CutfacOnboarding {
+  /** Every agent CLI as found on this computer now. */
+  agents: () => Promise<AgentSetup[]>;
+  /**
+   * Run the fix the last `agents()` named for the agent: its installer, update or sign-in. Each
+   * line it prints goes to `onFixOutput`.
+   */
+  fixAgent: (agent: AgentName) => Promise<AgentFix>;
+  /** A line a fix printed. Returns an unsubscribe. */
+  onFixOutput: (listener: (agent: AgentName, line: string) => void) => () => void;
+  /** Whether macOS lets the app read every file, as the agents it runs need. */
+  fullDiskAccess: () => Promise<boolean>;
+  /**
+   * Open the Full Disk Access list in System Settings, with a small window beside it to drag the
+   * app from. The app comes back to the front once the access is granted.
+   */
+  openAccessSettings: () => Promise<void>;
+  /** Full Disk Access was granted while System Settings was open. Returns an unsubscribe. */
+  onAccessGranted: (listener: () => void) => () => void;
+  /** Drag the app itself into the Full Disk Access list, from the helper window. */
+  startAppDrag: () => void;
+  /** The app's icon as a data URL, for the helper window to show as the thing to drag. */
+  appIcon: () => Promise<string>;
+  /** The folder the workspace step suggests. */
+  defaultFolder: () => Promise<Folder>;
+  /** Ask for another folder. Resolves it, or undefined if cancelled. */
+  chooseFolder: () => Promise<Folder | undefined>;
+  /**
+   * Make the folder if it is new and open the board on it; the window moves on by itself. Resolves
+   * why it couldn't, or undefined.
+   */
+  createWorkspace: (folder: string) => Promise<string | undefined>;
+}
 
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
 export interface CutfacDesktop {
@@ -51,6 +115,8 @@ export interface CutfacDesktop {
    * is kept already. Returns an unsubscribe.
    */
   onLicenseKeyRequest: (listener: (saved: boolean) => void) => () => void;
+  /** The first launch, before there is a workspace. */
+  onboarding: CutfacOnboarding;
   /** The operating system and its version, such as `macOS 15.4.0`. */
   platform: string;
 }

@@ -1,17 +1,29 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import type { AppCommand, CutfacDesktop } from "../web/src/desktop.ts";
+import type { AgentName } from "../src/core/schema.ts";
+import type { AppCommand, CutfacDesktop, CutfacOnboarding } from "../web/src/desktop.ts";
 import {
+  ACCESS_GRANTED_CHANNEL,
+  AGENTS_CHANNEL,
   APP_COMMAND_CHANNEL,
+  APP_ICON_CHANNEL,
+  CHOOSE_FOLDER_CHANNEL,
+  CREATE_WORKSPACE_CHANNEL,
+  DEFAULT_FOLDER_CHANNEL,
   EDIT_COMMAND_CHANNEL,
+  FIX_AGENT_CHANNEL,
+  FIX_OUTPUT_CHANNEL,
+  FULL_DISK_ACCESS_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
+  OPEN_ACCESS_SETTINGS_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
+  START_APP_DRAG_CHANNEL,
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
 
@@ -33,6 +45,43 @@ const APP_COMMANDS: Record<AppCommand, true> = {
 
 const isAppCommand = (command: string): command is AppCommand =>
   Object.hasOwn(APP_COMMANDS, command);
+
+/** Every agent the app runs, to check what a fix's output names by name. */
+const AGENT_NAMES: Record<AgentName, true> = { claude: true, codex: true };
+
+const isAgentName = (agent: string): agent is AgentName => Object.hasOwn(AGENT_NAMES, agent);
+
+const onboarding = {
+  agents: () => ipcRenderer.invoke(AGENTS_CHANNEL),
+  fixAgent: (agent) => ipcRenderer.invoke(FIX_AGENT_CHANNEL, agent),
+  onFixOutput: (listener) => {
+    const forward = (_event: IpcRendererEvent, agent: string, line: string) => {
+      if (isAgentName(agent)) listener(agent, line);
+    };
+
+    ipcRenderer.on(FIX_OUTPUT_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(FIX_OUTPUT_CHANNEL, forward);
+    };
+  },
+  fullDiskAccess: () => ipcRenderer.invoke(FULL_DISK_ACCESS_CHANNEL),
+  openAccessSettings: () => ipcRenderer.invoke(OPEN_ACCESS_SETTINGS_CHANNEL),
+  onAccessGranted: (listener) => {
+    const forward = () => listener();
+
+    ipcRenderer.on(ACCESS_GRANTED_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(ACCESS_GRANTED_CHANNEL, forward);
+    };
+  },
+  startAppDrag: () => ipcRenderer.send(START_APP_DRAG_CHANNEL),
+  appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
+  defaultFolder: () => ipcRenderer.invoke(DEFAULT_FOLDER_CHANNEL),
+  chooseFolder: () => ipcRenderer.invoke(CHOOSE_FOLDER_CHANNEL),
+  createWorkspace: (folder) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, folder),
+} satisfies CutfacOnboarding;
 
 const bridge = {
   openWorkspace: (): Promise<boolean> => ipcRenderer.invoke(OPEN_WORKSPACE_CHANNEL),
@@ -83,6 +132,7 @@ const bridge = {
       ipcRenderer.removeListener(LICENSE_KEY_REQUEST_CHANNEL, forward);
     };
   },
+  onboarding,
   platform: `${SYSTEM_NAMES[process.platform] ?? process.platform} ${process.getSystemVersion()}`,
 } satisfies CutfacDesktop;
 

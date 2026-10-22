@@ -44,7 +44,7 @@ async function failure(res: Response): Promise<Error> {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
 
   if (!res.ok) throw await failure(res);
@@ -53,7 +53,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-function send<T, Body>(method: "POST" | "PATCH", path: string, body: Body): Promise<T> {
+export function send<T, Body>(method: "POST" | "PATCH", path: string, body: Body): Promise<T> {
   return request<T>(path, {
     method,
     headers: { "content-type": "application/json" },
@@ -597,9 +597,14 @@ export interface ImportTurn {
   run?: AgentRun;
 }
 
-/** Bringing a template in from a link: the conversation with the agent and what it added. */
+/**
+ * Bringing a template in from a link, or making one from the workspace brief: the conversation
+ * with the agent and what it added.
+ */
 export interface ImportDoc {
-  link: string;
+  kind: "link" | "brief";
+  /** Where the template comes from; a brief import may go without one. */
+  link?: string;
   agent: AgentName;
   locale?: string;
   /** The user pressed Allow; until then the agent may only read. */
@@ -629,7 +634,9 @@ export interface ImportDetail extends ImportSummary {
 }
 
 export interface NewImport {
-  link: string;
+  /** Only a brief import may go without a link. */
+  link?: string;
+  kind?: ImportDoc["kind"];
   agent?: AgentName;
   /** The board's language, for the agent to write in. */
   locale?: string;

@@ -1,0 +1,162 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+
+import { Schema } from "effect";
+import {
+  app,
+  ipcMain,
+  type BrowserWindow,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+} from "electron";
+
+import { AgentName } from "../src/core/schema.ts";
+import type { Folder } from "../web/src/desktop.ts";
+import { agentSetups, fixAgent } from "./agents.ts";
+import { pickWorkspace } from "./dialogs.ts";
+import { appIconUrl, dragApp, hasFullDiskAccess, openAccessSettings } from "./fullDiskAccess.ts";
+import {
+  ACCESS_GRANTED_CHANNEL,
+  AGENTS_CHANNEL,
+  APP_ICON_CHANNEL,
+  CHOOSE_FOLDER_CHANNEL,
+  CREATE_WORKSPACE_CHANNEL,
+  DEFAULT_FOLDER_CHANNEL,
+  FIX_AGENT_CHANNEL,
+  FIX_OUTPUT_CHANNEL,
+  FULL_DISK_ACCESS_CHANNEL,
+  OPEN_ACCESS_SETTINGS_CHANNEL,
+  START_APP_DRAG_CHANNEL,
+} from "./ipc.ts";
+
+const isAgentName = Schema.is(AgentName);
+
+const isText = Schema.is(Schema.String);
+
+/** A folder as the workspace step shows it, from the home folder when it is inside it. */
+function folder(target: string): Folder {
+  const home = app.getPath("home");
+  const relative = path.relative(home, target);
+  const inside = relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+
+  return { path: target, label: inside ? path.join("~", relative) : target };
+}
+
+/** What the steps find and run on this Mac. The dev build can stand in for each, to try them all. */
+export interface OnboardingChecks {
+  agentSetups: typeof agentSetups;
+  fixAgent: typeof fixAgent;
+  hasFullDiskAccess: typeof hasFullDiskAccess;
+  /**
+   * Where the workspace step suggests making one. It isn't checked: without Full Disk Access, even
+   * looking in Documents would have macOS ask.
+   */
+  defaultFolder: () => string;
+}
+
+export const macChecks: OnboardingChecks = {
+  agentSetups,
+  fixAgent,
+  hasFullDiskAccess,
+  defaultFolder: () => path.join(app.getPath("documents"), "Cutfac"),
+};
+
+export interface OnboardingHost {
+  isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
+  /** The board's address before there is a workspace, where the helper window's page is. */
+  boardUrl: string;
+  preload: string;
+  window: () => BrowserWindow | undefined;
+  bringToFront: () => void;
+  /** What the folder dialog says, in the board's language. */
+  chooseMessage: () => string;
+  /** Starts the workspace and opens the board on it. Throws why it couldn't. */
+  openWorkspace: (folder: string) => Promise<void>;
+  checks?: OnboardingChecks | undefined;
+}
+
+/** Answers the first launch's steps, which come before there is a workspace and so a server. */
+export function handleOnboarding(host: OnboardingHost): void {
+  const checks = host.checks ?? macChecks;
+
+  // Only a folder the step was given here may be made into a workspace, never any path a page sends.
+  const offered = new Set<string>();
+
+  const offer = (target: string): Folder => {
+    offered.add(target);
+
+    return folder(target);
+  };
+
+  const assertFromApp = (event: IpcMainInvokeEvent) => {
+    if (!host.isFromApp(event)) throw new Error("Untrusted IPC sender");
+  };
+
+  ipcMain.handle(AGENTS_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return checks.agentSetups();
+  });
+  ipcMain.handle(FIX_AGENT_CHANNEL, (event, agent) => {
+    assertFromApp(event);
+
+    if (!isAgentName(agent)) throw new Error("Unknown agent");
+
+    return checks.fixAgent(agent, (line) => {
+      if (!event.sender.isDestroyed()) event.sender.send(FIX_OUTPUT_CHANNEL, agent, line);
+    });
+  });
+  ipcMain.handle(FULL_DISK_ACCESS_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return checks.hasFullDiskAccess();
+  });
+  ipcMain.handle(OPEN_ACCESS_SETTINGS_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return openAccessSettings({
+      boardUrl: host.boardUrl,
+      preload: host.preload,
+      onGranted: () => {
+        // System Settings is in front; the app comes back on the step that waited for it.
+        app.focus({ steal: true });
+        host.bringToFront();
+        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL);
+      },
+    });
+  });
+  ipcMain.on(START_APP_DRAG_CHANNEL, (event) => {
+    if (host.isFromApp(event)) dragApp(event.sender).catch(() => undefined);
+  });
+  ipcMain.handle(APP_ICON_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return appIconUrl();
+  });
+  ipcMain.handle(DEFAULT_FOLDER_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return offer(checks.defaultFolder());
+  });
+  ipcMain.handle(CHOOSE_FOLDER_CHANNEL, async (event) => {
+    assertFromApp(event);
+
+    const chosen = await pickWorkspace(host.window(), host.chooseMessage(), undefined);
+
+    return chosen === undefined ? undefined : offer(chosen);
+  });
+  ipcMain.handle(CREATE_WORKSPACE_CHANNEL, async (event, target) => {
+    assertFromApp(event);
+
+    if (!isText(target) || !offered.has(target)) return "Choose a folder first";
+
+    try {
+      await mkdir(target, { recursive: true });
+      await host.openWorkspace(target);
+
+      return undefined;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  });
+}

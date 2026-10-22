@@ -1,4 +1,3 @@
-import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,20 +7,19 @@ import {
   dialog,
   ipcMain,
   Menu,
-  nativeImage,
   nativeTheme,
   screen,
-  session,
-  shell,
-  type ContextMenuParams,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
-  type MenuItemConstructorOptions,
-  type WebContents,
 } from "electron";
 
-import type { AppCommand, EditCommand } from "../web/src/desktop.ts";
+import type { AppCommand, EditCommand, OnboardingStep } from "../web/src/desktop.ts";
 import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
+import { stopFixes } from "./agents.ts";
+import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPages.ts";
+import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
+import { pickSource, pickWorkspace } from "./dialogs.ts";
+import { stopWatching } from "./fullDiskAccess.ts";
 import {
   APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,
@@ -36,26 +34,33 @@ import {
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
 import { startLicense, type License } from "./license.ts";
+import { menuTemplate, showTextMenu } from "./menu.ts";
 import { MESSAGES } from "./messages.ts";
-import { probePort } from "./ports.ts";
+import { keepInsideApp } from "./navigation.ts";
+import { handleOnboarding } from "./onboarding.ts";
+import { limitPermissions, sandboxed } from "./permissions.ts";
+import { freePort, probePort } from "./ports.ts";
 import {
   loadLicense,
   loadLocale,
+  loadOnboarding,
   loadPage,
   loadPort,
   loadWindowPlace,
   loadWorkspace,
   saveLicense,
   saveLocale,
+  saveOnboarding,
   savePage,
   savePort,
   saveWindowPlace,
   saveWorkspace,
   settingsWritten,
 } from "./settings.ts";
-import { startSidecar, type Sidecar } from "./sidecar.ts";
+import { boardDir, startSidecar, type Sidecar } from "./sidecar.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
+import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
 // packaged app ignores it, so another program can't open the app on a page of its choosing.
@@ -65,8 +70,8 @@ const devPort = Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10);
 
 const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 
-/** What the board asks for: the clipboard for its copy buttons, and full screen for its videos. */
-const PAGE_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"]);
+/** The board before there is a workspace: the app's own copy, or Vite's in dev. */
+const boardUrl = devUrl ?? BOARD_URL;
 
 let window: BrowserWindow | undefined;
 
@@ -85,6 +90,9 @@ let switching = false;
 
 let quitting = false;
 
+/** The server is stopped and the settings saved, so the quit may go ahead. */
+let quitReady = false;
+
 /** A move or resize waiting to be saved, so a drag saves once when it stops. */
 let placeTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -96,28 +104,33 @@ app.setName("Cutfac");
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  registerBoardScheme();
   app.on("second-instance", bringToFront);
 
   app.on("window-all-closed", () => app.quit());
   app.on("before-quit", (event) => {
-    quitting = true;
+    if (quitReady) return;
 
-    if (!sidecar) return;
+    quitting = true;
 
     // The window closes only after this, too late for its place to reach the disk.
     if (window) rememberPlace(window);
 
-    // Hold the quit until the server is gone and the settings saved, then quit again with nothing
-    // left to stop.
+    // Hold the quit until the server is gone and the settings saved, the first launch's step too,
+    // then quit again with nothing left to stop.
     event.preventDefault();
-    void Promise.allSettled([sidecar.stop(), settingsWritten()]).then(() => {
+    void Promise.allSettled([sidecar?.stop(), settingsWritten()]).then(() => {
       sidecar = undefined;
+      quitReady = true;
       app.quit();
     });
   });
 
   // Last resort so a crash in this process never leaves the server behind.
-  process.on("exit", () => sidecar?.kill());
+  process.on("exit", () => {
+    sidecar?.kill();
+    stopFixes();
+  });
   process.on("SIGTERM", () => app.quit());
   process.on("SIGINT", () => app.quit());
 
@@ -132,18 +145,18 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle(REVEAL_PATH_CHANNEL, (event, target: string) => {
     assertFromApp(event);
 
-    return revealInWorkspace(target);
+    return revealInWorkspace(workspaceRoot, target);
   });
   ipcMain.on(START_DRAG_CHANNEL, (event, target: string) => {
     if (!isFromApp(event)) return;
 
     // A file gone since the board showed it just doesn't drag.
-    dragOut(event.sender, target).catch(() => undefined);
+    dragOut(workspaceRoot, event.sender, target).catch(() => undefined);
   });
   ipcMain.handle(PICK_PATH_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return pickSource();
+    return pickSource(window, MESSAGES[locale].chooseSource);
   });
   ipcMain.handle(SET_LICENSE_KEY_CHANNEL, (event, input: string) => {
     assertFromApp(event);
@@ -157,8 +170,19 @@ if (!app.requestSingleInstanceLock()) {
     if (!isFromApp(event) || !isLocale(next) || next === locale) return;
 
     locale = next;
-    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
+    setMenu();
     void saveLocale(next);
+  });
+  handleOnboarding({
+    isFromApp,
+    boardUrl,
+    preload: preloadPath,
+    window: () => window,
+    bringToFront,
+    chooseMessage: () => MESSAGES[locale].chooseWorkspace,
+    openWorkspace: async (folder) => {
+      if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
+    },
   });
 
   void app.whenReady().then(boot);
@@ -168,36 +192,21 @@ function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/** Whether `url` is on the board shown now, as opposed to a page it linked to. */
+const isAppUrl = (url: string) => originOf(url) === appOrigin;
+
 function isFromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   const sender = event.senderFrame?.url;
 
-  return sender !== undefined && new URL(sender).origin === appOrigin;
+  return sender !== undefined && isAppUrl(sender);
 }
 
 function assertFromApp(event: IpcMainInvokeEvent): void {
   if (!isFromApp(event)) throw new Error("Untrusted IPC sender");
 }
 
-function isAllowedPermission(permission: string, url: string): boolean {
-  return PAGE_PERMISSIONS.has(permission) && URL.parse(url)?.origin === appOrigin;
-}
-
-/**
- * Only the board, on the app's origin, gets the permissions it uses. Everything else a page can
- * ask for, such as the camera, microphone, location or notifications, is refused, so nothing
- * shown in the window can use what macOS lets the app do.
- */
-function limitPermissions(): void {
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
-    callback(isAllowedPermission(permission, details.requestingUrl)),
-  );
-  session.defaultSession.setPermissionCheckHandler((_contents, permission, origin) =>
-    isAllowedPermission(permission, origin),
-  );
-}
-
 async function boot(): Promise<void> {
-  limitPermissions();
+  limitPermissions(isAppUrl);
   // The board is dark only; this keeps the title bar, menus and dialogs dark with it.
   nativeTheme.themeSource = "dark";
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
@@ -211,17 +220,43 @@ async function boot(): Promise<void> {
   }
 
   updates = startUpdates({ messages: () => MESSAGES[locale], window: () => window });
-  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate()));
+  setMenu();
 
-  let workspace = (await loadWorkspace()) ?? (await pickWorkspace());
+  // In dev, Vite serves the board instead.
+  if (!devUrl) serveBoard(boardDir());
 
-  while (workspace) {
-    if ((await activate(workspace)) || quitting) return;
+  const saved = await loadWorkspace();
 
-    workspace = await pickWorkspace();
+  if ((saved !== undefined && (await activate(saved))) || quitting) return;
+
+  // No workspace yet, or the saved one wouldn't start: the first launch, where it was left. Someone
+  // who had a workspace already has been through it, so they only choose a folder.
+  const step = (await loadOnboarding()) ?? (saved === undefined ? "welcome" : "folder");
+
+  try {
+    await showOnboarding(step);
+  } catch (error) {
+    await dialog.showMessageBox({
+      type: "error",
+      message: MESSAGES[locale].couldNotStart,
+      detail: describeError(error),
+    });
+    app.quit();
   }
+}
 
-  app.quit();
+function setMenu(): void {
+  const template = menuTemplate({
+    messages: MESSAGES[locale],
+    updatesEnabled: updates?.enabled ?? false,
+    checkForUpdates: () => void updates?.checkNow(),
+    requestLicenseKey,
+    openWorkspace: () => void chooseWorkspace(),
+    appCommand: sendAppCommand,
+    editCommand: sendEditCommand,
+  });
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function sendEditCommand(command: EditCommand): void {
@@ -247,147 +282,11 @@ function requestLicenseKey(): void {
   window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, license?.hasKey() ?? false);
 }
 
-/** The standard menus, spelled out so every label can follow the board's language. */
-function menuTemplate(): MenuItemConstructorOptions[] {
-  const isMac = process.platform === "darwin";
-  const t = MESSAGES[locale];
-  const separator = { type: "separator" } as const;
-  const template: MenuItemConstructorOptions[] = [];
-
-  if (isMac) {
-    template.push({
-      role: "appMenu",
-      submenu: [
-        { role: "about", label: t.about },
-        ...(updates?.enabled
-          ? [
-              { label: t.checkForUpdates, click: () => void updates?.checkNow() },
-              { label: t.licenseKey, click: requestLicenseKey },
-            ]
-          : []),
-        separator,
-        { role: "services", label: t.services },
-        separator,
-        { role: "hide", label: t.hide },
-        { role: "hideOthers", label: t.hideOthers },
-        { role: "unhide", label: t.showAll },
-        separator,
-        { role: "quit", label: t.quit },
-      ],
-    });
-  }
-
-  template.push(
-    {
-      label: t.file,
-      submenu: [
-        { label: t.newVideo, accelerator: "CmdOrCtrl+N", click: () => sendAppCommand("newVideo") },
-        { label: t.openWorkspace, accelerator: "CmdOrCtrl+O", click: () => void chooseWorkspace() },
-        separator,
-        isMac ? { role: "close", label: t.closeWindow } : { role: "quit", label: t.quit },
-      ],
-    },
-    {
-      label: t.edit,
-      submenu: [
-        // The board decides: undo the typing in a text field, or the last change to the item.
-        { label: t.undo, accelerator: "CmdOrCtrl+Z", click: () => sendEditCommand("undo") },
-        {
-          label: t.redo,
-          accelerator: isMac ? "Shift+CmdOrCtrl+Z" : "CmdOrCtrl+Y",
-          click: () => sendEditCommand("redo"),
-        },
-        separator,
-        { role: "cut", label: t.cut },
-        { role: "copy", label: t.copy },
-        { role: "paste", label: t.paste },
-        ...(isMac ? [{ role: "pasteAndMatchStyle", label: t.pasteAndMatchStyle } as const] : []),
-        { role: "delete", label: t.delete },
-        { role: "selectAll", label: t.selectAll },
-      ],
-    },
-    {
-      label: t.view,
-      submenu: [
-        {
-          label: t.commandPalette,
-          accelerator: "CmdOrCtrl+K",
-          click: () => sendAppCommand("palette"),
-        },
-        {
-          label: t.toggleSidebar,
-          accelerator: "CmdOrCtrl+B",
-          click: () => sendAppCommand("toggleSidebar"),
-        },
-        separator,
-        { label: t.board, accelerator: "CmdOrCtrl+1", click: () => sendAppCommand("board") },
-        { label: t.learn, accelerator: "CmdOrCtrl+2", click: () => sendAppCommand("learn") },
-        {
-          label: t.templates,
-          accelerator: "CmdOrCtrl+3",
-          click: () => sendAppCommand("templates"),
-        },
-        separator,
-        { role: "reload", label: t.reload },
-        { role: "forceReload", label: t.forceReload },
-        { role: "toggleDevTools", label: t.toggleDevTools },
-        separator,
-        { role: "resetZoom", label: t.actualSize },
-        { role: "zoomIn", label: t.zoomIn },
-        { role: "zoomOut", label: t.zoomOut },
-        separator,
-        { role: "togglefullscreen", label: t.fullScreen },
-      ],
-    },
-    {
-      role: "windowMenu",
-      label: t.window,
-      submenu: [
-        { role: "minimize", label: t.minimize },
-        { role: "zoom", label: t.zoom },
-        ...(isMac
-          ? [separator, { role: "front", label: t.front } as const]
-          : [{ role: "close", label: t.closeWindow } as const]),
-      ],
-    },
-  );
-
-  return template;
-}
-
-/** Shows an open dialog over the window when there is one. Resolves undefined if cancelled. */
-async function pickOne(options: Electron.OpenDialogOptions): Promise<string | undefined> {
-  const result = await (window
-    ? dialog.showOpenDialog(window, options)
-    : dialog.showOpenDialog(options));
-
-  return result.canceled ? undefined : result.filePaths[0];
-}
-
-function pickWorkspace(): Promise<string | undefined> {
-  return pickOne({
-    properties: ["openDirectory", "createDirectory"],
-    message: MESSAGES[locale].chooseWorkspace,
-    defaultPath: workspaceRoot ? path.dirname(workspaceRoot) : app.getPath("documents"),
-  });
-}
-
-/**
- * Asks for a folder or file for agents to read. macOS lets one dialog pick either; elsewhere it
- * picks a folder, and a file can still be typed or pasted in the chat.
- */
-function pickSource(): Promise<string | undefined> {
-  return pickOne({
-    properties: ["openDirectory", "openFile"],
-    message: MESSAGES[locale].chooseSource,
-  });
-}
-
 /** Asks for a folder and switches to it. Resolves false if cancelled or if it failed to start. */
 async function chooseWorkspace(): Promise<boolean> {
   if (switching) return false;
 
-  const workspace = await pickWorkspace();
+  const workspace = await pickWorkspace(window, MESSAGES[locale].chooseWorkspace, workspaceRoot);
 
   if (!workspace) return false;
 
@@ -400,8 +299,26 @@ async function chooseWorkspace(): Promise<boolean> {
   return false;
 }
 
-/** Replaces the running server with one on `workspace`, then points the window at it. */
+/** Opens `workspace`, or says why it couldn't. Resolves false if it didn't open. */
 async function activate(workspace: string): Promise<boolean> {
+  try {
+    return await open(workspace);
+  } catch (error) {
+    await dialog.showMessageBox({
+      type: "error",
+      message: MESSAGES[locale].couldNotStart,
+      detail: describeError(error),
+    });
+
+    return false;
+  }
+}
+
+/**
+ * Replaces the running server with one on `workspace`, then points the window at the page last
+ * shown there. Resolves false if the app quit meanwhile; throws why it couldn't start.
+ */
+async function open(workspace: string): Promise<boolean> {
   switching = true;
 
   try {
@@ -409,7 +326,7 @@ async function activate(workspace: string): Promise<boolean> {
     sidecar = undefined;
 
     // A fixed dev port held by a stale server fails here instead of passing the health check.
-    const port = devUrl ? await probePort(devPort) : await freePort();
+    const port = devUrl ? await probePort(devPort) : await freePort(await loadPort());
 
     const started = await startSidecar({
       workspace,
@@ -435,36 +352,21 @@ async function activate(workspace: string): Promise<boolean> {
     await show(new URL(page, devUrl ?? started.url).href, path.basename(workspace));
 
     return true;
-  } catch (error) {
-    await dialog.showMessageBox({
-      type: "error",
-      message: MESSAGES[locale].couldNotStart,
-      detail: describeError(error),
-    });
-
-    return false;
   } finally {
     switching = false;
   }
 }
 
-/** The last port if it is still free, so the board's origin and its saved preferences stay put. */
-async function freePort(): Promise<number> {
-  const last = await loadPort();
-
-  if (last !== undefined) {
-    try {
-      return await probePort(last);
-    } catch {
-      // Something else took it since; the board starts with default preferences.
-    }
-  }
-
-  return probePort(0);
+/** Closes the workspace, if one is open, and shows the first launch on `step`. */
+async function showOnboarding(step: OnboardingStep): Promise<void> {
+  await sidecar?.stop();
+  sidecar = undefined;
+  workspaceRoot = undefined;
+  await show(new URL(onboardingPage(step), boardUrl).href, "Cutfac");
 }
 
 async function show(url: string, title: string): Promise<void> {
-  appOrigin = new URL(url).origin;
+  appOrigin = originOf(url) ?? "";
   window ??= createWindow(await loadWindowPlace());
   window.setTitle(title);
 
@@ -495,12 +397,7 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
       vibrancy: "sidebar",
       backgroundColor: "#00000000",
     }),
-    webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-    },
+    webPreferences: sandboxed(preloadPath),
   });
 
   const { webContents } = created;
@@ -510,7 +407,11 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
 
     created.show();
   });
-  created.on("focus", () => license?.refresh());
+  created.on("focus", () => {
+    license?.refresh();
+    // Back from System Settings: the board checks the access itself.
+    stopWatching();
+  });
 
   const rememberSoon = () => {
     clearTimeout(placeTimer);
@@ -527,22 +428,18 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
   });
   created.on("closed", () => {
     window = undefined;
+    stopWatching();
   });
   // The title is the workspace folder, not whatever the board's <title> says.
   created.on("page-title-updated", (event) => event.preventDefault());
 
-  webContents.setWindowOpenHandler(({ url }) => {
-    openExternally(url);
-
-    return { action: "deny" };
-  });
-
-  webContents.on("will-navigate", keepInsideApp);
-  webContents.on("will-redirect", keepInsideApp);
+  keepInsideApp(webContents, isAppUrl);
   webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
     if (isMainFrame) rememberPage(url);
   });
-  webContents.on("context-menu", (_event, params) => showTextMenu(created, params));
+  webContents.on("context-menu", (_event, params) =>
+    showTextMenu(created, params, MESSAGES[locale]),
+  );
 
   return created;
 }
@@ -558,59 +455,25 @@ function rememberPlace(target: BrowserWindow): void {
   );
 }
 
-/** Saves the board page just opened, so the workspace opens on it next time. */
-function rememberPage(url: string): void {
-  const { origin, hash } = new URL(url);
-
-  // While switching, the page still shown belongs to the other workspace.
-  if (origin !== appOrigin || workspaceRoot === undefined || switching) return;
-
-  savePage(workspaceRoot, hash).catch(() => undefined);
-}
-
 /**
- * Text fields and selected text get the usual spelling fixes, Cut, Copy and Paste. Chromium leaves
- * out a right click the board answered with its own menu, such as a card's.
+ * Saves the board page just opened, so the workspace opens on it next time; before there is one,
+ * the first-launch step, so it picks up there.
  */
-function showTextMenu(owner: BrowserWindow, params: ContextMenuParams): void {
-  const { isEditable, selectionText, editFlags, dictionarySuggestions } = params;
+function rememberPage(url: string): void {
+  // While switching, the page still shown belongs to the other workspace.
+  if (!isAppUrl(url) || switching) return;
 
-  if (!isEditable && selectionText.trim() === "") return;
+  const { hash } = new URL(url);
 
-  const t = MESSAGES[locale];
-  const separator = { type: "separator" } as const;
+  if (workspaceRoot !== undefined) {
+    savePage(workspaceRoot, hash).catch(() => undefined);
 
-  const template: MenuItemConstructorOptions[] = dictionarySuggestions
-    .slice(0, 3)
-    .map((word) => ({ label: word, click: () => owner.webContents.replaceMisspelling(word) }));
-
-  if (template.length > 0) template.push(separator);
-
-  if (isEditable) {
-    template.push(
-      { role: "cut", label: t.cut, enabled: editFlags.canCut },
-      { role: "copy", label: t.copy, enabled: editFlags.canCopy },
-      { role: "paste", label: t.paste, enabled: editFlags.canPaste },
-      separator,
-      { role: "selectAll", label: t.selectAll, enabled: editFlags.canSelectAll },
-    );
-  } else {
-    template.push({ role: "copy", label: t.copy });
+    return;
   }
 
-  Menu.buildFromTemplate(template).popup({ window: owner });
-}
+  const step = onboardingStep(hash);
 
-/** Page-initiated navigation (links, redirects) may not leave the app origin; web links open in the browser. */
-function keepInsideApp(event: { url: string; preventDefault: () => void }): void {
-  if (new URL(event.url).origin === appOrigin) return;
-
-  event.preventDefault();
-  openExternally(event.url);
-}
-
-function openExternally(url: string): void {
-  if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  if (step) saveOnboarding(step).catch(() => undefined);
 }
 
 function handleCrash(message: string): void {
@@ -618,44 +481,4 @@ function handleCrash(message: string): void {
   void dialog
     .showMessageBox({ type: "error", message: MESSAGES[locale].serverStopped, detail: message })
     .then(() => app.quit());
-}
-
-/** A path in the open workspace, absolute or from its root, with links resolved. */
-async function resolveInWorkspace(target: string): Promise<string> {
-  if (!workspaceRoot) throw new Error("No workspace is open");
-
-  // Resolve symlinks on both sides so /tmp/x and /private/tmp/x compare equal and links cannot escape.
-  const [root, resolved] = await Promise.all([
-    realpath(workspaceRoot),
-    realpath(path.resolve(workspaceRoot, target)),
-  ]);
-
-  const relative = path.relative(root, resolved);
-
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    throw new Error("Path is outside the workspace");
-  }
-
-  return resolved;
-}
-
-async function revealInWorkspace(target: string): Promise<void> {
-  if (!path.isAbsolute(target)) throw new Error("Path must be absolute");
-
-  shell.showItemInFolder(await resolveInWorkspace(target));
-}
-
-/** How big the picture under the pointer is when a file is dragged out. */
-const DRAG_ICON_SIZE = { width: 96, height: 96 };
-
-/** Drag a workspace file out of the window as a copy, under a thumbnail of it. */
-async function dragOut(sender: WebContents, target: string): Promise<void> {
-  const file = await resolveInWorkspace(target);
-
-  // No thumbnails on Linux, or for some files; their icon will do.
-  const icon = await nativeImage
-    .createThumbnailFromPath(file, DRAG_ICON_SIZE)
-    .catch(() => app.getFileIcon(file));
-
-  sender.startDrag({ file, icon });
 }

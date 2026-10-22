@@ -48,7 +48,6 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
-import { safeHttpUrl } from "@/lib/utils";
 
 import {
   api,
@@ -62,31 +61,15 @@ import {
 import { href, useLive } from "../hooks.ts";
 import { useLocale, useMessages } from "../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../lib/feedback.ts";
-import { importState, isWorking, linkLabel, turnRun, type ImportState } from "../lib/imports.ts";
+import { importState, isWorking, turnRun, type ImportState } from "../lib/imports.ts";
+import { replyMarkdown } from "../lib/replyBlocks.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import { HeldChips, SentAttachments, useHeldFiles, type HeldFiles } from "./editor/attachments.tsx";
 import { agentLabel, clockTime, RunReport } from "./editor/chat.tsx";
 import { composing } from "./editor/composer.tsx";
+import { ImportName, ImportRequest } from "./import-source.tsx";
 
 const ENDED = new Set<RunMessage["type"]>(["done", "stopped", "error"]);
-
-/** The import's link, opening in a new tab when it is a web address. */
-function SourceLink({ link, className }: { link: string; className?: string }) {
-  const url = safeHttpUrl(link);
-
-  if (url === undefined) return <span className={className}>{linkLabel(link)}</span>;
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer noopener"
-      className={className ?? "underline underline-offset-4"}
-    >
-      {linkLabel(link)}
-    </a>
-  );
-}
 
 interface ImportChatProps {
   id: string;
@@ -174,7 +157,7 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
       <Card className="h-full">
         <CardHeader>
           <CardTitle>
-            <SourceLink link={doc.link} className="wrap-anywhere outline-none hover:underline" />
+            <ImportName doc={doc} className="wrap-anywhere outline-none hover:underline" />
           </CardTitle>
           <CardDescription>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -244,7 +227,9 @@ interface TurnProps {
 
 /** One message from the user, then the agent's answer to it. */
 function Turn({ detail, turn, live, onStop, children }: TurnProps) {
-  const run = turnRun(detail, turn, live);
+  const view = turnRun(detail, turn, live);
+  // The question or the list the reply ends with, which the first launch draws, read as text here.
+  const run = view.reply === undefined ? view : { ...view, reply: replyMarkdown(view.reply) };
   const t = useMessages();
   const locale = useLocale();
 
@@ -262,9 +247,7 @@ function Turn({ detail, turn, live, onStop, children }: TurnProps) {
             <Bubble variant="secondary" align="end">
               <BubbleContent>
                 <p className="whitespace-pre-wrap">
-                  {turn.kind === "start"
-                    ? t.imports.startMessage(<SourceLink link={detail.doc.link} />)
-                    : turn.body}
+                  {turn.kind === "start" ? <ImportRequest doc={detail.doc} /> : turn.body}
                 </p>
               </BubbleContent>
             </Bubble>

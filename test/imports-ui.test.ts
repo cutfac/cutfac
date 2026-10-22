@@ -30,6 +30,7 @@ const detail = (
 ): ImportSummary => ({
   id: "0a1b2c3d",
   doc: {
+    kind: "link",
     link: "https://example.com/template",
     agent: "claude",
     allowed,

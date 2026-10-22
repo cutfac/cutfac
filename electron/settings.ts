@@ -6,7 +6,9 @@ import { Option, Schema } from "effect";
 import { app } from "electron";
 
 import { decodeLicenseRecord, type LicenseRecord } from "../src/license.ts";
+import type { OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
+import { ONBOARDING_STEPS } from "./boardPages.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
 
 /** The board page last shown, for the workspace it belongs to. */
@@ -23,9 +25,11 @@ interface Settings {
   license: LicenseRecord | undefined;
   window: WindowPlace;
   page: typeof Page.Type;
+  /** Where the first launch got to, while there is no workspace yet. */
+  onboarding: OnboardingStep | undefined;
 }
 
-function settingsFile(): string {
+export function settingsFile(): string {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
@@ -40,6 +44,8 @@ const decodePort = Schema.decodeUnknownOption(
 const decodeLocale = Schema.decodeUnknownOption(Schema.Literals(LOCALES));
 
 const decodePage = Schema.decodeUnknownOption(Page);
+
+const decodeOnboarding = Schema.decodeUnknownOption(Schema.Literals(ONBOARDING_STEPS));
 
 /**
  * Whatever was saved. Each loader decodes only the field it reads, so a value written by another
@@ -69,13 +75,18 @@ async function replaceSettings(patch: Partial<Settings>): Promise<void> {
 
 let writing = Promise.resolve();
 
-/** One save at a time, so two close together, such as a move and a page change, keep both. */
-function writeSettings(patch: Partial<Settings>): Promise<void> {
-  const next = writing.then(() => replaceSettings(patch));
-  writing = next.catch(() => undefined);
+/** One change at a time, so two close together, such as a move and a page change, keep both. */
+function queued<T>(change: () => Promise<T>): Promise<T> {
+  const next = writing.then(change);
+  writing = next.then(
+    () => undefined,
+    () => undefined,
+  );
 
   return next;
 }
+
+const writeSettings = (patch: Partial<Settings>) => queued(() => replaceSettings(patch));
 
 /** Settles once every save asked for so far is on disk, or has failed. */
 export const settingsWritten = (): Promise<void> => writing;
@@ -93,7 +104,9 @@ export async function loadWorkspace(): Promise<string | undefined> {
   }
 }
 
-export const saveWorkspace = (workspace: string) => writeSettings({ workspace });
+/** Saves the workspace just opened, which ends the first launch. */
+export const saveWorkspace = (workspace: string) =>
+  writeSettings({ workspace, onboarding: undefined });
 
 /**
  * The port the board last ran on. The board keeps its preferences in storage keyed by its origin,
@@ -148,3 +161,11 @@ export async function loadPage(workspace: string): Promise<string | undefined> {
 
 export const savePage = (workspace: string, hash: string) =>
   writeSettings({ page: { workspace, hash } });
+
+/** The first-launch step to open on, if the user quit before there was a workspace. */
+export async function loadOnboarding(): Promise<OnboardingStep | undefined> {
+  return Option.getOrUndefined(decodeOnboarding((await readSettings()).onboarding));
+}
+
+/** Saves the first-launch step the window shows, to pick up there next time. */
+export const saveOnboarding = (onboarding: OnboardingStep) => writeSettings({ onboarding });

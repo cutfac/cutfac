@@ -14,6 +14,7 @@ import {
 import { useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { BriefRow } from "@/components/brief-sheet";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
@@ -53,6 +54,7 @@ import {
   useMessages,
 } from "../i18n/index.ts";
 import { APP_KEYS } from "../lib/app-commands.ts";
+import type { BriefView } from "../lib/brief.ts";
 
 interface MainNavItem {
   view: "board" | "learn" | "templates";
@@ -291,12 +293,13 @@ function withKeys(label: string, keys: string | undefined): ReactNode {
 interface AppSidebarProps {
   ws: WorkspaceInfo | undefined;
   plan: Live<Plan>;
+  brief: Live<BriefView>;
   view: string;
   /** The open item or template, from the second part of the route. */
   id: string | undefined;
 }
 
-export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
+export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
   const t = useMessages();
   const { data: items } = useLive("items", api.items);
   const videos = sidebarVideos(items ?? []);
@@ -318,6 +321,7 @@ export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
           <SidebarMenuItem>
             <WorkspaceMenu ws={ws} />
           </SidebarMenuItem>
+          <BriefRow brief={brief} />
           <SidebarMenuItem>
             <NewItemTrigger
               render={

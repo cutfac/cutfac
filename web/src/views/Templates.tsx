@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { HeldChips, useHeldFiles } from "@/components/editor/attachments";
 import { ImportChat } from "@/components/import-chat";
+import { ImportName } from "@/components/import-source";
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -82,14 +83,7 @@ import {
 import { AGENTS } from "../components/editor/chat.tsx";
 import { agentInstalled, href, useAgentStatuses, useLive } from "../hooks.ts";
 import { messages, useLocale, useMessages } from "../i18n/index.ts";
-import {
-  importAgent,
-  importIdOf,
-  importRouteId,
-  importState,
-  isWorking,
-  linkLabel,
-} from "../lib/imports.ts";
+import { importAgent, importIdOf, importRouteId, importState, isWorking } from "../lib/imports.ts";
 import { NO_RUN } from "../lib/run.ts";
 import {
   coverOf,
@@ -413,7 +407,7 @@ function ImportRow({ detail, active }: { detail: ImportSummary; active: boolean 
               aria-current={active ? "page" : undefined}
               className="outline-none after:absolute after:inset-0 after:rounded-2xl"
             >
-              {linkLabel(detail.doc.link)}
+              <ImportName doc={detail.doc} linked={false} />
             </a>
           </ItemTitle>
           <ItemDescription>{t.imports.state[state]}</ItemDescription>

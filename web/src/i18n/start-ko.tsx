@@ -1,0 +1,126 @@
+import type { StartMessages } from "./start-en.tsx";
+
+/** 브리프와 첫 템플릿 문구, 해요체. */
+export const startKo: StartMessages = {
+  brief: {
+    purposeLabel: "어떤 영상을 만드나요?",
+    purpose: {
+      promote: {
+        title: "무언가를 홍보해요",
+        hint: "내 제품, 앱, 서비스",
+        example: "예: 대학생을 위한 가계부 앱. 밝고 친근하게.",
+        short: "홍보",
+      },
+      tips: {
+        title: "정보와 팁을 나눠요",
+        hint: "지식, 노하우, 방법",
+        example: "예: 바쁜 사람을 위한 간단 요리 팁.",
+        short: "정보·팁",
+      },
+      brand: {
+        title: "나를 알려요",
+        hint: "내 목소리와 이야기",
+        example: "예: 디자이너의 하루를 담담하게 보여줘요.",
+        short: "퍼스널 브랜드",
+      },
+      own: {
+        title: "다른 걸 만들어요",
+        hint: "직접 설명할게요",
+        example: "예: 우리 밴드 노래의 가사 영상.",
+        short: "직접 설명",
+      },
+    },
+    bodyLabel: "에이전트가 알아야 할 게 있나요?",
+    ownBodyLabel: "무엇을 만들고 싶나요?",
+    platformsLabel: "어디에 올리나요?",
+    platformsHint: "여러 개 골라도 돼요. 화면 비율과 길이가 여기에 맞춰져요.",
+    platform: {
+      tiktok: "틱톡",
+      shorts: "유튜브 쇼츠",
+      reels: "인스타그램 릴스",
+    },
+    platformShort: {
+      tiktok: "틱톡",
+      shorts: "쇼츠",
+      reels: "릴스",
+    },
+    add: "브리프 추가",
+    sheetTitle: "브리프",
+    sheetBody: "영상을 만드는 목적이에요. 에이전트가 템플릿과 영상을 만들기 전에 매번 읽어요.",
+    save: "저장",
+    saved: "브리프를 저장했어요",
+    saveFailed: (message) => `브리프를 저장하지 못했어요: ${message}`,
+  },
+  whatToMake: {
+    title: "무엇을 만들까요?",
+    body: "에이전트에게 조금만 알려 주면 영상 만드는 방식을 알아서 준비해요. 나중에 언제든 바꿀 수 있어요.",
+    optional: "선택",
+    material: {
+      label: "내 자료",
+      hint: "제품 페이지나 브랜드 키트처럼 에이전트가 읽을 웹사이트나 폴더예요.",
+      placeholder: "https://내-사이트.com",
+      add: "추가",
+      choose: "폴더 선택…",
+      remove: (source) => `${source} 빼기`,
+    },
+    reference: {
+      label: "참고할 레퍼런스",
+      hint: "따라 만들 예시를 골라요. 고르지 않으면 에이전트가 아는 것에서 시작해요.",
+      paste: "또는 스킬, 스타터 키트, 영상 링크를 붙여 넣으세요",
+      open: (title) => `${title} 열기`,
+    },
+    start: "만들기 시작",
+    starting: "시작하는 중…",
+    skip: "나중에 하기",
+    learnFailed: (source, message) => `${source}을(를) 읽지 못했어요: ${message}`,
+    noAgent: "준비된 에이전트가 없어요. 설정에서 준비한 뒤 다시 시도해 주세요.",
+  },
+  gallery: {
+    opuscar: {
+      title: "영화 스타일",
+      description: "51가지 영화 스타일. 스타일마다 프롬프트와 코드로 만든 데모가 있어요",
+    },
+    mgStyles: {
+      title: "모션 그래픽",
+      description: "15가지 모션 그래픽 스타일과 프롬프트, 소스",
+    },
+    animationBase: {
+      title: "손그림 애니메이션",
+      description: "손으로 그린 듯한 만화 애니메이션 스타터 키트",
+    },
+    lyricVideo: {
+      title: "가사 영상",
+      description: "로컬에서 렌더링한 완성된 뮤직비디오",
+    },
+  },
+  firstVideo: {
+    title: "첫 영상",
+    body: "에이전트가 이런 영상을 만드는 방식을 준비하고 있어요. 그동안 첫 영상의 제목을 정해 주세요.",
+    readyBody:
+      "에이전트가 이런 영상을 만드는 방식을 준비해 뒀어요. 첫 영상의 제목을 정하면 바로 열어 드려요.",
+    starting: "에이전트를 시작하는 중…",
+    phase: {
+      reading: "브리프와 레퍼런스를 읽는 중…",
+      writing: "템플릿을 만드는 중…",
+      checking: "제대로 렌더링되는지 확인하는 중…",
+    },
+    asking: "에이전트가 물어봐요",
+    answer: "또는 직접 답해 주세요",
+    send: "보내기",
+    ready: "템플릿이 준비됐어요",
+    settled: "알아서 정한 것들이에요. 눌러서 바꿀 수 있어요.",
+    change: (item) => `‘${item}’ 대신…`,
+    changeBody: (item, text) => `"${item}" 말인데요: ${text}`,
+    failed: "템플릿이 준비되기 전에 에이전트가 멈췄어요.",
+    noTemplate: "에이전트가 템플릿을 만들지 않고 끝냈어요.",
+    retry: "다시 시도",
+    withoutReference: "레퍼런스 없이 만들기",
+    titleLabel: "영상 제목",
+    titlePlaceholder: "예: 출시 주간 티저",
+    create: "영상 만들기",
+    creating: "만드는 중…",
+    waitHint: "템플릿이 준비되면 만들 수 있어요.",
+    later: "보드에서 이어서 하기",
+    createFailed: (message) => `영상을 만들지 못했어요: ${message}`,
+  },
+};

@@ -4,6 +4,8 @@ import type { AgentChoice, DetailField, LearnedKind, SafeZone, Status } from "..
 import type { ImportState } from "../lib/imports.ts";
 import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
+import { onboardingEn } from "./onboarding-en.tsx";
+import { startEn } from "./start-en.tsx";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
@@ -209,6 +211,13 @@ export const en = {
       closed: "Closed",
     } satisfies Record<ImportState, string>,
     startMessage: (link: ReactNode) => <>Bring in a template from {link}</>,
+    fromBrief: "From your brief",
+    briefMessage: (link: ReactNode | undefined) =>
+      link === undefined ? (
+        <>Make a template from my brief</>
+      ) : (
+        <>Make a template from my brief, modeled on {link}</>
+      ),
     allowed: "Allowed installs",
     allowTitle: "Let the agent set it up?",
     allowBody:
@@ -684,6 +693,8 @@ export const en = {
     slashHint: "/feedback sends the rest of the message to the Cutfac team, not to your agent.",
     slashEmpty: "Write what to tell us after /feedback.",
   },
+  onboarding: onboardingEn,
+  start: startEn,
 };
 
 export type Messages = typeof en;

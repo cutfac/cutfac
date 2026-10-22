@@ -1,5 +1,7 @@
 import type { ToolKind } from "../lib/run.ts";
 import type { Messages } from "./en.tsx";
+import { onboardingKo } from "./onboarding-ko.tsx";
+import { startKo } from "./start-ko.tsx";
 
 const TOOL_PHRASES: Record<ToolKind, (count: number) => string> = {
   read: (count) => `파일 ${count}개 읽음`,
@@ -200,6 +202,13 @@ export const ko: Messages = {
       closed: "닫힘",
     },
     startMessage: (link) => <>{link}에서 템플릿을 가져와 주세요</>,
+    fromBrief: "브리프로 만들기",
+    briefMessage: (link) =>
+      link === undefined ? (
+        <>브리프대로 템플릿을 만들어 주세요</>
+      ) : (
+        <>브리프대로 템플릿을 만들어 주세요. 참고: {link}</>
+      ),
     allowed: "설치 허용함",
     allowTitle: "에이전트가 설정하도록 허용할까요?",
     allowBody:
@@ -632,4 +641,6 @@ export const ko: Messages = {
     slashHint: "/feedback 뒤의 내용은 에이전트가 아니라 컷팩 팀에 전달돼요.",
     slashEmpty: "/feedback 뒤에 전할 내용을 적어주세요.",
   },
+  onboarding: onboardingKo,
+  start: startKo,
 };

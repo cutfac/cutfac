@@ -20,3 +20,16 @@ export function probePort(port: number): Promise<number> {
     });
   });
 }
+
+/** `last` if it is still free, so the board's origin and its saved preferences stay put. */
+export async function freePort(last: number | undefined): Promise<number> {
+  if (last !== undefined) {
+    try {
+      return await probePort(last);
+    } catch {
+      // Something else took it since; the board starts with default preferences.
+    }
+  }
+
+  return probePort(0);
+}

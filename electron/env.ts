@@ -55,7 +55,7 @@ export interface CleanEnv {
   HOME: string;
   USER: string;
   LOGNAME: string;
-  /** The system folders, then Homebrew and Bun in case the shell can't be read. */
+  /** The system folders, then Homebrew, Bun and the agents' own installs in case the shell can't be read. */
   PATH: string;
   SHELL?: string;
   TMPDIR?: string;
@@ -73,6 +73,8 @@ export function cleanEnv(account: Account, inherited: NodeJS.ProcessEnv): CleanE
       "/opt/homebrew/bin",
       "/usr/local/bin",
       path.join(account.home, ".bun", "bin"),
+      // Where the Claude Code and Codex installers put their programs, before a new shell has it.
+      path.join(account.home, ".local", "bin"),
     ),
   };
 
