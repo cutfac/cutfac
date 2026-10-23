@@ -298,10 +298,9 @@ const runServers = Effect.fnUntraced(function* (
   if (agent === "codex") {
     const ours = codexServerName(ws.config.name);
     const listed = yield* codexServers(bin);
-    const names = listed.map((server) => server.name);
     const kept = yield* approvedCodexServers(listed);
 
-    return { codexServer: codexRunServers(ours, launch, names, kept), tools: [] };
+    return { codexServer: codexRunServers(ours, launch, listed, kept), tools: [] };
   }
 
   const approved = yield* approvedClaudeServers();

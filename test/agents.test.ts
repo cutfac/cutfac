@@ -14,6 +14,7 @@ import {
   runMcpConfig,
   targetsRoot,
 } from "../src/core/agents.ts";
+import type { CodexListed } from "../src/core/mcpServers.ts";
 import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
 
 describe("connectClaude", () => {
@@ -115,6 +116,16 @@ describe("targetsRoot", () => {
 });
 
 const launch = (root: string) => mcpLaunch({ command: "/opt/cutfac", args: [] }, root);
+
+/** Servers as Codex lists them, all on and started by a command. */
+const listing = (...names: string[]): CodexListed[] =>
+  names.map((name) => ({ name, enabled: true, transport: "stdio", entry: { type: "stdio" } }));
+
+/** What switches off `name`, a server started by a command. */
+const off = (name: string) => [
+  `mcp_servers.${name}.enabled=false`,
+  `mcp_servers.${name}.command="false"`,
+];
 
 describe("a copied workspace", () => {
   let t: TestWorkspace;
@@ -234,31 +245,48 @@ exit 1
     );
   });
 
-  const PLUGINS_OFF = ["features.plugins=false", "features.apps=false"];
-
-  test("a codex board run switches off every other server, and plugins and apps", () => {
-    const listed = ["cutfac-test", "cutfac-other", "content-factory-old", "github"];
+  test("a codex board run switches off every other server and apps", () => {
+    const listed = listing("cutfac-test", "cutfac-other", "content-factory-old", "github");
 
     expect(codexRunServers("cutfac-test", launch("/here"), listed)).toEqual([
-      ...PLUGINS_OFF,
-      "mcp_servers.cutfac-other.enabled=false",
-      "mcp_servers.content-factory-old.enabled=false",
-      "mcp_servers.github.enabled=false",
+      "features.apps=false",
+      ...off("cutfac-other"),
+      ...off("content-factory-old"),
+      ...off("github"),
       ...codexServerLaunch("cutfac-test", launch("/here")),
     ]);
   });
 
-  test("without the CLI, a codex board run narrows this workspace's server only when registered", () => {
-    const off = 'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]';
+  test("a codex board run keeps plugins on and switches off the servers they bring", () => {
+    const listed: CodexListed[] = [
+      { name: "obsidian", enabled: true, transport: "stdio", entry: { command: "obsidian-mcp" } },
+      { name: "remote", enabled: true, transport: "streamable_http", entry: { url: "https://x" } },
+      { name: "review", enabled: false, transport: "stdio", entry: { command: "review-mcp" } },
+      { name: "odd", enabled: true, entry: { type: "sse" } },
+      { name: "docs", enabled: true, transport: "stdio", entry: { command: "docs-mcp" } },
+    ];
 
-    expect(codexRunServers("cutfac-test", undefined, ["cutfac-test", "cutfac-other"])).toEqual([
-      ...PLUGINS_OFF,
-      "mcp_servers.cutfac-other.enabled=false",
-      off,
+    const config = codexRunServers("cutfac-test", undefined, listed, ["docs"]);
+
+    expect(config).toEqual([
+      "features.apps=false",
+      ...off("obsidian"),
+      "mcp_servers.remote.enabled=false",
+      'mcp_servers.remote.url="http://127.0.0.1:9"',
+      "mcp_servers.odd.enabled=false",
     ]);
-    expect(codexRunServers("cutfac-test", undefined, ["github"])).toEqual([
-      ...PLUGINS_OFF,
-      "mcp_servers.github.enabled=false",
+    expect(config.some((entry) => entry.startsWith("features.plugins"))).toBe(false);
+  });
+
+  test("without the CLI, a codex board run narrows this workspace's server only when registered", () => {
+    const userOnlyOff = 'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]';
+
+    expect(
+      codexRunServers("cutfac-test", undefined, listing("cutfac-test", "cutfac-other")),
+    ).toEqual(["features.apps=false", ...off("cutfac-other"), userOnlyOff]);
+    expect(codexRunServers("cutfac-test", undefined, listing("github"))).toEqual([
+      "features.apps=false",
+      ...off("github"),
     ]);
   });
 });

@@ -29,10 +29,16 @@ export interface FoundServers {
   readonly problems: ReadonlyArray<string>;
 }
 
+/** How Codex reaches a server it lists, of the kinds a run can switch off. */
+const CodexTransport = Schema.Literals(["stdio", "streamable_http"]);
+
+export type CodexTransport = typeof CodexTransport.Type;
+
 /** A server Codex lists, on or off, as `codex mcp list` gives it. */
 export interface CodexListed {
   readonly name: string;
   readonly enabled: boolean;
+  readonly transport?: CodexTransport | undefined;
   readonly entry: Schema.JsonObject;
 }
 
@@ -147,13 +153,15 @@ const CodexListing = Schema.fromJsonString(
 
 const decodeCodexListing = Schema.decodeUnknownOption(CodexListing);
 
+const decodeTransport = Schema.decodeUnknownOption(Schema.Struct({ type: CodexTransport }));
+
 /** Listing servers reads a config file; a Codex that takes longer is stuck, not slow. */
 const LIST_TIMEOUT = "15 seconds";
 
 /**
- * The MCP servers in the user's Codex config, as Codex itself reads it, which a run loads unless
- * it switches them off. Without this list a run could reach a server that writes, so it fails
- * when Codex cannot give it.
+ * The MCP servers Codex loads here, from the user's config and plugins, as Codex itself reads them
+ * with a run's features, which a run loads unless it switches them off. Without this list a run
+ * could reach a server that writes, so it fails when Codex cannot give it.
  */
 export const codexServers = Effect.fn("mcpServers.codex")(function* (bin: string) {
   const ws = yield* Workspace;
@@ -162,7 +170,7 @@ export const codexServers = Effect.fn("mcpServers.codex")(function* (bin: string
     message: "Could not list Codex's MCP servers to switch off the ones this run must not reach",
   });
 
-  const listed = yield* run(bin, ["mcp", "list", "--json", "-c", "features.plugins=false"], {
+  const listed = yield* run(bin, ["mcp", "list", "--json", "-c", "features.apps=false"], {
     cwd: ws.root,
   }).pipe(Effect.timeoutOrElse({ duration: LIST_TIMEOUT, orElse: () => Effect.fail(failed) }));
 
@@ -173,13 +181,10 @@ export const codexServers = Effect.fn("mcpServers.codex")(function* (bin: string
   return servers.value.map(({ name, enabled, transport }): CodexListed => ({
     name,
     enabled: enabled !== false,
+    transport: Option.getOrUndefined(Option.map(decodeTransport(transport), ({ type }) => type)),
     entry: isJsonObject(transport) ? transport : {},
   }));
 });
-
-/** The names of the MCP servers in the user's Codex config. */
-export const codexServerNames = (bin: string) =>
-  Effect.map(codexServers(bin), (servers) => servers.map((server) => server.name));
 
 /** The servers in Codex's list that are on and not Cutfac's, which the user may turn on for runs. */
 export const codexCandidates = (listed: ReadonlyArray<CodexListed>): ReadonlyArray<McpServer> =>

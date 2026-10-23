@@ -275,6 +275,7 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
     const argv = await given();
 
     expect(argv).toContain("mcp_servers.web.enabled=false");
+    expect(argv).toContain('mcp_servers.web.url="http://127.0.0.1:9"');
     expect(argv).not.toContain("mcp_servers.docs.enabled=false");
   });
 });

@@ -25,7 +25,7 @@ import {
   runMcpConfig,
 } from "../src/core/agents.ts";
 import { detectAgentRelease, outdatedAgent } from "../src/core/agentVersion.ts";
-import { codexServerNames } from "../src/core/mcpServers.ts";
+import { codexServers } from "../src/core/mcpServers.ts";
 import { UNINHERITED } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
@@ -237,7 +237,7 @@ async function makeCheckWorkspace(): Promise<string> {
 
 /**
  * How each agent is told to reach this workspace's server, built as a board run builds it: Codex
- * also has the servers other workspaces registered in the user's config switched off.
+ * also has every other server it lists switched off, plugins' too.
  */
 async function serverOptions(agent: AgentName, bin: string, workspace: string) {
   const launch = mcpLaunch(
@@ -253,7 +253,7 @@ async function serverOptions(agent: AgentName, bin: string, workspace: string) {
     return { allowedTools: [CLAUDE_MCP_TOOLS], mcpConfig };
   }
 
-  const listed = await Effect.runPromise(Effect.provide(codexServerNames(bin), inWorkspace));
+  const listed = await Effect.runPromise(Effect.provide(codexServers(bin), inWorkspace));
 
   return {
     allowedTools: [],

@@ -2,6 +2,7 @@ import { Config, Effect, Option, Path, Schema } from "effect";
 
 import { type OutdatedAgent, detectAgentRelease, outdatedAgent } from "./agentVersion.ts";
 import { WorkspaceError } from "./errors.ts";
+import type { CodexListed, CodexTransport } from "./mcpServers.ts";
 import {
   type AgentModels,
   CLAUDE_MODELS,
@@ -241,30 +242,52 @@ export const codexServerLaunch = (name: string, launch: McpLaunch) => [
 ];
 
 /**
+ * What a switched-off server launches instead, by the kind Codex listed. A plugin's server has no
+ * entry in the user's config, and an entry with no launch stops Codex from starting, so switching
+ * one off gives it a whole entry. Codex never starts or reaches a server that is off.
+ */
+const CODEX_STAND_INS: Record<CodexTransport, string> = {
+  stdio: 'command="false"',
+  streamable_http: 'url="http://127.0.0.1:9"',
+};
+
+/** The Codex config entries that switch off the server Codex `listed`. */
+function codexServerOff({ name, transport }: CodexListed): string[] {
+  const key = codexServerKey(name);
+  const standIn = transport === undefined ? [] : [`${key}.${CODEX_STAND_INS[transport]}`];
+
+  return [`${key}.enabled=false`, ...standIn];
+}
+
+/**
  * Codex config entries that keep a run on this workspace's server, `ours`, and the ones the user
  * turned on for runs, `kept`, out of the servers Codex `listed`. Every other server is switched
- * off, and plugins and apps with the ones they bring, so nothing the user or another workspace set
- * up can act for the run unasked, and ours goes without the tools only the user's own session may
- * call. With `launch`, ours is started for this root; without it, ours is used as registered.
+ * off, plugins' too, and apps with the connectors they bring, so nothing the user or another
+ * workspace set up can act for the run unasked, and ours goes without the tools only the user's
+ * own session may call. Plugins stay on for their skills. With `launch`, ours is started for this
+ * root; without it, ours is used as registered.
  */
 export function codexRunServers(
   ours: string,
   launch: McpLaunch | undefined,
-  listed: ReadonlyArray<string>,
+  listed: ReadonlyArray<CodexListed>,
   kept: ReadonlyArray<string> = [],
 ): string[] {
   const others = [
-    "features.plugins=false",
     "features.apps=false",
-    ...listed.flatMap((name) =>
-      name === ours || kept.includes(name) ? [] : [`${codexServerKey(name)}.enabled=false`],
+    ...listed.flatMap((server) =>
+      !server.enabled || server.name === ours || kept.includes(server.name)
+        ? []
+        : codexServerOff(server),
     ),
   ];
 
   if (launch !== undefined) return [...others, ...codexServerLaunch(ours, launch)];
 
   // An entry with no command stops Codex from starting, so ours is narrowed only when registered.
-  return listed.includes(ours) ? [...others, codexUserOnlyOff(ours)] : others;
+  return listed.some((server) => server.name === ours)
+    ? [...others, codexUserOnlyOff(ours)]
+    : others;
 }
 
 const CodexServer = Schema.fromJsonString(Schema.Struct({ transport: LaunchArgs }));

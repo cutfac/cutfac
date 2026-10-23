@@ -27,7 +27,7 @@ import {
   listImports,
   settleInstalls,
 } from "../src/core/imports.ts";
-import { codexServerNames } from "../src/core/mcpServers.ts";
+import { type CodexListed, codexServers } from "../src/core/mcpServers.ts";
 import { listReferences } from "../src/core/references.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
@@ -167,14 +167,17 @@ test("after Allow, Claude may fetch and write in the workspace, but not run what
   expect(args).toContain("--strict-mcp-config");
 });
 
+/** Servers as Codex lists them, all on. */
+const listing = (...names: string[]): CodexListed[] =>
+  names.map((name) => ({ name, enabled: true, transport: "stdio", entry: { type: "stdio" } }));
+
 /** The `-c` entries of a Codex config. */
 const entries = (args: ReadonlyArray<string>) => args.filter((_, i) => args[i - 1] === "-c");
 
 test("Codex reads only, with every other MCP server off, until the user allows", () => {
-  const config = entries(codexImportConfig("read", SERVER, "cutfac-x", ["github", "a.b"]));
+  const config = entries(codexImportConfig("read", SERVER, "cutfac-x", listing("github", "a.b")));
 
   expect(config).toContain('sandbox_mode="read-only"');
-  expect(config).toContain("features.plugins=false");
   expect(config).toContain("features.apps=false");
   expect(config).toContain("mcp_servers.github.enabled=false");
   expect(config).toContain('mcp_servers."a.b".enabled=false');
@@ -187,7 +190,7 @@ test("Codex reads only, with every other MCP server off, until the user allows",
 });
 
 test("after Allow, Codex may write in the workspace and reach the network", () => {
-  const config = entries(codexImportConfig("install", SERVER, "cutfac-x", ["github"]));
+  const config = entries(codexImportConfig("install", SERVER, "cutfac-x", listing("github")));
 
   expect(config).toContain('sandbox_mode="workspace-write"');
   expect(config).toContain("sandbox_workspace_write.network_access=true");
@@ -802,10 +805,12 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
     const listed = '[{"name":"cutfac-imports"},{"name":"github"},{"name":"a.b"}]';
     const codex = await fakeBin("codex", `echo '${listed}'\n`);
 
-    expect(await t.run(codexServerNames(codex))).toEqual(["cutfac-imports", "github", "a.b"]);
+    const servers = await t.run(codexServers(codex));
+
+    expect(servers.map((server) => server.name)).toEqual(["cutfac-imports", "github", "a.b"]);
 
     await fakeBin("codex", "echo 'unknown flag' >&2\nexit 2\n");
-    const error = await t.fail(codexServerNames(codex));
+    const error = await t.fail(codexServers(codex));
 
     expect(error.message).toContain("Could not list Codex's MCP servers");
   });

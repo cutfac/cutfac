@@ -38,7 +38,7 @@ import {
   turnProblem,
 } from "./imports.ts";
 import { shortId } from "./items.ts";
-import { codexServerNames } from "./mcpServers.ts";
+import { type CodexListed, codexServers } from "./mcpServers.ts";
 import { mediaKind } from "./media.ts";
 import { type ReferenceUpload, addReferences } from "./references.ts";
 import { type Emit, type RunSpec, type Runner, type Runs, runsLayer } from "./runRegistry.ts";
@@ -193,13 +193,13 @@ export function claudeImportFlags(
 /**
  * Codex's config for an import turn. Codex reads MCP servers only from its user config, so this
  * workspace's server is defined inline under `ours` and every other one Codex `listed` is switched
- * off, with plugins and apps, so nothing else can act for the agent.
+ * off, plugins' too, with apps, so nothing else can act for the agent.
  */
 export function codexImportConfig(
   phase: ImportPhase,
   server: McpLaunch,
   ours: string,
-  listed: ReadonlyArray<string>,
+  listed: ReadonlyArray<CodexListed>,
 ): string[] {
   const key = codexServerKey(ours);
 
@@ -248,7 +248,7 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
     agent === "claude"
       ? claudeImportFlags(phase, server, doc.link)
       : [
-          ...codexImportConfig(phase, server, ours, yield* codexServerNames(bin)),
+          ...codexImportConfig(phase, server, ours, yield* codexServers(bin)),
           ...codexImageFlags((yield* pictures).map((path) => `${folder}/${path}`)),
         ];
 
