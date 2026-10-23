@@ -60,12 +60,14 @@ export const isCutfacServer = (name: string) =>
 /** Enough of a config file; Claude Code's record grows with every folder it opens. */
 const CONFIG_BYTES = 16 * 1024 * 1024;
 
-const decodeJsonObject = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
+export const decodeJsonObject = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.JsonObject),
+);
 
 const decodeTable = Schema.decodeUnknownOption(Schema.JsonObject);
 
 /** The servers in an `mcpServers` object, skipping anything that isn't one. */
-const entriesIn = (servers: Schema.Json | undefined) =>
+export const entriesIn = (servers: Schema.Json | undefined) =>
   isJsonObject(servers)
     ? Object.entries(servers).flatMap(([name, entry]) =>
         isJsonObject(entry) ? [{ name, entry }] : [],
@@ -89,7 +91,7 @@ function jsonObjectIn(label: string, text: string | undefined): ConfigObject {
 }
 
 /** A file outside the workspace, or none while it is missing or can't be read. */
-const peekConfig = (full: string) =>
+export const peekConfig = (full: string) =>
   Effect.flatMap(Workspace, (ws) => ws.peekText(full, CONFIG_BYTES)).pipe(
     Effect.asSome,
     Effect.orElseSucceed(Option.none),
@@ -192,8 +194,8 @@ export const codexCandidates = (listed: ReadonlyArray<CodexListed>): ReadonlyArr
     enabled && !isCutfacServer(name) ? [{ agent: "codex", name, source: "user", entry }] : [],
   );
 
-/** The servers in `toml`, a Codex `config.toml`, that are on and not Cutfac's. */
-export function configServers(toml: string): ReadonlyArray<McpServer> {
+/** The tables under `key` in `toml`, a Codex `config.toml`, by name; none when it isn't TOML. */
+export function tomlTables(toml: string, key: string) {
   let parsed: unknown;
 
   try {
@@ -202,19 +204,27 @@ export function configServers(toml: string): ReadonlyArray<McpServer> {
     return [];
   }
 
-  const servers = Predicate.hasProperty(parsed, "mcp_servers") ? parsed.mcp_servers : undefined;
+  const tables = Predicate.hasProperty(parsed, key) ? parsed[key] : undefined;
 
-  if (!Predicate.isObject(servers)) return [];
+  if (!Predicate.isObject(tables)) return [];
 
-  return codexCandidates(
-    Object.entries(servers).flatMap(([name, value]) =>
-      Option.match(decodeTable(value), {
-        onNone: () => [],
-        onSome: (entry) => [{ name, enabled: entry["enabled"] !== false, entry }],
-      }),
-    ),
+  return Object.entries(tables).flatMap(([name, value]) =>
+    Option.match(decodeTable(value), {
+      onNone: () => [],
+      onSome: (table) => [[name, table] as const],
+    }),
   );
 }
+
+/** The servers in `toml`, a Codex `config.toml`, that are on and not Cutfac's. */
+export const configServers = (toml: string): ReadonlyArray<McpServer> =>
+  codexCandidates(
+    tomlTables(toml, "mcp_servers").map(([name, entry]) => ({
+      name,
+      enabled: entry["enabled"] !== false,
+      entry,
+    })),
+  );
 
 /**
  * The servers in the user's Codex `config.toml`, read without starting Codex, which takes too
@@ -247,21 +257,24 @@ const CODEX_LAUNCH = [
 /** Settings whose values are secrets, such as a key; their names are all that is shown or kept. */
 const SECRET_MAPS = new Set(["env", "headers", "http_headers"]);
 
-/** What the user agrees to in turning `server` on: how it starts, its secrets kept as names. */
-export function approvedSetup(server: McpServer): Schema.JsonObject {
-  const fields =
-    server.agent === "codex"
-      ? CODEX_LAUNCH.map((key) => [key, server.entry[key]] as const)
-      : Object.entries(server.entry);
-
-  return Object.fromEntries(
+/** `fields` of a server's entry as the user agrees to them, its secrets kept as names. */
+const setupOf = (fields: ReadonlyArray<readonly [string, Schema.Json | undefined]>) =>
+  Object.fromEntries(
     fields.flatMap(([key, value]) => {
       if (value === undefined || isEmptyJson(value)) return [];
 
       return [[key, SECRET_MAPS.has(key) && isJsonObject(value) ? keysOf(value) : value]];
     }),
-  );
-}
+  ) satisfies Schema.JsonObject;
+
+/** What the user agrees to in turning on a server set up as `entry`, every part of which counts. */
+export const entrySetup = (entry: Schema.JsonObject) => setupOf(Object.entries(entry));
+
+/** What the user agrees to in turning `server` on: how it starts, its secrets kept as names. */
+export const approvedSetup = (server: McpServer) =>
+  server.agent === "codex"
+    ? setupOf(CODEX_LAUNCH.map((key) => [key, server.entry[key]] as const))
+    : entrySetup(server.entry);
 
 /** A name for exactly how `server` starts, so a change since the user turned it on is asked again. */
 export const serverFingerprint = (server: McpServer) =>
@@ -273,7 +286,8 @@ const strings = (value: Schema.Json | undefined) =>
 const keysOf = (value: Schema.Json | undefined) =>
   isJsonObject(value) ? Object.keys(value).toSorted() : [];
 
-const textOf = (value: Schema.Json | undefined) => (Predicate.isString(value) ? value : undefined);
+export const textOf = (value: Schema.Json | undefined) =>
+  Predicate.isString(value) ? value : undefined;
 
 /** `arg` as a shell would need it typed. */
 const shellWord = (arg: string) =>

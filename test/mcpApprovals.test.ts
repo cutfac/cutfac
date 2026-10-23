@@ -11,11 +11,13 @@ import { addFeedback, createItem } from "../src/core/items.ts";
 import {
   type McpServersStatus,
   approvedClaudeServers,
+  decideMcpPlugin,
   decideMcpServer,
   mcpNotices,
   mcpServersStatus,
 } from "../src/core/mcpApprovals.ts";
 import type { AgentName } from "../src/core/schema.ts";
+import { pluginFolder, setUpClaudePlugins, writeFiles } from "./pluginFixtures.ts";
 import {
   makeFakeAgents,
   makeWorkspace,
@@ -195,7 +197,7 @@ test("an agent the user doesn't have shows none of its servers", async () => {
   await setUpClaude({ mcpServers: { docs: DOCS } });
   await writeFile(join(config, "config.toml"), '[mcp_servers.web]\nurl = "https://x"\n');
 
-  expect(await inApp(mcpServersStatus())).toEqual({ servers: [], problems: [] });
+  expect(await inApp(mcpServersStatus())).toEqual({ servers: [], plugins: [], problems: [] });
   expect(await inApp(mcpNotices())).toEqual([]);
 });
 
@@ -278,4 +280,131 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
     expect(argv).toContain('mcp_servers.web.url="http://127.0.0.1:9"');
     expect(argv).not.toContain("mcp_servers.docs.enabled=false");
   });
+});
+
+/** Turn the plugin `id` on or off as the user sees it now. */
+const decidePlugin = async (agent: AgentName, id: string, on: boolean) => {
+  const status = await inApp(mcpServersStatus());
+  const plugin = status.plugins.find((one) => one.agent === agent && one.id === id);
+
+  return inApp(decideMcpPlugin({ agent, id, fingerprint: plugin?.fingerprint ?? "", on }));
+};
+
+const DOCS_PLUGIN = {
+  ".claude-plugin/plugin.json": { name: "docs", description: "Search the docs" },
+  ".mcp.json": { mcpServers: { search: { command: "${CLAUDE_PLUGIN_ROOT}/bin/search" } } },
+};
+
+describe("a plugin with MCP servers", () => {
+  beforeEach(async () => {
+    await fakes.bin("claude", "");
+    await setUpClaudePlugins(
+      config,
+      { "docs@market": { files: DOCS_PLUGIN } },
+      { "docs@market": true },
+    );
+  });
+
+  test("is asked about once for all of its servers, which stay off until the user says", async () => {
+    const [plugin] = (await inApp(mcpServersStatus())).plugins;
+
+    expect(plugin).toMatchObject({
+      agent: "claude",
+      id: "docs@market",
+      title: "docs",
+      description: "Search the docs",
+      state: "new",
+      servers: [{ name: "search", launch: "'${CLAUDE_PLUGIN_ROOT}/bin/search'" }],
+    });
+    expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
+
+    const [notice] = await inApp(mcpNotices());
+
+    expect(notice).toContain("the docs plugin's servers (Claude Code, new)");
+    expect(notice).toContain("ask the user to turn it on there");
+    expect(notice).toContain("Plugins' skills load either way.");
+
+    expect((await decidePlugin("claude", "docs@market", true)).state).toBe("on");
+    expect(await inApp(mcpNotices())).toEqual([]);
+
+    const saved = JSON.parse(await readFile(join(appDir, "mcp-servers.json"), "utf8"));
+
+    expect(saved.plugins.claude["docs@market"]).toEqual({
+      on: true,
+      fingerprint: plugin?.fingerprint,
+    });
+  });
+
+  test("once on, loads in Claude's runs as Claude Code names it, where the plugin is", async () => {
+    await decidePlugin("claude", "docs@market", true);
+
+    const approved = await inApp(approvedClaudeServers());
+    const root = pluginFolder(config, "docs@market");
+
+    expect(approved.servers["plugin:docs:search"]).toMatchObject({
+      command: `${root}/bin/search`,
+    });
+    expect(Object.values(approved.env)).toContain(root);
+    expect(approved.tools).toEqual(["mcp__plugin_docs_search"]);
+  });
+
+  test("is asked about again when what it starts changes, and not turned on unseen", async () => {
+    const [seen] = (await inApp(mcpServersStatus())).plugins;
+    await decidePlugin("claude", "docs@market", true);
+
+    await writeFiles(pluginFolder(config, "docs@market"), {
+      ".mcp.json": { mcpServers: { search: { command: "other" } } },
+    });
+
+    expect((await inApp(mcpServersStatus())).plugins[0]?.state).toBe("changed");
+    expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
+
+    const decision = { agent: "claude", id: "docs@market", on: true } as const;
+
+    expect(
+      (await failInApp(decideMcpPlugin({ ...decision, fingerprint: seen?.fingerprint ?? "" })))
+        ._tag,
+    ).toBe("Conflict");
+    expect(
+      (await failInApp(decideMcpPlugin({ ...decision, id: "gone@market", fingerprint: "" })))._tag,
+    ).toBe("NotFound");
+  });
+});
+
+test("Codex's runs keep the servers of a plugin the user turned on, offered as the plugin", async () => {
+  const listing = JSON.stringify([
+    { name: "notes", enabled: true, transport: { type: "stdio", command: "notes-mcp" } },
+    { name: "web", enabled: true, transport: { type: "streamable_http", url: "https://x" } },
+  ]);
+
+  await fakes.bin(
+    "codex",
+    `[ "$1" = mcp ] && { echo '${listing}'; exit 0; }
+[ "$1" = exec ] || exit 0
+cat > /dev/null
+printf '%s\\0' "$@" > "${fakes.calls}/args"
+`,
+  );
+
+  await writeFiles(config, {
+    "config.toml":
+      '[mcp_servers.web]\nurl = "https://x"\n\n[plugins."notes@local"]\nenabled = true\n',
+  });
+
+  await writeFiles(pluginFolder(config, "notes@local"), {
+    ".mcp.json": { mcpServers: { notes: { command: "notes-mcp" } } },
+  });
+
+  const status = await inApp(mcpServersStatus());
+
+  expect(status.servers.map((server) => server.name)).toEqual(["web"]);
+  expect(status.plugins.map((plugin) => plugin.id)).toEqual(["notes@local"]);
+
+  await decidePlugin("codex", "notes@local", true);
+  await edit("codex");
+
+  const argv = await given();
+
+  expect(argv).toContain("mcp_servers.web.enabled=false");
+  expect(argv).not.toContain("mcp_servers.notes.enabled=false");
 });

@@ -94,6 +94,11 @@ export class Workspace extends Context.Service<
     readonly peek: (full: string) => Effect.Effect<Peek, WorkspaceError>;
     /** Up to `maxBytes` from the start of a file the user named, inside the workspace or not. */
     readonly peekText: (full: string, maxBytes: number) => Effect.Effect<string, WorkspaceError>;
+    /** Up to `maxBytes` of a file the user named, as bytes, such as an image. */
+    readonly peekBytes: (
+      full: string,
+      maxBytes: number,
+    ) => Effect.Effect<Uint8Array, WorkspaceError>;
     /**
      * Run `effect` while no other effect holding `key` runs, such as two read-modify-writes of one
      * file. Not reentrant: `effect` must not take the same key.
@@ -419,6 +424,15 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
         Effect.withSpan("Workspace.peekText"),
       );
 
+  const peekBytes = (full: string, maxBytes: number) =>
+    fs
+      .stream(full, { bytesToRead: maxBytes })
+      .pipe(
+        Stream.mkUint8Array,
+        Effect.mapError(fail("read", full)),
+        Effect.withSpan("Workspace.peekBytes"),
+      );
+
   const changes = fs.watch(root, { recursive: true }).pipe(
     Stream.map((event) => event.path.split(path.sep).join("/")),
     Stream.filter((changed) => !ignoredChange(changed)),
@@ -461,6 +475,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     remove,
     peek,
     peekText,
+    peekBytes,
     exclusive,
     changes,
   });

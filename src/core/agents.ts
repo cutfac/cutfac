@@ -361,6 +361,16 @@ export const codexHome = Effect.gen(function* () {
   );
 });
 
+/** Claude Code's own folder, which holds the user's settings and plugins. */
+export const claudeConfigDir = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const home = yield* envVar("HOME");
+
+  return Option.orElse(yield* envVar("CLAUDE_CONFIG_DIR"), () =>
+    Option.map(home, (dir) => path.join(dir, ".claude")),
+  );
+});
+
 /**
  * The model Claude Code runs when none is picked, as its own settings set it: the environment,
  * then this workspace's settings, then the user's.
@@ -372,11 +382,7 @@ const claudeDefaultModel = Effect.fn("agents.claudeDefaultModel")(function* () {
 
   if (Option.isSome(fromEnv)) return claudeModelName(fromEnv.value);
 
-  const home = yield* envVar("HOME");
-
-  const configDir = Option.orElse(yield* envVar("CLAUDE_CONFIG_DIR"), () =>
-    Option.map(home, (dir) => path.join(dir, ".claude")),
-  );
+  const configDir = yield* claudeConfigDir;
 
   const files = [
     path.join(ws.root, ".claude", "settings.local.json"),

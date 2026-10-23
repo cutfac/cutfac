@@ -56,7 +56,13 @@ import {
 } from "../core/items.ts";
 import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/learn.ts";
 import { getFormat, listFormats } from "../core/library.ts";
-import { McpDecision, decideMcpServer, mcpServersStatus } from "../core/mcpApprovals.ts";
+import {
+  McpDecision,
+  McpPluginDecision,
+  decideMcpPlugin,
+  decideMcpServer,
+  mcpServersStatus,
+} from "../core/mcpApprovals.ts";
 import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
 import {
@@ -723,6 +729,11 @@ const apiRoutes = (options: ServerOptions) =>
       "POST",
       "/api/mcp-servers",
       Effect.flatMap(HttpServerRequest.schemaBodyJson(McpDecision), decideMcpServer),
+    ),
+    json(
+      "POST",
+      "/api/mcp-plugins",
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(McpPluginDecision), decideMcpPlugin),
     ),
     json(
       "POST",
