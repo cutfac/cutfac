@@ -73,7 +73,8 @@ export interface TeamFeedback {
   agent?: AgentName;
 }
 
-const q = (id: string) => `?id=${encodeURIComponent(id)}`;
+/** The `?id=` query naming an item. */
+export const q = (id: string) => `?id=${encodeURIComponent(id)}`;
 
 export const STATUSES = ["drafting", "review", "done", "archived"] as const;
 
@@ -812,17 +813,20 @@ export const api = {
   closeImport: (id: string) => send<ImportDetail, {}>("POST", `/api/import/close${q(id)}`, {}),
 };
 
-function eventData(event: Event): string {
+export function eventData(event: Event): string {
   // SAFETY: EventSource dispatches named server-sent events as MessageEvents with string data.
   return (event as MessageEvent<string>).data;
 }
+
+/** A stream of server-sent events from the local server. */
+export const openEvents = (path: string) => new EventSource(`${API_BASE}${path}`);
 
 /**
  * The latest agent run at `path`: a `run` message naming what it is about, its events from the
  * start, then live ones. A reconnect replays it all again from `run`.
  */
 function onRun(path: string, listener: (message: RunMessage) => void): () => void {
-  const source = new EventSource(`${API_BASE}${path}`);
+  const source = openEvents(path);
 
   source.addEventListener("run", (e) => {
     listener({ type: "run", subject: eventData(e) });

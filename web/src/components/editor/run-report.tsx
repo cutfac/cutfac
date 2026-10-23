@@ -21,6 +21,7 @@ import {
   type RunView,
   type ToolStep,
 } from "../../lib/run.ts";
+import { useRenderLine } from "./render-card.tsx";
 
 /** Past this many stretches of text and tool calls, a finished run folds them away behind its reply. */
 const FOLD_STEPS = 4;
@@ -41,6 +42,7 @@ export function RunReport({
 }) {
   const { steps, reply } = closingReply(run.steps, run.reply);
   const t = useMessages();
+  const rendering = useRenderLine();
 
   return (
     <>
@@ -50,7 +52,7 @@ export function RunReport({
       {run.running ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />
-          {run.compacting ? t.chat.compacting : t.chat.working}
+          {run.compacting ? t.chat.compacting : (rendering ?? t.chat.working)}
           <Button variant="ghost" size="xs" onClick={onStop}>
             <CircleStopIcon data-icon="inline-start" />
             {t.chat.stop}

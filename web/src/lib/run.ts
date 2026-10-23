@@ -234,7 +234,7 @@ const TOOL_KINDS = new Map<string, ToolKind>([
   ["edit", "edit"],
 ]);
 
-const toolKind = (name: string): ToolKind => TOOL_KINDS.get(name) ?? "other";
+export const toolKind = (name: string): ToolKind => TOOL_KINDS.get(name) ?? "other";
 
 export interface ToolCount {
   readonly kind: ToolKind;

@@ -40,6 +40,8 @@ export class Player {
   #resume: Resume | undefined;
   /** A time to jump to once the next file loads, for a jump that also switches the file. */
   #cue: number | undefined;
+  /** Whether to play the next file once it loads, as a finished render's does. */
+  #playOnLoad = false;
   readonly #listeners = new Set<() => void>();
 
   subscribe = (listener: () => void) => {
@@ -70,6 +72,11 @@ export class Player {
       this.#cue = undefined;
       this.#resume = undefined;
       this.#read();
+
+      if (this.#playOnLoad) {
+        this.#playOnLoad = false;
+        this.play();
+      }
     };
 
     const onPlay = () => {
@@ -144,9 +151,24 @@ export class Player {
     this.#set({ ...this.#state, time: at });
   }
 
-  /** Jump to `time` in the file about to load, rather than the one showing now. */
-  seekOnLoad(time: number) {
+  /** Jump to `time` in the file about to load, rather than the one showing now, and maybe play it. */
+  seekOnLoad(time: number, play = false) {
     this.#cue = time;
+    this.#playOnLoad = play;
+  }
+
+  /** Play from `time` in the file showing: now if it has loaded, or once it does. */
+  playFrom(time: number) {
+    const video = this.#video;
+
+    if (video === undefined || video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      this.seekOnLoad(time, true);
+
+      return;
+    }
+
+    this.seek(time);
+    this.play();
   }
 
   /** Pause and nudge the playhead, for stepping to the exact moment. */

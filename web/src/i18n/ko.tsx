@@ -2,6 +2,7 @@ import type { ToolKind } from "../lib/run.ts";
 import type { Messages } from "./en.tsx";
 import { mcpKo } from "./mcp-ko.tsx";
 import { onboardingKo } from "./onboarding-ko.tsx";
+import { renderKo } from "./render-ko.tsx";
 import { startKo } from "./start-ko.tsx";
 import { trustKo } from "./trust-ko.tsx";
 
@@ -654,4 +655,5 @@ export const ko: Messages = {
   start: startKo,
   trust: trustKo,
   mcp: mcpKo,
+  render: renderKo,
 };

@@ -52,6 +52,7 @@ import { Details } from "../components/editor/details.tsx";
 import { EditorDock, SectionGrip } from "../components/editor/dock.tsx";
 import { Hint, keepFocus } from "../components/editor/hint.tsx";
 import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
+import { RenderFrame, RenderProvider, useItemRender } from "../components/editor/render-card.tsx";
 import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
@@ -61,7 +62,8 @@ import { useMessages } from "../i18n/index.ts";
 import { EDIT_KEYS, onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { agentLabel, pickedSettings } from "../lib/models.ts";
-import { Player } from "../lib/player.ts";
+import { Player, usePlayer } from "../lib/player.ts";
+import { renderedName, shellRender } from "../lib/render.ts";
 import { pinsOn } from "../lib/requests.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import {
@@ -131,6 +133,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
+  const videoRatio = usePlayer(player, (state) => state.ratio);
   // The server refuses to step through the history while an agent writes to the item.
   const running = item !== undefined && (item.running || run.status === "running");
   const history = useItemHistory(setData);
@@ -182,6 +185,23 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     if (switching) player.seekOnLoad(at);
     else player.seek(at);
   }
+
+  // A render that finishes shows what it wrote and plays it from where the request pointed.
+  const renderView = useItemRender(id, shellRender(run.steps, run.status === "running"), (done) => {
+    const name = item === undefined ? undefined : renderedName(done, item.dir);
+    const at = target.start ?? 0;
+
+    if (name === undefined) return;
+
+    // The render's end can reach the board before the file it rewrote does.
+    if (name === media?.name && media.mtime >= done.startedAt) {
+      player.playFrom(at);
+    } else {
+      player.pause();
+      setMediaName(name);
+      player.seekOnLoad(at, true);
+    }
+  });
 
   /** Show where a past request pointed: its media, its moment, its outline. */
   function show(feedback: Feedback) {
@@ -317,49 +337,58 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
           ) : (
             <>
-              <Stage
-                player={player}
-                src={mediaUrl(item, media)}
-                kind={media.kind}
-                ratio={aspectRatio(media.aspect)}
-                region={target.region}
-                ghost={ghost?.region}
-                onRegion={(region) => {
-                  setTarget((current) => withRegion(current, region));
-                  setGhost(undefined);
-                }}
-                ask={{
-                  item,
-                  agent,
-                  files: boxFiles,
-                  onSend: (body, versions, attachments) =>
-                    sendRequest(
-                      item,
-                      editInput(
-                        body,
-                        agent,
-                        pickedSettings(statuses, picks, agent),
-                        media,
-                        target,
-                        versions,
-                        attachments,
-                      ),
-                      setData,
-                      setRun,
-                    ).then((sentTo) => {
-                      // `/feedback` leaves the box drawn, so the request about it can still follow.
-                      if (sentTo === "item") clear();
+              <RenderFrame
+                view={renderView}
+                ratio={(video ? videoRatio : undefined) ?? aspectRatio(media.aspect) ?? 9 / 16}
+                previous={
+                  renderView.render?.status === "running" &&
+                  renderedName(renderView.render, item.dir) === media.name
+                }
+              >
+                <Stage
+                  player={player}
+                  src={mediaUrl(item, media)}
+                  kind={media.kind}
+                  ratio={aspectRatio(media.aspect)}
+                  region={target.region}
+                  ghost={ghost?.region}
+                  onRegion={(region) => {
+                    setTarget((current) => withRegion(current, region));
+                    setGhost(undefined);
+                  }}
+                  ask={{
+                    item,
+                    agent,
+                    files: boxFiles,
+                    onSend: (body, versions, attachments) =>
+                      sendRequest(
+                        item,
+                        editInput(
+                          body,
+                          agent,
+                          pickedSettings(statuses, picks, agent),
+                          media,
+                          target,
+                          versions,
+                          attachments,
+                        ),
+                        setData,
+                        setRun,
+                      ).then((sentTo) => {
+                        // `/feedback` leaves the box drawn, so the request about it can still follow.
+                        if (sentTo === "item") clear();
 
-                      return sentTo;
-                    }),
-                }}
-                onAttach={attachToChat}
-                pins={pins}
-                onPin={(feedback) => {
-                  show(feedback);
-                  setTab("chat");
-                }}
-              />
+                        return sentTo;
+                      }),
+                  }}
+                  onAttach={attachToChat}
+                  pins={pins}
+                  onPin={(feedback) => {
+                    show(feedback);
+                    setTab("chat");
+                  }}
+                />
+              </RenderFrame>
               {video ? (
                 <>
                   <Timeline
@@ -444,31 +473,33 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               </div>
               {/* Kept mounted so a half-typed request survives a look at the other tabs. */}
               <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
-                <Chat
-                  item={item}
-                  media={media}
-                  run={run}
-                  target={target}
-                  statuses={statuses}
-                  agent={agent}
-                  onAgent={setChosen}
-                  picks={picks}
-                  onPick={setPick}
-                  inputRef={inputRef}
-                  files={chatFiles}
-                  onItem={setData}
-                  onRun={setRun}
-                  onClearTarget={clear}
-                  onShow={show}
-                  onRetarget={(feedback: Feedback) => {
-                    const again = targetOf(feedback);
+                <RenderProvider value={renderView}>
+                  <Chat
+                    item={item}
+                    media={media}
+                    run={run}
+                    target={target}
+                    statuses={statuses}
+                    agent={agent}
+                    onAgent={setChosen}
+                    picks={picks}
+                    onPick={setPick}
+                    inputRef={inputRef}
+                    files={chatFiles}
+                    onItem={setData}
+                    onRun={setRun}
+                    onClearTarget={clear}
+                    onShow={show}
+                    onRetarget={(feedback: Feedback) => {
+                      const again = targetOf(feedback);
 
-                    goTo(feedback.media, anchorOf(again));
-                    setTarget(again);
-                    setGhost(undefined);
-                  }}
-                  onCompare={() => player.pause()}
-                />
+                      goTo(feedback.media, anchorOf(again));
+                      setTarget(again);
+                      setGhost(undefined);
+                    }}
+                    onCompare={() => player.pause()}
+                  />
+                </RenderProvider>
               </TabsContent>
               <TabsContent value="checks" className="min-h-0 overflow-y-auto">
                 <SelectionArea className="p-4">
