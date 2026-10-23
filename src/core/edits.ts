@@ -845,14 +845,14 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
     lines.push(
       "",
       `The user asked for ${wanted} versions to compare side by side and pick from. Make ${wanted} clearly different takes on the request, not small tweaks of one.`,
-      "For each: render it in full over the same file name, built from the request rather than from the previous version; check it as below; then call save_variant with this feedback id and a few words on how it differs. Saving under a label already used replaces that version.",
+      "For each: render it in full over the same file name with the render tool and the version as its label, built from the request rather than from the previous version; check it as below; then call save_variant with this feedback id and a few words on how it differs. Saving under a label already used replaces that version.",
       "Call resolve_feedback once, after the last version. The board then puts the media back as it was until the user picks one.",
       "",
     );
   }
 
   lines.push(
-    "Use ffmpeg/ffprobe or the format's render command. Afterwards run verify_item; for a video, call review_media with `times` in and around the changed part and go through its checklist; for an image, open it at phone size. Then call resolve_feedback with this feedback id and one line on what changed.",
+    "Use ffmpeg/ffprobe or the format's render command, and run the final render through the render tool (not your shell) so the user sees its progress; call it again with just the id while it is running. Afterwards run verify_item; for a video, call review_media with `times` in and around the changed part and go through its checklist; for an image, open it at phone size. Then call resolve_feedback with this feedback id and one line on what changed.",
     "Finish with a short, plain summary for someone who does not use video editors. If the request is unclear, ask instead of guessing and leave the feedback open.",
   );
 

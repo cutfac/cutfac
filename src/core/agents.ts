@@ -75,6 +75,7 @@ export const MCP_WRITE_TOOLS = [
   "create_item",
   "update_item",
   "review_media",
+  "render",
   "resolve_feedback",
   "save_variant",
   "save_format",

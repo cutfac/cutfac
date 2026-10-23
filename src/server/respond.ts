@@ -1,5 +1,5 @@
-import { Effect } from "effect";
-import { HttpRouter, HttpServerResponse } from "effect/http";
+import { Effect, Schema } from "effect";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 /** Every error a route can fail with carries a tag and a message for the board to show. */
 interface Failure {
@@ -44,3 +44,14 @@ export const json = <A, E extends Failure, R>(
   path: HttpRouter.PathInput,
   handler: Effect.Effect<A, E, R>,
 ) => HttpRouter.route(method, path, respond(handler));
+
+const IdQuery = Schema.Struct({ id: Schema.NonEmptyString });
+
+export const queryId = Effect.map(
+  HttpServerRequest.schemaSearchParams(IdQuery),
+  (query) => query.id,
+);
+
+/** A route about the item or import named by `?id=`. */
+export const withId = <A, E, R>(f: (id: string) => Effect.Effect<A, E, R>) =>
+  Effect.flatMap(queryId, f);

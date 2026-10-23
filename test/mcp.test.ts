@@ -225,6 +225,7 @@ test("lists the workspace tools", async () => {
   expect(names).toContain("review_media");
   expect(names).toContain("send_feedback_to_cutfac");
   expect(names).toContain("update_brief");
+  expect(names).toContain("render");
 }, 20_000);
 
 const Brief = Schema.Struct({

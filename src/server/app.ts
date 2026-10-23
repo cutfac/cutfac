@@ -1,6 +1,5 @@
 import { BunHttpServer } from "@effect/platform-bun";
 import { Effect, Layer, Option, Schema, Semaphore, Stream } from "effect";
-import { Sse } from "effect/encoding";
 import {
   FetchHttpClient,
   HttpRouter,
@@ -90,7 +89,9 @@ import { requireTrust, trustProblem, trustStatus, trustWorkspace } from "../core
 import { createCountedItem, planStatus } from "../plan.ts";
 import { briefRoutes } from "./brief.ts";
 import { requestGuard } from "./guard.ts";
-import { failureResponse, json } from "./respond.ts";
+import { renderRoutes } from "./render.ts";
+import { failureResponse, json, queryId, withId } from "./respond.ts";
+import { eventStream, sseEvent } from "./sse.ts";
 
 export interface ServerOptions {
   /** The built board, served at `/`. Without it the server is API-only. */
@@ -129,8 +130,6 @@ const FILES_PREFIX = "/files/";
 /** Uploads are whole videos, far past Bun's 128 MB default. */
 const MAX_UPLOAD_BYTES = 8 * 1024 ** 3;
 
-const PING_EVERY = "25 seconds";
-
 // ---------------------------------------------------------------------------------------------
 // Responses
 
@@ -138,8 +137,6 @@ const notFound = HttpServerResponse.jsonUnsafe({ error: "No such API route" }, {
 
 // ---------------------------------------------------------------------------------------------
 // Request inputs
-
-const IdQuery = Schema.Struct({ id: Schema.NonEmptyString });
 
 const FeedbackQuery = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -236,11 +233,6 @@ const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
 const decodeFeedbackInput = Schema.decodeUnknownEffect(FeedbackInput);
 
 const encodeRunEvent = Schema.encodeEffect(Schema.fromJsonString(RunEvent));
-
-const queryId = Effect.map(HttpServerRequest.schemaSearchParams(IdQuery), (query) => query.id);
-
-/** A route about the item or import named by `?id=`. */
-const withId = <A, E, R>(f: (id: string) => Effect.Effect<A, E, R>) => Effect.flatMap(queryId, f);
 
 const nonEmpty = (text: string | undefined) =>
   text === undefined || text.trim() === "" ? undefined : text.trim();
@@ -575,20 +567,6 @@ const closeImportRoute = withId((id) => Effect.flatMap(stopAndCloseImport(id), i
 
 // ---------------------------------------------------------------------------------------------
 // Server-sent events
-
-const encoder = new TextEncoder();
-
-const sseEvent = (event: string, data: string) =>
-  encoder.encode(Sse.encoder.write(Sse.Event.make({ event, id: undefined, data })));
-
-/** A ping now and then, so proxies and the browser keep an idle stream open. */
-const keepAlive = Stream.map(Stream.tick(PING_EVERY), () => sseEvent("ping", ""));
-
-const eventStream = <E>(events: Stream.Stream<Uint8Array, E>) =>
-  HttpServerResponse.stream(Stream.merge(events, keepAlive), {
-    contentType: "text/event-stream",
-    headers: { "cache-control": "no-cache" },
-  });
 
 /**
  * The latest run on the queried key: a `run` event naming what it is about (an item's request, an
@@ -1023,11 +1001,12 @@ const staticRoutes = Layer.mergeAll(
 /** Every route of the board's API, the workspace files, and the board itself. */
 export const routes = (options: ServerOptions) =>
   options.webDir === undefined
-    ? Layer.mergeAll(staticRoutes, apiRoutes(options), briefRoutes, historyRoutes)
+    ? Layer.mergeAll(staticRoutes, apiRoutes(options), briefRoutes, renderRoutes, historyRoutes)
     : Layer.mergeAll(
         staticRoutes,
         apiRoutes(options),
         briefRoutes,
+        renderRoutes,
         historyRoutes,
         boardRoutes(options.webDir),
       );

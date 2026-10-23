@@ -54,6 +54,9 @@ export const spawnFailure = (command: string) => (error: PlatformError) =>
       : `Could not run ${command}: ${error.message}`,
   });
 
+/** SIGTERM first so a command can stop its own children; SIGKILL if it is still there after this. */
+export const STOP_GRACE = "3 seconds";
+
 const encoder = new TextEncoder();
 
 /**

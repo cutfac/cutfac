@@ -92,7 +92,9 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    15% from the right; Reels, Shorts, and TikTok cover the margins with captions and buttons.
 5. Show the user the brief and shot list in a few lines and wait for their okay before you render,
    unless they asked you to go ahead without checking.
-6. Build media with the format's `render` command or template. Name files with the aspect prefix:
+6. Build media with the format's `render` command or template. Run the render through the
+   `render` tool rather than your shell, so the user sees its progress beside the preview; call it
+   again with just the id while it says `running`. Name files with the aspect prefix:
    `[9x16] video.mp4`, `[9x16] cover.jpg`, `[3x4] 01-cover.jpg`. One message per slide or scene.
 7. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
    and duration match the video; pad with silence if needed.
@@ -206,10 +208,11 @@ the rest of `format.yaml` unchanged.
 
 A request with `variants.wanted` asks for that many versions to compare side by side. Make clearly
 different takes, not small tweaks of one. For each, render it over the same media file name from the
-request (not from the last version), check it, then `save_variant` with a few words on how it
-differs; saving under a label already used replaces that version. Call `resolve_feedback` once,
-after the last. The board puts the media back as it was until the user picks a version or keeps
-none. You can also offer versions unasked when a request leaves a real choice of look or pacing.
+request (not from the last version) with `render` and a `label` such as `v2`, check it, then
+`save_variant` with a few words on how it differs; saving under a label already used replaces that
+version. Call `resolve_feedback` once, after the last. The board puts the media back as it was
+until the user picks a version or keeps none. You can also offer versions unasked when a request
+leaves a real choice of look or pacing.
 
 ## Rights
 

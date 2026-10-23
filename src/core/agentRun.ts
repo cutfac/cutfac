@@ -35,7 +35,7 @@ import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { approvedClaudeServers, approvedCodexServers } from "./mcpApprovals.ts";
 import { codexServers } from "./mcpServers.ts";
-import { commandOptions, spawnFailure, tail } from "./process.ts";
+import { commandOptions, spawnFailure, STOP_GRACE, tail } from "./process.ts";
 import {
   type Emit,
   type RunSpec,
@@ -53,9 +53,6 @@ export interface RunInput extends AgentPick {
   readonly itemId: string;
   readonly feedbackId: string;
 }
-
-/** SIGTERM first so the agent can stop its own children; SIGKILL if it is still there after this. */
-const STOP_GRACE = "3 seconds";
 
 /** A request with a run is no longer waiting for its turn; the run keeps its model and effort. */
 const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
