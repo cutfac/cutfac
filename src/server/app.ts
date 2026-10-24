@@ -96,7 +96,7 @@ import { requireTrust, trustProblem, trustStatus, trustWorkspace } from "../core
 import { createCountedItem, planStatus } from "../plan.ts";
 import { briefRoutes } from "./brief.ts";
 import { requestGuard } from "./guard.ts";
-import { renderRoutes } from "./render.ts";
+import { renderChanges, renderRoutes } from "./render.ts";
 import { failureResponse, json, queryId, withId } from "./respond.ts";
 import { eventStream, sseEvent } from "./sse.ts";
 
@@ -621,10 +621,18 @@ const runStreamRoute = <I, R, E, R2>(
     return eventStream(events);
   });
 
-/** Workspace paths that changed on disk, so agent writes appear without a reload. */
-const changesRoute = Effect.map(Workspace, (ws) =>
-  eventStream(Stream.map(ws.changes, (path) => sseEvent("change", path))),
-);
+/** Workspace paths that changed on disk, and renders starting or ending, so agent work appears without a reload. */
+const changesRoute = Effect.gen(function* () {
+  const ws = yield* Workspace;
+  const renders = yield* renderChanges;
+
+  return eventStream(
+    Stream.merge(
+      Stream.map(ws.changes, (path) => sseEvent("change", path)),
+      renders,
+    ),
+  );
+});
 
 // ---------------------------------------------------------------------------------------------
 // Workspace files

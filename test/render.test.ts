@@ -6,7 +6,13 @@ import { Duration, Effect } from "effect";
 
 import { Conflict } from "../src/core/errors.ts";
 import { createItem } from "../src/core/items.ts";
-import { makeRenders, readRender, RENDERS_DIR, requestStop } from "../src/core/render.ts";
+import {
+  makeRenders,
+  readRender,
+  RENDERS_DIR,
+  requestStop,
+  runningRenders,
+} from "../src/core/render.ts";
 import {
   appendLog,
   plainLine,
@@ -219,5 +225,32 @@ describe("running a render", () => {
 
     expect(state?.status).toBe("stopped");
     expect(state?.endedAt).toBeNumber();
+  });
+
+  test("lists only the renders still going on", async () => {
+    await mkdir(join(ws.root, RENDERS_DIR), { recursive: true });
+
+    const save = (item: string, status: string, owner: number) =>
+      writeFile(
+        join(ws.root, RENDERS_DIR, `${encodeURIComponent(item)}.json`),
+        JSON.stringify({
+          item,
+          command: "x",
+          cwd: "",
+          status,
+          progress: { stage: "frames" },
+          startedAt: 1,
+          log: [],
+          owner,
+        }),
+      );
+
+    await save("b clip", "running", process.pid);
+    await save("a clip", "running", process.pid);
+    await save("done", "done", process.pid);
+    await save("gone", "running", 99_999_999);
+    await writeFile(join(ws.root, RENDERS_DIR, "a clip.stop"), "");
+
+    expect(await ws.run(runningRenders())).toEqual(["a clip", "b clip"]);
   });
 });

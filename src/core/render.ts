@@ -106,6 +106,18 @@ export const readRender = Effect.fn("render.readRender")(function* (item: string
   return state;
 });
 
+/** The items whose render is going on now, sorted. */
+export const runningRenders = Effect.fn("render.runningRenders")(function* () {
+  const ws = yield* Workspace;
+  const files = (yield* ws.list(RENDERS_DIR)).filter((entry) => entry.name.endsWith(".json"));
+
+  const states = yield* Effect.forEach(files, (entry) =>
+    readRender(decodeURIComponent(entry.name.slice(0, -".json".length))),
+  );
+
+  return states.flatMap((state) => (state?.status === "running" ? [state.item] : []));
+});
+
 const writeRender = Effect.fn("render.writeRender")(function* (state: RenderState) {
   const ws = yield* Workspace;
   const text = yield* Schema.encodeEffect(RenderJson)(state).pipe(Effect.orDie);

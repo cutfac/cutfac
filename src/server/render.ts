@@ -1,8 +1,8 @@
-import { Effect, Stream } from "effect";
+import { Effect, Option, Stream } from "effect";
 import { HttpRouter } from "effect/http";
 
 import { getItem } from "../core/items.ts";
-import { readRender, requestStop } from "../core/render.ts";
+import { readRender, RENDERS_DIR, requestStop, runningRenders } from "../core/render.ts";
 import { Workspace } from "../core/workspace.ts";
 import { failureResponse, json, withId } from "./respond.ts";
 import { eventStream, sseEvent } from "./sse.ts";
@@ -31,6 +31,22 @@ const renderStream = withId((id) =>
       ),
     );
   }),
+);
+
+/**
+ * A `change` event when a render starts or ends. Render files sit where the file watcher does not
+ * look, so the gallery would otherwise hear of a render only after it is done.
+ */
+export const renderChanges = Effect.map(Workspace, (ws) =>
+  Stream.tick("1 second").pipe(
+    // A look that fails waits for the next tick instead of ending the stream.
+    Stream.mapEffect(() => Effect.provideService(Effect.option(runningRenders()), Workspace, ws)),
+    Stream.filter(Option.isSome),
+    Stream.map((items) => items.value.join("\n")),
+    Stream.changes,
+    Stream.drop(1),
+    Stream.map(() => sseEvent("change", RENDERS_DIR)),
+  ),
 );
 
 /** Renders the agents run, which the board follows beside the preview and can stop. */
