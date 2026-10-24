@@ -228,18 +228,24 @@ const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.s
 /** Where Codex's config keeps the MCP server `name`. */
 export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
 
-/** The Codex config entry that takes the tools only the user's own session may call off `name`. */
-const codexUserOnlyOff = (name: string) =>
-  `${codexServerKey(name)}.disabled_tools=${JSON.stringify(MCP_USER_ONLY_TOOLS)}`;
+/**
+ * The Codex config entries for a run's own server `name`: without the tools only the user's own
+ * session may call, and the rest called without asking. A run has no one to ask, so Codex would
+ * refuse every tool marked as overwriting, such as update_item and review_media.
+ */
+const codexOursForRun = (name: string) => [
+  `${codexServerKey(name)}.disabled_tools=${JSON.stringify(MCP_USER_ONLY_TOOLS)}`,
+  `${codexServerKey(name)}.default_tools_approval_mode="approve"`,
+];
 
 /**
  * Codex config entries for a headless run: the server `name` started with `launch`, whatever the
- * user config says, without the tools only the user's own session may call.
+ * user config says, as a run's own server.
  */
 export const codexServerLaunch = (name: string, launch: McpLaunch) => [
   `${codexServerKey(name)}.command=${JSON.stringify(launch.command)}`,
   `${codexServerKey(name)}.args=${JSON.stringify(launch.args)}`,
-  codexUserOnlyOff(name),
+  ...codexOursForRun(name),
 ];
 
 /**
@@ -265,8 +271,8 @@ function codexServerOff({ name, transport }: CodexListed): string[] {
  * turned on for runs, `kept`, out of the servers Codex `listed`. Every other server is switched
  * off, plugins' too, and apps with the connectors they bring, so nothing the user or another
  * workspace set up can act for the run unasked, and ours goes without the tools only the user's
- * own session may call. Plugins stay on for their skills. With `launch`, ours is started for this
- * root; without it, ours is used as registered.
+ * own session may call and calls the rest without asking. Plugins stay on for their skills. With
+ * `launch`, ours is started for this root; without it, ours is used as registered.
  */
 export function codexRunServers(
   ours: string,
@@ -287,7 +293,7 @@ export function codexRunServers(
 
   // An entry with no command stops Codex from starting, so ours is narrowed only when registered.
   return listed.some((server) => server.name === ours)
-    ? [...others, codexUserOnlyOff(ours)]
+    ? [...others, ...codexOursForRun(ours)]
     : others;
 }
 

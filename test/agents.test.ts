@@ -226,6 +226,7 @@ exit 1
       'mcp_servers.cutfac-test.command="/opt/cutfac"',
       'mcp_servers.cutfac-test.args=["mcp","--workspace","/here"]',
       'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]',
+      'mcp_servers.cutfac-test.default_tools_approval_mode="approve"',
     ]);
 
     for (const entry of codexServer) expect(args[args.indexOf(entry) - 1]).toBe("-c");
@@ -279,11 +280,14 @@ exit 1
   });
 
   test("without the CLI, a codex board run narrows this workspace's server only when registered", () => {
-    const userOnlyOff = 'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]';
+    const ours = [
+      'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]',
+      'mcp_servers.cutfac-test.default_tools_approval_mode="approve"',
+    ];
 
     expect(
       codexRunServers("cutfac-test", undefined, listing("cutfac-test", "cutfac-other")),
-    ).toEqual(["features.apps=false", ...off("cutfac-other"), userOnlyOff]);
+    ).toEqual(["features.apps=false", ...off("cutfac-other"), ...ours]);
     expect(codexRunServers("cutfac-test", undefined, listing("github"))).toEqual([
       "features.apps=false",
       ...off("github"),
