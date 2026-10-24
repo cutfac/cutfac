@@ -9,6 +9,21 @@ export const isEmptyJson = (value: Schema.Json) =>
   (Array.isArray(value) && value.length === 0) ||
   (isJsonObject(value) && Object.keys(value).length === 0);
 
+/** `store` with `value` at `path`, keeping everything else as it was. */
+export function setAt(
+  store: Schema.JsonObject,
+  [key, ...rest]: ReadonlyArray<string>,
+  value: Schema.Json,
+): Schema.JsonObject {
+  if (key === undefined) return store;
+  const inner = store[key];
+
+  return {
+    ...store,
+    [key]: rest.length === 0 ? value : setAt(isJsonObject(inner) ? inner : {}, rest, value),
+  };
+}
+
 /** Code-unit order, the same on every machine, unlike a locale's. */
 export const byName =
   <A>(name: (a: A) => string) =>

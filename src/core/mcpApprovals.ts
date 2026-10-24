@@ -4,7 +4,7 @@ import { envVar } from "./agents.ts";
 import { AGENT_TITLE } from "./agentVersion.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
 import { Conflict, NotFound } from "./errors.ts";
-import { isJsonObject } from "./json.ts";
+import { isJsonObject, setAt } from "./json.ts";
 import {
   type McpPlugin,
   claudePluginRunServers,
@@ -109,21 +109,6 @@ const at = (store: Schema.Json, path: ReadonlyArray<string>) =>
     (value, key) => (isJsonObject(value) ? value[key] : undefined),
     store,
   );
-
-/** `store` with `value` at `path`, keeping everything else as it was. */
-function setAt(
-  store: Schema.JsonObject,
-  [key, ...rest]: ReadonlyArray<string>,
-  value: Schema.Json,
-): Schema.JsonObject {
-  if (key === undefined) return store;
-  const inner = store[key];
-
-  return {
-    ...store,
-    [key]: rest.length === 0 ? value : setAt(isJsonObject(inner) ? inner : {}, rest, value),
-  };
-}
 
 function stateOf(choice: Schema.Json | undefined, fingerprint: string): McpState {
   const found = decodeChoice(choice);
