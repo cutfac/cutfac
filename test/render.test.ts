@@ -52,6 +52,16 @@ describe("reading render progress", () => {
     expect(fold(["over 250% faster"])).toEqual(START_PROGRESS);
   });
 
+  test("a percentage after counted progress leaves the count alone", () => {
+    const progress = fold([
+      "  Duration: 00:00:02.00, start: 0.000000",
+      "frame=   60 fps=0.0 q=-1.0 size=  1kB time=00:00:02.00 bitrate=1kbits/s",
+      "[libx264 @ 0x77c5069880] ref B L1: 95.2%  4.8%",
+    ]);
+
+    expect(progress).toMatchObject({ stage: "encoding", done: 2, total: 2, percent: 1 });
+  });
+
   test("ignores color codes", () => {
     expect(fold(["\u001b[32mRendered 3/6\u001b[0m"])).toMatchObject({ done: 3, total: 6 });
   });

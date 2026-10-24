@@ -99,6 +99,9 @@ export function readProgress(progress: RenderProgress, line: string): RenderProg
       : counted("encoding", at, duration, "seconds", duration);
   }
 
+  // A bar counting frames or seconds ignores stray percentages, such as libx264's closing stats.
+  if (progress.total !== undefined) return progress;
+
   const percent = /(?:^|\s)(\d{1,3}(?:\.\d+)?)%(?:\s|$)/.exec(line);
 
   if (percent?.[1] !== undefined && Number(percent[1]) <= 100) {
