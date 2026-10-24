@@ -93,8 +93,10 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
 5. Show the user the brief and shot list in a few lines and wait for their okay before you render,
    unless they asked you to go ahead without checking.
 6. Build media with the format's `render` command or template. Run the render through the
-   `render` tool rather than your shell, so the user sees its progress beside the preview; call it
-   again with just the id while it says `running`. Name files with the aspect prefix:
+   `render` tool rather than your shell, so the user sees its progress beside the preview: give the
+   format's command its arguments as `args`, or pass a `command` when the format has none (a run
+   from the board without full access may run only the format's). Call it again with just the id
+   while it says `running`. Name files with the aspect prefix:
    `[9x16] video.mp4`, `[9x16] cover.jpg`, `[3x4] 01-cover.jpg`. One message per slide or scene.
 7. Masters must be clean: no platform watermarks or UI. Every MP4 needs an AAC track whose start
    and duration match the video; pad with silence if needed.

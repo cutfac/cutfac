@@ -45,7 +45,7 @@ Only `title` is required.
 | `hookRules`    | `[]`     | Rules for the first seconds                                     |
 | `structure`    | `[]`     | The beats, in order                                             |
 | `checklist`    | `[]`     | What to check before review                                     |
-| `render`       |          | Command that renders one item, run from the workspace root      |
+| `render`       |          | Command that renders one item; the agent adds its arguments     |
 | `source`       |          | `{ url, author, license }`: where the template came from        |
 | `skills`       | `[]`     | Agent Skills the template is made with: `{ name, source }`      |
 | `requires`     | `[]`     | Programs that must be on `PATH`, by name only, such as `ffmpeg` |
@@ -167,6 +167,12 @@ frame at a time, so a template works best when each frame depends only on what i
   template's style and the seed. Nothing else changes the picture.
 
 Then a fix in one beat changes only that beat, and the agent can check it by rendering a frame.
+
+Agents run `render` with Cutfac's `render` tool, adding the item's arguments and the folder to run
+it in (the workspace root unless they say), so the user sees its progress beside the preview. The
+tool runs it outside the agent's own permissions, so a run from the board without Full access may
+run only this command; anything else goes through the agent's shell, where the user's permissions
+apply.
 
 ## Style
 
