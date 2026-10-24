@@ -45,7 +45,7 @@ import {
 
 import { api, type ItemSummary, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop, insetTitleBar } from "../desktop.ts";
-import { href, useLive, type Live } from "../hooks.ts";
+import { href, useLive, useMcpWaiting, type Live } from "../hooks.ts";
 import {
   isLocale,
   LOCALE_NAMES,
@@ -122,11 +122,13 @@ interface LinkRowProps {
   title?: string | undefined;
   /** Open feedback to show at the row's right edge; nothing when zero or missing. */
   badge?: number | undefined;
+  /** What waits for the user there, as a dot at the row's right edge read out as this. */
+  dot?: string | undefined;
   children: ReactNode;
 }
 
 /** One sidebar row that navigates; the narrow-screen sheet closes behind it. */
-function LinkRow({ to, active, tooltip, title, badge, children }: LinkRowProps) {
+function LinkRow({ to, active, tooltip, title, badge, dot, children }: LinkRowProps) {
   const t = useMessages();
   const { setOpenMobile } = useSidebar();
 
@@ -150,6 +152,12 @@ function LinkRow({ to, active, tooltip, title, badge, children }: LinkRowProps) 
       {badge ? (
         <SidebarMenuBadge aria-label={t.nav.openFeedback(badge)}>{badge}</SidebarMenuBadge>
       ) : null}
+      {dot === undefined ? null : (
+        // Beside the label, or by the icon's corner while the sidebar is folded to icons.
+        <span className="pointer-events-none absolute top-3.25 right-2.75 size-1.5 rounded-full bg-sidebar-foreground group-data-[collapsible=icon]:top-0.5 group-data-[collapsible=icon]:right-0.5">
+          <span className="sr-only">{dot}</span>
+        </span>
+      )}
     </SidebarMenuItem>
   );
 }
@@ -305,6 +313,8 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
   const { data: items } = useLive("items", api.items);
   const videos = sidebarVideos(items ?? []);
   const editing = view === "item" && id ? id : undefined;
+  const waiting = useMcpWaiting();
+  const setupWaiting = waiting > 0 ? t.mcp.waiting(waiting) : undefined;
 
   // An open video that is not listed leaves Board lit, as the board is where it lives.
   const boardActive =
@@ -387,7 +397,13 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
       <SidebarFooter>
         <PlanCard plan={plan.data} />
         <SidebarMenu>
-          <LinkRow to={href("setup")} active={view === "setup"} tooltip={t.nav.setup}>
+          <LinkRow
+            to={href("setup")}
+            active={view === "setup"}
+            // Folded to icons, the dot alone doesn't say what waits.
+            tooltip={setupWaiting === undefined ? t.nav.setup : `${t.nav.setup} · ${setupWaiting}`}
+            dot={setupWaiting}
+          >
             <PlugZapIcon />
             <span>{t.nav.setup}</span>
           </LinkRow>

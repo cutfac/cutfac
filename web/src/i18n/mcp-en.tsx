@@ -6,6 +6,7 @@ export const mcpEn = {
   error: "Could not read your agents' MCP servers",
   problems: "Some of your agents' MCP setup couldn't be read",
   /** On the sidebar's Setup row while some wait for the user. */
+  waiting: (count: number) => `${count} waiting for you to decide`,
   sources: {
     user: "All workspaces",
     local: "This folder only",

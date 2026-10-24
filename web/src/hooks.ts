@@ -10,6 +10,7 @@ import {
 } from "./api.ts";
 import { desktop } from "./desktop.ts";
 import type { ModelPicks } from "./lib/models.ts";
+import { mcpApi, onMcpDecided } from "./mcpApi.ts";
 
 interface Loaded<T> {
   key: string;
@@ -240,4 +241,45 @@ export function useSidebarOpen(editing: boolean): SidebarOpen {
   }
 
   return [editing ? editorOpen : saved, setOpen];
+}
+
+/**
+ * How many MCP servers and plugins wait for the user to decide on. Checked again after a choice and
+ * when the board comes back into view, since the user sets servers up in their agent, elsewhere.
+ */
+export function useMcpWaiting() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+
+    const check = () => {
+      mcpApi.waiting().then(
+        (waiting) => {
+          if (current) setCount(waiting.count);
+        },
+        () => {
+          // The count stays as it was; Setup shows what went wrong.
+        },
+      );
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+
+    check();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", check);
+    const stop = onMcpDecided(check);
+
+    return () => {
+      current = false;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", check);
+      stop();
+    };
+  }, []);
+
+  return count;
 }

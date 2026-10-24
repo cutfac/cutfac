@@ -347,8 +347,8 @@ const waits = (state: McpState) => state === "new" || state === "changed";
 const waitingFor = (agent: AgentName, state: McpState) =>
   `${AGENT_TITLE[agent]}, ${state === "new" ? "new" : "changed since turned on"}`;
 
-/** The servers waiting for the user, read without starting Codex, as workspace_overview says. */
-export const mcpNotices = Effect.fn("mcpApprovals.notices")(function* () {
+/** The servers and plugins waiting for the user, read without starting Codex, which is slow. */
+const waitingNow = Effect.fnUntraced(function* () {
   const offered = yield* Effect.all(
     [
       ifInstalled("claude", NONE, () => claudeOffered),
@@ -367,12 +367,29 @@ export const mcpNotices = Effect.fn("mcpApprovals.notices")(function* () {
     plugins: offered.flatMap((one) => one.plugins),
   });
 
-  const waitingServers = servers.flatMap(({ item, state }) =>
-    waits(state) ? [`${item.name} (${waitingFor(item.agent, state)})`] : [],
+  return {
+    servers: servers.filter(({ state }) => waits(state)),
+    plugins: plugins.filter(({ state }) => waits(state)),
+  };
+});
+
+/** How many servers and plugins wait for the user, for the board to point at Setup. */
+export const mcpWaiting = Effect.fn("mcpApprovals.waiting")(function* () {
+  const { servers, plugins } = yield* waitingNow();
+
+  return { count: servers.length + plugins.length };
+});
+
+/** The servers waiting for the user, as workspace_overview says. */
+export const mcpNotices = Effect.fn("mcpApprovals.notices")(function* () {
+  const { servers, plugins } = yield* waitingNow();
+
+  const waitingServers = servers.map(
+    ({ item, state }) => `${item.name} (${waitingFor(item.agent, state)})`,
   );
 
-  const waitingPlugins = plugins.flatMap(({ item, state }) =>
-    waits(state) ? [`the ${item.title} plugin's servers (${waitingFor(item.agent, state)})`] : [],
+  const waitingPlugins = plugins.map(
+    ({ item, state }) => `the ${item.title} plugin's servers (${waitingFor(item.agent, state)})`,
   );
 
   const waiting = [...waitingServers, ...waitingPlugins];

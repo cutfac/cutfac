@@ -15,6 +15,7 @@ import {
   decideMcpServer,
   mcpNotices,
   mcpServersStatus,
+  mcpWaiting,
 } from "../src/core/mcpApprovals.ts";
 import type { AgentName } from "../src/core/schema.ts";
 import { pluginFolder, setUpClaudePlugins, writeFiles } from "./pluginFixtures.ts";
@@ -151,15 +152,17 @@ describe("the MCP servers the user set up", () => {
     ]);
   });
 
-  test("are told to the agent while they wait for the user", async () => {
+  test("are told to the agent and counted for the board while they wait for the user", async () => {
     const [notice] = await inApp(mcpNotices());
 
     expect(notice).toContain("docs (Claude Code, new), notes (Claude Code, new)");
+    expect(await inApp(mcpWaiting())).toEqual({ count: 2 });
 
     await decide("claude", "docs", true);
     await decide("claude", "notes", false);
 
     expect(await inApp(mcpNotices())).toEqual([]);
+    expect(await inApp(mcpWaiting())).toEqual({ count: 0 });
   });
 
   test("keep every other record in the file as it was", async () => {
@@ -324,6 +327,7 @@ describe("a plugin with MCP servers", () => {
     expect(notice).toContain("the docs plugin's servers (Claude Code, new)");
     expect(notice).toContain("ask the user to turn it on there");
     expect(notice).toContain("Plugins' skills load either way.");
+    expect(await inApp(mcpWaiting())).toEqual({ count: 1 });
 
     expect((await decidePlugin("claude", "docs@market", true)).state).toBe("on");
     expect(await inApp(mcpNotices())).toEqual([]);
