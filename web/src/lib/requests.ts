@@ -37,7 +37,11 @@ export const versionsMedia = (feedback: Feedback): string | undefined =>
  * result that waits for a decision. A request that waited counts from when its turn came, not from
  * when it was made.
  */
-export function hasResult(item: ItemDetail, feedback: Feedback, running: boolean): boolean {
+export function hasResult(
+  item: Pick<ItemDetail, "media">,
+  feedback: Feedback,
+  running: boolean,
+): boolean {
   const context = feedback.context;
 
   if (running || feedback.decision !== undefined) return false;

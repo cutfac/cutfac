@@ -64,7 +64,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import { api, fileUrl, STATUSES, type ItemSummary, type Status } from "../api.ts";
+import { api, STATUSES, type ItemSummary, type Status } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
@@ -72,6 +72,9 @@ import { gridColumns, stepCard, stepOf } from "../lib/board-keys.ts";
 import { QUIET_DRAG } from "../lib/drag.ts";
 import { modHeld } from "../lib/edit-commands.ts";
 import { archiveItems, moveItem, revealItem } from "../lib/items.ts";
+import { byWork, isBusy, itemWork } from "../lib/work.ts";
+import { Tile } from "./GalleryTile.tsx";
+import { Thumbnail } from "./Thumbnail.tsx";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
@@ -94,6 +97,9 @@ function writeHintDismissed() {
 
 /** The videos as a gallery, newest first, or as a board of status columns. */
 type Layout = "gallery" | "board";
+
+/** How often the videos load again while an agent or a render works on one of them. */
+const BUSY_POLL_MS = 2000;
 
 const LAYOUT_KEY = "cutfac.videos.layout";
 
@@ -157,6 +163,17 @@ export function Board() {
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
   const [layout, setLayout] = useState(readLayout);
+  const busy = items?.some((item) => isBusy(itemWork(item))) ?? false;
+  const reloadItems = useEffectEvent(reload);
+
+  // A render saves how far it is where the file watcher doesn't look, so the tiles ask again.
+  useEffect(() => {
+    if (!busy) return;
+
+    const timer = setInterval(() => reloadItems(), BUSY_POLL_MS);
+
+    return () => clearInterval(timer);
+  }, [busy]);
 
   if (error) {
     return (
@@ -399,7 +416,10 @@ const trackCount = (grid: HTMLElement | null) =>
 const GALLERY_GRID =
   "grid grid-cols-2 gap-x-4 gap-y-6 @xl:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5 @6xl:grid-cols-6 @7xl:grid-cols-7";
 
-/** Every video as a tile, newest first; a tile's menu moves it to another status. */
+/**
+ * Every video as a tile: what waits for the user first, then work going on, then the rest newest
+ * first. A tile's menu moves it to another status.
+ */
 function Gallery({
   items,
   formatTitle,
@@ -411,11 +431,11 @@ function Gallery({
 }) {
   const t = useMessages();
   const grid = useRef<HTMLDivElement>(null);
-  const tiles = items.toSorted((a, b) => b.updatedAt - a.updatedAt);
+  const tiles = byWork(items.map((item) => ({ item, work: itemWork(item) })));
 
   const picks = usePicks(items, () =>
     gridColumns(
-      tiles.map((i) => i.id),
+      tiles.map((tile) => tile.item.id),
       trackCount(grid.current),
     ),
   );
@@ -426,10 +446,11 @@ function Gallery({
         <p className="py-6 text-center text-xs text-muted-foreground">{t.board.emptyColumn}</p>
       ) : null}
       <div ref={grid} className={GALLERY_GRID}>
-        {tiles.map((item) => (
+        {tiles.map(({ item, work }) => (
           <Tile
             key={item.id}
             item={item}
+            work={work}
             formatTitle={formatTitle}
             selected={picks.selected.has(item.id)}
             onToggle={() => picks.toggle(item.id)}
@@ -612,85 +633,6 @@ function Column({
   );
 }
 
-/**
- * The card's picture: its first video, else its first image. On the board, dragging it moves the
- * card like the rest of it; in the desktop app, an ⌥-drag takes the file out of the app instead, to drop a copy
- * in Finder or another app.
- */
-function Thumbnail({
-  item,
-  overlay = false,
-  large = false,
-}: {
-  item: ItemSummary;
-  overlay?: boolean;
-  /** As wide as its place, as in the gallery, rather than a card's small one. */
-  large?: boolean;
-}) {
-  const media =
-    item.media.find((m) => m.kind === "video") ?? item.media.find((m) => m.kind === "image");
-
-  const box = large
-    ? "aspect-9/16 w-full overflow-hidden rounded-2xl bg-muted"
-    : "aspect-9/16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted";
-
-  if (media === undefined) {
-    return (
-      <div className={`${box} flex items-center justify-center text-muted-foreground`}>
-        <ClapperboardIcon className={large ? "size-8" : "size-5"} />
-      </div>
-    );
-  }
-
-  const path = `${item.dir}/${media.name}`;
-
-  const picture =
-    media.kind === "video" ? (
-      <video
-        className={`${box} block object-cover`}
-        // The fragment makes browsers paint a frame instead of a blank box.
-        src={`${fileUrl(path, media.mtime)}#t=0.1`}
-        muted
-        playsInline
-        preload="metadata"
-      />
-    ) : (
-      <img
-        className={`${box} block object-cover`}
-        src={fileUrl(path, media.mtime)}
-        alt=""
-        loading="lazy"
-      />
-    );
-
-  if (!desktop || overlay) return picture;
-
-  return (
-    // Above the card's link, so an ⌥-drag here can take the file. The card's link is the one to
-    // focus and read out.
-    <a
-      href={href("item", item.id)}
-      tabIndex={-1}
-      aria-hidden
-      draggable={false}
-      className="relative z-10 block shrink-0"
-      onPointerDown={(event) => {
-        // Only an ⌥-drag leaves the card's drag for the page's own, which carries the file.
-        event.currentTarget.draggable = event.altKey;
-
-        if (event.altKey) event.stopPropagation();
-      }}
-      onDragStart={(event) => {
-        // The page's own drag gives way to one that carries the file.
-        event.preventDefault();
-        desktop?.startDrag(path);
-      }}
-    >
-      {picture}
-    </a>
-  );
-}
-
 /** What a card shows; the copy that follows a drag shows it without the links. */
 function CardBody({
   item,
@@ -739,78 +681,6 @@ function CardBody({
         </div>
       </div>
     </CardContent>
-  );
-}
-
-/**
- * A video in the gallery, with its menu: its picture large, then its title and where it stands. A
- * picked tile has a ring, and the focused one an outline.
- */
-function Tile({
-  item,
-  formatTitle,
-  selected,
-  onToggle,
-  onMenu,
-  menu,
-}: {
-  item: ItemSummary;
-  formatTitle: (id: string) => string;
-  selected: boolean;
-  onToggle: () => void;
-  onMenu: () => void;
-  menu: ReactNode;
-}) {
-  const t = useMessages();
-
-  return (
-    <ContextMenu>
-      {/* The tint reaches a little past the tile, so it sits on a wrapper that the link covers too. */}
-      <div className="relative -m-2 min-w-0 rounded-3xl p-2 transition-colors hover:bg-muted/50 has-focus-visible:bg-muted/50 has-data-popup-open:bg-muted/50">
-        <ContextMenuTrigger
-          data-card={item.id}
-          data-selected={selected}
-          className="group/tile"
-          onClick={(event) => {
-            // Shift or ⌘ picks the tile, or puts it back, instead of opening it.
-            if (!(event.shiftKey || modHeld(event))) return;
-
-            event.preventDefault();
-            onToggle();
-          }}
-          onContextMenu={onMenu}
-        >
-          <div className="rounded-2xl transition group-hover/tile:shadow-md group-has-focus-visible/tile:shadow-md group-has-focus-visible/tile:outline-2 group-has-focus-visible/tile:outline-offset-2 group-has-focus-visible/tile:outline-ring group-data-popup-open/tile:shadow-md group-data-[selected=true]/tile:ring-2 group-data-[selected=true]/tile:ring-primary">
-            <Thumbnail item={item} large />
-          </div>
-          <div className="mt-2 flex flex-col gap-1.5 px-1">
-            {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
-            <a
-              href={href("item", item.id)}
-              data-card-link
-              className="line-clamp-2 text-sm leading-snug font-medium break-keep outline-none after:absolute after:inset-0"
-            >
-              {item.title}
-              {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
-            </a>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline">
-                <StatusDot status={item.status} />
-                {t.status[item.status]}
-              </Badge>
-              {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
-              {item.openFeedback > 0 ? (
-                <Badge variant="destructive">
-                  <MessageSquareIcon data-icon="inline-start" />
-                  {t.board.openFeedback(item.openFeedback)}
-                </Badge>
-              ) : null}
-            </div>
-          </div>
-        </ContextMenuTrigger>
-      </div>
-      {menu}
-    </ContextMenu>
   );
 }
 

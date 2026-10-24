@@ -4,6 +4,7 @@ import type { AgentChoice, DetailField, LearnedKind, SafeZone, Status } from "..
 import type { ImportState } from "../lib/imports.ts";
 import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
+import { galleryEn } from "./gallery-en.tsx";
 import { mcpEn } from "./mcp-en.tsx";
 import { onboardingEn } from "./onboarding-en.tsx";
 import { permissionsEn } from "./permissions-en.tsx";
@@ -713,6 +714,7 @@ export const en = {
   trust: trustEn,
   mcp: mcpEn,
   permissions: permissionsEn,
+  gallery: galleryEn,
   render: renderEn,
 };
 

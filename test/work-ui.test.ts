@@ -1,0 +1,119 @@
+import { describe, expect, test } from "bun:test";
+
+import type { AgentRun, Feedback, ItemSummary } from "../web/src/api.ts";
+import type { RenderState } from "../web/src/lib/render.ts";
+import { byWork, isBusy, itemWork, needsYou } from "../web/src/lib/work.ts";
+
+const at = (second: number) => new Date(Date.UTC(2026, 9, 25, 0, 0, second)).toISOString();
+
+const request = (id: string, extra: Partial<Feedback> = {}): Feedback => ({
+  id,
+  at: at(1),
+  author: "user",
+  body: `request ${id}`,
+  media: "clip.mp4",
+  status: "open",
+  ...extra,
+});
+
+const run = (status: AgentRun["status"]): AgentRun => ({
+  agent: "claude",
+  status,
+  startedAt: at(1),
+});
+
+const render: RenderState = {
+  item: "item",
+  command: "bun run render",
+  cwd: ".",
+  label: "v2",
+  status: "running",
+  progress: { stage: "frames", percent: 0.5 },
+  startedAt: 0,
+  log: [],
+};
+
+function summary(extra: Partial<ItemSummary> = {}): ItemSummary {
+  return {
+    id: "item",
+    dir: "items/item",
+    title: "Item",
+    status: "drafting",
+    openFeedback: 0,
+    requests: [],
+    running: false,
+    media: [{ name: "clip.mp4", kind: "video", size: 1, mtime: Date.parse(at(0)) }],
+    updatedAt: 0,
+    ...extra,
+  };
+}
+
+const versions = request("versions", {
+  variants: {
+    saved: [
+      { id: "a", label: "A", file: "a.mp4", at: at(2) },
+      { id: "b", label: "B", file: "b.mp4", at: at(2) },
+    ],
+  },
+});
+
+describe("itemWork", () => {
+  test("versions to pick come before everything else", () => {
+    const work = itemWork(summary({ requests: [versions], running: true, render }));
+
+    expect(work).toEqual({ kind: "versions", request: versions, labels: ["A", "B"] });
+    expect(needsYou(work)).toBe(true);
+  });
+
+  test("a failed or stopped run with its request open waits for the user", () => {
+    const failed = request("failed", { run: run("failed") });
+
+    expect(itemWork(summary({ requests: [failed] }))).toEqual({ kind: "halted", request: failed });
+  });
+
+  test("a render reports its version and how much is done", () => {
+    const work = itemWork(summary({ render }));
+
+    expect(work.kind).toBe("rendering");
+    expect(work).toMatchObject({ label: "v2" });
+    expect(isBusy(work)).toBe(true);
+  });
+
+  test("a running agent works on the request whose run is going", () => {
+    const going = request("going", { run: run("running") });
+
+    expect(itemWork(summary({ requests: [going], running: true }))).toEqual({
+      kind: "working",
+      request: going,
+    });
+    expect(itemWork(summary({ running: true }))).toEqual({ kind: "working" });
+  });
+
+  test("changed media waits to be looked at, and nothing else is quiet", () => {
+    const changed = request("changed", { context: { before: "clip.mp4", after: "clip.mp4" } });
+
+    expect(itemWork(summary({ requests: [changed] }))).toEqual({
+      kind: "result",
+      request: changed,
+    });
+    expect(itemWork(summary({ requests: [request("plain")] }))).toEqual({ kind: "quiet" });
+  });
+});
+
+describe("byWork", () => {
+  test("puts what needs the user first, then work, results, and the rest by change", () => {
+    const tiles = [
+      summary({ id: "quiet-old", updatedAt: 1 }),
+      summary({ id: "working", running: true }),
+      summary({ id: "quiet-new", updatedAt: 2 }),
+      summary({ id: "versions", requests: [versions] }),
+    ].map((item) => ({ item, work: itemWork(item) }));
+
+    expect(byWork(tiles).map((tile) => tile.item.id)).toEqual([
+      "versions",
+      "working",
+      "quiet-new",
+      "quiet-old",
+    ]);
+  });
+});
