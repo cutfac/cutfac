@@ -132,6 +132,7 @@ describe("what the user sees of a server", () => {
         }),
       ),
     ).toEqual({
+      kind: "command",
       launch: `'/opt/my tools/srv' --root 'it'\\''s here'`,
       helper: "./headers.sh",
       env: ["A", "TOKEN"],
@@ -148,11 +149,33 @@ describe("what the user sees of a server", () => {
         }),
       ),
     ).toEqual({
+      kind: "url",
       launch: "https://api.example.com/mcp?…",
       helper: undefined,
       env: ["API_TOKEN"],
       headers: ["X-Team", "X-Key"],
     });
+  });
+
+  test("shows paths under the home folder from ~, and a ~ the agent passes on as it is", () => {
+    const server = claude("srv", {
+      command: "/home/me/bin/srv",
+      args: [
+        "--root",
+        "/home/me",
+        "/home/me/",
+        "/home/me/my notes",
+        "/home/meg/x",
+        "/opt/x",
+        "~/x",
+      ],
+    });
+
+    expect(launchView(server, "/home/me/").launch).toBe(
+      `~/bin/srv --root ~ ~/ ~/'my notes' /home/meg/x /opt/x '~/x'`,
+    );
+    // A home folder of `/` would turn every path into `~`.
+    expect(launchView(server, "/").launch).toBe(launchView(server).launch);
   });
 });
 

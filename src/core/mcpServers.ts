@@ -44,6 +44,8 @@ export interface CodexListed {
 
 /** What the user sees of a server before turning it on: what it starts or reaches, and with what. */
 export interface McpLaunchView {
+  /** Whether it is reached at an address or started by a command. */
+  readonly kind: "url" | "command";
   /** The command line, or the address without the part after `?`, which can carry a key. */
   readonly launch: string;
   /** A command that runs to make its headers. */
@@ -301,20 +303,35 @@ export function shownUrl(url: string) {
   return base === url ? bare : `${bare}?…`;
 }
 
-function launchOf(entry: Schema.JsonObject) {
-  const url = textOf(entry["url"]);
+/** `arg` as a shell would need it typed, from `~` when it's under the home folder `home`. */
+function shownWord(arg: string, home: string | undefined) {
+  if (arg === home) return "~";
 
-  if (url !== undefined) return shownUrl(url);
-  const command = textOf(entry["command"]);
+  if (home === undefined || !arg.startsWith(`${home}/`)) return shellWord(arg);
 
-  return command === undefined ? "" : [command, ...strings(entry["args"])].map(shellWord).join(" ");
+  const rest = arg.slice(home.length + 1);
+
+  return rest === "" ? "~/" : `~/${shellWord(rest)}`;
 }
 
-export function launchView({ entry }: McpServer): McpLaunchView {
+function launchOf(entry: Schema.JsonObject, home: string | undefined) {
+  const command = textOf(entry["command"]);
+
+  if (command === undefined) return "";
+
+  return [command, ...strings(entry["args"])].map((arg) => shownWord(arg, home)).join(" ");
+}
+
+/** What the user sees of `server`, its paths under the user's home folder `home` shown from `~`. */
+export function launchView({ entry }: McpServer, home?: string): McpLaunchView {
+  const url = textOf(entry["url"]);
   const bearer = textOf(entry["bearer_token_env_var"]);
+  // A home of `/` would turn every path into `~`.
+  const under = home?.replace(/\/+$/, "") || undefined;
 
   return {
-    launch: launchOf(entry),
+    kind: url === undefined ? "command" : "url",
+    launch: url === undefined ? launchOf(entry, under) : shownUrl(url),
     helper: textOf(entry["headersHelper"]) ?? textOf(entry["http_headers_helper"]),
     env: [
       ...keysOf(entry["env"]),

@@ -1,5 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
+import { envVar } from "./agents.ts";
 import { AGENT_TITLE } from "./agentVersion.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
 import { Conflict, NotFound } from "./errors.ts";
@@ -9,6 +10,7 @@ import {
   claudePluginRunServers,
   claudePlugins,
   codexPlugins,
+  filledServers,
   pluginFingerprint,
   pluginLogo,
 } from "./mcpPlugins.ts";
@@ -227,13 +229,22 @@ const offeredBy = (agent: AgentName) =>
 const pluginsOf = (agent: AgentName) =>
   ifInstalled(agent, [], () => (agent === "claude" ? claudePlugins() : codexPlugins()));
 
-const viewOf = ({ item: server, fingerprint, state }: Judged<McpServer>): McpServerView => ({
-  agent: server.agent,
-  name: server.name,
-  source: server.source,
-  state,
+/** The user's home folder, which what a server starts is shown from as `~`. */
+const homeFolder = Effect.map(envVar("HOME"), Option.getOrUndefined);
+
+const viewOf = Effect.fnUntraced(function* ({
+  item: server,
   fingerprint,
-  ...launchView(server),
+  state,
+}: Judged<McpServer>) {
+  return {
+    agent: server.agent,
+    name: server.name,
+    source: server.source,
+    state,
+    fingerprint,
+    ...launchView(server, yield* homeFolder),
+  } satisfies McpServerView;
 });
 
 const pluginViewOf = Effect.fnUntraced(function* ({
@@ -241,6 +252,8 @@ const pluginViewOf = Effect.fnUntraced(function* ({
   fingerprint,
   state,
 }: Judged<McpPlugin>) {
+  const home = yield* homeFolder;
+
   return {
     agent: plugin.agent,
     id: plugin.id,
@@ -249,7 +262,11 @@ const pluginViewOf = Effect.fnUntraced(function* ({
     logo: plugin.logoFile === undefined ? undefined : yield* pluginLogo(plugin.logoFile),
     state,
     fingerprint,
-    servers: plugin.servers.map((server) => ({ name: server.name, ...launchView(server) })),
+    // Where the plugin is, filled in, so the user reads what actually runs.
+    servers: filledServers(plugin).map((server) => ({
+      name: server.name,
+      ...launchView(server, home),
+    })),
   } satisfies McpPluginView;
 });
 
@@ -265,7 +282,7 @@ export const mcpServersStatus = Effect.fn("mcpApprovals.status")(function* () {
   });
 
   return {
-    servers: servers.map(viewOf),
+    servers: yield* Effect.forEach(servers, viewOf),
     plugins: yield* Effect.forEach(plugins, pluginViewOf),
     problems: offered.flatMap((one) => one.problems),
   } satisfies McpServersStatus;
@@ -296,7 +313,7 @@ export const decideMcpServer = Effect.fn("mcpApprovals.decide")(function* (decis
     setAt(store, choicePath(ws.root, server), { on, fingerprint }),
   );
 
-  return viewOf({ item: server, fingerprint, state: on ? "on" : "off" });
+  return yield* viewOf({ item: server, fingerprint, state: on ? "on" : "off" });
 });
 
 /** Turn a plugin's servers on or off for runs from the board, as {@link decideMcpServer} does. */

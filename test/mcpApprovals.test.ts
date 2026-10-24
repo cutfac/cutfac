@@ -314,7 +314,8 @@ describe("a plugin with MCP servers", () => {
       title: "docs",
       description: "Search the docs",
       state: "new",
-      servers: [{ name: "search", launch: "'${CLAUDE_PLUGIN_ROOT}/bin/search'" }],
+      // Where the plugin is, filled in.
+      servers: [{ name: "search", launch: `${pluginFolder(config, "docs@market")}/bin/search` }],
     });
     expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
 

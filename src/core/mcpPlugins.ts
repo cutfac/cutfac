@@ -224,6 +224,14 @@ function filled(value: Schema.Json, vars: Readonly<Record<string, string>>): Sch
   return Object.fromEntries(Object.entries(value).map(([key, one]) => [key, filled(one, vars)]));
 }
 
+/** `plugin`'s servers with where it is filled in, as the agent starts them. */
+export const filledServers = (plugin: McpPlugin): ReadonlyArray<McpServer> =>
+  plugin.servers.map((server) => {
+    const entry = filled(server.entry, plugin.vars);
+
+    return { ...server, entry: isJsonObject(entry) ? entry : {} };
+  });
+
 /**
  * `plugin`'s servers as Claude Code loads them: named for the plugin, with where it is filled in,
  * and, for a server it starts, given too as variables, as Claude Code does.
@@ -231,15 +239,14 @@ function filled(value: Schema.Json, vars: Readonly<Record<string, string>>): Sch
 export function claudePluginRunServers(plugin: McpPlugin): ReadonlyArray<McpServer> {
   const [name] = idParts(plugin.id);
 
-  return plugin.servers.map((server) => {
-    const entry = filled(server.entry, plugin.vars);
-    const given = isJsonObject(entry) ? entry : {};
-    const env = isJsonObject(given["env"]) ? given["env"] : {};
+  return filledServers(plugin).map((server) => {
+    const { entry } = server;
+    const env = isJsonObject(entry["env"]) ? entry["env"] : {};
 
     return {
       ...server,
       name: `plugin:${name}:${server.name}`,
-      entry: "command" in given ? { ...given, env: { ...plugin.vars, ...env } } : given,
+      entry: "command" in entry ? { ...entry, env: { ...plugin.vars, ...env } } : entry,
     };
   });
 }
