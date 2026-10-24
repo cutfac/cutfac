@@ -21,7 +21,7 @@ import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
-import { getFormat, listFormats, saveFormat } from "../core/library.ts";
+import { formatNotices, getFormat, readFormats, saveFormat } from "../core/library.ts";
 import { mcpNotices } from "../core/mcpApprovals.ts";
 import { itemReferences, listReferences } from "../core/references.ts";
 import {
@@ -406,6 +406,9 @@ const ListFormats = tool("list_formats", {
   description: "Reusable format recipes.",
   success: Schema.Struct({
     formats: Schema.Array(Schema.Struct({ id: Schema.String, ...FormatDoc.fields })),
+    notices: Schema.Array(Schema.String).annotate(
+      describe("formats left out because their format.yaml doesn't read, and how to fix each"),
+    ),
   }),
   readonly: true,
 });
@@ -538,18 +541,19 @@ const handlers = WorkspaceToolkit.toLayer(
       workspace_overview: () =>
         run(
           Effect.gen(function* () {
-            const [items, formats, feedback, copies, learned, plan, brief] = yield* Effect.all(
-              [
-                listItems(),
-                listFormats(),
-                openFeedback(),
-                skillCopies(),
-                listLearned(),
-                planStatus(),
-                readBrief(),
-              ],
-              { concurrency: "unbounded" },
-            );
+            const [items, { formats, unreadable }, feedback, copies, learned, plan, brief] =
+              yield* Effect.all(
+                [
+                  listItems(),
+                  readFormats(),
+                  openFeedback(),
+                  skillCopies(),
+                  listLearned(),
+                  planStatus(),
+                  readBrief(),
+                ],
+                { concurrency: "unbounded" },
+              );
 
             const briefPath = yield* ws.abs(BRIEF_FILE);
             const about = yield* ws.abs(ABOUT_FILE);
@@ -575,6 +579,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 ...skillNotices(yield* absCopies(copies)),
                 ...briefNotices(brief, briefPath),
                 ...learnNotices(learned, about),
+                ...formatNotices(unreadable),
                 ...(yield* agentVersionNotices()),
                 ...(yield* trustNotices()),
                 ...(yield* mcpNotices()),
@@ -711,8 +716,9 @@ const handlers = WorkspaceToolkit.toLayer(
 
       list_formats: () =>
         run(
-          Effect.map(listFormats(), (formats) => ({
+          Effect.map(readFormats(), ({ formats, unreadable }) => ({
             formats: formats.map((format) => ({ id: format.id, ...format.doc })),
+            notices: formatNotices(unreadable),
           })),
         ),
 

@@ -46,25 +46,50 @@ export const getFormat = Effect.fn("library.getFormat")(function* (id: string) {
   return format;
 });
 
-export const listFormats = Effect.fn("library.listFormats")(function* () {
+/** A format left out of the list because its format.yaml doesn't read, and why. */
+export interface UnreadableFormat {
+  readonly id: string;
+  readonly message: string;
+}
+
+type FormatRead = { readonly format: Format } | { readonly unreadable: UnreadableFormat };
+
+/** Every format, and apart from them the ones whose format.yaml doesn't read. */
+export const readFormats = Effect.fn("library.readFormats")(function* () {
   const ws = yield* Workspace;
   const ids = yield* foldersWith(ws.config.paths.formats, FORMAT_FILE);
 
-  // One unreadable format.yaml shouldn't hide the rest; check_format says what is wrong with it.
-  const formats = yield* Effect.forEach(
+  // One unreadable format.yaml shouldn't hide the rest.
+  const read = yield* Effect.forEach(
     ids,
     (id) =>
       getFormat(id).pipe(
-        Effect.map((format): Format[] => [format]),
+        Effect.map((format): FormatRead => ({ format })),
         Effect.catchTag("WorkspaceError", (error) =>
-          Effect.as(Effect.logWarning(error.message), []),
+          Effect.succeed<FormatRead>({ unreadable: { id, message: error.message } }),
         ),
       ),
     { concurrency: 8 },
   );
 
-  return formats.flat();
+  return {
+    formats: read.flatMap((entry) => ("format" in entry ? [entry.format] : [])),
+    unreadable: read.flatMap((entry) => ("unreadable" in entry ? [entry.unreadable] : [])),
+  };
 });
+
+export const listFormats = Effect.fn("library.listFormats")(function* () {
+  return (yield* readFormats()).formats;
+});
+
+/** What the agent should know about formats left out because their format.yaml doesn't read. */
+export function formatNotices(unreadable: ReadonlyArray<UnreadableFormat>): string[] {
+  return unreadable.map(
+    ({ id, message }) =>
+      `Format "${id}" is left out of formats; its format.yaml doesn't read ` +
+      `(${message.replace(/\s+/g, " ").trim()}). Fix the file, then call check_format with id "${id}".`,
+  );
+}
 
 export interface FormatInput extends FormatDoc {
   readonly id?: string | undefined;

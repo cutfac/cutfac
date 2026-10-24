@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -363,6 +363,34 @@ test("keeps the workspace skill current and tells the agent about an edited copy
   expect(skill.copies.every((c) => c.path.startsWith("/"))).toBe(true);
 
   await writeFile(copy, bundled);
+}, 20_000);
+
+const FormatList = Schema.Struct({
+  formats: Schema.Array(Schema.Struct({ id: Schema.String })),
+  notices: Schema.Array(Schema.String),
+});
+
+test("tells the agent about a format.yaml that doesn't read, and still lists the rest", async () => {
+  const formats = join(t.root, "formats");
+  await mkdir(join(formats, "fine"), { recursive: true });
+  await mkdir(join(formats, "half-done"), { recursive: true });
+  await writeFile(join(formats, "fine/format.yaml"), "title: Fine\n");
+  await writeFile(join(formats, "half-done/format.yaml"), "summary: no title here\n");
+
+  try {
+    const { notices } = await server.call("workspace_overview", {}, Overview);
+    const listed = await server.call("list_formats", {}, FormatList);
+
+    expect(listed.formats.map((f) => f.id)).toEqual(["fine"]);
+    expect(listed.notices).toHaveLength(1);
+    expect(listed.notices[0]).toContain("formats/half-done/format.yaml");
+    expect(listed.notices[0]).toContain("check_format");
+    expect(notices).toContain(listed.notices[0] ?? "");
+  } finally {
+    for (const id of ["fine", "half-done"]) {
+      await rm(join(formats, id), { recursive: true, force: true });
+    }
+  }
 }, 20_000);
 
 test("agents can create an item and hand it over for review", async () => {

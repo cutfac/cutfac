@@ -13,7 +13,7 @@ import {
   specProblems,
 } from "../src/core/formatSpec.ts";
 import { createItem } from "../src/core/items.ts";
-import { listFormats, saveFormat } from "../src/core/library.ts";
+import { formatNotices, listFormats, readFormats, saveFormat } from "../src/core/library.ts";
 import { FormatDoc } from "../src/core/schema.ts";
 import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
@@ -208,6 +208,20 @@ describe("formats in a workspace", () => {
     ]);
     expect(statuses[0]?.check.problems[0]?.kind).toBe("spec");
     expect((await t.run(listFormats())).map((f) => f.id)).toEqual(["good"]);
+  });
+
+  test("a format.yaml without a title becomes a notice, and the other formats still list", async () => {
+    await t.run(saveFormat({ ...decode({ title: "Good" }), id: "good" }));
+    await put("formats/bad/format.yaml", "summary: no title\n");
+
+    const { formats, unreadable } = await t.run(readFormats());
+    const notices = formatNotices(unreadable);
+
+    expect(formats.map((f) => f.id)).toEqual(["good"]);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain('Format "bad"');
+    expect(notices[0]).toContain('formats/bad/format.yaml: Missing key at ["title"]');
+    expect(notices[0]).toContain('check_format with id "bad"');
   });
 
   test("lists formats in name order, however long each check takes", async () => {
