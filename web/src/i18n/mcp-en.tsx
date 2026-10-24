@@ -1,43 +1,41 @@
-/** Turning the MCP servers the user set up for their agents on or off for runs from the board. */
+/** Turning the MCP servers and plugins the user set up for their agents on or off for video work. */
 export const mcpEn = {
-  title: "MCP servers for runs from the board",
-  body: "Your Claude Code and Codex have these servers and plugins set up. Runs you start from the board use only the ones you turn on here, with all of their tools, so look over what each one starts first.",
-  footnote:
-    "Servers from claude.ai connectors don't load in runs from the board. Plugins' skills always load; only their servers wait for you here.",
+  title: "Tools for video work",
+  body: "These MCP servers and plugins are set up in your Claude Code and Codex. Work you start from the board uses only the ones you turn on here, with all of their tools, so look over what each one runs first.",
+  footnote: "claude.ai connectors aren't listed here. A plugin's skills still load while it's off.",
   error: "Could not read your agents' MCP servers",
   problems: "Some of your agents' MCP setup couldn't be read",
+  /** On the sidebar's Setup row while some wait for the user. */
   sources: {
     user: "All workspaces",
     local: "This folder only",
     project: "This workspace's .mcp.json",
   },
-  states: {
-    on: "On",
-    off: "Off",
-    new: "New",
-    changed: "Changed",
-  },
   /** Under a server whose setup changed after the user turned it on. */
   changedNote:
     "Its setup changed after you turned it on, so it's off until you look it over again.",
+  starts: "What it runs",
   env: "Variables",
   headers: "Headers",
   helper: "Runs for its headers",
-  turnOn: "Turn on",
-  turnOff: "Turn off",
-  keepOff: "Keep off",
-  turnedOn: (name: string) => `${name} is on for runs from the board`,
-  turnedOff: (name: string) => `${name} stays off for runs from the board`,
-  failed: (name: string) => `Could not change ${name}`,
+  use: "Use",
+  skip: "Don't use",
+  /** The switch of one the user already decided on. */
+  toggle: (name: string) => `Use ${name} for video work`,
+  server: {
+    /** The title of a server the user hasn't decided on yet. */
+    ask: (name: string) => `Use the ${name} server for video work?`,
+    access: "With it on, your agent can use all of its tools during video work.",
+    turnedOn: (name: string) => `Video work now uses the ${name} server`,
+    turnedOff: (name: string) => `Video work won't use the ${name} server`,
+    failed: (name: string) => `Could not change the ${name} server`,
+  },
   plugin: {
-    /** The title of a plugin the user hasn't decided on yet. */
     ask: (title: string) => `Use the ${title} plugin for video work?`,
-    access: (title: string) => `With it on, video work can reach ${title}.`,
-    use: "Use",
-    skip: "Don't use",
-    starts: (count: number) => (count === 1 ? "What it starts" : `What it starts (${count})`),
-    turnedOn: (title: string) => `Video work can now use ${title}`,
-    turnedOff: (title: string) => `Video work won't use ${title}`,
+    access: (title: string) => `With it on, your agent can reach ${title} during video work.`,
+    turnedOn: (title: string) => `Video work now uses the ${title} plugin`,
+    turnedOff: (title: string) => `Video work won't use the ${title} plugin`,
+    failed: (title: string) => `Could not change the ${title} plugin`,
   },
 };
 

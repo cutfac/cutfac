@@ -37,7 +37,6 @@ export function Setup() {
   return (
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
       <TrustCard />
-      <McpServersCard />
       <Card>
         <CardHeader>
           <CardTitle>{t.setup.connectTitle}</CardTitle>
@@ -122,6 +121,7 @@ export function Setup() {
           )}
         </CardContent>
       </Card>
+      <McpServersCard />
     </Page>
   );
 }

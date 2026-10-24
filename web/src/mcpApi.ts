@@ -14,6 +14,8 @@ export interface McpServerView {
   state: McpState;
   /** Names how it starts as shown, so turning it on doesn't agree to a change since. */
   fingerprint: string;
+  /** Whether it is reached at an address or started by a command. */
+  kind: "url" | "command";
   /** The command line, or the address without anything that could be a key. */
   launch: string;
   /** A command that runs to make its headers. */
@@ -24,7 +26,7 @@ export interface McpServerView {
 }
 
 /** How a server starts, as the user looks it over. */
-export type McpLaunchView = Pick<McpServerView, "launch" | "helper" | "env" | "headers">;
+export type McpLaunchView = Pick<McpServerView, "kind" | "launch" | "helper" | "env" | "headers">;
 
 /** A plugin of the user's agent that brings MCP servers, which the user turns on or off as one. */
 export interface McpPluginView {

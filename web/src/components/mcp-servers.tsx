@@ -1,11 +1,17 @@
-import { ChevronRightIcon, PuzzleIcon } from "lucide-react";
-import { useState } from "react";
+import {
+  ChevronRightIcon,
+  GlobeIcon,
+  type LucideIcon,
+  PuzzleIcon,
+  TerminalIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,16 +32,24 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import {
   type McpLaunchView,
   type McpPluginView,
+  type McpServersStatus,
   type McpServerView,
   type McpState,
   mcpApi,
 } from "../mcpApi.ts";
+
+/** What the user turned on or off since `status` was read, by row. */
+interface Kept {
+  status?: McpServersStatus;
+  states: Readonly<Record<string, McpState>>;
+}
 
 /**
  * The MCP servers the user set up for Claude Code and Codex, and the plugins that bring some,
@@ -44,6 +58,7 @@ import {
 export function McpServersCard() {
   const t = useMessages();
   const { data: status, error, reload } = useLive("mcp-servers", mcpApi.servers);
+  const [kept, setKept] = useState<Kept>({ states: {} });
 
   if (error !== undefined) return <ErrorAlert title={t.mcp.error} message={error} />;
 
@@ -53,6 +68,44 @@ export function McpServersCard() {
   ) {
     return null;
   }
+
+  // A fresh read already has what the user chose.
+  const states = kept.status === status ? kept.states : {};
+
+  const keep = (key: string) => (state: McpState | undefined) => {
+    if (state === undefined) return reload();
+
+    setKept((previous) => {
+      const next: Record<string, McpState> =
+        previous.status === status ? { ...previous.states } : {};
+
+      next[key] = state;
+
+      return { status, states: next };
+    });
+  };
+
+  // What waits for the user comes first; the rest keep their place as they're switched.
+  const rows = [
+    ...status.plugins.map((plugin) => {
+      const key = `plugin\0${plugin.agent}\0${plugin.id}`;
+      const state = states[key] ?? plugin.state;
+
+      return {
+        state,
+        row: <PluginRow key={key} plugin={plugin} state={state} kept={keep(key)} />,
+      };
+    }),
+    ...status.servers.map((server) => {
+      const key = `server\0${server.agent}\0${server.name}`;
+      const state = states[key] ?? server.state;
+
+      return {
+        state,
+        row: <ServerRow key={key} server={server} state={state} kept={keep(key)} />,
+      };
+    }),
+  ].toSorted((a, b) => Number(waits(b.state)) - Number(waits(a.state)));
 
   return (
     <Card>
@@ -74,18 +127,7 @@ export function McpServersCard() {
               </AlertDescription>
             </Alert>
           ) : null}
-          <ItemGroup>
-            {status.plugins.map((plugin) => (
-              <PluginRow key={`${plugin.agent}\0${plugin.id}`} plugin={plugin} onChange={reload} />
-            ))}
-            {status.servers.map((server) => (
-              <ServerRow
-                key={`${server.agent}\0${server.name}`}
-                server={server}
-                onChange={reload}
-              />
-            ))}
-          </ItemGroup>
+          <ItemGroup>{rows.map(({ row }) => row)}</ItemGroup>
         </div>
       </CardContent>
       <CardFooter>
@@ -98,105 +140,137 @@ export function McpServersCard() {
 /** Waiting for the user: never decided on, or changed since they turned it on. */
 const waits = (state: McpState) => state === "new" || state === "changed";
 
-function StateBadge({ state }: { state: McpState }) {
-  const t = useMessages();
-
-  return (
-    <Badge variant={state === "on" ? "secondary" : waits(state) ? "default" : "outline"}>
-      {t.mcp.states[state]}
-    </Badge>
-  );
+interface RowProps {
+  state: McpState;
+  /** Told what the user's choice left it as, or nothing when it couldn't be kept. */
+  kept: (state: McpState | undefined) => void;
 }
 
-function PluginRow({ plugin, onChange }: { plugin: McpPluginView; onChange: () => void }) {
+function PluginRow({ plugin, state, kept }: RowProps & { plugin: McpPluginView }) {
   const t = useMessages();
-  const [open, setOpen] = useState(false);
   const { agent, id, fingerprint, title } = plugin;
 
   return (
-    <Item variant="outline">
-      <ItemMedia variant="image">
-        {plugin.logo === undefined ? (
-          <div className="flex size-full items-center justify-center bg-muted">
-            <PuzzleIcon className="size-5 text-muted-foreground" />
-          </div>
+    <McpRow
+      media={
+        plugin.logo === undefined ? (
+          <IconTile icon={PuzzleIcon} />
         ) : (
           <img src={plugin.logo} alt="" />
-        )}
-      </ItemMedia>
-      <ItemContent className="min-w-0">
-        <ItemTitle className="flex-wrap">
-          {waits(plugin.state) ? t.mcp.plugin.ask(title) : title}
-          <Badge variant="outline">{t.setup.agents[agent]}</Badge>
-          <StateBadge state={plugin.state} />
-        </ItemTitle>
-        {plugin.description === undefined ? null : (
-          <ItemDescription>{plugin.description}</ItemDescription>
-        )}
-        <ItemDescription>{t.mcp.plugin.access(title)}</ItemDescription>
-        {plugin.state === "changed" ? <ItemDescription>{t.mcp.changedNote}</ItemDescription> : null}
-        <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger render={<Button variant="ghost" size="xs" className="-ml-2" />}>
-            {t.mcp.plugin.starts(plugin.servers.length)}
-            <ChevronRightIcon data-icon="inline-end" className={open ? "rotate-90" : undefined} />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="mt-1.5 flex flex-col gap-3">
-              {plugin.servers.map((server) => (
-                <Launch key={server.name} name={server.name} server={server} />
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </ItemContent>
-      <Decision
-        state={plugin.state}
-        labels={{ on: t.mcp.plugin.use, off: t.mcp.plugin.skip, skip: t.mcp.plugin.skip }}
-        send={(on) => mcpApi.decidePlugin({ agent, id, fingerprint, on })}
-        done={(on) => (on ? t.mcp.plugin.turnedOn(title) : t.mcp.plugin.turnedOff(title))}
-        failed={t.mcp.failed(title)}
-        onChange={onChange}
-      />
-    </Item>
+        )
+      }
+      name={title}
+      ask={t.mcp.plugin.ask(title)}
+      about={[t.setup.agents[agent], plugin.description].filter(Boolean).join(" · ")}
+      access={t.mcp.plugin.access(title)}
+      state={state}
+      decision={{
+        send: (on) => mcpApi.decidePlugin({ agent, id, fingerprint, on }),
+        done: (on) => (on ? t.mcp.plugin.turnedOn(title) : t.mcp.plugin.turnedOff(title)),
+        failed: t.mcp.plugin.failed(title),
+        kept,
+      }}
+    >
+      {plugin.servers.map((server) => (
+        <Launch
+          key={server.name}
+          name={plugin.servers.length > 1 ? server.name : undefined}
+          server={server}
+        />
+      ))}
+    </McpRow>
   );
 }
 
-function ServerRow({ server, onChange }: { server: McpServerView; onChange: () => void }) {
+function ServerRow({ server, state, kept }: RowProps & { server: McpServerView }) {
   const t = useMessages();
   const { agent, name, fingerprint } = server;
 
   return (
+    <McpRow
+      media={<IconTile icon={server.kind === "url" ? GlobeIcon : TerminalIcon} />}
+      name={name}
+      ask={t.mcp.server.ask(name)}
+      about={`${t.setup.agents[agent]} · ${t.mcp.sources[server.source]}`}
+      access={t.mcp.server.access}
+      state={state}
+      decision={{
+        send: (on) => mcpApi.decide({ agent, name, fingerprint, on }),
+        done: (on) => (on ? t.mcp.server.turnedOn(name) : t.mcp.server.turnedOff(name)),
+        failed: t.mcp.server.failed(name),
+        kept,
+      }}
+    >
+      <Launch server={server} />
+    </McpRow>
+  );
+}
+
+function IconTile({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <div className="flex size-full items-center justify-center bg-muted">
+      <Icon className="size-5 text-muted-foreground" />
+    </div>
+  );
+}
+
+interface McpRowProps {
+  media: ReactNode;
+  name: string;
+  /** The title while it waits for the user. */
+  ask: string;
+  /** Which agent it's for and what it is, as one line. */
+  about: string;
+  /** What turning it on gives the agent, said while it waits. */
+  access: string;
+  state: McpState;
+  decision: Omit<DecisionProps, "name" | "state">;
+  /** How it starts. */
+  children: ReactNode;
+}
+
+/** A server or plugin as the user turns it on or off, with what it runs folded away. */
+function McpRow({ media, name, ask, about, access, state, decision, children }: McpRowProps) {
+  const t = useMessages();
+  const [open, setOpen] = useState(false);
+  const pending = waits(state);
+
+  return (
     <Item variant="outline">
+      <ItemMedia variant="image">{media}</ItemMedia>
       <ItemContent className="min-w-0">
-        <ItemTitle className="flex-wrap">
-          <span className="font-mono">{name}</span>
-          <Badge variant="outline">{t.setup.agents[agent]}</Badge>
-          <Badge variant="outline">{t.mcp.sources[server.source]}</Badge>
-          <StateBadge state={server.state} />
-        </ItemTitle>
-        {server.state === "changed" ? <ItemDescription>{t.mcp.changedNote}</ItemDescription> : null}
-        <Launch server={server} />
+        <ItemTitle>{pending ? ask : name}</ItemTitle>
+        <ItemDescription>{about}</ItemDescription>
+        {pending ? <ItemDescription>{access}</ItemDescription> : null}
+        {state === "changed" ? (
+          <p className="flex items-start gap-1.5 text-sm font-medium">
+            <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+            {t.mcp.changedNote}
+          </p>
+        ) : null}
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <CollapsibleTrigger render={<Button variant="ghost" size="xs" className="-ml-2" />}>
+            {t.mcp.starts}
+            <ChevronRightIcon data-icon="inline-end" className={open ? "rotate-90" : undefined} />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-1.5 flex flex-col gap-3">{children}</div>
+          </CollapsibleContent>
+        </Collapsible>
       </ItemContent>
-      <Decision
-        state={server.state}
-        labels={{ on: t.mcp.turnOn, off: t.mcp.turnOff, skip: t.mcp.keepOff }}
-        send={(on) => mcpApi.decide({ agent, name, fingerprint, on })}
-        done={(on) => (on ? t.mcp.turnedOn(name) : t.mcp.turnedOff(name))}
-        failed={t.mcp.failed(name)}
-        onChange={onChange}
-      />
+      <Decision name={name} state={state} {...decision} />
     </Item>
   );
 }
 
 /** How a server starts, named when it's one of several. */
-function Launch({ name, server }: { name?: string; server: McpLaunchView }) {
+function Launch({ name, server }: { name?: string | undefined; server: McpLaunchView }) {
   const t = useMessages();
 
   return (
     <SelectionArea render={<div className="flex flex-col gap-1 text-xs" />}>
-      {name === undefined ? null : <p className="font-mono font-medium">{name}</p>}
-      <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono break-all whitespace-pre-wrap">
+      {name === undefined ? null : <p className="font-medium">{name}</p>}
+      <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono wrap-break-word whitespace-pre-wrap">
         {server.launch}
       </pre>
       <Names label={t.mcp.env} names={server.env} />
@@ -204,7 +278,7 @@ function Launch({ name, server }: { name?: string; server: McpLaunchView }) {
       {server.helper === undefined ? null : (
         <p>
           <span className="text-muted-foreground">{t.mcp.helper}: </span>
-          <span className="font-mono break-all">{server.helper}</span>
+          <span className="font-mono wrap-break-word">{server.helper}</span>
         </p>
       )}
     </SelectionArea>
@@ -218,50 +292,84 @@ function Names({ label, names }: { label: string; names: ReadonlyArray<string> }
   return (
     <p>
       <span className="text-muted-foreground">{label}: </span>
-      <span className="font-mono break-all">{names.join(", ")}</span>
+      <span className="font-mono wrap-break-word">{names.join(", ")}</span>
     </p>
   );
 }
 
 interface DecisionProps {
+  name: string;
   state: McpState;
-  /** What the buttons say: to turn it on, to turn it off, and to leave it off while it waits. */
-  labels: { on: string; off: string; skip: string };
   send: (on: boolean) => Promise<{ state: McpState }>;
   /** What the toast says once the choice is kept. */
   done: (on: boolean) => string;
   failed: string;
-  onChange: () => void;
+  kept: (state: McpState | undefined) => void;
 }
 
-/** The buttons that turn something on or off for runs from the board, as fits its state. */
-function Decision({ state, labels, send, done, failed, onChange }: DecisionProps) {
+/**
+ * The question's two answers while it waits for the user, and a switch once they've answered,
+ * which keeps the keyboard focus where the answer was.
+ */
+function Decision({ name, state, send, done, failed, kept }: DecisionProps) {
+  const t = useMessages();
   const [busy, setBusy] = useState<boolean>();
+  const actions = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLElement>(null);
+  const refocus = useRef(false);
+  const pending = waits(state);
+
+  useEffect(() => {
+    if (pending || !refocus.current) return;
+
+    refocus.current = false;
+    toggle.current?.focus();
+  }, [pending]);
 
   const decide = (on: boolean) => {
+    refocus.current = actions.current?.contains(document.activeElement) === true;
     setBusy(on);
     send(on)
-      .then(() => toast.success(done(on)))
-      .catch((cause: Error) => toast.error(failed, { description: cause.message }))
-      .finally(() => {
-        setBusy(undefined);
-        onChange();
-      });
+      .then((view) => {
+        toast.success(done(on));
+        kept(view.state);
+      })
+      .catch((cause: Error) => {
+        toast.error(failed, { description: cause.message });
+        kept(undefined);
+      })
+      .finally(() => setBusy(undefined));
   };
 
-  const button = (on: boolean, label: string, variant: "default" | "outline" | "ghost") => (
-    <Button size="sm" variant={variant} disabled={busy !== undefined} onClick={() => decide(on)}>
+  const answer = (on: boolean, label: string, variant: "default" | "ghost") => (
+    <Button
+      size="sm"
+      variant={variant}
+      disabled={busy !== undefined}
+      focusableWhenDisabled
+      onClick={() => decide(on)}
+    >
       {busy === on ? <Spinner data-icon="inline-start" /> : null}
       {label}
     </Button>
   );
 
   return (
-    <ItemActions>
-      {state === "on" ? button(false, labels.off, "outline") : null}
-      {state === "off" ? button(true, labels.on, "outline") : null}
-      {waits(state) ? button(false, labels.skip, "ghost") : null}
-      {waits(state) ? button(true, labels.on, "default") : null}
+    <ItemActions ref={actions} className="self-start">
+      {pending ? (
+        <>
+          {answer(false, t.mcp.skip, "ghost")}
+          {answer(true, t.mcp.use, "default")}
+        </>
+      ) : (
+        <Switch
+          ref={toggle}
+          aria-label={t.mcp.toggle(name)}
+          checked={busy ?? state === "on"}
+          readOnly={busy !== undefined}
+          onCheckedChange={decide}
+        />
+      )}
     </ItemActions>
   );
 }
