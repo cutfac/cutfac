@@ -1,5 +1,6 @@
 import { Effect, Option } from "effect";
 
+import { claudePermissionFlags, codexPermissionConfig } from "./agentPermissions.ts";
 import { MCP_USER_ONLY_TOOLS, claudeMcpTool } from "./agents.ts";
 import { CommandFailed } from "./errors.ts";
 import { which } from "./process.ts";
@@ -15,6 +16,11 @@ export interface InvocationOptions extends SessionArgs {
   readonly bin: string;
   readonly prompt: string;
   readonly allowedTools: ReadonlyArray<string>;
+  /**
+   * Claude's permission flags, or Codex's config entries, for how much the run may do; editing in
+   * the workspace when left out.
+   */
+  readonly permissions?: ReadonlyArray<string> | undefined;
   /** Claude's `--mcp-config` as a JSON string, the only MCP servers the run loads. */
   readonly mcpConfig?: string | undefined;
   /** Codex config entries that point its MCP server at this workspace. */
@@ -72,8 +78,6 @@ export function claudeCommand(
       "--output-format",
       "stream-json",
       "--verbose",
-      "--permission-mode",
-      "acceptEdits",
       ...flags,
       ...(session.sessionId === undefined
         ? ["--session-id", session.newSessionId]
@@ -155,6 +159,9 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
     hosts = [],
     model,
     effort,
+    permissions = agent === "claude"
+      ? claudePermissionFlags("edit", {})
+      : codexPermissionConfig("edit", {}),
   } = options;
 
   const fetch = hosts.map((host) => `WebFetch(domain:${host})`);
@@ -165,6 +172,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
   const flags =
     agent === "claude"
       ? [
+          ...permissions,
           "--allowedTools",
           [...options.allowedTools, ...fetch].filter(isToolRule).join(","),
           "--disallowedTools",
@@ -176,13 +184,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
           ...flag("--effort", effort),
         ]
       : [
-          ...codexConfig([
-            'sandbox_mode="workspace-write"',
-            'approval_policy="never"',
-            ...search,
-            ...reasoning,
-            ...codexServer,
-          ]),
+          ...codexConfig([...permissions, ...search, ...reasoning, ...codexServer]),
           ...flag("-m", model),
           ...codexImageFlags(images),
         ];

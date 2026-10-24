@@ -6,6 +6,7 @@ import type { ToolCount, ToolKind } from "../lib/run.ts";
 import type { TemplateState } from "../lib/templates.ts";
 import { mcpEn } from "./mcp-en.tsx";
 import { onboardingEn } from "./onboarding-en.tsx";
+import { permissionsEn } from "./permissions-en.tsx";
 import { renderEn } from "./render-en.tsx";
 import { startEn } from "./start-en.tsx";
 import { trustEn } from "./trust-en.tsx";
@@ -712,6 +713,7 @@ export const en = {
   start: startEn,
   trust: trustEn,
   mcp: mcpEn,
+  permissions: permissionsEn,
   render: renderEn,
 };
 

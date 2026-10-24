@@ -10,6 +10,7 @@ import {
   toolsFor,
 } from "./agentCommand.ts";
 import { type RunEvent, parseClaudeLine, parseCodexLine } from "./agentParse.ts";
+import { runPermissions } from "./agentPermissions.ts";
 import {
   CLAUDE_MCP_TOOLS,
   type CliEntry,
@@ -328,6 +329,7 @@ const performEdit = Effect.fnUntraced(function* (
   const format = yield* itemFormat(item.doc.format);
   const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
   const { tools: serverTools, ...servers } = yield* runServers(cli, agent, bin);
+  const permissions = yield* runPermissions(agent);
   const images = yield* editImages(item, f);
 
   yield* record({ status: "running" });
@@ -346,6 +348,7 @@ const performEdit = Effect.fnUntraced(function* (
             formatTools,
           ),
           ...servers,
+          permissions,
           images,
           hosts: sourceHosts(item.doc.sources),
           model,

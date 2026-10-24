@@ -378,26 +378,29 @@ export const claudeConfigDir = Effect.gen(function* () {
   );
 });
 
+/** Claude Code's settings files for this workspace, the one that wins first: its own, then the user's. */
+export const claudeSettingsFiles = Effect.gen(function* () {
+  const ws = yield* Workspace;
+  const path = yield* Path.Path;
+  const configDir = yield* claudeConfigDir;
+
+  return [
+    path.join(ws.root, ".claude", "settings.local.json"),
+    path.join(ws.root, ".claude", "settings.json"),
+    ...Option.toArray(Option.map(configDir, (dir) => path.join(dir, "settings.json"))),
+  ];
+});
+
 /**
  * The model Claude Code runs when none is picked, as its own settings set it: the environment,
  * then this workspace's settings, then the user's.
  */
 const claudeDefaultModel = Effect.fn("agents.claudeDefaultModel")(function* () {
-  const ws = yield* Workspace;
-  const path = yield* Path.Path;
   const fromEnv = yield* envVar("ANTHROPIC_MODEL");
 
   if (Option.isSome(fromEnv)) return claudeModelName(fromEnv.value);
 
-  const configDir = yield* claudeConfigDir;
-
-  const files = [
-    path.join(ws.root, ".claude", "settings.local.json"),
-    path.join(ws.root, ".claude", "settings.json"),
-    ...Option.toArray(Option.map(configDir, (dir) => path.join(dir, "settings.json"))),
-  ];
-
-  for (const file of files) {
+  for (const file of yield* claudeSettingsFiles) {
     const model = Option.flatMap(yield* peek(file), decodeModelSetting).pipe(
       Option.flatMapNullishOr((settings) => settings.model),
     );

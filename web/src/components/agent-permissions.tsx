@@ -1,0 +1,92 @@
+import { TriangleAlertIcon } from "lucide-react";
+import { useId, useState } from "react";
+import { toast } from "sonner";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { useMessages } from "../i18n/index.ts";
+import {
+  type Access,
+  type PermissionMode,
+  type PermissionView,
+  permissionsApi,
+} from "../permissionsApi.ts";
+
+const MODES: ReadonlyArray<PermissionMode> = ["follow", "edit", "auto", "full"];
+
+/** Access that asks the user to look twice: anything on the computer, or too little to edit. */
+const warns = (access: Access) => access === "full" || access === "limited";
+
+/** How much an agent's runs from the board may do, as the user picks it, and what that comes to. */
+export function AgentPermissions({ view }: { view: PermissionView }) {
+  const t = useMessages();
+  const id = useId();
+  // What the last choice kept, until a fresh read of `view` takes over.
+  const [kept, setKept] = useState<{ from: PermissionView; view: PermissionView }>();
+  const [busy, setBusy] = useState<PermissionMode>();
+  const shown = kept?.from === view ? kept.view : view;
+  const mode = busy ?? shown.mode;
+  const access = mode === "follow" ? shown.follows : mode;
+  const agent = t.setup.agents[view.agent];
+  const items = MODES.map((value) => ({ value, label: t.permissions.modes[value] }));
+
+  const choose = (next: PermissionMode) => {
+    setBusy(next);
+    permissionsApi
+      .set({ agent: view.agent, mode: next })
+      .then((chosen) => {
+        setKept({ from: view, view: chosen });
+        toast.success(t.permissions.saved(agent, t.permissions.modes[next]));
+      })
+      .catch((cause: Error) => {
+        toast.error(t.permissions.failed(agent), { description: cause.message });
+      })
+      .finally(() => setBusy(undefined));
+  };
+
+  const about = access === "auto" ? t.permissions.access.auto(agent) : t.permissions.access[access];
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span id={id} className="text-sm font-medium">
+          {t.permissions.label}
+        </span>
+        <Select
+          items={items}
+          value={mode}
+          readOnly={busy !== undefined}
+          onValueChange={(next) => {
+            if (next !== null && next !== shown.mode) choose(next);
+          }}
+        >
+          <SelectTrigger size="sm" aria-labelledby={id}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end" alignItemWithTrigger={false}>
+            {items.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p
+        className={`flex items-start gap-1.5 text-xs ${warns(access) ? "font-medium" : "text-muted-foreground"}`}
+      >
+        {warns(access) ? <TriangleAlertIcon className="mt-px size-3.5 shrink-0" /> : null}
+        <span>
+          {mode === "follow" ? `${t.permissions.followed(agent, shown.setting)} ` : null}
+          {about}
+        </span>
+      </p>
+    </div>
+  );
+}

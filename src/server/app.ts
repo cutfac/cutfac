@@ -12,6 +12,11 @@ import {
 
 import { agentBin } from "../core/agentCommand.ts";
 import { RunEvent } from "../core/agentParse.ts";
+import {
+  PermissionChoice,
+  agentPermissions,
+  setAgentPermissions,
+} from "../core/agentPermissions.ts";
 import { RunRegistry } from "../core/agentRun.ts";
 import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
 import {
@@ -702,6 +707,12 @@ const apiRoutes = (options: ServerOptions) =>
       Effect.flatMap(HttpServerRequest.schemaBodyJson(TrustBody), (body) =>
         trustWorkspace(body.fingerprint),
       ),
+    ),
+    json("GET", "/api/agent-permissions", agentPermissions()),
+    json(
+      "POST",
+      "/api/agent-permissions",
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(PermissionChoice), setAgentPermissions),
     ),
     json("GET", "/api/mcp-servers", mcpServersStatus()),
     json("GET", "/api/mcp-servers/waiting", mcpWaiting()),

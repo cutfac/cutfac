@@ -160,6 +160,9 @@ export function claudeImportFlags(
   link: string | undefined,
 ): string[] {
   const shared = [
+    // Imports keep Cutfac's own mode, whatever the user chose for edits.
+    "--permission-mode",
+    "acceptEdits",
     "--settings",
     claudeImportSettings(phase, link),
     "--strict-mcp-config",

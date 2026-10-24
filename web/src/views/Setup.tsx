@@ -2,6 +2,7 @@ import { CheckCircle2Icon, CheckIcon, FolderOpenIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AgentPermissions } from "@/components/agent-permissions";
 import { McpServersCard } from "@/components/mcp-servers";
 import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { ErrorAlert, Page } from "@/components/page";
@@ -15,6 +16,7 @@ import {
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemFooter,
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
@@ -26,12 +28,19 @@ import { api, type AgentStatus } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { type PermissionView, permissionsApi } from "../permissionsApi.ts";
 
 /** First-run onboarding: connect an agent. Learning about the product waits until the user wants it. */
 export function Setup() {
   const t = useMessages();
   const { data: agents, error: agentsError, reload } = useLive("agents", api.agents);
   const { data: ws } = useLive("workspace", api.workspace);
+
+  const { data: permissions, error: permissionsError } = useLive(
+    "agent-permissions",
+    permissionsApi.list,
+  );
+
   const connected = agents?.some((a) => a.connected) ?? false;
 
   return (
@@ -51,11 +60,21 @@ export function Setup() {
               <Skeleton className="h-16 w-full" />
             </div>
           ) : (
-            <ItemGroup>
-              {agents.map((a) => (
-                <AgentRow key={a.agent} status={a} onChange={reload} />
-              ))}
-            </ItemGroup>
+            <div className="flex flex-col gap-3">
+              <ItemGroup>
+                {agents.map((a) => (
+                  <AgentRow
+                    key={a.agent}
+                    status={a}
+                    permissions={permissions?.find((p) => p.agent === a.agent)}
+                    onChange={reload}
+                  />
+                ))}
+              </ItemGroup>
+              {permissionsError ? (
+                <ErrorAlert title={t.permissions.error} message={permissionsError} />
+              ) : null}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -126,7 +145,14 @@ export function Setup() {
   );
 }
 
-function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => void }) {
+interface AgentRowProps {
+  status: AgentStatus;
+  /** How its runs may act, once read. */
+  permissions: PermissionView | undefined;
+  onChange: () => void;
+}
+
+function AgentRow({ status, permissions, onChange }: AgentRowProps) {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ ok: boolean; detail: string }>();
   const t = useMessages();
@@ -190,6 +216,13 @@ function AgentRow({ status, onChange }: { status: AgentStatus; onChange: () => v
           <Badge variant="outline">{t.setup.notInstalled}</Badge>
         )}
       </ItemActions>
+      {status.installed && permissions !== undefined ? (
+        <ItemFooter>
+          <div className="w-full border-t pt-3">
+            <AgentPermissions view={permissions} />
+          </div>
+        </ItemFooter>
+      ) : null}
     </Item>
   );
 }
