@@ -16,6 +16,7 @@ import { version } from "../../package.json" with { type: "json" };
 import { SERVER_NAME } from "../core/agents.ts";
 import { agentVersionNotices } from "../core/agentVersion.ts";
 import { BRIEF_FILE, briefNotices, readBrief } from "../core/brief.ts";
+import { movedRuleNotices } from "../core/claudeRules.ts";
 import { resolveEdit, saveVariant } from "../core/edits.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
@@ -580,6 +581,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 ...briefNotices(brief, briefPath),
                 ...learnNotices(learned, about),
                 ...formatNotices(unreadable),
+                ...(yield* movedRuleNotices(formats)),
                 ...(yield* agentVersionNotices()),
                 ...(yield* trustNotices()),
                 ...(yield* mcpNotices()),

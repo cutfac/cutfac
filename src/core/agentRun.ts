@@ -7,7 +7,6 @@ import {
   agentBin,
   agentInvocation,
   isSessionId,
-  toolsFor,
 } from "./agentCommand.ts";
 import { type RunEvent, parseClaudeLine, parseCodexLine } from "./agentParse.ts";
 import { runPermissions } from "./agentPermissions.ts";
@@ -20,6 +19,7 @@ import {
   runMcpConfig,
 } from "./agents.ts";
 import { detectAgentRelease, unreadableOutputMessage } from "./agentVersion.ts";
+import { CLAUDE_RUN_TOOLS } from "./claudeRules.ts";
 import {
   baselineMillis,
   beginEdit,
@@ -32,7 +32,6 @@ import {
   waitingPick,
 } from "./edits.ts";
 import type { CutfacError } from "./errors.ts";
-import { itemFormat } from "./formatSpec.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { approvedClaudeServers, approvedCodexServers } from "./mcpApprovals.ts";
 import { codexServers } from "./mcpServers.ts";
@@ -316,7 +315,6 @@ const performEdit = Effect.fnUntraced(function* (
   emit: Emit,
   record: RecordRun,
 ) {
-  const ws = yield* Workspace;
   const { itemId, feedbackId, agent, model, effort } = input;
   const pick: AgentPick = { agent, model, effort };
   // Before anything can fail, so the board shows the run, and any error, on this request.
@@ -326,8 +324,6 @@ const performEdit = Effect.fnUntraced(function* (
   const bin = yield* agentBin(agent);
   yield* requireTrust(agent);
   const prompt = yield* buildEditPrompt(item, f);
-  const format = yield* itemFormat(item.doc.format);
-  const formatTools = Option.match(format, { onNone: () => [], onSome: (fmt) => fmt.doc.tools });
   const { tools: serverTools, ...servers } = yield* runServers(cli, agent, bin);
   const permissions = yield* runPermissions(agent);
   const images = yield* editImages(item, f);
@@ -343,10 +339,7 @@ const performEdit = Effect.fnUntraced(function* (
           ...session,
           bin,
           prompt,
-          allowedTools: toolsFor(
-            [...ws.config.agent.claudeAllowedTools, CLAUDE_MCP_TOOLS, ...serverTools],
-            formatTools,
-          ),
+          allowedTools: [...CLAUDE_RUN_TOOLS, CLAUDE_MCP_TOOLS, ...serverTools],
           ...servers,
           permissions,
           images,

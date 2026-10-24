@@ -27,7 +27,6 @@ const format = (id: string, title: string): Format => ({
     checklist: [],
     skills: [],
     requires: [],
-    tools: [],
     inputs: [],
   },
 });

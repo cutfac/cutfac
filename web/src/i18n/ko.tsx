@@ -172,7 +172,6 @@ export const ko: Messages = {
     installed: "설치됨",
     missing: "설치 안 됨",
     programs: "프로그램",
-    tools: "에이전트 도구",
     source: "출처",
     author: "만든 사람",
     license: "라이선스",

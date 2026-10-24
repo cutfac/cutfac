@@ -66,8 +66,8 @@ const CLAUDE_READ_TOOLS = ["Read", "Glob", "Grep", "WebFetch", "WebSearch", "Ski
 
 /**
  * After Allow: fetch a skill as it is published and put it in place, nothing that runs what it
- * fetched. Writes and edits are allowed inside the workspace only; the workspace's own tools,
- * such as `npx`, are left out because they run code.
+ * fetched. Writes and edits are allowed inside the workspace only; programs such as `npx` are
+ * left out because they run code.
  */
 const CLAUDE_INSTALL_ALLOWED = [
   ...CLAUDE_READ_TOOLS,

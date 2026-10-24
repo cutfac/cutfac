@@ -291,6 +291,19 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
     expect(after(await given(), "--permission-mode")).toBe("bypassPermissions");
   });
 
+  test("of Claude allows only Cutfac's own tools, whatever an earlier cutfac.yaml lists", async () => {
+    await writeFile(
+      join(t.root, "cutfac.yaml"),
+      "name: Permissions\nagent:\n  claudeAllowedTools: [Bash(uv:*)]\n",
+    );
+
+    await edit("claude");
+
+    expect(after(await given(), "--allowedTools")).toBe(
+      "Read,Write,Edit,Glob,Grep,Bash(ffmpeg:*),Bash(ffprobe:*),mcp__cutfac",
+    );
+  });
+
   test("of Codex leaves a reviewer the user set to answer", async () => {
     await writeFile(
       join(config, "config.toml"),

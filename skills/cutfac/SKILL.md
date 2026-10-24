@@ -137,7 +137,7 @@ user.
    If it makes something other than video or images (a web page, a sketch, a 3D scene), say in the
    README how a clip is captured from it, and add what that needs to `requires`.
    A link with several templates (a pack or a kit) is one format when they differ only in look, with
-   a choice per look, and one format each when they differ in structure, aspects, or tools. Install
+   a choice per look, and one format each when they differ in structure or aspects. Install
    a skill they share once and list it in each format's `skills`.
 3. List every skill, package, and program it needs, where each comes from, what it is for, and its
    license, and ask the user before installing any of them. Install only what they agree to, and
@@ -146,10 +146,13 @@ user.
    `.claude/skills/<name>/`; otherwise put a copy there too. Copy files byte for byte with
    `git clone`, or `curl` on the raw URL, rather than an installer such as `npx skills add`; a fetch
    tool that summarizes pages is for reading, and a summary is never a copy. If you have no way to
-   copy them, say so and ask the user.
+   copy them, say so and ask the user. Board edits by Claude Code may run `ffmpeg` and `ffprobe`;
+   for any other program the template runs, such as `uv`, add the narrowest rule, such as
+   `Bash(uv:*)`, to `permissions.allow` in the workspace's `.claude/settings.json` with the user's
+   OK. A board run can't write that file, so there, tell the user which rule it needs, or that they
+   can let board runs do more under Permissions in Setup.
 4. `save_format` with `title`, `summary`, `aspects`, `duration`, `requireAudio`, `skills` (name and
-   source), `requires` (program names only), `tools` (the narrowest Claude Code permissions the
-   skill needs, such as `Bash(uv:*)`), `inputs`, and `source` (`url`, `author`, `license`). Keep
+   source), `requires` (program names only), `inputs`, and `source` (`url`, `author`, `license`). Keep
    anything else under `metadata`; other unknown keys are dropped.
 5. In the folder it returns, write `README.md` (how to make one item, step by step, for an agent that
    has never seen the link), the choice files, and previews. Make previews with the template itself

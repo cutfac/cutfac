@@ -184,7 +184,6 @@ export const en = {
     installed: "Installed",
     missing: "Not installed",
     programs: "Programs",
-    tools: "Agent tools",
     source: "Source",
     author: "Author",
     license: "License",

@@ -33,38 +33,37 @@ in `format.yaml` is relative to the template folder and may not leave it.
 
 Only `title` is required.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `title` | | Name shown on the board |
-| `summary` | `""` | One line on what the template makes |
-| `references` | `[]` | Ids of the learned videos it was distilled from |
-| `aspects` | `[9x16]` | Any of `9x16`, `4x5`, `3x4`, `1x1`, `16x9` |
-| `duration` | | `{ min, max }` in seconds |
-| `fps` | | Frame rate the media should have |
-| `requireAudio` | `true` | Whether every video needs an audio track |
-| `hookRules` | `[]` | Rules for the first seconds |
-| `structure` | `[]` | The beats, in order |
-| `checklist` | `[]` | What to check before review |
-| `render` | | Command that renders one item, run from the workspace root |
-| `source` | | `{ url, author, license }`: where the template came from |
-| `skills` | `[]` | Agent Skills the template is made with: `{ name, source }` |
-| `requires` | `[]` | Programs that must be on `PATH`, by name only, such as `ffmpeg` |
-| `tools` | `[]` | Extra tools Claude Code may use in board edits, such as `Bash(uv:*)` |
-| `inputs` | `[]` | What to decide when an item is made (below) |
-| `metadata` | | Anything else; Cutfac keeps it and never reads it |
+| Field          | Default  | Meaning                                                         |
+| -------------- | -------- | --------------------------------------------------------------- |
+| `title`        |          | Name shown on the board                                         |
+| `summary`      | `""`     | One line on what the template makes                             |
+| `references`   | `[]`     | Ids of the learned videos it was distilled from                 |
+| `aspects`      | `[9x16]` | Any of `9x16`, `4x5`, `3x4`, `1x1`, `16x9`                      |
+| `duration`     |          | `{ min, max }` in seconds                                       |
+| `fps`          |          | Frame rate the media should have                                |
+| `requireAudio` | `true`   | Whether every video needs an audio track                        |
+| `hookRules`    | `[]`     | Rules for the first seconds                                     |
+| `structure`    | `[]`     | The beats, in order                                             |
+| `checklist`    | `[]`     | What to check before review                                     |
+| `render`       |          | Command that renders one item, run from the workspace root      |
+| `source`       |          | `{ url, author, license }`: where the template came from        |
+| `skills`       | `[]`     | Agent Skills the template is made with: `{ name, source }`      |
+| `requires`     | `[]`     | Programs that must be on `PATH`, by name only, such as `ffmpeg` |
+| `inputs`       | `[]`     | What to decide when an item is made (below)                     |
+| `metadata`     |          | Anything else; Cutfac keeps it and never reads it               |
 
 ### Inputs
 
 An input is one decision per item, such as a style or a hook line.
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `id` | | Letters, digits, `-` and `_` |
-| `title` | | Label in the new item dialog |
-| `description` | | Help under the label |
-| `choices` | `[]` | Options to pick from; without them the input is free text |
-| `default` | | Used when the item gives no value; one of the choice ids, if there are choices |
-| `required` | `false` | An item cannot be made without a value or a default |
+| Field         | Default | Meaning                                                                        |
+| ------------- | ------- | ------------------------------------------------------------------------------ |
+| `id`          |         | Letters, digits, `-` and `_`                                                   |
+| `title`       |         | Label in the new item dialog                                                   |
+| `description` |         | Help under the label                                                           |
+| `choices`     | `[]`    | Options to pick from; without them the input is free text                      |
+| `default`     |         | Used when the item gives no value; one of the choice ids, if there are choices |
+| `required`    | `false` | An item cannot be made without a value or a default                            |
 
 A choice has an `id`, a `title`, an optional `summary`, an optional `preview` (an image or clip
 that shows it) and `files` the agent reads when an item picks it, such as a style prompt.
@@ -73,7 +72,7 @@ The values an item was made with are stored in its `item.yaml` under `inputs`, w
 in. `create_item` rejects unknown inputs, values that are not one of the choices, and missing
 required ones.
 
-### Skills, programs and tools
+### Skills and programs
 
 - A skill is an [Agent Skill](https://agentskills.io) folder with a `SKILL.md`. The check looks for
   it in the workspace at `.agents/skills/<name>/` (Codex) and `.claude/skills/<name>/` (Claude
@@ -81,8 +80,12 @@ required ones.
   an import run from the board makes that copy itself. `name` is the folder name, lowercase words
   joined by hyphens; `source` says where to get it.
 - `requires` lists programs the template runs. The check only looks them up on `PATH`.
-- `tools` is added to Claude Code's allowed tools when the board asks an agent to edit an item of
-  this template. Codex runs ignore it.
+- A board edit by Claude Code may use the workspace's files, `ffmpeg` and `ffprobe`, and Cutfac's
+  own tools. A template that runs another program, such as `uv`, needs a rule for it in
+  `permissions.allow` of the workspace's `.claude/settings.json`, as any Claude Code session there
+  would: `{ "permissions": { "allow": ["Bash(uv:*)"] } }`. Setup lists such rules, and Claude runs
+  with them once the user trusts the workspace; the user can also let board runs do more under
+  Permissions there. Codex runs work in Codex's own sandbox and need no rule.
 
 When the board sends an edit request, the prompt points the agent at the template's `format.yaml`,
 `README.md`, the `SKILL.md` of each skill, and the files of each choice the item picked. If the
@@ -100,12 +103,12 @@ command. New fields that more than one template needs belong in the spec instead
 `check_format` (MCP), `GET /api/formats/status` (HTTP) and the Templates page all report the same
 problems:
 
-| Kind | Meaning |
-| --- | --- |
-| `spec` | `format.yaml` does not read, or a value cannot work: a bad id, a default that is not a choice, a path outside the folder, `duration.min` above `max` |
-| `skill` | A skill is in neither skill folder |
-| `program` | A program is not on `PATH` |
-| `file` | A preview or choice file is missing |
+| Kind      | Meaning                                                                                                                                              |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spec`    | `format.yaml` does not read, or a value cannot work: a bad id, a default that is not a choice, a path outside the folder, `duration.min` above `max` |
+| `skill`   | A skill is in neither skill folder                                                                                                                   |
+| `program` | A program is not on `PATH`                                                                                                                           |
+| `file`    | A preview or choice file is missing                                                                                                                  |
 
 A template is ready when there are no problems. The board still lists templates that are not
 ready, with a prompt to copy for your agent to finish them.
@@ -128,7 +131,6 @@ skills:
   - name: art-motion
     source: https://github.com/example/art-motion
 requires: [uv, ffmpeg]
-tools: ["Bash(uv:*)", "Bash(ffmpeg:*)"]
 inputs:
   - id: style
     title: Style
@@ -228,7 +230,7 @@ from a link". In short:
 
 A link can hold several templates, such as a pack of styles or a kit of layouts. Variants that
 share a structure and differ only in look become one template with a choice per look; ones that
-differ in structure, aspects or tools become one template each. A skill they share is installed
+differ in structure or aspects become one template each. A skill they share is installed
 once and listed in each template's `skills`, and each template's `source` points at the same link.
 
 ## Rights

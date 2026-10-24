@@ -513,7 +513,6 @@ export interface Format {
     source?: { url?: string; author?: string; license?: string };
     skills: { name: string; source?: string }[];
     requires: string[];
-    tools: string[];
     inputs: InputField[];
   };
   readme?: string;

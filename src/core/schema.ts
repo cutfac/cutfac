@@ -99,22 +99,6 @@ export interface AgentPick extends ModelSettings {
   readonly agent: AgentName;
 }
 
-export const DEFAULT_CLAUDE_TOOLS = [
-  "Read",
-  "Write",
-  "Edit",
-  "Glob",
-  "Grep",
-  "Bash(ffmpeg:*)",
-  "Bash(ffprobe:*)",
-  "Bash(bun:*)",
-  "Bash(npx:*)",
-  "Bash(ls:*)",
-  "Bash(mkdir:*)",
-  "Bash(cp:*)",
-  "Bash(mv:*)",
-];
-
 /** cutfac.yaml at the workspace root. Paths are workspace-relative. */
 export const WorkspaceConfig = Schema.Struct({
   name: Schema.String,
@@ -125,7 +109,6 @@ export const WorkspaceConfig = Schema.Struct({
   }).pipe(withDefault({})),
   agent: Schema.Struct({
     default: AgentChoice.pipe(withDefault("claude")),
-    claudeAllowedTools: Schema.Array(Schema.String).pipe(withDefault(DEFAULT_CLAUDE_TOOLS)),
   }).pipe(withDefault({})),
 });
 
@@ -631,9 +614,6 @@ export const FormatDoc = Schema.Struct({
   skills: Schema.Array(FormatSkill).pipe(withDefault([])),
   requires: Schema.Array(
     Schema.String.annotate(describe("a program the format runs, which must be on PATH")),
-  ).pipe(withDefault([])),
-  tools: Schema.Array(
-    Schema.String.annotate(describe("extra Claude Code allowed tools, such as Bash(uv:*)")),
   ).pipe(withDefault([])),
   inputs: Schema.Array(InputField).pipe(withDefault([])),
   metadata: Schema.optional(

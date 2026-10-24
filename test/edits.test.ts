@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { Crypto, Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
 
-import { agentInvocation, toolsFor } from "../src/core/agentCommand.ts";
+import { agentInvocation } from "../src/core/agentCommand.ts";
 import {
   type RunEvent,
   parseClaudeLine,
@@ -131,14 +131,6 @@ describe("agent CLIs", () => {
     expect(first.args).toContain("Read,Bash(ffmpeg:*)");
     expect(first.stdin).toBe("do it");
     expect(next.args.slice(-2)).toEqual(["--resume", "s1"]);
-  });
-
-  test("a format's tools join the workspace's, each once", () => {
-    expect(toolsFor(["Read", "Bash(ffmpeg:*)"], ["Bash(uv:*)", "Read"])).toEqual([
-      "Read",
-      "Bash(ffmpeg:*)",
-      "Bash(uv:*)",
-    ]);
   });
 
   test("codex reads the prompt from stdin and resumes by thread id", () => {

@@ -567,8 +567,7 @@ function FormatBody({ format, status }: { format: Format; status: FormatStatus }
         ))}
       </div>
 
-      {doc.skills.length + doc.requires.length + doc.tools.length > 0 ||
-      doc.source !== undefined ? (
+      {doc.skills.length + doc.requires.length > 0 || doc.source !== undefined ? (
         <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-2">
           {doc.skills.length === 0 ? null : (
             <Fact label={t.templates.skills}>
@@ -591,13 +590,6 @@ function FormatBody({ format, status }: { format: Format; status: FormatStatus }
             <Fact label={t.templates.programs}>
               {doc.requires.map((program) => (
                 <code key={program}>{program}</code>
-              ))}
-            </Fact>
-          )}
-          {doc.tools.length === 0 ? null : (
-            <Fact label={t.templates.tools}>
-              {doc.tools.map((tool) => (
-                <code key={tool}>{tool}</code>
               ))}
             </Fact>
           )}

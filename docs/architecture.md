@@ -19,14 +19,14 @@
 
 ## Components
 
-| Path | Role |
-| --- | --- |
-| `src/core/` | Schemas, `Workspace` (every filesystem access, root-escape guarded), items, learning, formats, verification |
-| `src/mcp/` | MCP tools over the core. Transport-agnostic, stdio today |
-| `src/server/` | HTTP API on Effect, `/files/*` with byte ranges, SSE change feed from `fs.watch` and agent run streams |
-| `web/` | React SPA (board, item editor, templates, learn) |
-| `electron/` | Desktop shell: starts the server as a sidecar and opens the SPA in a window |
-| `skills/` | Agent skill copied into each workspace and kept current on `init`, `serve` and MCP start. A copy the user edited is left alone, and `workspace_overview` tells the agent to offer the new one |
+| Path          | Role                                                                                                                                                                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/`   | Schemas, `Workspace` (every filesystem access, root-escape guarded), items, learning, formats, verification                                                                                   |
+| `src/mcp/`    | MCP tools over the core. Transport-agnostic, stdio today                                                                                                                                      |
+| `src/server/` | HTTP API on Effect, `/files/*` with byte ranges, SSE change feed from `fs.watch` and agent run streams                                                                                        |
+| `web/`        | React SPA (board, item editor, templates, learn)                                                                                                                                              |
+| `electron/`   | Desktop shell: starts the server as a sidecar and opens the SPA in a window                                                                                                                   |
+| `skills/`     | Agent skill copied into each workspace and kept current on `init`, `serve` and MCP start. A copy the user edited is left alone, and `workspace_overview` tells the agent to offer the new one |
 
 ## Editing by chat
 
@@ -83,7 +83,7 @@ is ready and the checklist renders are held to.
 ## Templates
 
 A template (a format in the core) is a folder with a `format.yaml` that declares what making an item
-with it takes: Agent Skills, programs on `PATH`, extra agent tools, and inputs chosen per item. The
+with it takes: Agent Skills, programs on `PATH`, and inputs chosen per item. The
 spec is in [templates.md](templates.md).
 
 Cutfac has no importers. The user's agent reads a link and writes the folder; the core only

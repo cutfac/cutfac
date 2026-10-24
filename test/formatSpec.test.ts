@@ -65,27 +65,6 @@ describe("specProblems", () => {
     ]);
   });
 
-  test("lists each tool as its own rule", () => {
-    const doc = decode({
-      title: "Tools",
-      tools: ["Bash(uv:*)", "Read,Bash", "Bash(a),WebFetch(b)"],
-    });
-
-    expect(specProblems(doc)).toEqual([
-      {
-        kind: "spec",
-        subject: "tools",
-        message: '"Read,Bash" is not one tool rule, such as Bash(uv:*); list each on its own',
-      },
-      {
-        kind: "spec",
-        subject: "tools",
-        message:
-          '"Bash(a),WebFetch(b)" is not one tool rule, such as Bash(uv:*); list each on its own',
-      },
-    ]);
-  });
-
   test("format paths stay inside the folder", () => {
     expect(isFormatPath("previews/a.png")).toBe(true);
     expect(isFormatPath("/etc/passwd")).toBe(false);

@@ -58,12 +58,6 @@ export const isSessionId = (id: string) =>
  */
 export const isToolRule = (rule: string) => /^[\w-]+(?:\([^(),\p{Cc}]*\))?$/u.test(rule);
 
-/** The workspace's allowed tools plus the ones the item's format asks for, each once. */
-export const toolsFor = (
-  workspace: ReadonlyArray<string>,
-  format: ReadonlyArray<string>,
-): ReadonlyArray<string> => [...new Set([...workspace, ...format])];
-
 /** `claude -p` streaming JSON, with `flags` deciding what it may do. */
 export function claudeCommand(
   bin: string,
