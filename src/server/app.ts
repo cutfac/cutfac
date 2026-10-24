@@ -77,6 +77,7 @@ import {
   listReferences,
   removeReference,
 } from "../core/references.ts";
+import { readRender } from "../core/render.ts";
 import { listReviews } from "../core/review.ts";
 import type { Runs } from "../core/runRegistry.ts";
 import {
@@ -297,16 +298,29 @@ const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: stri
   return { item: yield* itemDetail(yield* getItem(id)), added };
 });
 
-const itemSummary = (item: Item) => ({
-  id: item.id,
-  dir: item.dir,
-  title: item.doc.title,
-  status: item.doc.status,
-  format: item.doc.format,
-  hook: item.doc.hook,
-  openFeedback: item.doc.feedback.filter((f) => f.status === "open").length,
-  media: item.media,
-  updatedAt: item.updatedAt,
+/**
+ * What the gallery shows of an item: its open requests, whether an agent works on it, and the
+ * render going on, so a tile can say what waits for the user and what is under way.
+ */
+const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
+  const runs = yield* RunRegistry;
+  const render = yield* readRender(item.id);
+  const requests = item.doc.feedback.filter((f) => f.status === "open");
+
+  return {
+    id: item.id,
+    dir: item.dir,
+    title: item.doc.title,
+    status: item.doc.status,
+    format: item.doc.format,
+    hook: item.doc.hook,
+    openFeedback: requests.length,
+    requests,
+    running: yield* runs.isRunning(item.id),
+    render: render?.status === "running" ? render : undefined,
+    media: item.media,
+    updatedAt: item.updatedAt,
+  };
 });
 
 /** Everything learned, newest first, with about.md as agents read it. */
@@ -740,7 +754,9 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "GET",
       "/api/items",
-      Effect.map(listItems(), (items) => items.map(itemSummary)),
+      Effect.flatMap(listItems(), (items) =>
+        Effect.forEach(items, itemSummary, { concurrency: "unbounded" }),
+      ),
     ),
     json(
       "POST",

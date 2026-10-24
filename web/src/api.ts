@@ -1,3 +1,5 @@
+import type { RenderState } from "./lib/render.ts";
+
 /**
  * The SPA talks to the local Cutfac server. Same-origin by default; a hosted UI can point
  * at a local daemon with ?api=http://localhost:4317 (stored per browser).
@@ -269,6 +271,12 @@ export interface ItemSummary {
   format?: string;
   hook?: string;
   openFeedback: number;
+  /** The requests still open, oldest first as saved. */
+  requests: Feedback[];
+  /** An agent works on the item right now. */
+  running: boolean;
+  /** The render going on, while one is. */
+  render?: RenderState;
   media: Media[];
   updatedAt: number;
 }
