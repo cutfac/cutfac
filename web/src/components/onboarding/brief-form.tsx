@@ -16,13 +16,13 @@ import { useMessages } from "../../i18n/index.ts";
 import { PLATFORMS, PURPOSES, type BriefDraft, type Purpose } from "../../lib/brief.ts";
 
 /**
- * A card to pick, as a purpose is: tinted on hover, and outlined with a fill once picked by the
- * radio inside it.
+ * A tile to pick, as a purpose is: a light fill with no edge, as the buttons have, deeper on hover
+ * and outlined once picked by the radio inside it.
  */
 const choiceCard = cn(
-  "flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition-colors outline-none",
-  "hover:bg-muted/50 focus-visible:bg-muted/50 has-focus-visible:bg-muted/50",
-  "has-checked:border-foreground/40 has-checked:bg-muted",
+  "flex flex-col items-start gap-1 rounded-2xl bg-foreground/6 p-3 text-left transition-colors outline-none",
+  "hover:bg-foreground/10 has-focus-visible:bg-foreground/10",
+  "has-checked:bg-foreground/12 has-checked:ring-1 has-checked:ring-foreground/30",
 );
 
 interface PartProps {
