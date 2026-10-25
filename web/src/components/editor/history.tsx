@@ -51,7 +51,7 @@ import {
   versionGroups,
   type ChangeState,
 } from "../../lib/history.ts";
-import { formatAgo } from "../../lib/time.ts";
+import { dayLabel, formatAgo } from "../../lib/time.ts";
 
 /** Same as the server's image extensions; everything else it keeps is video. */
 const IMAGE = /\.(jpe?g|png|webp|gif)$/i;
@@ -189,18 +189,25 @@ export function HistoryPanel({ item, running, onGoTo, onRestore, onPreview }: Hi
         <section className="flex flex-col gap-2">
           <Heading title={t.history.changes} hint={t.history.changesHint} />
           <ol className="-mx-2 flex flex-col">
-            {changeRows(history).map(({ entry, state }) => (
-              <ChangeRow
-                key={entry.id}
-                icon={iconOf(entry)}
-                label={describeChange(entry, item.doc.feedback, t, locale)}
-                detail={entry.kind === "media" ? entry.media : undefined}
-                at={entry.at}
-                state={state}
-                disabled={running}
-                onClick={() => onGoTo(entry.id)}
-              />
-            ))}
+            {changeRows(history).map(({ entry, state }, n, rows) => {
+              const day = dayLabel(entry.at, locale);
+              // Each day's changes sit under its name, as Codex dates its chat.
+              const firstOfDay = n === 0 || dayLabel(rows[n - 1]!.entry.at, locale) !== day;
+
+              return (
+                <ChangeRow
+                  key={entry.id}
+                  day={firstOfDay ? day : undefined}
+                  icon={iconOf(entry)}
+                  label={describeChange(entry, item.doc.feedback, t, locale)}
+                  detail={entry.kind === "media" ? entry.media : undefined}
+                  at={entry.at}
+                  state={state}
+                  disabled={running}
+                  onClick={() => onGoTo(entry.id)}
+                />
+              );
+            })}
             <ChangeRow
               icon={FlagIcon}
               label={t.history.original}
@@ -252,13 +259,15 @@ function Ago({ at }: { at: string }) {
   const locale = useLocale();
 
   return (
-    <time dateTime={at} title={new Date(at).toLocaleString(locale)}>
+    <time dateTime={at} title={new Date(at).toLocaleString(locale)} className="tabular-nums">
       {formatAgo(at, locale)}
     </time>
   );
 }
 
 interface ChangeRowProps {
+  /** The day's name, above the first of its changes. */
+  day?: string | undefined;
   icon: LucideIcon;
   label: string;
   /** The file it changed, or a line about the row. */
@@ -269,23 +278,39 @@ interface ChangeRowProps {
   onClick: () => void;
 }
 
-function ChangeRow({ icon: Icon, label, detail, at, state, disabled, onClick }: ChangeRowProps) {
+function ChangeRow({
+  day,
+  icon: Icon,
+  label,
+  detail,
+  at,
+  state,
+  disabled,
+  onClick,
+}: ChangeRowProps) {
   const t = useMessages();
 
   return (
     <li>
+      {day === undefined ? null : (
+        <h3 className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground [li:first-child>&]:pt-0">
+          {day}
+        </h3>
+      )}
       <button
         type="button"
         disabled={disabled || state === "now"}
         aria-current={state === "now" ? "step" : undefined}
         title={state === "undone" ? t.history.undoneHint : undefined}
         className={cn(
-          "flex w-full items-start gap-2.5 rounded-xl px-2 py-2 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted disabled:pointer-events-none",
+          "flex w-full items-center gap-2.5 rounded-2xl px-2 py-1.5 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted disabled:pointer-events-none",
           state === "undone" && "opacity-50",
         )}
         onClick={onClick}
       >
-        <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-2xl bg-foreground/6 text-muted-foreground">
+          <Icon className="size-4" />
+        </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate">{label}</span>
           <span className="truncate text-xs text-muted-foreground">
@@ -347,7 +372,7 @@ function VersionRow({ src, version, current, disabled, onRestore, onPreview }: V
             <img
               src={src}
               alt=""
-              className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
+              className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
             />
           ) : (
             // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
@@ -355,7 +380,7 @@ function VersionRow({ src, version, current, disabled, onRestore, onPreview }: V
               src={src}
               controls
               autoPlay
-              className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
+              className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
             />
           )}
           <DialogFooter>{restore}</DialogFooter>
@@ -363,7 +388,9 @@ function VersionRow({ src, version, current, disabled, onRestore, onPreview }: V
       </Dialog>
       <div className="flex min-w-0 flex-1 flex-col">
         <Ago at={version.at} />
-        <span className="text-xs text-muted-foreground">{megabytes(version.size)}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {megabytes(version.size)}
+        </span>
       </div>
       {restore}
     </li>
@@ -371,7 +398,7 @@ function VersionRow({ src, version, current, disabled, onRestore, onPreview }: V
 }
 
 function Frame({ src, image, className }: { src: string; image: boolean; className: string }) {
-  const frame = cn("rounded-lg bg-muted object-cover ring-1 ring-foreground/10", className);
+  const frame = cn("rounded-2xl bg-muted object-cover", className);
 
   if (image) return <img src={src} alt="" loading="lazy" className={frame} />;
 

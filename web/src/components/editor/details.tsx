@@ -107,9 +107,10 @@ function TextField({
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="whitespace-pre-wrap">{children}</dd>
+    // A label beside its value, rows split by hairlines, as Codex lists a plugin's information.
+    <div className="flex gap-3 py-2">
+      <dt className="w-24 shrink-0 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 flex-1 whitespace-pre-wrap">{children}</dd>
     </div>
   );
 }
@@ -170,7 +171,7 @@ export function Details({
         />
       </FieldGroup>
       {doc.format === undefined ? null : (
-        <dl className="flex flex-col gap-3">
+        <dl className="flex flex-col divide-y">
           <Fact label={t.item.format}>
             <a href={href("templates", doc.format)} className="underline underline-offset-4">
               {format?.doc.title ?? doc.format}
@@ -186,7 +187,7 @@ export function Details({
       {docs.map(([name, text]) =>
         text === undefined ? null : (
           <details key={name} className="group/doc">
-            <summary className="-mx-1 flex items-center gap-1.5 rounded-md px-1 font-medium outline-none select-none focus-visible:bg-muted">
+            <summary className="-mx-1 flex items-center gap-1.5 rounded-2xl px-1 font-medium outline-none select-none focus-visible:bg-muted">
               <FileTextIcon className="size-4 text-muted-foreground" />
               {name}
             </summary>

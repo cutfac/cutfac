@@ -53,7 +53,7 @@ export function Toolbar({
         <ArrowLeftIcon data-icon="inline-start" />
         {t.nav.board}
       </a>
-      <h1 className="min-w-0 truncate text-sm font-semibold">{item.doc.title}</h1>
+      <h1 className="min-w-0 truncate text-sm font-medium">{item.doc.title}</h1>
       {running && asking !== undefined ? (
         <Badge variant="outline">
           <span className="size-1.5 rounded-full bg-selection" />

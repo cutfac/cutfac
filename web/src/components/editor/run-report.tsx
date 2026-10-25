@@ -158,12 +158,12 @@ function ToolGroup({ tools, active }: { tools: ReadonlyArray<ToolStep>; active: 
         <ChevronRightIcon data-icon="inline-end" className={open ? "rotate-90" : undefined} />
       </CollapsibleTrigger>
       {active && !open && latest !== undefined ? (
-        <div className="mt-1.5 ml-3.5 border-l pl-3">
+        <div className="mt-1.5 ml-6">
           <ToolLine tool={latest} />
         </div>
       ) : null}
       <CollapsibleContent>
-        <div className="mt-1.5 ml-3.5 flex max-h-64 flex-col gap-1.5 overflow-y-auto border-l pl-3">
+        <div className="mt-1.5 ml-6 flex max-h-64 flex-col gap-1.5 overflow-y-auto">
           {tools.map((tool, index) => (
             // oxlint-disable-next-line react/no-array-index-key -- calls only ever append, so position is identity
             <ToolLine key={index} tool={tool} />

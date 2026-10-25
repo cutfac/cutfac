@@ -30,3 +30,22 @@ export function formatAgo(at: string, locale: string, now: number = Date.now()):
 /** When a message was sent, as the chat shows it under the message. */
 export const clockTime = (at: string, locale: string) =>
   new Date(at).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+
+const startOfDay = (at: number) => new Date(at).setHours(0, 0, 0, 0);
+
+/** The day a list groups its rows under: `today`, `yesterday`, then the date. */
+export function dayLabel(at: string, locale: string, now: number = Date.now()): string {
+  const day = startOfDay(Date.parse(at));
+  const days = Math.round((day - startOfDay(now)) / 86_400_000);
+
+  if (days === 0 || days === -1) {
+    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(days, "day");
+  }
+
+  const options: Intl.DateTimeFormatOptions = { month: "long", day: "numeric" };
+
+  // The year shows only when it isn't this one.
+  if (new Date(day).getFullYear() !== new Date(now).getFullYear()) options.year = "numeric";
+
+  return new Date(day).toLocaleDateString(locale, options);
+}
