@@ -1,67 +1,31 @@
-import {
-  ArrowLeftIcon,
-  ClapperboardIcon,
-  KeyboardIcon,
-  PlusIcon,
-  Redo2Icon,
-  Undo2Icon,
-} from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { InTitleBar } from "@/components/title-bar";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import type { DroppedFile } from "@/components/ui/dropzone";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import {
-  api,
-  fileUrl,
-  onAgentRun,
-  STATUSES,
-  type AgentChoice,
-  type Feedback,
-  type ItemDetail,
-  type Media,
-  type Status,
-} from "../api.ts";
-import { FileStrip, ReferenceStrip, useAttachments } from "../components/editor/attachments.tsx";
-import { Chat } from "../components/editor/chat.tsx";
+import { api, onAgentRun, type AgentChoice, type Feedback } from "../api.ts";
+import { ReferenceStrip, useAttachments } from "../components/editor/attachments.tsx";
+import { Chat, ChatComposer } from "../components/editor/chat.tsx";
 import { Checks } from "../components/editor/checks.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
 import { EditorDock, SectionGrip } from "../components/editor/dock.tsx";
-import { Hint, keepFocus } from "../components/editor/hint.tsx";
 import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
+import { mediaUrl, MediaStrip, NoMedia, shownMedia } from "../components/editor/item-media.tsx";
+import { Toolbar } from "../components/editor/item-toolbar.tsx";
 import { RenderFrame, RenderProvider, useItemRender } from "../components/editor/render-card.tsx";
 import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
-import { href, useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
+import { useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
-import { EDIT_KEYS, onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
+import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { redoable, undoable } from "../lib/history.ts";
-import { agentLabel, pickedSettings } from "../lib/models.ts";
+import { pickedSettings } from "../lib/models.ts";
 import { Player, usePlayer } from "../lib/player.ts";
 import { renderedName, shellRender } from "../lib/render.ts";
 import { pinsOn } from "../lib/requests.ts";
@@ -79,10 +43,6 @@ import {
   type Target,
 } from "../lib/target.ts";
 
-const showError = (cause: Error) => {
-  toast.error(cause.message);
-};
-
 /** Where typing goes to the element, so the editor's single-key shortcuts stay out of the way. */
 const TEXT_ENTRY =
   "input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog'], [role='listbox'], [role='menu']";
@@ -93,18 +53,6 @@ const CONTROL =
 
 const within = (target: EventTarget | null, selector: string) =>
   target instanceof Element && target.closest(selector) !== null;
-
-/** The media to show: the chosen one, else the first video, else whatever there is. */
-function shownMedia(item: ItemDetail, name: string | undefined): Media | undefined {
-  return (
-    item.media.find((media) => media.name === name) ??
-    item.media.find((media) => media.kind === "video") ??
-    item.media[0]
-  );
-}
-
-const mediaUrl = (item: ItemDetail, media: Media) =>
-  fileUrl(`${item.dir}/${media.name}`, media.mtime);
 
 interface ItemViewProps {
   id: string;
@@ -161,16 +109,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
 
   const focusComposer = () => inputRef.current?.focus({ preventScroll: true });
 
-  /** Show the chat with the cursor in its box, once files are attached to its next request. */
-  function toChat() {
-    setTab("chat");
-    // The chat's tab is hidden until the switch renders.
-    requestAnimationFrame(focusComposer);
-  }
-
+  /** Attach files to the next request and put the cursor in the box it is written in. */
   function attachToChat(files: ReadonlyArray<DroppedFile>) {
     chatFiles.add(files);
-    toChat();
+    focusComposer();
   }
 
   /** Show `name` and put the playhead at `at`, waiting for the file to load if it is another. */
@@ -376,6 +318,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                         setData,
                         setRun,
                       ).then((sentTo) => {
+                        setTab("chat");
                         // `/feedback` leaves the box drawn, so the request about it can still follow.
                         if (sentTo === "item") clear();
 
@@ -442,7 +385,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     onItem={setData}
                     onAttach={(path) => {
                       chatFiles.attach(path);
-                      toChat();
+                      focusComposer();
                     }}
                     onDetach={(path) => {
                       const holding = [chatFiles, boxFiles].filter((files) =>
@@ -471,24 +414,19 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 </TabsList>
                 <SectionGrip section="chat" />
               </div>
-              {/* Kept mounted so a half-typed request survives a look at the other tabs. */}
+              {/* Kept mounted so the chat keeps its scroll and a half-written answer across tabs. */}
               <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
                 <RenderProvider value={renderView}>
                   <Chat
                     item={item}
                     media={media}
                     run={run}
-                    target={target}
                     statuses={statuses}
                     agent={agent}
-                    onAgent={setChosen}
                     picks={picks}
-                    onPick={setPick}
                     inputRef={inputRef}
-                    files={chatFiles}
                     onItem={setData}
                     onRun={setRun}
-                    onClearTarget={clear}
                     onShow={show}
                     onRetarget={(feedback: Feedback) => {
                       const again = targetOf(feedback);
@@ -523,247 +461,27 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 </SelectionArea>
               </TabsContent>
             </Tabs>
+            <ChatComposer
+              item={item}
+              media={media}
+              target={target}
+              statuses={statuses}
+              agent={agent}
+              onAgent={setChosen}
+              picks={picks}
+              onPick={setPick}
+              run={run}
+              inputRef={inputRef}
+              files={chatFiles}
+              onItem={setData}
+              onRun={setRun}
+              onClearTarget={clear}
+              onSent={() => setTab("chat")}
+            />
           </aside>
         }
       />
       <ShortcutsDialog open={shortcuts} onOpenChange={setShortcuts} />
     </>
   );
-}
-
-function Toolbar({
-  item,
-  running,
-  agent,
-  asking,
-  onItem,
-  onEdit,
-  onShortcuts,
-}: {
-  item: ItemDetail;
-  running: boolean;
-  agent: LiveRun["agent"];
-  /** The agent waits for the user to answer what it asked. */
-  asking: boolean;
-  onItem: (item: ItemDetail) => void;
-  onEdit: (command: EditCommand) => void;
-  onShortcuts: () => void;
-}) {
-  const t = useMessages();
-  const statuses = STATUSES.map((status) => ({ value: status, label: t.status[status] }));
-
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <a href={href("board")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-        <ArrowLeftIcon data-icon="inline-start" />
-        {t.nav.board}
-      </a>
-      <h1 className="min-w-0 truncate text-sm font-semibold">{item.doc.title}</h1>
-      {running && asking ? (
-        <Badge variant="outline">
-          <span className="size-1.5 rounded-full bg-selection" />
-          {t.item.asking(agentLabel(agent) ?? t.chat.agent)}
-        </Badge>
-      ) : running ? (
-        <Badge variant="secondary">
-          <Spinner data-icon="inline-start" />
-          {t.item.editing(agentLabel(agent) ?? t.chat.agent)}
-        </Badge>
-      ) : null}
-      <div className="ml-auto flex shrink-0 items-center gap-1">
-        <Hint label={t.history.undo} keys={EDIT_KEYS.undo}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t.history.undo}
-            disabled={running || undoable(item.history) === undefined}
-            onMouseDown={keepFocus}
-            onClick={() => onEdit("undo")}
-          >
-            <Undo2Icon />
-          </Button>
-        </Hint>
-        <Hint label={t.history.redo} keys={EDIT_KEYS.redo}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t.history.redo}
-            disabled={running || redoable(item.history) === undefined}
-            onMouseDown={keepFocus}
-            onClick={() => onEdit("redo")}
-          >
-            <Redo2Icon />
-          </Button>
-        </Hint>
-        <Hint label={t.shortcuts.open} keys="?">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t.shortcuts.open}
-            onMouseDown={keepFocus}
-            onClick={onShortcuts}
-          >
-            <KeyboardIcon />
-          </Button>
-        </Hint>
-      </div>
-      <Select
-        items={statuses}
-        value={item.doc.status}
-        onValueChange={(status: Status | null) => {
-          if (status !== null) api.updateItem(item.id, { status }).then(onItem, showError);
-        }}
-      >
-        <SelectTrigger size="sm" aria-label={t.item.status}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          {statuses.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-/** Upload a file as new media of the item; the server names it with its aspect. */
-function useUpload(
-  item: ItemDetail,
-  onItem: (item: ItemDetail) => void,
-  onUploaded: (name: string) => void,
-) {
-  const [uploading, setUploading] = useState(false);
-
-  function upload(file: File | undefined) {
-    if (file === undefined || uploading) return;
-
-    setUploading(true);
-
-    api
-      .uploadMedia(item.id, file)
-      .then((next) => {
-        onItem(next);
-
-        const added = next.media.find(
-          (media) => !item.media.some((old) => old.name === media.name),
-        );
-
-        if (added !== undefined) onUploaded(added.name);
-      }, showError)
-      .finally(() => setUploading(false));
-  }
-
-  return {
-    uploading,
-    /** Takes the first of the files dropped or picked. */
-    fromFiles: (files: ReadonlyArray<DroppedFile>) => upload(files[0]?.file),
-  };
-}
-
-const MEDIA_ACCEPT = "video/*,image/*";
-
-function NoMedia({
-  item,
-  onItem,
-  onUploaded,
-}: {
-  item: ItemDetail;
-  onItem: (item: ItemDetail) => void;
-  onUploaded: (name: string) => void;
-}) {
-  const { uploading, fromFiles } = useUpload(item, onItem, onUploaded);
-  const openFiles = useRef<() => void>(null);
-  const t = useMessages();
-
-  return (
-    <Dropzone
-      label={t.attachments.drop.media}
-      accept={MEDIA_ACCEPT}
-      multiple={false}
-      openRef={openFiles}
-      onFiles={fromFiles}
-      className="flex flex-1"
-    >
-      <div className="flex flex-1 rounded-3xl border border-dashed">
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ClapperboardIcon />
-            </EmptyMedia>
-            <EmptyTitle>{t.item.noMediaTitle}</EmptyTitle>
-            <EmptyDescription>{t.item.noMediaBody}</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button variant="outline" onClick={() => openFiles.current?.()}>
-              {uploading ? (
-                <Spinner data-icon="inline-start" />
-              ) : (
-                <PlusIcon data-icon="inline-start" />
-              )}
-              {t.item.addMedia}
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </div>
-    </Dropzone>
-  );
-}
-
-/** Every file of the item; pick one to edit, or add another. */
-function MediaStrip({
-  item,
-  shown,
-  onPick,
-  onItem,
-  onUploaded,
-}: {
-  item: ItemDetail;
-  shown: Media;
-  onPick: (name: string) => void;
-  onItem: (item: ItemDetail) => void;
-  onUploaded: (name: string) => void;
-}) {
-  const { uploading, fromFiles } = useUpload(item, onItem, onUploaded);
-  const t = useMessages();
-
-  return (
-    <FileStrip
-      title={t.attachments.media}
-      label={t.attachments.drop.media}
-      addLabel={t.item.addMedia}
-      accept={MEDIA_ACCEPT}
-      multiple={false}
-      uploading={uploading}
-      onFiles={fromFiles}
-    >
-      {item.media.map((media) => (
-        <button
-          key={media.name}
-          type="button"
-          aria-pressed={media.name === shown.name}
-          title={media.name}
-          className="group/media flex w-20 shrink-0 flex-col gap-1 rounded-lg p-1 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted"
-          onClick={() => onPick(media.name)}
-        >
-          <Thumbnail src={mediaUrl(item, media)} media={media} />
-          <span className="truncate text-xs text-muted-foreground group-aria-pressed/media:font-medium group-aria-pressed/media:text-foreground">
-            {media.name}
-          </span>
-        </button>
-      ))}
-    </FileStrip>
-  );
-}
-
-function Thumbnail({ src, media }: { src: string; media: Media }) {
-  const frame =
-    "aspect-square w-full rounded-md bg-muted object-cover ring-1 ring-foreground/10 group-aria-pressed/media:ring-2 group-aria-pressed/media:ring-selection";
-
-  if (media.kind === "image") return <img src={src} alt="" loading="lazy" className={frame} />;
-
-  // `#t` shows a frame a little in, past a black first frame.
-  return <video src={`${src}#t=0.5`} muted preload="metadata" className={frame} />;
 }

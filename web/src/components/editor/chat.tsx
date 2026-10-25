@@ -23,12 +23,10 @@ import {
 import {
   api,
   type AgentChoice,
-  type AgentName,
   type AgentStatus,
   type Feedback,
   type ItemDetail,
   type Media,
-  type ModelSettings,
 } from "../../api.ts";
 import { approvalsApi } from "../../approvalsApi.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -36,28 +34,21 @@ import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { asksUser, inOrder, linePaused, versionsOf, waitingLine } from "../../lib/requests.ts";
 import { liveFor, runView, type LiveRun, type OnRun } from "../../lib/run.ts";
-import { targetOf, type Target } from "../../lib/target.ts";
-import type { Attachments } from "./attachments.tsx";
-import { Composer, copyPrompt, editInput, sendRequest } from "./composer.tsx";
+import { targetOf } from "../../lib/target.ts";
+import { Composer, type ComposerProps, copyPrompt, editInput, sendRequest } from "./composer.tsx";
 import { Request, type RequestActions } from "./request.tsx";
 
 interface ChatProps {
   item: ItemDetail;
   media: Media | undefined;
   run: LiveRun;
-  target: Target;
   statuses: ReadonlyArray<AgentStatus> | undefined;
   agent: AgentChoice;
-  onAgent: (agent: AgentChoice) => void;
   /** The model and effort picked for each agent. */
   picks: ModelPicks;
-  onPick: (agent: AgentName, settings: ModelSettings) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
-  /** Files going with the next request. */
-  files: Attachments;
   onItem: (item: ItemDetail) => void;
   onRun: OnRun;
-  onClearTarget: () => void;
   /** Show where a past request pointed: its media, its moment, its outline. */
   onShow: (feedback: Feedback) => void;
   /** Point the composer at a past request's target again, to follow up on it. */
@@ -71,17 +62,12 @@ export function Chat({
   item,
   media,
   run,
-  target,
   statuses,
   agent,
-  onAgent,
   picks,
-  onPick,
   inputRef,
-  files,
   onItem,
   onRun,
-  onClearTarget,
   onShow,
   onRetarget,
   onCompare,
@@ -91,10 +77,6 @@ export function Chat({
   const requests = inOrder(item);
   const line = waitingLine(requests);
   const running = item.running || run.status === "running";
-
-  const answering =
-    !running &&
-    requests.some((feedback) => asksUser(item, feedback, runView(feedback.run, undefined, false)));
 
   /** How many requests run before a waiting one, counting the run going now. */
   const aheadOf = (feedback: Feedback) => {
@@ -211,25 +193,40 @@ export function Chat({
           }}
         />
       ) : null}
-      <Composer
-        item={item}
-        media={media}
-        target={target}
-        statuses={statuses}
-        agent={agent}
-        onAgent={onAgent}
-        settings={pickedSettings(statuses, picks, agent)}
-        onPick={onPick}
-        running={running}
-        answering={answering}
-        inputRef={inputRef}
-        files={files}
-        onItem={onItem}
-        onRun={onRun}
-        onClearTarget={onClearTarget}
-        onStop={actions.stop}
-      />
     </div>
+  );
+}
+
+type ChatComposerProps = Omit<ComposerProps, "settings" | "running" | "answering" | "onStop"> & {
+  run: LiveRun;
+  picks: ModelPicks;
+};
+
+/**
+ * The composer under the item's panel, on every tab, so a request can go out from wherever the
+ * user is looking. It offers to stop a run, and takes what the user writes as the answer when the
+ * agent asked something.
+ */
+export function ChatComposer({ run, picks, ...props }: ChatComposerProps) {
+  const { item, statuses, agent } = props;
+  const running = item.running || run.status === "running";
+
+  const answering =
+    !running &&
+    inOrder(item).some((feedback) =>
+      asksUser(item, feedback, runView(feedback.run, undefined, false)),
+    );
+
+  return (
+    <Composer
+      {...props}
+      settings={pickedSettings(statuses, picks, agent)}
+      running={running}
+      answering={answering}
+      onStop={() => {
+        api.stopEdit(item.id).catch(sendFailed);
+      }}
+    />
   );
 }
 

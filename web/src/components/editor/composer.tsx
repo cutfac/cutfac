@@ -222,7 +222,7 @@ const agentItems = (statuses: ReadonlyArray<AgentStatus> | undefined, t: Message
     disabled: value !== "queue" && !agentInstalled(statuses, value),
   }));
 
-interface ComposerProps {
+export interface ComposerProps {
   item: ItemDetail;
   media: Media | undefined;
   target: Target;
@@ -244,6 +244,8 @@ interface ComposerProps {
   onRun: OnRun;
   onClearTarget: () => void;
   onStop: () => void;
+  /** A request went out, so whatever the panel shows, the chat with its run should show. */
+  onSent?: () => void;
 }
 
 /**
@@ -267,6 +269,7 @@ export function Composer({
   onRun,
   onClearTarget,
   onStop,
+  onSent,
 }: ComposerProps) {
   const [body, setBody] = useState("");
   const openFiles = useRef<() => void>(null);
@@ -295,6 +298,7 @@ export function Composer({
       );
 
       setBody("");
+      onSent?.();
 
       if (sentTo === "item") {
         // Versions cost a run each, so the next request is a single edit unless asked again.
