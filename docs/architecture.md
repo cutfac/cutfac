@@ -41,15 +41,18 @@ with ffmpeg and the skill.
    and lists the item's `sources`: folders, files, and http(s) links the user wants read, stored
    relative when inside the workspace and absolute outside it (`src/core/sources.ts`). Nothing is
    read when they are saved; the agent says when one is gone.
-3. **Run.** `src/core/agentRun.ts` runs `claude -p` or `codex exec` headless in the workspace, one
-   session per item, and streams its steps over SSE (`/api/item/run`). The command lines are built
-   in `agentCommand.ts`, their output is read in `agentParse.ts`, and `runRegistry.ts` keeps one run
-   per item. A request may name the model
-   and effort (`claude --model --effort`, `codex -m` with `model_reasoning_effort`); left out, each
-   CLI uses its own default. Claude Code asks the board, as it would ask in a terminal, before it
-   uses a tool the user's settings don't allow (`approval.ts`); Always allow keeps the rule it
-   offers, and the workspace stays trusted for it. Codex works in its own sandbox and searches the
-   web when the item has source links. Without an agent the request stays queued; the chat offers
+3. **Run.** `src/core/agentRun.ts` runs `claude -p` or `codex app-server` headless in the
+   workspace, one session per item, and streams its steps over SSE (`/api/item/run`). The command
+   lines are built in `agentCommand.ts`. Claude's stream-json output is read in `claudeStream.ts`;
+   Codex is spoken to over the app-server's stdio JSON-RPC (`codexAppServer.ts`, with the messages
+   in `codexProtocol.ts`): `initialize`, `thread/start` or `thread/resume`, then `turn/start`, until
+   `turn/completed`. `runRegistry.ts` keeps one run per item. A request may name the model and
+   effort (`claude --model --effort`; the thread's `model` and the turn's `effort` for Codex); left
+   out, each CLI uses its own default. Both agents ask the board, as they would ask in a terminal,
+   before they use a tool the user's settings don't allow (`approval.ts`): Claude through its
+   permission prompt, Codex through the app-server's approval requests (`codexApprovals.ts`).
+   Always allow keeps the rule the agent offers, and the workspace stays trusted for it. Codex works in its own sandbox and searches the web when
+   the item has source links. Without an agent the request stays queued; the chat offers
    "Copy prompt" so any agent can pick it up.
 4. **Line.** One run works on an item at a time. A request sent while the item's agent is busy, or
    while earlier requests wait, is stored with `waiting: <agent>` and runs in the order requests

@@ -170,7 +170,7 @@ web build other than `dist/web`.
 Open an item on the board. Drag across the timeline to select a part (or press `I` and `O` at the
 playhead), drag on the video to mark an area, then type what should change and press Enter. A box
 you draw opens a small request box right beside it, so you can ask about it without leaving the
-frame. The server runs `claude -p` or `codex exec` in the workspace, one session per item, and
+frame. The server runs `claude -p` or `codex app-server` in the workspace, one session per item, and
 streams its steps into the chat. The agent gets a clip of the range, the frame with the box drawn
 on it, the timecodes, and the original file. When it is done, compare before and after, then keep
 the edit or restore the previous version. Without a connected agent, the request waits in the chat
