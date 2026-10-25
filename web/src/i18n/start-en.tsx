@@ -1,5 +1,4 @@
 import type { Platform, Purpose } from "../lib/brief.ts";
-import type { GalleryId } from "../lib/gallery.ts";
 import type { RunPhase } from "../lib/onboarding.ts";
 
 interface PurposeCopy {
@@ -12,8 +11,8 @@ interface PurposeCopy {
 }
 
 /**
- * The brief and the first template: what the videos are for, the reference to start from, and the
- * first video while the agent makes the template. The brief's form shows again on the Brief page.
+ * The brief and the first template: what the videos are for, asked a part at a time, and the first
+ * video while the agent makes the template. The brief's form shows again on the Brief page.
  */
 export const startEn = {
   brief: {
@@ -67,8 +66,12 @@ export const startEn = {
   whatToMake: {
     title: "What will you make?",
     body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later under Brief in the sidebar.",
-    optional: "Optional",
+    details: {
+      body: "A line or two is enough, or skip it.",
+      ownBody: "A line or two is enough.",
+    },
     material: {
+      title: "Anything your agent should read?",
       label: "Your material",
       hint: "A website or folder your agent should read, like your product page or a brand kit.",
       placeholder: "https://your-site.com",
@@ -76,36 +79,15 @@ export const startEn = {
       choose: "Choose folder…",
       remove: (source: string) => `Remove ${source}`,
     },
-    reference: {
-      label: "Start from a reference",
-      hint: "Pick an example to build on. Without one, your agent starts from what it knows.",
-      paste: "Or paste a link to a skill, starter kit or video",
-      open: (title: string) => `Open ${title}`,
-    },
+    next: "Next",
+    back: "Back",
+    skipPart: "Skip",
     start: "Start making",
     starting: "Starting…",
     skip: "Skip for now",
     learnFailed: (source: string, message: string) => `Could not read ${source}: ${message}`,
     noAgent: "No agent is ready. Set one up in Setup, then try again.",
   },
-  gallery: {
-    opuscar: {
-      title: "Film styles",
-      description: "51 film styles, each a prompt and a demo made in code",
-    },
-    mgStyles: {
-      title: "Motion graphics",
-      description: "15 motion graphics styles, with prompts and source",
-    },
-    animationBase: {
-      title: "Hand-painted animation",
-      description: "A starter kit for hand-painted cartoon animation",
-    },
-    lyricVideo: {
-      title: "Lyric video",
-      description: "A finished lyric music video, rendered locally",
-    },
-  } satisfies Record<GalleryId, { title: string; description: string }>,
   firstVideo: {
     title: "Your first video",
     body: "Your agent is setting up how this kind of video gets made. Give the first one a title meanwhile.",

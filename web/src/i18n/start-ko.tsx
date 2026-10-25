@@ -54,8 +54,12 @@ export const startKo: StartMessages = {
   whatToMake: {
     title: "무엇을 만들까요?",
     body: "에이전트에게 조금만 알려 주면 영상 만드는 방식을 알아서 준비해요. 나중에 사이드바의 브리프에서 언제든 바꿀 수 있어요.",
-    optional: "선택",
+    details: {
+      body: "한두 줄이면 충분해요. 건너뛰어도 돼요.",
+      ownBody: "한두 줄이면 충분해요.",
+    },
     material: {
+      title: "에이전트가 읽을 자료가 있나요?",
       label: "내 자료",
       hint: "제품 페이지나 브랜드 키트처럼 에이전트가 읽을 웹사이트나 폴더예요.",
       placeholder: "https://내-사이트.com",
@@ -63,35 +67,14 @@ export const startKo: StartMessages = {
       choose: "폴더 선택…",
       remove: (source) => `${source} 빼기`,
     },
-    reference: {
-      label: "참고할 레퍼런스",
-      hint: "따라 만들 예시를 골라요. 고르지 않으면 에이전트가 아는 것에서 시작해요.",
-      paste: "또는 스킬, 스타터 키트, 영상 링크를 붙여 넣으세요",
-      open: (title) => `${title} 열기`,
-    },
+    next: "다음",
+    back: "이전",
+    skipPart: "건너뛰기",
     start: "만들기 시작",
     starting: "시작하는 중…",
     skip: "나중에 하기",
     learnFailed: (source, message) => `${withParticle(source, "을/를")} 읽지 못했어요: ${message}`,
     noAgent: "준비된 에이전트가 없어요. 설정에서 준비한 뒤 다시 시도해 주세요.",
-  },
-  gallery: {
-    opuscar: {
-      title: "영화 스타일",
-      description: "51가지 영화 스타일. 스타일마다 프롬프트와 코드로 만든 데모가 있어요",
-    },
-    mgStyles: {
-      title: "모션 그래픽",
-      description: "15가지 모션 그래픽 스타일과 프롬프트, 소스",
-    },
-    animationBase: {
-      title: "손그림 애니메이션",
-      description: "손으로 그린 듯한 만화 애니메이션 스타터 키트",
-    },
-    lyricVideo: {
-      title: "가사 영상",
-      description: "로컬에서 렌더링한 완성된 뮤직비디오",
-    },
   },
   firstVideo: {
     title: "첫 영상",
