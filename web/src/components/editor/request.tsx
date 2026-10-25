@@ -79,7 +79,8 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
   const locale = useLocale();
 
   return (
-    <div className="flex flex-col gap-4">
+    // As far apart as Aside sets a request and its reply.
+    <div className="flex flex-col gap-8">
       <Message align="end">
         <MessageContent>
           {isEmptyTarget(target) ? null : (
