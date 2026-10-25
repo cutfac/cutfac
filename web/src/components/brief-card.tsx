@@ -2,16 +2,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { BriefForm } from "@/components/onboarding/brief-form";
-import { ListSkeleton } from "@/components/page";
+import { ListSkeleton, Section } from "@/components/page";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 
 import { briefApi } from "../briefApi.ts";
@@ -32,20 +24,14 @@ export function BriefCard({ brief }: { brief: Live<BriefView> }) {
   const t = useMessages().start.brief;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t.title}</CardTitle>
-        <CardDescription>{t.body}</CardDescription>
-      </CardHeader>
+    <Section title={t.title} description={t.body} body="card">
       {brief.data === undefined && brief.error === undefined ? (
-        <CardContent>
-          <ListSkeleton rows={2} />
-        </CardContent>
+        <ListSkeleton rows={2} />
       ) : (
         // The form starts over from the file whenever the file changes, as the agent may write it.
         <BriefEditor key={JSON.stringify(brief.data ?? null)} brief={brief} />
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -69,11 +55,9 @@ function BriefEditor({ brief }: { brief: Live<BriefView> }) {
   }
 
   return (
-    <>
-      <CardContent>
-        <BriefForm value={draft} onChange={setDraft} disabled={saving} />
-      </CardContent>
-      <CardFooter className="justify-end">
+    <div className="flex flex-col gap-4">
+      <BriefForm value={draft} onChange={setDraft} disabled={saving} />
+      <div className="flex justify-end">
         {/* A brief that couldn't be read would be replaced with this form. */}
         <Button
           disabled={saving || brief.data === undefined || sameBrief(draft, saved)}
@@ -82,7 +66,7 @@ function BriefEditor({ brief }: { brief: Live<BriefView> }) {
           {saving ? <Spinner data-icon="inline-start" /> : null}
           {t.save}
         </Button>
-      </CardFooter>
-    </>
+      </div>
+    </div>
   );
 }

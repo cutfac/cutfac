@@ -144,6 +144,7 @@ Tabs and other segmented choices have no box around them: only the picked one is
 rest are quiet text. Controls in a title bar are ghosts that tint under the pointer, as Aside's are;
 the one main action keeps its fill.
 
-A settings page groups its rows as both apps do: each group's name and what it is for sit above a
-card that holds only the rows (`Section` in `components/page.tsx`), split by hairlines
-(`Item variant="row"`).
+A page groups what it holds as both apps do: each group's name, what it is for and its action sit
+above it, never inside a card (`Section` in `components/page.tsx`). Settings go in a card that
+holds only rows split by hairlines (`Item variant="row"`), a form in a plain card, and anything else
+stands open.

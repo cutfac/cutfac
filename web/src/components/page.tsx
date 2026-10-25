@@ -54,29 +54,42 @@ export function Page({ title, description, actions, width, children }: PageProps
 }
 
 /**
- * A group of settings as the Codex app and Aside lay theirs out: its name and what it is for above
- * a card that holds only its rows, and a note under the card when it has one.
+ * A group on a page as the Codex app and Aside lay theirs out: its name, what it is for and its
+ * action above what it holds, and a note under it when it has one. A group of settings holds only
+ * rows split by hairlines (`rows`); a form sits in a plain card (`card`); anything else stands on
+ * its own (`open`).
  */
 export function Section({
   title,
   description,
+  action,
   note,
+  body = "rows",
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
+  action?: ReactNode;
   note?: ReactNode;
+  body?: "rows" | "card" | "open";
   children: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <header className="flex flex-col gap-0.5 px-1">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+      <header className="flex items-end gap-3 px-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <h2 className="text-sm font-medium">{title}</h2>
+          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        </div>
+        {action}
       </header>
-      <Card size="rows">
-        <CardContent>{children}</CardContent>
-      </Card>
+      {body === "open" ? (
+        children
+      ) : (
+        <Card size={body === "rows" ? "rows" : "default"}>
+          <CardContent>{children}</CardContent>
+        </Card>
+      )}
       {note ? <p className="px-1 text-xs text-muted-foreground">{note}</p> : null}
     </section>
   );

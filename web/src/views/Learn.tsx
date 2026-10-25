@@ -11,7 +11,7 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
 import { BriefCard } from "@/components/brief-card";
-import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
+import { ErrorAlert, ListSkeleton, Page, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -352,65 +352,63 @@ export function Learn() {
   return (
     <Page width="default" title={t.learn.title} description={t.learn.description}>
       <BriefCard brief={brief} />
-      <section className="flex flex-col gap-1.5 pt-4">
-        <h2 className="font-medium">{t.learn.materials}</h2>
-        <p className="text-sm text-muted-foreground">{t.learn.materialsBody}</p>
-      </section>
-      <AddSource onLearned={reload} />
-      {error ? (
-        <ErrorAlert title={t.learn.loadError} message={error} />
-      ) : data === undefined ? (
-        <ListSkeleton rows={3} />
-      ) : data.learned.length === 0 ? (
-        <div className="rounded-3xl border border-dashed">
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <GraduationCapIcon />
-              </EmptyMedia>
-              <EmptyTitle>{t.learn.emptyTitle}</EmptyTitle>
-              <EmptyDescription>{t.learn.emptyBody}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+      <Section title={t.learn.materials} description={t.learn.materialsBody} body="open">
+        <div className="flex flex-col gap-4">
+          <AddSource onLearned={reload} />
+          {error ? (
+            <ErrorAlert title={t.learn.loadError} message={error} />
+          ) : data === undefined ? (
+            <ListSkeleton rows={3} />
+          ) : data.learned.length === 0 ? (
+            <div className="rounded-3xl border border-dashed">
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <GraduationCapIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>{t.learn.emptyTitle}</EmptyTitle>
+                  <EmptyDescription>{t.learn.emptyBody}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {data.learned.map((entry) => (
+                <LearnedCard key={entry.id} entry={entry} onForgot={setData} />
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {data.learned.map((entry) => (
-            <LearnedCard key={entry.id} entry={entry} onForgot={setData} />
-          ))}
-        </div>
-      )}
+      </Section>
       {about ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.learn.aboutTitle}</CardTitle>
-            <CardDescription>{t.learn.aboutBody}</CardDescription>
-            {desktop ? (
-              <CardAction>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    desktop
-                      ?.revealPath(about.path)
-                      .catch((cause: Error) => toast.error(cause.message))
-                  }
-                >
-                  <FolderOpenIcon data-icon="inline-start" />
-                  {t.learn.showFile}
-                </Button>
-              </CardAction>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            <SelectionArea className="typeset typeset-docs">
-              {/* about.md marks each learned section with an HTML comment, which is for agents only. */}
-              <Markdown remarkPlugins={[remarkGfm]} skipHtml>
-                {about.text}
-              </Markdown>
-            </SelectionArea>
-          </CardContent>
-        </Card>
+        <Section
+          title={t.learn.aboutTitle}
+          description={t.learn.aboutBody}
+          body="card"
+          action={
+            desktop ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  desktop
+                    ?.revealPath(about.path)
+                    .catch((cause: Error) => toast.error(cause.message))
+                }
+              >
+                <FolderOpenIcon data-icon="inline-start" />
+                {t.learn.showFile}
+              </Button>
+            ) : null
+          }
+        >
+          <SelectionArea className="typeset typeset-docs">
+            {/* about.md marks each learned section with an HTML comment, which is for agents only. */}
+            <Markdown remarkPlugins={[remarkGfm]} skipHtml>
+              {about.text}
+            </Markdown>
+          </SelectionArea>
+        </Section>
       ) : null}
     </Page>
   );
