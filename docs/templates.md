@@ -80,12 +80,12 @@ required ones.
   an import run from the board makes that copy itself. `name` is the folder name, lowercase words
   joined by hyphens; `source` says where to get it.
 - `requires` lists programs the template runs. The check only looks them up on `PATH`.
-- A board edit by Claude Code may use the workspace's files, `ffmpeg` and `ffprobe`, and Cutfac's
-  own tools. A template that runs another program, such as `uv`, needs a rule for it in
-  `permissions.allow` of the workspace's `.claude/settings.json`, as any Claude Code session there
-  would: `{ "permissions": { "allow": ["Bash(uv:*)"] } }`. Setup lists such rules, and Claude runs
-  with them once the user trusts the workspace; the user can also let board runs do more under
-  Permissions there. Codex runs work in Codex's own sandbox and need no rule.
+- A board edit by Claude Code asks the user on the board before it runs a program their settings
+  don't allow, such as a template's `uv`, as Claude Code asks in a terminal. Always allow keeps the
+  rule it offers. A rule in `permissions.allow` of the workspace's `.claude/settings.json`, such as
+  `{ "permissions": { "allow": ["Bash(uv:*)"] } }`, spares the question; Setup lists such rules,
+  and Claude runs with them once the user trusts the workspace. Codex runs work in Codex's own
+  sandbox and need no rule.
 
 When the board sends an edit request, the prompt points the agent at the template's `format.yaml`,
 `README.md`, the `SKILL.md` of each skill, and the files of each choice the item picked. If the

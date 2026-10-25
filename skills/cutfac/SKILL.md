@@ -146,11 +146,9 @@ user.
    `.claude/skills/<name>/`; otherwise put a copy there too. Copy files byte for byte with
    `git clone`, or `curl` on the raw URL, rather than an installer such as `npx skills add`; a fetch
    tool that summarizes pages is for reading, and a summary is never a copy. If you have no way to
-   copy them, say so and ask the user. Board edits by Claude Code may run `ffmpeg` and `ffprobe`;
-   for any other program the template runs, such as `uv`, add the narrowest rule, such as
-   `Bash(uv:*)`, to `permissions.allow` in the workspace's `.claude/settings.json` with the user's
-   OK. A board run can't write that file, so there, tell the user which rule it needs, or that they
-   can let board runs do more under Permissions in Setup.
+   copy them, say so and ask the user. A board edit by Claude Code asks the user on the board
+   before it runs a program their settings don't allow, such as `uv`, and Always allow there keeps
+   the rule, so a template needs no rule written for it.
 4. `save_format` with `title`, `summary`, `aspects`, `duration`, `requireAudio`, `skills` (name and
    source), `requires` (program names only), `inputs`, and `source` (`url`, `author`, `license`). Keep
    anything else under `metadata`; other unknown keys are dropped.

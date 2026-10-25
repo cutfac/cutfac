@@ -46,8 +46,11 @@ with ffmpeg and the skill.
    in `agentCommand.ts`, their output is read in `agentParse.ts`, and `runRegistry.ts` keeps one run
    per item. A request may name the model
    and effort (`claude --model --effort`, `codex -m` with `model_reasoning_effort`); left out, each
-   CLI uses its own default. Claude Code may fetch from the hosts of the item's source links. Without
-   an agent the request stays queued; the chat offers "Copy prompt" so any agent can pick it up.
+   CLI uses its own default. Claude Code asks the board, as it would ask in a terminal, before it
+   uses a tool the user's settings don't allow (`approval.ts`); Always allow keeps the rule it
+   offers, and the workspace stays trusted for it. Codex works in its own sandbox and searches the
+   web when the item has source links. Without an agent the request stays queued; the chat offers
+   "Copy prompt" so any agent can pick it up.
 4. **Line.** One run works on an item at a time. A request sent while the item's agent is busy, or
    while earlier requests wait, is stored with `waiting: <agent>` and runs in the order requests
    were made. Its context and `baseline` are taken when its turn begins, so its before side is the
