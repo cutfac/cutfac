@@ -4,7 +4,6 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "rea
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
 import { StackMark } from "@/components/stack-mark";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Empty,
@@ -101,13 +100,15 @@ function LearnHint() {
     setDismissed(true);
   };
 
+  // One quiet line with no edge, as the Codex app notes something, rather than a boxed alert.
   return (
-    <Alert>
-      <BookOpenIcon />
-      <AlertTitle className="@2xl/board:mr-40">{t.board.learnHint.title}</AlertTitle>
-      <AlertDescription className="@2xl/board:mr-40">{t.board.learnHint.body}</AlertDescription>
-      {/* Beside the text where there is room, under it where there isn't. */}
-      <div className="col-start-2 mt-2 flex gap-2 @2xl/board:absolute @2xl/board:top-2.5 @2xl/board:right-3 @2xl/board:mt-0">
+    <div className="flex items-center gap-3 rounded-2xl bg-foreground/4 py-1.5 ps-3 pe-1.5 text-sm">
+      <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" />
+      <p className="min-w-0 flex-1 truncate" title={t.board.learnHint.body}>
+        <span className="font-medium">{t.board.learnHint.title}</span>
+        <span className="text-muted-foreground"> · {t.board.learnHint.body}</span>
+      </p>
+      <div className="flex shrink-0 gap-1">
         <Button variant="ghost" size="sm" onClick={dismiss}>
           {t.board.learnHint.dismiss}
         </Button>
@@ -119,7 +120,7 @@ function LearnHint() {
           {t.board.learnHint.action}
         </a>
       </div>
-    </Alert>
+    </div>
   );
 }
 
