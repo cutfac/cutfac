@@ -17,7 +17,7 @@ import { SERVER_NAME } from "../core/agents.ts";
 import { agentVersionNotices } from "../core/agentVersion.ts";
 import { BRIEF_FILE, briefNotices, readBrief } from "../core/brief.ts";
 import { movedRuleNotices } from "../core/claudeRules.ts";
-import { resolveEdit, saveVariant } from "../core/edits.ts";
+import { awaitsDecision, resolveEdit, saveVariant } from "../core/edits.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { getItem, listItems, openFeedback } from "../core/items.ts";
@@ -115,6 +115,12 @@ const FreeVersion = Schema.optional(
   ),
 );
 
+const AwaitingDecision = Schema.Finite.annotate(
+  describe(
+    "requests whose versions or result wait for the user to pick, keep or roll back on the board",
+  ),
+);
+
 const ItemSummary = Schema.Struct({
   id: Schema.String,
   title: Schema.String,
@@ -122,6 +128,7 @@ const ItemSummary = Schema.Struct({
   format: Schema.optional(Schema.String),
   media: Schema.Finite.annotate(describe("media file count")),
   openFeedback: Schema.Finite,
+  awaitingDecision: AwaitingDecision,
 });
 
 const ItemDetail = Schema.Struct({
@@ -201,6 +208,7 @@ const WorkspaceOverview = tool("workspace_overview", {
       }),
     ),
     openFeedback: Schema.Finite,
+    awaitingDecision: AwaitingDecision,
     notices: Schema.Array(Schema.String).annotate(
       describe("problems with the workspace to act on before the task, and how to fix each"),
     ),
@@ -576,6 +584,8 @@ const handlers = WorkspaceToolkit.toLayer(
                 })),
               ),
               openFeedback: feedback.length,
+              awaitingDecision: items.flatMap((item) => item.doc.feedback.filter(awaitsDecision))
+                .length,
               notices: [
                 ...skillNotices(yield* absCopies(copies)),
                 ...briefNotices(brief, briefPath),
@@ -623,6 +633,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 format: item.doc.format,
                 media: item.media.length,
                 openFeedback: item.doc.feedback.filter((f) => f.status === "open").length,
+                awaitingDecision: item.doc.feedback.filter(awaitsDecision).length,
               })),
           })),
         ),
