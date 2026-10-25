@@ -3,38 +3,15 @@ import { ChevronDownIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
 
 import type { AgentStatus, ModelSettings } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
-import {
-  effortLabel,
-  effortsFor,
-  modelLabel,
-  settingsLabels,
-  usableSettings,
-} from "../../lib/models.ts";
-
-/** The choice that leaves the model or effort to the agent; no id or effort is empty. */
-const BY_DEFAULT = "";
-
-/** Settings from the two choices, leaving out what is left to the agent. */
-function fromChoices(model: string, effort: string): ModelSettings {
-  const settings: ModelSettings = {};
-
-  if (model !== BY_DEFAULT) settings.model = model;
-
-  if (effort !== BY_DEFAULT) settings.effort = effort;
-
-  return settings;
-}
+import { effortLabel, effortsFor, usableSettings } from "../../lib/models.ts";
 
 interface ModelPickerProps {
   status: AgentStatus;
@@ -42,31 +19,28 @@ interface ModelPickerProps {
   onPick: (settings: ModelSettings) => void;
 }
 
-/**
- * The model and reasoning effort the agent runs with. Picking a model that does not take the
- * chosen effort sets the effort back to the default.
- */
-export function ModelPicker({ status, settings, onPick }: ModelPickerProps) {
-  const t = useMessages();
-  const m = t.composer.models;
-  const model = settings.model ?? BY_DEFAULT;
-  const effort = settings.effort ?? BY_DEFAULT;
-  const efforts = effortsFor(status, settings.model);
-  const own = status.models.find((option) => option.id === settings.model)?.defaultEffort;
-  const labels = settingsLabels(status, settings, t);
-  // The agent's own pick shows by name, so no one has to guess what "default" means.
-  const ownModel = status.defaultModel ?? m.defaultModel;
-  const shown = (settings.model === undefined ? [ownModel, ...labels] : labels).join(" · ");
-  const pick = (next: ModelSettings) => onPick(usableSettings(status, next));
+/** One quiet setting under the composer: its value by name, opening a list to pick from. */
+function Setting({
+  label,
+  value,
+  options,
+  onPick,
+}: {
+  label: string;
+  value: string | undefined;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  onPick: (value: string) => void;
+}) {
+  const shown = options.find((option) => option.value === value)?.label ?? value ?? "";
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        // In a narrow chat the label gives way first, so the send button stays in view.
+        // In a narrow chat the name gives way first, so the send button stays in view.
         render={
           <InputGroupButton
-            title={`${m.label}: ${shown}`}
-            aria-label={`${m.label}: ${shown}`}
+            title={`${label}: ${shown}`}
+            aria-label={`${label}: ${shown}`}
             className="min-w-0 shrink"
           />
         }
@@ -74,45 +48,47 @@ export function ModelPicker({ status, settings, onPick }: ModelPickerProps) {
         <span className="truncate">{shown}</span>
         <ChevronDownIcon className="text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-auto min-w-48">
-        {status.models.length > 0 ? (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{m.model}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={model}
-              onValueChange={(value: string) => pick(fromChoices(value, effort))}
-            >
-              <DropdownMenuRadioItem value={BY_DEFAULT}>
-                {m.byDefault(status.defaultModel)}
-              </DropdownMenuRadioItem>
-              {status.models.map((option) => (
-                <DropdownMenuRadioItem key={option.id} value={option.id}>
-                  {modelLabel(status, option.id)}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-        ) : null}
-        {status.models.length > 0 && efforts.length > 0 ? <DropdownMenuSeparator /> : null}
-        {efforts.length > 0 ? (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{m.effort}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={effort}
-              onValueChange={(value: string) => pick(fromChoices(model, value))}
-            >
-              <DropdownMenuRadioItem value={BY_DEFAULT}>
-                {m.byDefault(own === undefined ? undefined : effortLabel(own, t))}
-              </DropdownMenuRadioItem>
-              {efforts.map((option) => (
-                <DropdownMenuRadioItem key={option} value={option}>
-                  {effortLabel(option, t)}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-        ) : null}
+      <DropdownMenuContent side="top" align="end" className="w-auto min-w-40">
+        <DropdownMenuRadioGroup value={value ?? ""} onValueChange={onPick}>
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The model and reasoning effort the agent runs with, each by name. Picking a model that does not
+ * take the chosen effort moves the effort to one it does.
+ */
+export function ModelPicker({ status, settings, onPick }: ModelPickerProps) {
+  const t = useMessages();
+  const m = t.composer.models;
+  const efforts = effortsFor(status, settings.model);
+  const pick = (next: ModelSettings) => onPick(usableSettings(status, next));
+
+  return (
+    <>
+      {status.models.length > 0 ? (
+        <Setting
+          label={m.model}
+          value={settings.model}
+          options={status.models.map((option) => ({ value: option.id, label: option.label }))}
+          onPick={(model) => pick({ ...settings, model })}
+        />
+      ) : null}
+      {efforts.length > 0 ? (
+        <Setting
+          label={m.effort}
+          value={settings.effort}
+          options={efforts.map((effort) => ({ value: effort, label: effortLabel(effort, t) }))}
+          onPick={(effort) => pick({ ...settings, effort })}
+        />
+      ) : null}
+    </>
   );
 }

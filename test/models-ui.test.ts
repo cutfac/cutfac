@@ -48,19 +48,38 @@ describe("picking a model and effort", () => {
     expect(offersModels(undefined)).toBe(false);
   });
 
-  test("a request leaves out a model or effort the agent no longer offers", () => {
+  test("a request always names a model and effort the agent offers", () => {
     expect(usableSettings(codex, { model: "gpt-a", effort: "ultra" })).toEqual({
       model: "gpt-a",
       effort: "ultra",
     });
-    // Moving to a model that does not take the effort sets the effort back to the default.
-    expect(usableSettings(codex, { model: "gpt-b", effort: "ultra" })).toEqual({ model: "gpt-b" });
-    expect(usableSettings(codex, { model: "gone", effort: "medium" })).toEqual({
+    // Moving to a model that does not take the effort moves the effort to one it does.
+    expect(usableSettings(codex, { model: "gpt-b", effort: "ultra" })).toEqual({
+      model: "gpt-b",
       effort: "medium",
     });
-    expect(usableSettings(codex, { model: "gone", effort: "ultra" })).toEqual({});
+    // With nothing picked, or a model gone, the agent's first model runs with its own effort.
+    expect(usableSettings(codex, undefined)).toEqual({ model: "gpt-a", effort: "low" });
+    expect(usableSettings(codex, { model: "gone", effort: "medium" })).toEqual({
+      model: "gpt-a",
+      effort: "medium",
+    });
     expect(usableSettings(claude, { model: "opus" })).toEqual({});
     expect(usableSettings(undefined, { model: "opus" })).toEqual({});
+  });
+
+  test("the agent's own default model is the one picked when it names one", () => {
+    expect(usableSettings({ ...codex, defaultModel: "GPT-B" }, {})).toEqual({
+      model: "gpt-b",
+      effort: "medium",
+    });
+    // Claude names a release, such as Opus 5.5, of an alias it lists as Opus.
+    const opus = { id: "opus", label: "Opus", efforts: ["low", "high", "max"] };
+    const sonnet = { id: "sonnet", label: "Sonnet", efforts: ["low", "high", "max"] };
+
+    expect(
+      usableSettings({ ...codex, models: [sonnet, opus], defaultModel: "Opus 5.5" }, {}),
+    ).toEqual({ model: "opus", effort: "high" });
   });
 
   test("each agent sends its own pick, and a copied prompt none", () => {

@@ -219,4 +219,15 @@ describe("the notice that a pick makes the agent read the conversation again", (
     expect(notice(onB, CODEX, { model: "gpt-b", effort: "low" })).toBeUndefined();
     expect(notice(onA, CODEX, { model: "gpt-a", effort: "high" })).toBeUndefined();
   });
+
+  test("stays quiet when the run named no model and the agent does not say its default", () => {
+    const { defaultModel: _, ...unsaid } = CLAUDE;
+    const ranOnDefault = itemWith([ran({ agent: "claude" })]);
+
+    expect(notice(ranOnDefault, unsaid, { model: "sonnet" })).toBeUndefined();
+    // Claude names a release of the alias it lists, which the conversation already ran on.
+    expect(
+      notice(ranOnDefault, { ...CLAUDE, defaultModel: "Opus 5.5" }, { model: "opus" }),
+    ).toBeUndefined();
+  });
 });

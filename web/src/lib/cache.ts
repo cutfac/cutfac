@@ -1,4 +1,5 @@
 import type { AgentChoice, AgentName, AgentStatus, ItemDetail, ModelSettings } from "../api.ts";
+import { ownModel } from "./models.ts";
 
 /**
  * A pick the agent's cached conversation cannot carry over, so it reads the whole conversation
@@ -20,10 +21,6 @@ function lastAsked(item: ItemDetail, agent: AgentName) {
   return undefined;
 }
 
-/** The agent's default model as one of its options, when the list names it. */
-const defaultModel = (status: AgentStatus) =>
-  status.models.find((option) => option.label === status.defaultModel)?.id;
-
 /**
  * Whether sending with `settings` makes the agent read its conversation on the item again, as
  * Claude Code and Codex warn when a model changes mid-conversation. A change of effort alone says
@@ -41,9 +38,13 @@ export function cacheNotice(
   const last = lastAsked(item, agent);
 
   if (last === undefined) return undefined;
-  const model = settings.model ?? defaultModel(status);
+  const model = settings.model ?? ownModel(status);
+  const before = last.settings.model ?? ownModel(status);
 
-  if (model !== (last.settings.model ?? defaultModel(status))) return { kind: "model", model };
+  // A run that named no model ran the agent's default, which may be any model when it does not say.
+  if (before === undefined) return undefined;
+
+  if (model !== before) return { kind: "model", model };
   const option = status.models.find((candidate) => candidate.id === model);
   const effort = settings.effort ?? option?.defaultEffort;
 

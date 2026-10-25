@@ -598,13 +598,9 @@ export const en = {
     agent: "Agent to send to",
     /** The model and reasoning effort the agent runs with; a default is the agent's own pick. */
     models: {
-      label: "Model and reasoning effort",
       model: "Model",
       effort: "Reasoning effort",
       defaultModel: "Default model",
-      /** `pick` is what the agent picks by default, when it says. */
-      byDefault: (pick: string | undefined) =>
-        pick === undefined ? "Default" : `Default (${pick})`,
       /** Efforts the agents take; one not listed shows as the agent names it. */
       efforts: {
         none: "None",

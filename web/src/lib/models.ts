@@ -36,25 +36,52 @@ export function effortsFor(status: AgentStatus, model: string | undefined) {
 export const offersModels = (status: AgentStatus | undefined): status is AgentStatus =>
   status !== undefined && (status.models.length > 0 || status.efforts.length > 0);
 
+/** The model the agent runs when none is picked, when it says and its list names it. */
+export function ownModel(status: AgentStatus) {
+  const own = status.defaultModel;
+
+  if (own === undefined) return undefined;
+
+  // Claude names a release, such as `Opus 5.5`, of an alias it lists as `Opus`.
+  return status.models.find((option) => own === option.label || own.startsWith(`${option.label} `))
+    ?.id;
+}
+
+/** The effort to run with when none is picked: the model's own, else High, else the middle one. */
+function defaultEffort(efforts: ReadonlyArray<string>, own: string | undefined) {
+  if (own !== undefined && efforts.includes(own)) return own;
+
+  return efforts.includes("high") ? "high" : efforts[Math.floor(efforts.length / 2)];
+}
+
 /**
- * What a request is sent with: the pick, less a model or effort the agent no longer offers. With
- * no list to check against, nothing is picked, so what is sent is what the picker shows.
+ * What a request is sent with: the pick, with a model and effort the agent offers filled in where
+ * it has none or no longer offers it, so the picker always names what runs. With no list to check
+ * against, nothing is picked.
  */
 export function usableSettings(
   status: AgentStatus | undefined,
   pick: ModelSettings | undefined,
 ): ModelSettings {
-  if (!offersModels(status) || pick === undefined) return {};
+  if (!offersModels(status)) return {};
 
   const settings: ModelSettings = {};
 
-  const model = status.models.find((option) => option.id === pick.model)?.id;
+  const option =
+    status.models.find((candidate) => candidate.id === pick?.model) ??
+    status.models.find((candidate) => candidate.id === ownModel(status)) ??
+    status.models[0];
 
-  if (model !== undefined) settings.model = model;
+  if (option !== undefined) settings.model = option.id;
 
-  if (pick.effort !== undefined && effortsFor(status, settings.model).includes(pick.effort)) {
-    settings.effort = pick.effort;
-  }
+  const efforts = effortsFor(status, settings.model);
+
+  const effort =
+    pick?.effort !== undefined && efforts.includes(pick.effort)
+      ? pick.effort
+      : defaultEffort(efforts, option?.defaultEffort);
+
+  if (effort !== undefined) settings.effort = effort;
 
   return settings;
 }

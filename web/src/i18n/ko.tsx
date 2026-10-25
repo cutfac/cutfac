@@ -559,11 +559,9 @@ export const ko: Messages = {
     request: "편집 요청",
     agent: "보낼 에이전트",
     models: {
-      label: "모델과 추론 강도",
       model: "모델",
       effort: "추론 강도",
       defaultModel: "기본 모델",
-      byDefault: (pick) => (pick === undefined ? "기본" : `기본 (${pick})`),
       efforts: {
         none: "없음",
         minimal: "최소",
