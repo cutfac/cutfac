@@ -101,3 +101,19 @@ export function byWork<T extends { readonly item: ItemSummary; readonly work: It
     (a, b) => RANK[a.work.kind] - RANK[b.work.kind] || b.item.updatedAt - a.item.updatedAt,
   );
 }
+
+/** Finished work never asks for the user, so it stays on the board. */
+const unfinished = (item: ItemSummary) => item.status !== "done" && item.status !== "archived";
+
+/** The videos still in progress, in the gallery's order, as the sidebar lists them. */
+export const inProgress = (
+  items: ReadonlyArray<ItemSummary>,
+  seen?: (render: RenderState) => boolean,
+) =>
+  byWork(items.flatMap((item) => (unfinished(item) ? [{ item, work: itemWork(item, seen) }] : [])));
+
+/** How many videos wait for the user, finished ones too: versions there still need picking. */
+export const waitingCount = (
+  items: ReadonlyArray<ItemSummary>,
+  seen?: (render: RenderState) => boolean,
+) => items.filter((item) => needsYou(itemWork(item, seen))).length;

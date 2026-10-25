@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import type { AgentRun, Feedback, ItemSummary } from "../web/src/api.ts";
 import type { RenderState } from "../web/src/lib/render.ts";
-import { byWork, isBusy, itemWork, needsYou } from "../web/src/lib/work.ts";
+import {
+  byWork,
+  inProgress,
+  isBusy,
+  itemWork,
+  needsYou,
+  waitingCount,
+} from "../web/src/lib/work.ts";
 
 const at = (second: number) => new Date(Date.UTC(2026, 9, 25, 0, 0, second)).toISOString();
 
@@ -144,5 +151,26 @@ describe("byWork", () => {
       "quiet-new",
       "quiet-old",
     ]);
+  });
+});
+
+describe("the sidebar's videos", () => {
+  const items = [
+    summary({ id: "quiet", updatedAt: 3 }),
+    summary({ id: "done", status: "done", requests: [versions] }),
+    summary({ id: "working", running: true, updatedAt: 1 }),
+    summary({ id: "versions", requests: [versions], updatedAt: 2 }),
+    summary({ id: "archived", status: "archived" }),
+  ];
+
+  test("lists the unfinished ones in the gallery's order", () => {
+    expect(inProgress(items).map((tile) => tile.item.id)).toEqual(["versions", "working", "quiet"]);
+  });
+
+  test("counts every video that waits for the user, finished or not", () => {
+    expect(waitingCount(items)).toBe(2);
+    expect(
+      waitingCount([summary({ requests: [{ ...versions, run: run("running") }], running: true })]),
+    ).toBe(0);
   });
 });

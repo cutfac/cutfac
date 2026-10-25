@@ -42,9 +42,9 @@ export const ko: Messages = {
     inProgress: "진행 중",
     allVideos: "모든 영상",
     toggle: "사이드바 열고 닫기",
-    openFeedback: (count) => `처리 안 된 피드백 ${count}개`,
-    videoTitle: (title, status, open) =>
-      open > 0 ? `${title} (${status}, 처리 안 된 피드백 ${open}개)` : `${title} (${status})`,
+    waiting: (count) => `확인할 영상 ${count}개`,
+    videoTitle: (title, status, state) =>
+      state === undefined ? `${title} (${status})` : `${title} (${status}, ${state})`,
   },
   palette: {
     title: "명령 팔레트",

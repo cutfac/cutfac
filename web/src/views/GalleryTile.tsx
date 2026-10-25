@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Progress } from "@/components/ui/progress";
+import { workDot, workText } from "@/components/work-state";
 
 import { api, type ItemSummary } from "../api.ts";
 import { href } from "../hooks.ts";
@@ -31,39 +32,6 @@ function playOnHover(tile: HTMLElement, playing: boolean) {
 
   video.pause();
   video.currentTime = POSTER_TIME;
-}
-
-function workText(work: ItemWork, t: ReturnType<typeof useMessages>) {
-  switch (work.kind) {
-    case "versions":
-      return t.gallery.versions(work.labels.length);
-    case "halted":
-      return t.gallery.halted;
-    case "rendering": {
-      const text =
-        work.share === undefined
-          ? t.render.rendering
-          : t.render.percent(Math.round(work.share * 100));
-
-      return work.label === undefined ? text : `${work.label} · ${text}`;
-    }
-
-    case "renderFailed":
-      return work.label === undefined ? t.render.failed : `${work.label} · ${t.render.failed}`;
-    case "working":
-      return t.gallery.working;
-    case "result":
-      return t.gallery.result;
-    case "quiet":
-      return undefined;
-  }
-}
-
-/** The amber dot asks for the user; a pulsing one is work going on; the plain one, a new result. */
-function workDot(work: ItemWork) {
-  if (needsYou(work)) return "bg-selection";
-
-  return isBusy(work) ? "animate-pulse bg-muted-foreground" : "bg-primary";
 }
 
 /** Where the video stands, over the corner of its picture. */

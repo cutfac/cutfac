@@ -42,8 +42,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { workDot, workText } from "@/components/work-state";
 
-import { api, type ItemSummary, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
+import { api, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop, insetTitleBar } from "../desktop.ts";
 import { href, useLive, useMcpWaiting, type Live } from "../hooks.ts";
 import {
@@ -56,6 +57,8 @@ import {
 } from "../i18n/index.ts";
 import { APP_KEYS } from "../lib/app-commands.ts";
 import type { BriefView } from "../lib/brief.ts";
+import { failureSeen } from "../lib/render-seen.ts";
+import { inProgress, waitingCount } from "../lib/work.ts";
 
 interface MainNavItem {
   view: "board" | "learn" | "templates";
@@ -70,22 +73,6 @@ export const MAIN_NAV: ReadonlyArray<MainNavItem> = [
 
 /** How many videos the sidebar lists before pointing at the board. */
 const MAX_VIDEOS = 8;
-
-/** Finished work never asks for attention, so it stays on the board. */
-const isFinished = (item: ItemSummary) => item.status === "done" || item.status === "archived";
-
-/** A video waits on the user when it carries open feedback or sits in review. */
-const needsAttention = (item: ItemSummary) => item.openFeedback > 0 || item.status === "review";
-
-/** Videos that need attention first, then the most recently touched. */
-function sidebarVideos(items: ReadonlyArray<ItemSummary>): ItemSummary[] {
-  return items
-    .filter((item) => !isFinished(item))
-    .toSorted(
-      (a, b) => Number(needsAttention(b)) - Number(needsAttention(a)) || b.updatedAt - a.updatedAt,
-    )
-    .slice(0, MAX_VIDEOS);
-}
 
 /** Fill and stroke for each status. The theme has one color, amber, and it is kept for review. */
 function statusDot(status: Status): string {
@@ -120,15 +107,26 @@ interface LinkRowProps {
   active: boolean;
   tooltip?: ReactNode;
   title?: string | undefined;
-  /** Open feedback to show at the row's right edge; nothing when zero or missing. */
+  /** How many videos wait for the user there, at the row's right edge; nothing when zero. */
   badge?: number | undefined;
-  /** What waits for the user there, as a dot at the row's right edge read out as this. */
+  /** What waits for the user there, or goes on, as a dot at the row's right edge read out as this. */
   dot?: string | undefined;
+  /** The dot's color; the sidebar's text color unless said. */
+  dotTone?: string | undefined;
   children: ReactNode;
 }
 
 /** One sidebar row that navigates; the narrow-screen sheet closes behind it. */
-function LinkRow({ to, active, tooltip, title, badge, dot, children }: LinkRowProps) {
+function LinkRow({
+  to,
+  active,
+  tooltip,
+  title,
+  badge,
+  dot,
+  dotTone = "bg-sidebar-foreground",
+  children,
+}: LinkRowProps) {
   const t = useMessages();
   const { setOpenMobile } = useSidebar();
 
@@ -150,11 +148,13 @@ function LinkRow({ to, active, tooltip, title, badge, dot, children }: LinkRowPr
         {children}
       </SidebarMenuButton>
       {badge ? (
-        <SidebarMenuBadge aria-label={t.nav.openFeedback(badge)}>{badge}</SidebarMenuBadge>
+        <SidebarMenuBadge aria-label={t.nav.waiting(badge)}>{badge}</SidebarMenuBadge>
       ) : null}
       {dot === undefined ? null : (
         // Beside the label, or by the icon's corner while the sidebar is folded to icons.
-        <span className="pointer-events-none absolute top-3.25 right-2.75 size-1.5 rounded-full bg-sidebar-foreground group-data-[collapsible=icon]:top-0.5 group-data-[collapsible=icon]:right-0.5">
+        <span
+          className={`pointer-events-none absolute top-3.25 right-2.75 size-1.5 rounded-full ${dotTone} group-data-[collapsible=icon]:top-0.5 group-data-[collapsible=icon]:right-0.5`}
+        >
           <span className="sr-only">{dot}</span>
         </span>
       )}
@@ -310,15 +310,15 @@ interface AppSidebarProps {
 
 export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
   const t = useMessages();
-  const { data: items } = useLive("items", api.items);
-  const videos = sidebarVideos(items ?? []);
+  const items = useLive("items", api.items).data ?? [];
+  const videos = inProgress(items, failureSeen).slice(0, MAX_VIDEOS);
   const editing = view === "item" && id ? id : undefined;
   const waiting = useMcpWaiting();
   const setupWaiting = waiting > 0 ? t.mcp.waiting(waiting) : undefined;
 
   // An open video that is not listed leaves Board lit, as the board is where it lives.
   const boardActive =
-    view === "board" || (editing !== undefined && !videos.some((v) => v.id === editing));
+    view === "board" || (editing !== undefined && !videos.some(({ item }) => item.id === editing));
 
   return (
     <Sidebar
@@ -355,7 +355,7 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
                   to={href(target)}
                   active={target === "board" ? boardActive : view === target}
                   tooltip={withKeys(t.nav[target], APP_KEYS[target])}
-                  badge={target === "board" ? ws?.openFeedback : undefined}
+                  badge={target === "board" ? waitingCount(items, failureSeen) : undefined}
                 >
                   <Icon />
                   <span>{t.nav[target]}</span>
@@ -369,22 +369,24 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
             <SidebarGroupLabel>{t.nav.inProgress}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {videos.map((video) => (
-                  <LinkRow
-                    key={video.id}
-                    to={href("item", video.id)}
-                    active={video.id === editing}
-                    title={t.nav.videoTitle(
-                      video.title,
-                      t.status[video.status],
-                      video.openFeedback,
-                    )}
-                  >
-                    <StatusDot status={video.status} />
-                    <span className="sr-only">{t.status[video.status]}</span>
-                    <span>{video.title}</span>
-                  </LinkRow>
-                ))}
+                {videos.map(({ item: video, work }) => {
+                  const state = workText(work, t);
+
+                  return (
+                    <LinkRow
+                      key={video.id}
+                      to={href("item", video.id)}
+                      active={video.id === editing}
+                      title={t.nav.videoTitle(video.title, t.status[video.status], state)}
+                      dot={state}
+                      dotTone={workDot(work)}
+                    >
+                      <StatusDot status={video.status} />
+                      <span className="sr-only">{t.status[video.status]}</span>
+                      <span>{video.title}</span>
+                    </LinkRow>
+                  );
+                })}
                 <LinkRow to={href("board")} active={false}>
                   <ArrowRightIcon />
                   <span>{t.nav.allVideos}</span>

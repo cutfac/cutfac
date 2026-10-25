@@ -54,9 +54,10 @@ export const en = {
     inProgress: "In progress",
     allVideos: "All videos",
     toggle: "Toggle sidebar",
-    openFeedback: (count: number) => `${count} open feedback`,
-    videoTitle: (title: string, status: string, open: number) =>
-      open > 0 ? `${title} (${status}, ${open} open feedback)` : `${title} (${status})`,
+    waiting: (count: number) =>
+      count === 1 ? "1 video waits for you" : `${count} videos wait for you`,
+    videoTitle: (title: string, status: string, state: string | undefined) =>
+      state === undefined ? `${title} (${status})` : `${title} (${status}, ${state})`,
   },
   palette: {
     title: "Command palette",
