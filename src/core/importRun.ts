@@ -7,7 +7,6 @@ import {
   codexConfig,
   codexImageFlags,
 } from "./agentCommand.ts";
-import { runLaunch } from "./agentPermissions.ts";
 import { type TurnResult, converse, noteCompaction } from "./agentRun.ts";
 import {
   CLAUDE_MCP_TOOLS,
@@ -223,7 +222,7 @@ export function codexImportConfig(
 /** Start the agent on the turn and wait for its reply. */
 const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit) {
   const ws = yield* Workspace;
-  const { importId, turnId } = input;
+  const { importId, turnId, server } = input;
   const { doc } = yield* getImport(importId);
   const { agent } = doc;
   const turn = doc.turns.find((entry) => entry.id === turnId);
@@ -237,7 +236,6 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
   const bin = yield* agentBin(agent);
   yield* requireTrust(agent);
   const phase = importPhase(doc);
-  const server = runLaunch(input.server, phase === "read" ? "limited" : "edit");
   const ours = codexServerName(ws.config.name);
   const { owner } = importFiles(importId);
   const folder = yield* ws.abs(owner);

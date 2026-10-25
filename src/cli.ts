@@ -6,7 +6,6 @@ import { Cause, Console, Effect, FileSystem, Layer, Option, Path, Schema } from 
 import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient } from "effect/http";
 
-import { ACCESS, RunAccess } from "./core/agentPermissions.ts";
 import { AgentSetupJson } from "./core/agentReadiness.ts";
 import {
   type CliEntry,
@@ -212,22 +211,9 @@ const serve = Command.make(
   }),
 ).pipe(Command.withDescription("Serve the web board and local API"));
 
-const mcp = Command.make(
-  "mcp",
-  {
-    workspace: workspaceFlag,
-    access: Flag.Literals("access", ACCESS).pipe(
-      Flag.withDescription("What the board run it serves may do; left out in your own sessions"),
-      Flag.optional,
-    ),
-  },
-  ({ workspace, access }) =>
-    // stdout carries the protocol, so nothing here may print to it.
-    Layer.launch(
-      mcpLayer.pipe(
-        Layer.provide([appData, Workspace.layer(workspace), Layer.succeed(RunAccess, access)]),
-      ),
-    ),
+const mcp = Command.make("mcp", { workspace: workspaceFlag }, ({ workspace }) =>
+  // stdout carries the protocol, so nothing here may print to it.
+  Layer.launch(mcpLayer.pipe(Layer.provide([appData, Workspace.layer(workspace)]))),
 ).pipe(Command.withDescription("Run the MCP server over stdio for Claude Code and Codex"));
 
 const learnCommand = Command.make(

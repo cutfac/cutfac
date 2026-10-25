@@ -233,16 +233,13 @@ describe("the user's choice", () => {
 
 const given = async () => (await readFile(join(fakes.calls, "args"), "utf8")).split("\0");
 
-/** The way Cutfac was started, which the run starts its own server with. */
-const CLI = { command: "/opt/cutfac", args: [] };
-
-const edit = (agent: AgentName, cli?: typeof CLI) =>
+const edit = (agent: AgentName) =>
   inApp(
     Effect.gen(function* () {
       const created = yield* createItem({ title: "Clip" });
       const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
 
-      yield* runEdit(cli)(
+      yield* runEdit(undefined)(
         { itemId: created.id, feedbackId: feedback.id, agent },
         () => Effect.void,
       );
@@ -305,22 +302,6 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
     expect(after(await given(), "--allowedTools")).toBe(
       "Read,Write,Edit,Glob,Grep,Bash(ffmpeg:*),Bash(ffprobe:*),mcp__cutfac",
     );
-  });
-
-  test("of Claude tells Cutfac's server what the run may do", async () => {
-    await edit("claude", CLI);
-
-    expect(after(await given(), "--mcp-config")).toContain('"--access","edit"]');
-  });
-
-  test("of Codex tells Cutfac's server what the run may do", async () => {
-    await writeFile(join(config, "config.toml"), 'sandbox_mode = "read-only"\n');
-
-    await edit("codex", CLI);
-
-    const launch = (await given()).find((entry) => entry.includes(".args=["));
-
-    expect(launch).toEndWith('"--access","limited"]');
   });
 
   test("of Codex leaves a reviewer the user set to answer", async () => {

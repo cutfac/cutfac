@@ -1,6 +1,6 @@
-import { Context, Effect, Option, Path, Schema } from "effect";
+import { Effect, Option, Path, Schema } from "effect";
 
-import { claudeSettingsFiles, codexHome, type McpLaunch } from "./agents.ts";
+import { claudeSettingsFiles, codexHome } from "./agents.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
 import { isJsonObject, setAt } from "./json.ts";
 import { peekConfig } from "./mcpServers.ts";
@@ -15,23 +15,7 @@ export const PermissionMode = Schema.Literals(["follow", "edit", "auto", "full"]
 export type PermissionMode = typeof PermissionMode.Type;
 
 /** What a run may do in the end: edit in the workspace, more as a reviewer agrees, anything, or less. */
-export const ACCESS = ["edit", "auto", "full", "limited"] as const;
-
-export type Access = (typeof ACCESS)[number];
-
-/**
- * What the board run an MCP server serves may do, from its `--access`. None in the user's own
- * sessions, where they approve each call themselves.
- */
-export const RunAccess = Context.Reference<Option.Option<Access>>("cutfac/RunAccess", {
-  defaultValue: () => Option.none(),
-});
-
-/** `launch` for a board run that may do `access`, so the server it starts knows. */
-export const runLaunch = (launch: McpLaunch, access: Access): McpLaunch => ({
-  ...launch,
-  args: [...launch.args, "--access", access],
-});
+export type Access = "edit" | "auto" | "full" | "limited";
 
 /** The user's own permission setting for Claude Code: its `permissions.defaultMode`. */
 export interface ClaudePermissionSettings {
@@ -217,29 +201,16 @@ const chosenMode = Effect.fnUntraced(function* (agent: AgentName) {
   return Option.getOrElse(mode, (): PermissionMode => "follow");
 });
 
-/**
- * What a run of `agent` may do, and Claude's permission flags or Codex's config entries that let
- * it.
- */
+/** Claude's permission flags, or Codex's config entries, for a run of `agent`. */
 export const runPermissions = Effect.fn("agentPermissions.run")(function* (agent: AgentName) {
   const mode = yield* chosenMode(agent);
 
   // Only following the user's settings needs them.
   if (agent === "claude") {
-    const user = mode === "follow" ? yield* claudeSettings : {};
-
-    return {
-      permissions: claudePermissionFlags(mode, user),
-      access: mode === "follow" ? claudeAccess(user) : mode,
-    };
+    return claudePermissionFlags(mode, mode === "follow" ? yield* claudeSettings : {});
   }
 
-  const user = mode === "follow" ? yield* codexSettings : {};
-
-  return {
-    permissions: codexPermissionConfig(mode, user),
-    access: mode === "follow" ? codexAccess(user) : mode,
-  };
+  return codexPermissionConfig(mode, mode === "follow" ? yield* codexSettings : {});
 });
 
 const permissionView = Effect.fnUntraced(function* (agent: AgentName) {

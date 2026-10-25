@@ -9,7 +9,7 @@ import {
   isSessionId,
 } from "./agentCommand.ts";
 import { type RunEvent, parseClaudeLine, parseCodexLine } from "./agentParse.ts";
-import { type Access, runLaunch, runPermissions } from "./agentPermissions.ts";
+import { runPermissions } from "./agentPermissions.ts";
 import {
   CLAUDE_MCP_TOOLS,
   type CliEntry,
@@ -282,17 +282,15 @@ const settleFeedback = Effect.fnUntraced(function* (input: RunInput, reply: stri
 /**
  * The MCP servers the run loads: this workspace's, and the ones the user turned on in Setup, with
  * the tools Claude may call on them. With the CLI known, this workspace's server is always started
- * for this root, so a copied or moved workspace never acts on the one it came from, and told what
- * the run may do.
+ * for this root, so a copied or moved workspace never acts on the one it came from.
  */
 const runServers = Effect.fnUntraced(function* (
   cli: CliEntry | undefined,
   agent: AgentName,
   bin: string,
-  access: Access,
 ) {
   const ws = yield* Workspace;
-  const launch = cli === undefined ? undefined : runLaunch(mcpLaunch(cli, ws.root), access);
+  const launch = cli === undefined ? undefined : mcpLaunch(cli, ws.root);
 
   if (agent === "codex") {
     const ours = codexServerName(ws.config.name);
@@ -326,8 +324,8 @@ const performEdit = Effect.fnUntraced(function* (
   const bin = yield* agentBin(agent);
   yield* requireTrust(agent);
   const prompt = yield* buildEditPrompt(item, f);
-  const { permissions, access } = yield* runPermissions(agent);
-  const { tools: serverTools, ...servers } = yield* runServers(cli, agent, bin, access);
+  const { tools: serverTools, ...servers } = yield* runServers(cli, agent, bin);
+  const permissions = yield* runPermissions(agent);
   const images = yield* editImages(item, f);
 
   yield* record({ status: "running" });
