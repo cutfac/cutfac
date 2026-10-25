@@ -239,6 +239,9 @@ export const Feedback = Schema.Struct({
       describe("when work began, if later than the request; media changes after it are this one's"),
     ),
   ),
+  answers: Schema.optional(
+    Schema.String.annotate(describe("the request whose question from the agent this one answers")),
+  ),
   status: Schema.Literals(["open", "resolved"]).pipe(withDefault("open")),
   resolution: Schema.optional(Schema.String),
   resolvedAt: Schema.optional(Schema.String),

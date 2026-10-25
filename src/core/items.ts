@@ -341,6 +341,46 @@ export const resolveFeedback = (id: string, feedbackId: string, resolution: stri
     ),
   );
 
+/** The agent's run on the request ended with it still open: it asked the user and waits. */
+export const asksUser = (f: Feedback) =>
+  f.status === "open" &&
+  f.decision === undefined &&
+  f.waiting === undefined &&
+  f.run?.status === "done";
+
+const asked = (doc: ItemDoc, feedbackId: string) =>
+  doc.feedback.filter((f) => f.id !== feedbackId && asksUser(f));
+
+/**
+ * A new request is the user's answer to what the agent asked: the requests that waited on it are
+ * settled, and the new one says which it answers, the latest, so its prompt can carry the question.
+ */
+export const answerQuestions = (item: Item, feedbackId: string) =>
+  asked(item.doc, feedbackId).length === 0
+    ? Effect.succeed(item)
+    : Effect.flatMap(nowIso, (resolvedAt) =>
+        mutateItem(item.id, (doc) => {
+          const questions = asked(doc, feedbackId);
+          const answers = questions.at(-1)?.id;
+
+          const answer = (entry: Feedback): Feedback => {
+            if (entry.id === feedbackId)
+              return answers === undefined ? entry : { ...entry, answers };
+
+            return questions.includes(entry)
+              ? {
+                  ...entry,
+                  status: "resolved",
+                  resolution: "Answered in a later request",
+                  resolvedAt,
+                }
+              : entry;
+          };
+
+          return Effect.succeed({ ...doc, feedback: doc.feedback.map(answer) });
+        }),
+      );
+
 export interface OpenFeedback {
   readonly item: string;
   readonly title: string;

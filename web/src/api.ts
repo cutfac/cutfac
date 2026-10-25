@@ -212,6 +212,8 @@ export interface Feedback {
   effort?: string;
   /** When a request that waited began its run; its changes count from then. */
   baseline?: string;
+  /** The request whose question from the agent this one answers. */
+  answers?: string;
   status: "open" | "resolved";
   resolution?: string;
   resolvedAt?: string;
