@@ -4,11 +4,12 @@ import { join } from "node:path";
 
 import { Deferred, Effect, Fiber, Stream } from "effect";
 
-import { agentInvocation, claudeAnswer } from "../src/core/agentCommand.ts";
-import { type RunEvent, type ToolRequest, parseClaudeLine } from "../src/core/agentParse.ts";
+import { agentInvocation } from "../src/core/agentCommand.ts";
+import type { AgentRequest, RunEvent } from "../src/core/agentParse.ts";
 import type { RunInput } from "../src/core/agentRun.ts";
 import { converse } from "../src/core/agentTurn.ts";
 import type { Approval, ApprovalAnswer, Ask } from "../src/core/approval.ts";
+import { parseClaudeLine } from "../src/core/claudeStream.ts";
 import { type RunSpec, type Runner, makeRunRegistry } from "../src/core/runRegistry.ts";
 import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
 
@@ -49,7 +50,7 @@ const ffmpeg = {
   permission_suggestions: [SUGGESTION],
 };
 
-const askOf = (line: string): ToolRequest => {
+const askOf = (line: string): AgentRequest => {
   const parsed = parseClaudeLine(line, root).control;
 
   if (parsed?.kind !== "ask") throw new Error(`not a request: ${line}`);
@@ -70,8 +71,6 @@ describe("what Claude asks on stdout", () => {
       always: true,
       rules: ["Bash(ffmpeg:*)"],
     });
-    expect(request.toolUseId).toBe("tu-1");
-    expect(request.inPerson).toBe(false);
   });
 
   test("shows a file in the workspace by where it is in it", () => {
@@ -113,19 +112,33 @@ describe("what Claude asks on stdout", () => {
     ).toBe(false);
   });
 
-  test("can need the user at Claude itself, or be taken back, or be of a kind the board can't answer", () => {
-    const question = askOf(
+  test("can need the user at Claude itself, which is turned down at once", () => {
+    const question = parseClaudeLine(
       canUse("r1", { tool_name: "AskUserQuestion", input: {}, requires_user_interaction: true }),
-    );
+    ).control;
 
+    if (question?.kind !== "reply") throw new Error("not answered at once");
+    const [answer] = question.lines.map((line) => JSON.parse(line));
+
+    expect(answer.response).toMatchObject({ subtype: "success", request_id: "r1" });
+    expect(answer.response.response).toMatchObject({ behavior: "deny" });
+    expect(answer.response.response.message).toContain("Cutfac board");
+  });
+
+  test("can be taken back, or be of a kind the board can't answer", () => {
     const cancel = JSON.stringify({ type: "control_cancel_request", request_id: "r1" });
+    const elicitation = parseClaudeLine(control("r2", { subtype: "elicitation" })).control;
 
-    expect(question.inPerson).toBe(true);
     expect(parseClaudeLine(cancel).control).toEqual({ kind: "cancel", id: "r1" });
-    expect(parseClaudeLine(control("r2", { subtype: "elicitation" })).control).toEqual({
-      kind: "unsupported",
-      id: "r2",
-    });
+
+    if (elicitation?.kind !== "reply") throw new Error("not answered at once");
+
+    expect(elicitation.lines.map((line) => JSON.parse(line))).toEqual([
+      {
+        type: "control_response",
+        response: { subtype: "error", request_id: "r2", error: expect.any(String) },
+      },
+    ]);
   });
 
   test("ends with the turn's result, after which Claude reads nothing more", () => {
@@ -137,10 +150,10 @@ describe("what Claude asks on stdout", () => {
 
 describe("the answer on stdin", () => {
   const request = askOf(canUse("r1", ffmpeg));
-  const decoded = (answer: ApprovalAnswer) => JSON.parse(claudeAnswer(request, answer));
+  const decoded = (answer: ApprovalAnswer) => JSON.parse(request.answer(answer));
 
   test("allows the tool as asked, this once", () => {
-    expect(claudeAnswer(request, "allow")).toEndWith("\n");
+    expect(request.answer("allow")).toEndWith("\n");
     expect(decoded("allow")).toEqual({
       type: "control_response",
       response: {

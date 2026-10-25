@@ -27,7 +27,7 @@ describe("a command Cutfac runs on a Mac where the Codex desktop app is set up",
     // Lists no servers of its own, as `codex mcp list --json` would.
     await fakes.bin(
       "codex",
-      `echo "$1 \${${DAEMON}-unset}" >> "${seen}"\n[ "$1" = mcp ] && echo "[]"\n`,
+      `echo "$1 \${${DAEMON}-unset}" >> "${seen}"\n[ "$1" = mcp ] && echo "[]"\nexit 0\n`,
     );
   });
 
@@ -40,7 +40,7 @@ describe("a command Cutfac runs on a Mac where the Codex desktop app is set up",
 
   const lines = async () => (await readFile(seen, "utf8")).trim().split("\n");
 
-  test("doesn't pass on the desktop app's daemon setting, which stops `codex exec`", async () => {
+  test("doesn't pass on the desktop app's daemon setting, which stops `codex mcp`", async () => {
     await t.runWith(fakes.layer, run(join(fakes.dir, "bin", "codex"), ["mcp"]));
 
     expect(await lines()).toEqual(["mcp unset"]);
@@ -63,7 +63,7 @@ describe("a command Cutfac runs on a Mac where the Codex desktop app is set up",
 
     const calls = await lines();
 
-    expect(calls).toContain("exec unset");
+    expect(calls).toContain("app-server unset");
     expect(calls.every((line) => line.endsWith(" unset"))).toBe(true);
   });
 });

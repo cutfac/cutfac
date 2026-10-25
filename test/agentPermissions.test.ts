@@ -10,7 +10,7 @@ import {
   claudeAccess,
   claudePermissionFlags,
   codexAccess,
-  codexPermissionConfig,
+  codexPermissions,
   codexPermissionSettings,
   setAgentPermissions,
 } from "../src/core/agentPermissions.ts";
@@ -20,6 +20,9 @@ import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";
 import type { AgentName } from "../src/core/schema.ts";
 import {
+  codexAppServer,
+  codexParams,
+  codexReceived,
   makeFakeAgents,
   makeWorkspace,
   type FakeAgents,
@@ -34,46 +37,32 @@ test("Claude's flags leave the user's mode to Claude, or set one of Cutfac's ove
   expect(claudePermissionFlags("full")).toEqual(["--permission-mode", "bypassPermissions"]);
 });
 
-describe("Codex's config", () => {
-  test("follows the user's, with the workspace writable and no asking unless a reviewer answers", () => {
-    expect(codexPermissionConfig("follow", {})).toEqual([
-      'sandbox_mode="workspace-write"',
-      'approval_policy="never"',
-    ]);
-    expect(codexPermissionConfig("follow", { sandbox: "read-only" })).toEqual([
-      'approval_policy="never"',
-    ]);
-    expect(
-      codexPermissionConfig("follow", {
-        sandbox: "workspace-write",
-        approval: "on-request",
-        reviewer: "guardian_subagent",
-      }),
-    ).toEqual([]);
-    expect(codexPermissionConfig("follow", { reviewer: "auto_review", approval: "never" })).toEqual(
-      ['sandbox_mode="workspace-write"', 'approval_policy="never"'],
-    );
-    expect(codexPermissionConfig("follow", { reviewer: "user" })).toContain(
-      'approval_policy="never"',
-    );
+describe("Codex's permissions", () => {
+  test("follow the user's, with the workspace writable where they set no sandbox", () => {
+    expect(codexPermissions("follow", {})).toEqual({ sandbox: "workspace-write" });
+    expect(codexPermissions("follow", { approval: "never" })).toEqual({
+      sandbox: "workspace-write",
+    });
+    expect(codexPermissions("follow", { sandbox: "read-only", reviewer: "user" })).toEqual({});
   });
 
-  test("sets Cutfac's own modes over the user's", () => {
-    const user = { sandbox: "read-only", approval: "on-request", reviewer: "user" };
+  test("set Cutfac's own modes over the user's", () => {
+    const user = { sandbox: "read-only", approval: "never", reviewer: "auto_review" };
 
-    expect(codexPermissionConfig("edit", user)).toEqual([
-      'sandbox_mode="workspace-write"',
-      'approval_policy="never"',
-    ]);
-    expect(codexPermissionConfig("auto", user)).toEqual([
-      'sandbox_mode="workspace-write"',
-      'approval_policy="on-request"',
-      'approvals_reviewer="auto_review"',
-    ]);
-    expect(codexPermissionConfig("full", user)).toEqual([
-      'sandbox_mode="danger-full-access"',
-      'approval_policy="never"',
-    ]);
+    expect(codexPermissions("edit", user)).toEqual({
+      sandbox: "workspace-write",
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+    });
+    expect(codexPermissions("auto", user)).toEqual({
+      sandbox: "workspace-write",
+      approvalPolicy: "on-request",
+      approvalsReviewer: "auto_review",
+    });
+    expect(codexPermissions("full", user)).toEqual({
+      sandbox: "danger-full-access",
+      approvalPolicy: "never",
+    });
   });
 });
 
@@ -88,9 +77,12 @@ test("following the user's settings comes to what they let a run do", () => {
 
   expect(codexAccess({})).toBe("edit");
   expect(codexAccess({ sandbox: "danger-full-access" })).toBe("full");
-  expect(codexAccess({ sandbox: "read-only", reviewer: "auto_review" })).toBe("limited");
+  expect(codexAccess({ approval: "untrusted" })).toBe("asks");
+  expect(codexAccess({ sandbox: "read-only" })).toBe("asks");
+  expect(codexAccess({ sandbox: "read-only", reviewer: "auto_review" })).toBe("auto");
   expect(codexAccess({ approval: "on-request", reviewer: "guardian_subagent" })).toBe("auto");
-  expect(codexAccess({ approval: "never", reviewer: "guardian_subagent" })).toBe("edit");
+  expect(codexAccess({ approval: "never", reviewer: "guardian_subagent" })).toBe("unasked");
+  expect(codexAccess({ sandbox: "read-only", approval: "never" })).toBe("limited");
 });
 
 describe("Codex's own settings", () => {
@@ -220,6 +212,9 @@ describe("the user's choice", () => {
   });
 });
 
+/** What the fake Codex was asked to start the thread with. */
+const threadParams = async () => codexParams(await codexReceived(fakes.calls), "thread/start");
+
 const given = async () => (await readFile(join(fakes.calls, "args"), "utf8")).split("\0");
 
 const edit = (agent: AgentName) =>
@@ -248,14 +243,7 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
 echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
 `,
     );
-    await fakes.bin(
-      "codex",
-      `[ "$1" = mcp ] && { echo '[]'; exit 0; }
-[ "$1" = exec ] || exit 0
-cat > /dev/null
-printf '%s\\0' "$@" > "${fakes.calls}/args"
-`,
-    );
+    await fakes.bin("codex", codexAppServer(fakes.calls));
   });
 
   test("of Claude leaves the user's mode to Claude, which asks the board what it would ask", async () => {
@@ -291,7 +279,7 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
     for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
   });
 
-  test("of Codex leaves a reviewer the user set to answer", async () => {
+  test("of Codex leaves the user's own approvals to Codex, with the workspace writable", async () => {
     await writeFile(
       join(config, "config.toml"),
       'approval_policy = "on-request"\napprovals_reviewer = "guardian_subagent"\n',
@@ -299,10 +287,7 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
 
     await edit("codex");
 
-    const argv = await given();
-
-    expect(argv).toContain('sandbox_mode="workspace-write"');
-    expect(argv.some((entry) => entry.startsWith("approval_policy="))).toBe(false);
+    expect(await threadParams()).toEqual({ sandbox: "workspace-write" });
   });
 
   test("of Codex takes the mode the user chose", async () => {
@@ -310,10 +295,9 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
 
     await edit("codex");
 
-    const argv = await given();
-
-    expect(argv).toContain('sandbox_mode="danger-full-access"');
-    expect(argv).toContain('approval_policy="never"');
-    expect(argv).not.toContain('sandbox_mode="workspace-write"');
+    expect(await threadParams()).toEqual({
+      sandbox: "danger-full-access",
+      approvalPolicy: "never",
+    });
   });
 });

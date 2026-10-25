@@ -1,12 +1,12 @@
 import { generateKeyPairSync, sign } from "node:crypto";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Each helper runs a test's effect to completion, so it is the entry point that provides layers.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
-import { ConfigProvider, Effect, Layer, Option } from "effect";
+import { ConfigProvider, Effect, Layer, Option, type Schema } from "effect";
 
 import { which } from "../src/core/process.ts";
 import { Workspace } from "../src/core/workspace.ts";
@@ -102,3 +102,58 @@ export function signedGrant(
 
   return `${payload.toString("base64url")}.${sign(null, payload, privateKey).toString("base64url")}`;
 }
+
+/** The thread a fake `codex app-server` starts, or resumes. */
+export const FAKE_THREAD = "0f9d3c1e-8b2a-4c5d-9e6f-7a8b9c0d1e2f";
+
+/** A line a fake Codex writes on its own thread's turn: an item done, as `item/completed`. */
+export const codexItem = (item: Schema.JsonObject) =>
+  `echo '${JSON.stringify({ method: "item/completed", params: { threadId: FAKE_THREAD, turnId: "turn-1", item } })}'`;
+
+/** A fake Codex's answer to the run's request `id`. */
+const answered = (id: number, result: Schema.JsonObject) =>
+  `echo '${JSON.stringify({ id, result })}'`;
+
+/**
+ * A script for a fake `codex app-server`: it keeps its arguments in `calls/args` and every line it
+ * reads in `calls/stdin`, answers the handshake, runs `turn` (shell, which may write lines and
+ * `read -r` the answers) once the turn starts, and then completes the turn.
+ */
+export function codexAppServer(calls: string, turn = "", status = "completed"): string {
+  const done = { threadId: FAKE_THREAD, turn: { id: "turn-1", status } };
+
+  return `[ "$1" = mcp ] && { echo '[]'; exit 0; }
+[ "$1" = app-server ] || exit 0
+printf '%s\\0' "$@" > "${calls}/args"
+while IFS= read -r line; do
+  printf '%s\\n' "$line" >> "${calls}/stdin"
+  case "$line" in
+    *'"method":"initialize"'*) ${answered(1, {})} ;;
+    *'"method":"thread/'*) ${answered(2, { thread: { id: FAKE_THREAD } })} ;;
+    *'"method":"turn/start"'*)
+      ${answered(3, { turn: { id: "turn-1", status: "inProgress" } })}
+      ${turn}
+      echo '${JSON.stringify({ method: "turn/completed", params: done })}' ;;
+  esac
+done
+`;
+}
+
+/** A line a fake `codex app-server` read: a request or notification of the run's, or an answer. */
+export interface CodexReceived {
+  readonly id?: number | string;
+  readonly method?: string;
+  readonly params?: Schema.JsonObject;
+  readonly result?: Schema.Json;
+}
+
+/** The messages a fake `codex app-server` read, in order. */
+export const codexReceived = async (calls: string): Promise<ReadonlyArray<CodexReceived>> =>
+  (await readFile(join(calls, "stdin"), "utf8"))
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => JSON.parse(line));
+
+/** The params of the first message with `method` that a fake Codex read. */
+export const codexParams = (received: ReadonlyArray<CodexReceived> = [], method: string) =>
+  received.find((message) => message.method === method)?.params;

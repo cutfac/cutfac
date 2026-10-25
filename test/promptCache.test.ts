@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { Effect, type Schema } from "effect";
 
-import { parseClaudeLine } from "../src/core/agentParse.ts";
 import { runEdit } from "../src/core/agentRun.ts";
 import { refuse } from "../src/core/approval.ts";
+import { parseClaudeLine } from "../src/core/claudeStream.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import type {
   AgentChoice,

@@ -106,7 +106,7 @@ const runServers = Effect.fnUntraced(function* (
     const listed = yield* codexServers(bin);
     const kept = yield* approvedCodexServers(listed);
 
-    return { codexServer: codexRunServers(ours, launch, listed, kept) };
+    return { codexConfig: codexRunServers(ours, launch, listed, kept) };
   }
 
   const approved = yield* approvedClaudeServers();
@@ -150,7 +150,7 @@ const performEdit = Effect.fnUntraced(function* (
             bin,
             prompt,
             ...servers,
-            permissions,
+            ...permissions,
             images,
             hosts: sourceHosts(item.doc.sources),
             model,

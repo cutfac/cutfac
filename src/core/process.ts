@@ -62,7 +62,7 @@ const encoder = new TextEncoder();
 /**
  * Variables a command doesn't inherit from the app. The Codex desktop app sets
  * CODEX_APP_SERVER_USE_LOCAL_DAEMON for every app the user opens, and with it set to anything,
- * `codex exec` and `codex mcp` refuse to run.
+ * `codex mcp` refuses to run.
  */
 export const UNINHERITED = {
   CODEX_APP_SERVER_USE_LOCAL_DAEMON: undefined,

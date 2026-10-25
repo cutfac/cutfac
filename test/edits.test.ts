@@ -5,13 +5,10 @@ import { join } from "node:path";
 import { Crypto, Deferred, Effect, Fiber, Option, Schedule, Schema, Stream } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
-import {
-  type RunEvent,
-  parseClaudeLine,
-  parseCodexLine,
-  relativeToRoot,
-} from "../src/core/agentParse.ts";
+import { type RunEvent, relativeToRoot } from "../src/core/agentParse.ts";
 import { type RunInput, editRuns } from "../src/core/agentRun.ts";
+import { parseClaudeLine } from "../src/core/claudeStream.ts";
+import { CODEX_INITIALIZE } from "../src/core/codexProtocol.ts";
 import {
   approveEdit,
   baselineMillis,
@@ -131,22 +128,13 @@ describe("agent CLIs", () => {
     expect(next.args.slice(-2)).toEqual(["--resume", "s1"]);
   });
 
-  test("codex reads the prompt from stdin and resumes by thread id", () => {
-    const first = agentInvocation("codex", {
-      ...opts,
-      sessionId: undefined,
-      images: ["/f.png", "/a,b.png"],
-    });
+  test("codex opens an app-server connection, which then starts or resumes the thread", () => {
+    const first = agentInvocation("codex", { ...opts, sessionId: undefined });
 
-    const next = agentInvocation("codex", { ...opts, sessionId: "t1" });
-
-    expect(first.args.slice(0, 2)).toEqual(["exec", "--json"]);
-    expect(first.args.at(-1)).toBe("-");
-    // In `=` form, so the flag cannot take the `-` that reads the prompt; a comma would split it.
-    expect(first.args.at(-2)).toBe("--image=/f.png");
-    expect(first.args.join(" ")).not.toContain("a,b.png");
-    expect(next.args.slice(0, 2)).toEqual(["exec", "resume"]);
-    expect(next.args.slice(-2)).toEqual(["t1", "-"]);
+    expect(first.command).toBe("/bin/x");
+    expect(first.args).toEqual(["app-server"]);
+    expect(first.stdin).toBe(CODEX_INITIALIZE);
+    expect(first.attended).toBe(true);
   });
 
   test("parses claude stream-json", () => {
@@ -180,22 +168,6 @@ describe("agent CLIs", () => {
     expect(parseClaudeLine("not json")).toEqual({ events: [] });
   });
 
-  test("parses codex json events", () => {
-    expect(parseCodexLine('{"type":"thread.started","thread_id":"t1"}').sessionId).toBe("t1");
-
-    const message = parseCodexLine(
-      '{"type":"item.completed","item":{"type":"agent_message","text":"Cut it."}}',
-    );
-
-    expect(message.reply).toBe("Cut it.");
-    expect(
-      parseCodexLine(
-        '{"type":"item.started","item":{"type":"command_execution","command":"ffprobe a"}}',
-      ).events,
-    ).toEqual([{ type: "tool", name: "shell", detail: "ffprobe a" }]);
-    expect(parseCodexLine('{"type":"turn.failed","error":{"message":"boom"}}').error).toBe("boom");
-  });
-
   test("shows tool paths relative to the workspace", () => {
     const root = "/Users/me/Videos/brew";
 
@@ -216,15 +188,6 @@ describe("agent CLIs", () => {
     );
 
     expect(claude.events).toEqual([{ type: "tool", name: "Read", detail: "story.yaml" }]);
-    expect(
-      parseCodexLine(
-        JSON.stringify({
-          type: "item.completed",
-          item: { type: "file_change", changes: [{ path: `${root}/items/a/story.yaml` }] },
-        }),
-        root,
-      ).events,
-    ).toEqual([{ type: "tool", name: "edit", detail: "items/a/story.yaml" }]);
   });
 });
 

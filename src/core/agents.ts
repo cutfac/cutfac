@@ -83,9 +83,8 @@ export const MCP_WRITE_TOOLS = [
 ] as const;
 
 /**
- * The MCP tools that send what the user has to see and agree to first. A Claude run from the board
- * asks the board for them each time; a run that can't ask, such as Codex's or an import's, never
- * gets them.
+ * The MCP tools that send what the user has to see and agree to first. A run from the board asks
+ * the board for them each time; an import, which runs with no one to ask, declines them.
  */
 export const MCP_USER_ONLY_TOOLS = ["send_feedback_to_cutfac"] as const satisfies ReadonlyArray<
   (typeof MCP_WRITE_TOOLS)[number]
@@ -230,13 +229,14 @@ const tomlKey = (name: string) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : JSON.s
 export const codexServerKey = (name: string) => `mcp_servers.${tomlKey(name)}`;
 
 /**
- * The Codex config entries for a run's own server `name`: without the tools only the user's own
- * session may call, and the rest called without asking. A run has no one to ask, so Codex would
- * refuse every tool marked as overwriting, such as update_item and review_media.
+ * The Codex config entries for a run's own server `name`: its tools called without asking, but for
+ * those the user has to agree to, which Codex asks the board about first.
  */
 const codexOursForRun = (name: string) => [
-  `${codexServerKey(name)}.disabled_tools=${JSON.stringify(MCP_USER_ONLY_TOOLS)}`,
   `${codexServerKey(name)}.default_tools_approval_mode="approve"`,
+  ...MCP_USER_ONLY_TOOLS.map(
+    (tool) => `${codexServerKey(name)}.tools.${tool}.approval_mode="prompt"`,
+  ),
 ];
 
 /**
@@ -271,8 +271,8 @@ function codexServerOff({ name, transport }: CodexListed): string[] {
  * Codex config entries that keep a run on this workspace's server, `ours`, and the ones the user
  * turned on for runs, `kept`, out of the servers Codex `listed`. Every other server is switched
  * off, plugins' too, and apps with the connectors they bring, so nothing the user or another
- * workspace set up can act for the run unasked, and ours goes without the tools only the user's
- * own session may call and calls the rest without asking. Plugins stay on for their skills. With
+ * workspace set up can act for the run unasked, and ours calls its tools without asking, but for
+ * those the user has to agree to. Plugins stay on for their skills. With
  * `launch`, ours is started for this root; without it, ours is used as registered.
  */
 export function codexRunServers(

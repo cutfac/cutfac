@@ -2,6 +2,7 @@ import { Effect, Option, Path, Schema } from "effect";
 
 import { claudeSettingsFiles, codexHome } from "./agents.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
+import type { CodexPermissions } from "./codexProtocol.ts";
 import { isJsonObject, setAt } from "./json.ts";
 import { peekConfig } from "./mcpServers.ts";
 import { AGENTS, AgentName } from "./schema.ts";
@@ -16,9 +17,9 @@ export type PermissionMode = typeof PermissionMode.Type;
 
 /**
  * What a run may do in the end: ask the board before it acts, edit in the workspace, more as a
- * reviewer agrees, anything, or less.
+ * reviewer agrees, anything, edit but skip what it would have to ask about, or less.
  */
-export type Access = "asks" | "edit" | "auto" | "full" | "limited";
+export type Access = "asks" | "edit" | "auto" | "full" | "unasked" | "limited";
 
 /** The user's own permission setting for Claude Code: its `permissions.defaultMode`. */
 export interface ClaudePermissionSettings {
@@ -63,35 +64,36 @@ export function claudePermissionFlags(mode: PermissionMode): ReadonlyArray<strin
 }
 
 /**
- * Codex's config entries for `mode`. Following the user's settings leaves theirs to Codex, with
- * the workspace writable where they set no sandbox, and never asking unless a reviewer answers.
+ * How a Codex run may act in `mode`. Following the user's settings leaves theirs to Codex, with the
+ * workspace writable where they set no sandbox; what Codex asks then comes to the board.
  */
-export function codexPermissionConfig(
+export function codexPermissions(
   mode: PermissionMode,
   user: CodexPermissionSettings,
-): ReadonlyArray<string> {
+): CodexPermissions {
   switch (mode) {
     case "follow":
-      return [
-        ...(user.sandbox === undefined ? ['sandbox_mode="workspace-write"'] : []),
-        ...(codexReviewed(user) ? [] : ['approval_policy="never"']),
-      ];
+      return user.sandbox === undefined ? { sandbox: "workspace-write" } : {};
     case "edit":
-      return ['sandbox_mode="workspace-write"', 'approval_policy="never"'];
+      return {
+        sandbox: "workspace-write",
+        approvalPolicy: "on-request",
+        approvalsReviewer: "user",
+      };
     case "auto":
-      return [
-        'sandbox_mode="workspace-write"',
-        'approval_policy="on-request"',
-        'approvals_reviewer="auto_review"',
-      ];
+      return {
+        sandbox: "workspace-write",
+        approvalPolicy: "on-request",
+        approvalsReviewer: "auto_review",
+      };
     case "full":
-      return ['sandbox_mode="danger-full-access"', 'approval_policy="never"'];
+      return { sandbox: "danger-full-access", approvalPolicy: "never" };
   }
 }
 
-/** Whether Codex's requests for more access go to a reviewer, not to someone a run can't ask. */
+/** Whether Codex's requests for more access go to a reviewer rather than the user. */
 const codexReviewed = (user: CodexPermissionSettings) =>
-  user.reviewer !== undefined && CODEX_REVIEWERS.has(user.reviewer) && user.approval !== "never";
+  user.reviewer !== undefined && CODEX_REVIEWERS.has(user.reviewer);
 
 /** What following the user's Claude Code settings comes to. */
 export function claudeAccess(user: ClaudePermissionSettings): Access {
@@ -110,13 +112,21 @@ export function claudeAccess(user: ClaudePermissionSettings): Access {
   }
 }
 
-/** What following the user's Codex settings comes to. */
+/**
+ * What following the user's Codex settings comes to. Never asking, a run skips what would need
+ * the user; asking before every command, or in a read-only sandbox, it asks before it edits.
+ */
 export function codexAccess(user: CodexPermissionSettings): Access {
-  if (user.sandbox === "danger-full-access") return "full";
+  const sandbox = user.sandbox ?? "workspace-write";
 
-  if (user.sandbox !== undefined && user.sandbox !== "workspace-write") return "limited";
+  if (sandbox === "danger-full-access") return "full";
+  const writes = sandbox === "workspace-write";
 
-  return codexReviewed(user) ? "auto" : "edit";
+  if (user.approval === "never") return writes ? "unasked" : "limited";
+
+  if (codexReviewed(user)) return "auto";
+
+  return user.approval === "untrusted" || !writes ? "asks" : "edit";
 }
 
 const ClaudeSettings = Schema.fromJsonString(
@@ -206,14 +216,16 @@ const chosenMode = Effect.fnUntraced(function* (agent: AgentName) {
   return Option.getOrElse(mode, (): PermissionMode => "follow");
 });
 
-/** Claude's permission flags, or Codex's config entries, for a run of `agent`. */
+/** Claude's permission flags, or how a Codex run may act, for a run of `agent`. */
 export const runPermissions = Effect.fn("agentPermissions.run")(function* (agent: AgentName) {
   const mode = yield* chosenMode(agent);
 
-  if (agent === "claude") return claudePermissionFlags(mode);
+  if (agent === "claude") return { permissions: claudePermissionFlags(mode) };
 
   // Only following the user's settings needs them.
-  return codexPermissionConfig(mode, mode === "follow" ? yield* codexSettings : {});
+  return {
+    codexPermissions: codexPermissions(mode, mode === "follow" ? yield* codexSettings : {}),
+  };
 });
 
 const permissionView = Effect.fnUntraced(function* (agent: AgentName) {

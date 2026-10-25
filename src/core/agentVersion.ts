@@ -13,8 +13,10 @@ export const MIN_AGENT_VERSION: Readonly<Record<AgentName, string>> = {
   // through `--settings`. Every other flag Cutfac passes, such as `--effort xhigh`, `--session-id`
   // with `--resume`, `--allowedTools` and `--permission-prompt-tool stdio`, is older than that.
   claude: "2.1.257",
-  // 0.122.0 added `codex debug models`, which the model picker reads; the rest of what Cutfac
-  // uses, such as `exec resume --json`, is older. 0.128.0 is a few releases on.
+  // 0.128.0 has all of `codex app-server` that a run uses: `thread/resume` with `excludeTurns`,
+  // `approvalsReviewer`, `item/permissions/requestApproval`, MCP tool approvals asked as
+  // elicitations, and a server's per-tool `approval_mode`. `codex debug models`, which the model
+  // picker reads, is older.
   codex: "0.128.0",
 };
 

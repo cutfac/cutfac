@@ -322,7 +322,7 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
       "codex",
       answeringVersion(
         "codex-cli 0.163.0",
-        `cat >/dev/null\necho '{"type":"turn.begun"}'\necho 'not json at all'\n`,
+        `head -n 1 >/dev/null\necho '{"method":"turn/begun"}'\necho 'not json at all'\n`,
       ),
     );
 

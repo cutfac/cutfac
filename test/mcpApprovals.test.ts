@@ -269,8 +269,7 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
     await fakes.bin(
       "codex",
       `[ "$1" = mcp ] && { echo '${listing}'; exit 0; }
-[ "$1" = exec ] || exit 0
-cat > /dev/null
+[ "$1" = app-server ] || exit 0
 printf '%s\\0' "$@" > "${fakes.calls}/args"
 `,
     );
@@ -385,8 +384,7 @@ test("Codex's runs keep the servers of a plugin the user turned on, offered as t
   await fakes.bin(
     "codex",
     `[ "$1" = mcp ] && { echo '${listing}'; exit 0; }
-[ "$1" = exec ] || exit 0
-cat > /dev/null
+[ "$1" = app-server ] || exit 0
 printf '%s\\0' "$@" > "${fakes.calls}/args"
 `,
   );

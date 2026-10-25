@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 // The end-to-end tests run the import registry against the test workspace.
 // @effect-diagnostics strictEffectProvide:off
-import { Context, Effect, Layer, ManagedRuntime, Result, Stream } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Result, Schema, Stream } from "effect";
 import { Tool } from "effect/ai";
 
 import { MCP_READ_TOOLS, MCP_WRITE_TOOLS, type McpLaunch } from "../src/core/agents.ts";
@@ -13,6 +13,7 @@ import {
   ImportRuns,
   claudeImportFlags,
   codexImportConfig,
+  codexImportPermissions,
   startImport,
   startTurn,
   stopAndCloseImport,
@@ -33,8 +34,14 @@ import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { CutfacToolkit } from "../src/mcp/server.ts";
 import {
+  type CodexReceived,
+  FAKE_THREAD,
   type FakeAgents,
   type TestServices,
+  codexAppServer,
+  codexItem,
+  codexParams,
+  codexReceived,
   makeFakeAgents,
   makeWorkspace,
   type TestWorkspace,
@@ -44,9 +51,6 @@ const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"
 
 /** The id the fake claude gives its conversation, made as Claude Code makes them. */
 const SESSION = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
-
-/** The id the fake codex gives its thread, made as Codex makes them. */
-const THREAD = "01a15cbb-ce4a-7520-952a-fe8655899d56";
 
 let t: TestWorkspace;
 
@@ -68,9 +72,21 @@ const read = (rel: string) => readFile(join(t.root, rel), "utf8");
 /** Where a workspace path is on disk, as the agent is told it. */
 const absolute = (rel: string) => t.run(Effect.flatMap(Workspace, (ws) => ws.abs(rel)));
 
-/** The `--image` flags in an argument list. */
-const imageFlags = (args: ReadonlyArray<string> = []) =>
-  args.filter((arg) => arg.startsWith("--image"));
+/** What a Codex run gave its turn: the prompt, then the pictures. */
+const decodeTurnStart = Schema.decodeUnknownSync(
+  Schema.Struct({
+    input: Schema.Array(
+      Schema.Struct({
+        type: Schema.String,
+        text: Schema.optional(Schema.String),
+        path: Schema.optional(Schema.String),
+      }),
+    ),
+  }),
+);
+
+const turnInput = (received: ReadonlyArray<CodexReceived> | undefined) =>
+  decodeTurnStart(codexParams(received, "turn/start")).input;
 
 /** The value after `flag` in an argument list. */
 const valueOf = (args: ReadonlyArray<string>, flag: string) => args[args.indexOf(flag) + 1] ?? "";
@@ -171,13 +187,10 @@ test("after Allow, Claude may fetch and write in the workspace, but not run what
 const listing = (...names: string[]): CodexListed[] =>
   names.map((name) => ({ name, enabled: true, transport: "stdio", entry: { type: "stdio" } }));
 
-/** The `-c` entries of a Codex config. */
-const entries = (args: ReadonlyArray<string>) => args.filter((_, i) => args[i - 1] === "-c");
-
 test("Codex reads only, with every other MCP server off, until the user allows", () => {
-  const config = entries(codexImportConfig("read", SERVER, "cutfac-x", listing("github", "a.b")));
+  const config = codexImportConfig("read", SERVER, "cutfac-x", listing("github", "a.b"));
 
-  expect(config).toContain('sandbox_mode="read-only"');
+  expect(codexImportPermissions("read")).toEqual({ sandbox: "read-only", approvalPolicy: "never" });
   expect(config).toContain("features.apps=false");
   expect(config).toContain("mcp_servers.github.enabled=false");
   expect(config).toContain('mcp_servers."a.b".enabled=false');
@@ -185,14 +198,16 @@ test("Codex reads only, with every other MCP server off, until the user allows",
 
   expect(config).toContain(`mcp_servers.cutfac-x.enabled_tools=${JSON.stringify(MCP_READ_TOOLS)}`);
 
-  expect(config).toContain('approval_policy="never"');
   expect(config.some((entry) => entry.includes("network_access"))).toBe(false);
 });
 
 test("after Allow, Codex may write in the workspace and reach the network", () => {
-  const config = entries(codexImportConfig("install", SERVER, "cutfac-x", listing("github")));
+  const config = codexImportConfig("install", SERVER, "cutfac-x", listing("github"));
 
-  expect(config).toContain('sandbox_mode="workspace-write"');
+  expect(codexImportPermissions("install")).toEqual({
+    sandbox: "workspace-write",
+    approvalPolicy: "never",
+  });
   expect(config).toContain("sandbox_workspace_write.network_access=true");
   expect(config).toContain("mcp_servers.github.enabled=false");
   expect(config.some((entry) => entry.includes("enabled_tools"))).toBe(false);
@@ -201,10 +216,14 @@ test("after Allow, Codex may write in the workspace and reach the network", () =
 test("neither phase of an import may send feedback to the Cutfac team", () => {
   for (const phase of ["read", "install"] as const) {
     const denied = valueOf(claudeImportFlags(phase, SERVER, LINK), "--disallowedTools").split(",");
-    const config = entries(codexImportConfig(phase, SERVER, "cutfac-x", []));
+    const config = codexImportConfig(phase, SERVER, "cutfac-x", []);
 
     expect(denied).toContain("mcp__cutfac__send_feedback_to_cutfac");
-    expect(config).toContain('mcp_servers.cutfac-x.disabled_tools=["send_feedback_to_cutfac"]');
+    // Codex asks before it, and with no one to ask, an import turn declines it.
+    expect(config).toContain(
+      'mcp_servers.cutfac-x.tools.send_feedback_to_cutfac.approval_mode="prompt"',
+    );
+    expect(codexImportPermissions(phase).approvalPolicy).toBe("never");
   }
 });
 
@@ -609,21 +628,24 @@ echo '{"type":"result","subtype":"success","session_id":"${SESSION}","result":"D
   });
 
   /**
-   * A `codex` that lists no MCP servers of its own, records each run's arguments and prompt, and
-   * answers in its JSON events.
+   * A `codex app-server` that lists no MCP servers of its own, keeps what each run reads in a
+   * folder of its own, and replies to every turn.
    */
   const fakeCodex = () =>
     fakeBin(
       "codex",
-      `[ "$1 $2" = "mcp list" ] && echo '[]' && exit 0
-calls="${fakes.calls}"
-call="$calls/$(ls "$calls" | grep -c 'args$')"
-printf '%s\n' "$@" > "$call.args"
-: > "$call.scrub"
-cat > "$call.stdin"
-echo '{"type":"thread.started","thread_id":"${THREAD}"}'
-echo '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
-`,
+      `run="${fakes.calls}/codex-$(ls "${fakes.calls}" | grep -c '^codex-')"
+[ "$1" = app-server ] && mkdir "$run"
+${codexAppServer("$run", codexItem({ type: "agentMessage", id: "m1", text: "Done." }))}`,
+    );
+
+  /** What each Codex run read, oldest first. */
+  const codexRuns = async () =>
+    Promise.all(
+      (await readdir(fakes.calls))
+        .filter((name) => name.startsWith("codex-"))
+        .toSorted()
+        .map((name) => codexReceived(join(fakes.calls, name))),
     );
 
   /** A file outside the workspace, standing in for an upload's temporary copy. */
@@ -672,14 +694,17 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}'
     expect((await runEnd(started.id))?.type).toBe("done");
 
     const dir = importFiles(started.id).owner;
-    const [first, second] = await calls();
+    const [first, second] = await codexRuns();
 
-    expect(imageFlags(first?.args)).toEqual([]);
-    expect(second?.args).toContain(THREAD);
-    expect(imageFlags(second?.args)).toEqual([
-      `--image=${await absolute(`${dir}/files/logo.png`)}`,
+    expect(turnInput(first).map((part) => part.type)).toEqual(["text"]);
+    expect(codexParams(second, "thread/resume")).toMatchObject({ threadId: FAKE_THREAD });
+
+    const [text, ...pictures] = turnInput(second);
+
+    expect(pictures).toEqual([
+      { type: "localImage", path: await absolute(`${dir}/files/logo.png`) },
     ]);
-    expect(second?.stdin).toContain(`- ${await absolute(`${dir}/files/notes.txt`)}`);
+    expect(text?.text).toContain(`- ${await absolute(`${dir}/files/notes.txt`)}`);
   });
 
   test("a closed import keeps none of the files sent to it", async () => {

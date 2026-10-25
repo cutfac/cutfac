@@ -15,9 +15,8 @@ import { BunServices } from "@effect/platform-bun";
 import { Effect, Layer, Option, Schema } from "effect";
 
 import { type AgentInvocation, agentInvocation } from "../src/core/agentCommand.ts";
-import { parseClaudeLine, parseCodexLine } from "../src/core/agentParse.ts";
+import type { ParsedLine } from "../src/core/agentParse.ts";
 import {
-  CLAUDE_MCP_TOOLS,
   SERVER_NAME,
   codexRunServers,
   codexServerName,
@@ -92,31 +91,24 @@ export interface TurnReading {
   readonly tools: ReadonlyArray<string>;
 }
 
-/** The session, reply, error and tool calls Cutfac's parser for `agent` finds in `lines`. */
-export function readTurn(
-  agent: AgentName,
-  lines: ReadonlyArray<string>,
-  workspace?: string,
-): TurnReading {
-  const parse = agent === "claude" ? parseClaudeLine : parseCodexLine;
-  let reading: TurnReading = { sessionId: undefined, reply: "", error: undefined, tools: [] };
+/** How a run reads each line of its agent's output, as `AgentInvocation.parse` does. */
+export type LineParser = AgentInvocation["parse"];
 
-  for (const line of lines) {
-    const parsed = parse(line, workspace);
+const UNREAD: TurnReading = { sessionId: undefined, reply: "", error: undefined, tools: [] };
 
-    reading = {
-      sessionId: parsed.sessionId ?? reading.sessionId,
-      reply: parsed.reply ?? reading.reply,
-      error: parsed.error ?? reading.error,
-      tools: [
-        ...reading.tools,
-        ...parsed.events.flatMap((event) => (event.type === "tool" ? [event.name] : [])),
-      ],
-    };
-  }
+const nextReading = (reading: TurnReading, parsed: ParsedLine): TurnReading => ({
+  sessionId: parsed.sessionId ?? reading.sessionId,
+  reply: parsed.reply ?? reading.reply,
+  error: parsed.error ?? reading.error,
+  tools: [
+    ...reading.tools,
+    ...parsed.events.flatMap((event) => (event.type === "tool" ? [event.name] : [])),
+  ],
+});
 
-  return reading;
-}
+/** The session, reply, error and tool calls `parse` finds in `lines`. */
+export const readTurn = (parse: LineParser, lines: ReadonlyArray<string>, workspace?: string) =>
+  lines.reduce((reading, line) => nextReading(reading, parse(line, workspace)), UNREAD);
 
 /** What a turn must show, besides ending well. */
 export interface Expectation {
@@ -141,8 +133,22 @@ export function turnProblems(code: number, reading: TurnReading, expected: Expec
   ].filter((problem) => problem !== undefined);
 }
 
-/** Lines that describe the machine or the account, not the conversation. */
+/** Claude's lines that describe the machine or the account, not the conversation. */
 const ABOUT_THE_RUN = ["system", "rate_limit_event"];
+
+/**
+ * What of Codex's notifications Cutfac reads, kept whole. The rest, such as the account's rate
+ * limits or the user's apps and skills, keep only their method.
+ */
+const CODEX_READ = new Set([
+  "thread/started",
+  "turn/started",
+  "turn/completed",
+  "item/started",
+  "item/completed",
+  "error",
+  "serverRequest/resolved",
+]);
 
 /** Values in the other lines that are opaque to Cutfac and say something about the account. */
 const OPAQUE = /"(signature|request_id)":"[^"]*"/g;
@@ -155,9 +161,22 @@ const OPAQUE = /"(signature|request_id)":"[^"]*"/g;
  */
 function trimmedLine(line: string): string {
   const parsed = Option.getOrUndefined(decodeJsonLine(line));
-  const type = Option.getOrUndefined(decodeType(parsed?.["type"]));
 
-  if (parsed === undefined || type === undefined) return line;
+  if (parsed === undefined) return line;
+  const method = Option.getOrUndefined(decodeType(parsed["method"]));
+
+  // Codex's answer to `initialize` names the machine: its OS, and where Codex keeps its files.
+  if (parsed["id"] === 1 && method === undefined) return JSON.stringify({ id: 1, result: {} });
+
+  if (method !== undefined) {
+    return CODEX_READ.has(method) || "id" in parsed
+      ? line.replace(OPAQUE, '"$1":""')
+      : JSON.stringify({ method });
+  }
+
+  const type = Option.getOrUndefined(decodeType(parsed["type"]));
+
+  if (type === undefined) return line;
 
   if (!ABOUT_THE_RUN.includes(type)) return line.replace(OPAQUE, '"$1":""');
 
@@ -189,19 +208,30 @@ export function fixtureLines(
 
 interface TurnOutput {
   readonly code: number;
-  readonly stdout: string;
+  readonly lines: ReadonlyArray<string>;
+  readonly reading: TurnReading;
   readonly stderr: string;
   readonly timedOut: boolean;
 }
 
+/**
+ * Runs one turn as a board run does: each line read as it comes, what the agent waits on
+ * answered on stdin, and stdin closed once the turn ends. Whatever the agent asks the user is
+ * turned down, as nobody is there to answer.
+ */
 async function runTurn(invocation: AgentInvocation, cwd: string): Promise<TurnOutput> {
   const child = Bun.spawn([invocation.command, ...invocation.args], {
     cwd,
     env: { ...process.env, ...UNINHERITED, ...invocation.env },
-    stdin: new Blob([invocation.stdin]),
+    stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
+
+  const send = (text: string) => {
+    child.stdin.write(text);
+    child.stdin.flush();
+  };
 
   let timedOut = false;
 
@@ -210,14 +240,42 @@ async function runTurn(invocation: AgentInvocation, cwd: string): Promise<TurnOu
     child.kill();
   }, TURN_TIMEOUT_MS);
 
-  try {
-    const [stdout, stderr, code] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited,
-    ]);
+  const stderr = new Response(child.stderr).text();
+  const lines: string[] = [];
+  let reading = UNREAD;
+  let pending = "";
 
-    return { code, stdout, stderr, timedOut };
+  const take = (line: string) => {
+    if (line.trim() === "") return;
+    lines.push(line);
+    const parsed = invocation.parse(line, cwd);
+
+    reading = nextReading(reading, parsed);
+    const control = parsed.control;
+
+    if (control?.kind === "reply") control.lines.forEach(send);
+
+    if (control?.kind === "ask") send(control.request.answer("deny"));
+
+    if (parsed.ended === true) child.stdin.end();
+  };
+
+  try {
+    send(invocation.stdin);
+    const decoder = new TextDecoder();
+
+    for await (const chunk of child.stdout) {
+      const parts = (pending + decoder.decode(chunk, { stream: true })).split("\n");
+
+      pending = parts.pop() ?? "";
+      parts.forEach(take);
+    }
+
+    take(pending);
+    // Claude reads its message and stops; a turn that never ended still lets the process go.
+    child.stdin.end();
+
+    return { code: await child.exited, lines, reading, stderr: await stderr, timedOut };
   } finally {
     clearTimeout(timer);
   }
@@ -250,15 +308,12 @@ async function serverOptions(agent: AgentName, bin: string, workspace: string) {
   if (agent === "claude") {
     const mcpConfig = await Effect.runPromise(Effect.provide(runMcpConfig(launch), inWorkspace));
 
-    return { allowedTools: [CLAUDE_MCP_TOOLS], mcpConfig };
+    return { mcpConfig };
   }
 
   const listed = await Effect.runPromise(Effect.provide(codexServers(bin), inWorkspace));
 
-  return {
-    allowedTools: [],
-    codexServer: codexRunServers(codexServerName(WORKSPACE_NAME), launch, listed),
-  };
+  return { codexConfig: codexRunServers(codexServerName(WORKSPACE_NAME), launch, listed) };
 }
 
 interface CheckedTurn {
@@ -285,8 +340,7 @@ async function checkTurn(
 
   const startedAt = Date.now();
   const output = await runTurn(invocation, workspace);
-  const lines = output.stdout.split("\n").filter((line) => line.trim() !== "");
-  const reading = readTurn(agent, lines, workspace);
+  const reading = output.reading;
 
   const problems = [
     output.timedOut ? `did not finish in ${TURN_TIMEOUT_MS / 1000} seconds` : undefined,
@@ -311,7 +365,12 @@ async function checkTurn(
     for (const problem of problems) log(`    - ${problem}`);
   }
 
-  return { name, problems, reading, lines: fixtureLines(output.stdout, await places(workspace)) };
+  return {
+    name,
+    problems,
+    reading,
+    lines: fixtureLines(output.lines.join("\n"), await places(workspace)),
+  };
 }
 
 /** The folders a fixture must not keep, each with what stands in for it. */

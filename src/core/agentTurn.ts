@@ -1,19 +1,8 @@
 import { type Cause, Crypto, Effect, FiberMap, Queue, Ref, type Scope, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import {
-  type AgentInvocation,
-  type SessionArgs,
-  claudeAnswer,
-  claudeRefusal,
-  isSessionId,
-} from "./agentCommand.ts";
-import {
-  type ClaudeControl,
-  type RunEvent,
-  parseClaudeLine,
-  parseCodexLine,
-} from "./agentParse.ts";
+import { type AgentInvocation, type SessionArgs, isSessionId } from "./agentCommand.ts";
+import type { AgentControl, RunEvent } from "./agentParse.ts";
 import { detectAgentRelease, unreadableOutputMessage } from "./agentVersion.ts";
 import { type Ask, refuse } from "./approval.ts";
 import type { CutfacError } from "./errors.ts";
@@ -60,20 +49,12 @@ interface Attempt extends Progress {
 /** Where a conversation keeps its session; `undefined` forgets it. */
 export type SaveSession<R> = (sessionId: string | undefined) => Effect.Effect<void, CutfacError, R>;
 
-/** What the agent hears when a tool it asks for needs the user at the agent itself. */
-const IN_PERSON =
-  "The user is following this run on the Cutfac board, which can't answer this tool. Go on " +
-  "without it, and say in your reply what you needed from the user.";
-
-/** What the agent hears when it asks the board something other than whether it may use a tool. */
-const UNSUPPORTED = "The Cutfac board doesn't answer this kind of request.";
-
 const encoder = new TextEncoder();
 
 /** What the agent reads on stdin, and how its requests get answered there. */
 interface Input {
   readonly stdin: string | Stream.Stream<Uint8Array>;
-  readonly onControl: (control: ClaudeControl) => Effect.Effect<void>;
+  readonly onControl: (control: AgentControl) => Effect.Effect<void>;
   /** Closes stdin once the agent has given its result, so it exits as it would in a terminal. */
   readonly end: Effect.Effect<void>;
 }
@@ -85,35 +66,33 @@ const unattendedInput = (stdin: string): Input => ({
 });
 
 /**
- * Stdin for an agent that asks before a tool: the prompt, then each answer `ask` gets, sent as soon
- * as it comes. A request the agent takes back is no longer put to anyone.
+ * Stdin for an agent that asks before a tool: the first line, then each answer `ask` gets, sent as
+ * soon as it comes, and whatever the agent's own lines call for. A request the agent takes back is
+ * no longer put to anyone.
  */
 const attendedInput = Effect.fnUntraced(function* (
-  prompt: string,
+  first: string,
   ask: Ask,
 ): Effect.fn.Return<Input, never, Scope.Scope> {
   const lines = yield* Queue.unbounded<Uint8Array, Cause.Done>();
   const asking = yield* FiberMap.make<string>();
   const send = (line: string) => Effect.asVoid(Queue.offer(lines, encoder.encode(line)));
 
-  yield* send(prompt);
+  yield* send(first);
 
-  const onControl = (control: ClaudeControl): Effect.Effect<void> => {
+  const onControl = (control: AgentControl): Effect.Effect<void> => {
     switch (control.kind) {
       case "ask": {
-        const { request } = control;
+        const { approval, answer } = control.request;
+        const answered = Effect.flatMap(ask(approval), (a) => send(answer(a)));
 
-        if (request.inPerson) return send(claudeAnswer(request, "deny", IN_PERSON));
-
-        const answer = Effect.flatMap(ask(request.approval), (a) => send(claudeAnswer(request, a)));
-
-        return Effect.asVoid(FiberMap.run(asking, request.approval.id, answer));
+        return Effect.asVoid(FiberMap.run(asking, approval.id, answered));
       }
 
       case "cancel":
         return FiberMap.remove(asking, control.id);
-      case "unsupported":
-        return send(claudeRefusal(control.id, UNSUPPORTED));
+      case "reply":
+        return Effect.forEach(control.lines, send, { discard: true });
     }
   };
 
@@ -133,7 +112,6 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
 ) {
   const ws = yield* Workspace;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const parse = agent === "claude" ? parseClaudeLine : parseCodexLine;
   const { emit, save, ask = refuse } = conversation;
 
   const progress = yield* Ref.make<Progress>({
@@ -145,7 +123,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
   });
 
   const onLine = Effect.fnUntraced(function* (input: Input, line: string) {
-    const parsed = parse(line, ws.root);
+    const parsed = invocation.parse(line, ws.root);
     yield* Effect.forEach(parsed.events, emit, { discard: true });
 
     if (parsed.control !== undefined) yield* input.onControl(parsed.control);
@@ -260,10 +238,10 @@ export const converse = Effect.fnUntraced(function* <R>(conversation: Conversati
   const resumed = stored !== undefined && isSessionId(stored) ? stored : undefined;
   const first = yield* attempt(resumed);
 
-  // A resumed session the agent no longer has fails before it reports any session: start fresh.
+  // A resumed session the agent no longer has fails before the agent says anything: start fresh.
   const staleSession =
     resumed !== undefined &&
-    first.session === resumed &&
+    !first.understood &&
     !first.unreadable &&
     failureOf(agent, first) !== undefined;
 

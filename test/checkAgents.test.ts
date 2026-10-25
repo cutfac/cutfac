@@ -10,6 +10,8 @@ import {
   turnProblems,
   type TurnReading,
 } from "../electron/checkAgents.ts";
+import { parseClaudeLine } from "../src/core/claudeStream.ts";
+import { codexTurn } from "../src/core/codexAppServer.ts";
 import type { AgentName } from "../src/core/schema.ts";
 
 describe("check:agents arguments", () => {
@@ -108,6 +110,27 @@ describe("fixtures", () => {
     );
   });
 
+  test("keep of Codex only what it says about the conversation", () => {
+    const done =
+      '{"method":"turn/completed","params":{"threadId":"t","turn":{"id":"u","status":"completed"}}}';
+
+    const asks = '{"id":0,"method":"item/permissions/requestApproval","params":{"threadId":"t"}}';
+
+    const lines = [
+      '{"id":1,"result":{"userAgent":"codex/0.164 (Mac OS 26)","codexHome":"/Users/me/.codex"}}',
+      '{"method":"account/rateLimits/updated","params":{"rateLimits":{"primary":{"usedPercent":4}}}}',
+      done,
+      asks,
+    ];
+
+    expect(fixtureLines(lines.join("\n"), [])).toEqual([
+      '{"id":1,"result":{}}',
+      '{"method":"account/rateLimits/updated"}',
+      done,
+      asks,
+    ]);
+  });
+
   test("blank thinking signatures and request ids, and leave lines that are not JSON", () => {
     const thinking =
       '{"type":"assistant","content":[{"thinking":"","signature":"AbC+/="}],"request_id":"req_01x"}';
@@ -126,8 +149,21 @@ describe("fixtures", () => {
           .split("\n")
           .filter((line) => line !== "");
 
-      const first = readTurn(agent, await lines("first"), FIXTURE_ROOT);
-      const resumed = readTurn(agent, await lines("resume"), FIXTURE_ROOT);
+      // A fresh reader for each turn, as each run has its own.
+      const parser = () =>
+        agent === "claude"
+          ? parseClaudeLine
+          : codexTurn({
+              prompt: "",
+              sessionId: undefined,
+              images: [],
+              model: undefined,
+              effort: undefined,
+              permissions: {},
+            });
+
+      const first = readTurn(parser(), await lines("first"), FIXTURE_ROOT);
+      const resumed = readTurn(parser(), await lines("resume"), FIXTURE_ROOT);
 
       expect(turnProblems(0, first, { tool: true, reply: "ready-4721" })).toEqual([]);
       expect(first.tools).toContain(

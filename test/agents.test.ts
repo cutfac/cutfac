@@ -210,25 +210,31 @@ exit 1
     });
   });
 
+  /** Our server's tools run unasked, but Codex asks the board before one the user has to agree to. */
+  const ours = [
+    'mcp_servers.cutfac-test.default_tools_approval_mode="approve"',
+    'mcp_servers.cutfac-test.tools.send_feedback_to_cutfac.approval_mode="prompt"',
+  ];
+
   test("runs codex with its server overridden for this root", () => {
-    const codexServer = codexServerLaunch("cutfac-test", launch("/here"));
+    const codexConfig = codexServerLaunch("cutfac-test", launch("/here"));
 
     const { args } = agentInvocation("codex", {
       bin: "/bin/codex",
       prompt: "do it",
       sessionId: undefined,
       newSessionId: "new",
-      codexServer,
+      codexConfig,
     });
 
-    expect(codexServer).toEqual([
+    expect(codexConfig).toEqual([
       'mcp_servers.cutfac-test.command="/opt/cutfac"',
       'mcp_servers.cutfac-test.args=["mcp","--workspace","/here"]',
-      'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]',
-      'mcp_servers.cutfac-test.default_tools_approval_mode="approve"',
+      ...ours,
     ]);
+    expect(args[0]).toBe("app-server");
 
-    for (const entry of codexServer) expect(args[args.indexOf(entry) - 1]).toBe("-c");
+    for (const entry of codexConfig) expect(args[args.indexOf(entry) - 1]).toBe("-c");
   });
 
   test("a board run asks the user before it sends feedback to the Cutfac team", () => {
@@ -280,11 +286,6 @@ exit 1
   });
 
   test("without the CLI, a codex board run narrows this workspace's server only when registered", () => {
-    const ours = [
-      'mcp_servers.cutfac-test.disabled_tools=["send_feedback_to_cutfac"]',
-      'mcp_servers.cutfac-test.default_tools_approval_mode="approve"',
-    ];
-
     expect(
       codexRunServers("cutfac-test", undefined, listing("cutfac-test", "cutfac-other")),
     ).toEqual(["features.apps=false", ...off("cutfac-other"), ...ours]);

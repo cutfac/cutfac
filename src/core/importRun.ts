@@ -1,12 +1,6 @@
 import { Context, Effect } from "effect";
 
-import {
-  type SessionArgs,
-  agentBin,
-  agentCommand,
-  codexConfig,
-  codexImageFlags,
-} from "./agentCommand.ts";
+import { type SessionArgs, agentBin, claudeCommand, codexInvocation } from "./agentCommand.ts";
 import {
   CLAUDE_MCP_TOOLS,
   MCP_READ_TOOLS,
@@ -20,6 +14,7 @@ import {
   ourMcpConfig,
 } from "./agents.ts";
 import { type TurnResult, converse, noteCompaction } from "./agentTurn.ts";
+import type { CodexPermissions } from "./codexProtocol.ts";
 import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
 import { freshPrompt, turnMessage } from "./importPrompts.ts";
 import {
@@ -204,20 +199,22 @@ export function codexImportConfig(
   ours: string,
   listed: ReadonlyArray<CodexListed>,
 ): string[] {
-  const key = codexServerKey(ours);
-
-  const sandbox =
+  const reading =
     phase === "read"
-      ? [`${key}.enabled_tools=${JSON.stringify(MCP_READ_TOOLS)}`, 'sandbox_mode="read-only"']
-      : ['sandbox_mode="workspace-write"', "sandbox_workspace_write.network_access=true"];
+      ? [`${codexServerKey(ours)}.enabled_tools=${JSON.stringify(MCP_READ_TOOLS)}`]
+      : ["sandbox_workspace_write.network_access=true"];
 
-  return codexConfig([
-    ...codexRunServers(ours, server, listed),
-    ...sandbox,
-    'approval_policy="never"',
-    'web_search="live"',
-  ]);
+  return [...codexRunServers(ours, server, listed), ...reading, 'web_search="live"'];
 }
+
+/**
+ * How a Codex import turn may act: reading only, or then writing in the workspace with the network
+ * on. It never asks, as an import has no one to answer.
+ */
+export const codexImportPermissions = (phase: ImportPhase): CodexPermissions => ({
+  sandbox: phase === "read" ? "read-only" : "workspace-write",
+  approvalPolicy: "never",
+});
 
 /** Start the agent on the turn and wait for its reply. */
 const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit) {
@@ -242,18 +239,16 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
 
   // Codex is handed the pictures that came with this message; Claude opens them with Read, so
   // only a Codex run looks for them.
-  const pictures = Effect.filter(
-    (turn.attachments ?? []).filter((path) => mediaKind(path) === "image"),
-    (path) => ws.exists(`${owner}/${path}`),
-  );
-
-  const flags =
+  const pictures =
     agent === "claude"
-      ? claudeImportFlags(phase, server, doc.link)
-      : [
-          ...codexImportConfig(phase, server, ours, yield* codexServers(bin)),
-          ...codexImageFlags((yield* pictures).map((path) => `${folder}/${path}`)),
-        ];
+      ? []
+      : yield* Effect.filter(
+          (turn.attachments ?? []).filter((path) => mediaKind(path) === "image"),
+          (path) => ws.exists(`${owner}/${path}`),
+        );
+
+  const codexConfig =
+    agent === "claude" ? [] : codexImportConfig(phase, server, ours, yield* codexServers(bin));
 
   // Without a session to resume, the prompt carries the conversation so far.
   const prompt = (session: SessionArgs) =>
@@ -261,14 +256,22 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
       ? freshPrompt(doc, turn, folder)
       : turnMessage(doc, turn, folder);
 
+  const invocation = (session: SessionArgs) =>
+    agent === "claude"
+      ? claudeCommand(bin, prompt(session), claudeImportFlags(phase, server, doc.link), session)
+      : codexInvocation({
+          ...session,
+          bin,
+          prompt: prompt(session),
+          codexConfig,
+          codexPermissions: codexImportPermissions(phase),
+          images: pictures.map((path) => `${folder}/${path}`),
+        });
+
   return yield* converse({
     agent,
     stored: doc.session,
-    invocation: (session) =>
-      Effect.succeed({
-        ...agentCommand(agent, bin, prompt(session), flags, session),
-        env: IMPORT_ENV,
-      }),
+    invocation: (session) => Effect.succeed({ ...invocation(session), env: IMPORT_ENV }),
     save: (sessionId) => saveImportSession(importId, sessionId),
     emit,
   });

@@ -125,20 +125,37 @@ describe("running on a model", () => {
     expect([after(args, "--model"), after(args, "--effort")]).toEqual(["opus", "max"]);
   });
 
-  test("codex takes -m and the reasoning effort as config", () => {
-    const args = agentInvocation("codex", { ...opts, model: "gpt-a", effort: "high" }).args;
+  /** What a Codex run asks for: the thread it starts, then the turn on it. */
+  const codexRequests = (options: { readonly model?: string; readonly effort?: string }) => {
+    const { parse } = agentInvocation("codex", { ...opts, ...options });
 
-    expect(after(args, "-m")).toBe("gpt-a");
-    expect(args).toContain('model_reasoning_effort="high"');
+    const params = (line: string) => {
+      const control = parse(line, undefined).control;
+
+      return control?.kind === "reply" ? JSON.parse(control.lines.at(-1) ?? "{}").params : {};
+    };
+
+    return {
+      thread: params('{"id":1,"result":{}}'),
+      turn: params('{"id":2,"result":{"thread":{"id":"t1"}}}'),
+    };
+  };
+
+  test("codex starts the thread on the model and the turn at the effort", () => {
+    const { thread, turn } = codexRequests({ model: "gpt-a", effort: "high" });
+
+    expect(thread.model).toBe("gpt-a");
+    expect(turn.effort).toBe("high");
   });
 
   test("left out, each CLI keeps its own default", () => {
-    for (const agent of ["claude", "codex"] as const) {
-      const args = agentInvocation(agent, opts).args;
+    const args = agentInvocation("claude", opts).args;
 
-      expect(args.some((arg) => ["--model", "--effort", "-m"].includes(arg))).toBe(false);
-      expect(args.some((arg) => arg.startsWith("model_reasoning_effort"))).toBe(false);
-    }
+    expect(args.some((arg) => ["--model", "--effort"].includes(arg))).toBe(false);
+
+    const { thread, turn } = codexRequests({});
+
+    expect("model" in thread || "effort" in turn).toBe(false);
   });
 });
 
