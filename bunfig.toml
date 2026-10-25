@@ -1,0 +1,3 @@
+# Tests live in test/; reference-repos/ holds other projects' source, with tests of their own.
+[test]
+root = "test"

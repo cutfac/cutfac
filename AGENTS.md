@@ -29,6 +29,10 @@ Engineering:
 
 - Runtime and packages: Bun only (`bun`, `bun run`). Lint with `oxlint`, format with `oxfmt`.
 - Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
+- For core logic, look at how OpenCode does it first: its source, also Effect 4, is in
+  `reference-repos/opencode/`, vendored with `git subtree --squash`. Only read it; don't edit or
+  import from it. Update it with
+  `git subtree pull --prefix=reference-repos/opencode https://github.com/anomalyco/opencode.git dev --squash`.
 - Keep each source file under 500 lines. When one grows past that, split it by responsibility into
   cohesive modules, not at arbitrary line boundaries. Split large intermediate work, such as
   generator scripts and generated files, the same way.
