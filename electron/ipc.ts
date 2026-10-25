@@ -16,8 +16,11 @@ export const APP_COMMAND_CHANNEL = "cutfac:app-command";
 /** A `cutfac://new` link came, for the board to take its prompt into a new video. */
 export const NEW_VIDEO_LINK_CHANNEL = "cutfac:new-video-link";
 
-/** The prompt the last link came with, once; none when it was taken or none came. */
+/** The last link's prompt and who linked to it, once; none when it was taken or none came. */
 export const TAKE_NEW_VIDEO_LINK_CHANNEL = "cutfac:take-new-video-link";
+
+/** Whether a link's prompt waits for the board, without taking it, for the first launch to say so. */
+export const NEW_VIDEO_LINK_WAITING_CHANNEL = "cutfac:new-video-link-waiting";
 
 /** What waits for the user, for the Dock badge and a notification when an agent asks. */
 export const ATTENTION_CHANNEL = "cutfac:attention";

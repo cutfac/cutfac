@@ -21,6 +21,8 @@ export interface MenuActions {
   editCommand: (command: EditCommand) => void;
   /** The dev build's Dev Panel; the released app has no Develop menu. */
   openDevTools?: (() => void) | undefined;
+  /** The dev build's stand-in for a `cutfac://` link, which only the packaged app is sent. */
+  openCopiedLink?: (() => void) | undefined;
 }
 
 /** The standard menus, spelled out so every label can follow the board's language. */
@@ -130,6 +132,9 @@ export function menuTemplate(actions: MenuActions): MenuItemConstructorOptions[]
                 accelerator: "Alt+Shift+CmdOrCtrl+D",
                 click: actions.openDevTools,
               },
+              ...(actions.openCopiedLink
+                ? [{ label: "Open Copied cutfac:// Link", click: actions.openCopiedLink }]
+                : []),
             ],
           },
         ]

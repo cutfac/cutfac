@@ -3,6 +3,7 @@ import type { OnboardingMessages } from "./onboarding-en.tsx";
 /** 처음 실행할 때의 문구, 해요체. */
 export const onboardingKo: OnboardingMessages = {
   step: (current, total) => `${total}단계 중 ${current}단계`,
+  linkWaiting: "링크로 받은 영상 요청이 기다리고 있어요. 설정을 마치면 바로 열려요.",
   welcome: {
     title: "컷팩에 오신 걸 환영해요",
     body: "에이전트에게 말로 부탁해서 짧은 영상을 만들어요. 고치고 싶은 순간을 가리키고, 여러 버전을 나란히 비교해 보세요.",

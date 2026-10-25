@@ -6,6 +6,13 @@ export type EditCommand = "undo" | "redo";
 /** What the app menu asks of the board, beyond Undo and Redo: a dialog, the sidebar, or a page. */
 export type AppCommand = "palette" | "newVideo" | "toggleSidebar" | "board" | "learn" | "templates";
 
+/** A new video a `cutfac://new` link on a web page asks for, for the user to look over and send. */
+export interface NewVideoLink {
+  prompt: string;
+  /** What the page that linked here calls itself, a short lowercase name. */
+  source?: string;
+}
+
 /**
  * What cutfac.com said about a license key: `granted` unlocks the paid plan, `invalid` names no
  * license, `ended` names one whose plan has ended, and `unavailable` means it couldn't be asked.
@@ -153,10 +160,16 @@ export interface CutfacDesktop {
   /** A command chosen from the app menu or its shortcuts. Returns an unsubscribe. */
   onAppCommand: (listener: (command: AppCommand) => void) => () => void;
   /**
-   * The prompt a `cutfac://new` link on a web page opened the app with, for a new video the user
-   * sends themselves. One that came before this was called arrives at once. Returns an unsubscribe.
+   * The new video a `cutfac://new` link on a web page opened the app with, for the user to send
+   * themselves. Takes it: one that came before this was called arrives at once. Returns an
+   * unsubscribe.
    */
-  onNewVideoPrompt: (listener: (prompt: string) => void) => () => void;
+  onNewVideoLink: (listener: (link: NewVideoLink) => void) => () => void;
+  /**
+   * Whether a link's new video waits for the board to take it, now and whenever a link comes,
+   * without taking it. Returns an unsubscribe.
+   */
+  onNewVideoLinkWaiting: (listener: (waiting: boolean) => void) => () => void;
   /**
    * Check a license key with cutfac.com and keep it to unlock the paid plan, unless it is invalid.
    * Resolves what cutfac.com said.

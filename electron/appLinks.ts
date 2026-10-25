@@ -1,3 +1,4 @@
+import type { NewVideoLink } from "../web/src/desktop.ts";
 import { SCHEME } from "./boardPages.ts";
 
 /** A link longer than this is turned away whole, rather than read in part. */
@@ -12,12 +13,6 @@ const SOURCE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 /** Control characters other than tab and newline, which a prompt has no use for. */
 // oxlint-disable-next-line no-control-regex -- these are what it strips
 const CONTROL = /[\u0000-\u0008\u000B-\u001F\u007F]/g;
-
-/** A new video to start, with the prompt to fill in for the user to send, and who linked to it. */
-export interface NewVideoLink {
-  prompt: string;
-  source?: string;
-}
 
 const cleanPrompt = (text: string) => text.replaceAll("\r\n", "\n").replace(CONTROL, "").trim();
 

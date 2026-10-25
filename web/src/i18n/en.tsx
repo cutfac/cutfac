@@ -281,6 +281,13 @@ export const en = {
     downloading: "Downloading videos…",
     sending: "Starting…",
     create: "Create and start",
+    /** A request a `cutfac://new` link on a web page filled in, and the name the page gave. */
+    fromLink: (source: string | undefined) =>
+      source === undefined
+        ? "Filled in from a link on a web page. Check it before you start."
+        : `Filled in from a link (${source}). Check it before you start.`,
+    linkHeld: "A link brought another request. Your draft is kept.",
+    useLink: "Use the link's request",
   },
   license: {
     title: "License key",

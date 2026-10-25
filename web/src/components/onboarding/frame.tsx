@@ -1,9 +1,9 @@
-import { CheckIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { CheckIcon, LinkIcon } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-import { insetTitleBar } from "../../desktop.ts";
+import { desktop, insetTitleBar } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 
 /** The steps the dots count: agent, access, folder, what to make and the first video. */
@@ -40,11 +40,32 @@ export function OnboardingFrame({
             wide ? "max-w-lg" : "max-w-md",
           )}
         >
+          <LinkWaiting />
           {children}
         </div>
       </main>
       {step === undefined ? null : <StepDots current={step} />}
     </div>
+  );
+}
+
+/**
+ * Says a `cutfac://new` link's request waits, so a first launch the link started doesn't seem to
+ * have dropped it: the board opens it once setup is done.
+ */
+function LinkWaiting() {
+  const t = useMessages();
+  const [waiting, setWaiting] = useState(false);
+
+  useEffect(() => desktop?.onNewVideoLinkWaiting(setWaiting), []);
+
+  if (!waiting) return null;
+
+  return (
+    <p className="flex items-start gap-2 rounded-xl border bg-card px-3 py-2.5 text-sm text-muted-foreground">
+      <LinkIcon className="mt-0.5 size-4 shrink-0" />
+      {t.onboarding.linkWaiting}
+    </p>
   );
 }
 

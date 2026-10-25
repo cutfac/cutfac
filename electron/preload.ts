@@ -6,6 +6,7 @@ import type {
   CutfacDesktop,
   CutfacDevTools,
   CutfacOnboarding,
+  NewVideoLink,
 } from "../web/src/desktop.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
@@ -32,6 +33,7 @@ import {
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
   NEW_VIDEO_LINK_CHANNEL,
+  NEW_VIDEO_LINK_WAITING_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   OPEN_DEV_PANEL_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
@@ -150,11 +152,11 @@ const bridge = {
       ipcRenderer.removeListener(APP_COMMAND_CHANNEL, forward);
     };
   },
-  onNewVideoPrompt: (listener) => {
+  onNewVideoLink: (listener) => {
     const take = () => {
       void ipcRenderer
         .invoke(TAKE_NEW_VIDEO_LINK_CHANNEL)
-        .then((prompt: string | undefined) => prompt !== undefined && listener(prompt));
+        .then((link: NewVideoLink | undefined) => link !== undefined && listener(link));
     };
 
     ipcRenderer.on(NEW_VIDEO_LINK_CHANNEL, take);
@@ -163,6 +165,18 @@ const bridge = {
 
     return () => {
       ipcRenderer.removeListener(NEW_VIDEO_LINK_CHANNEL, take);
+    };
+  },
+  onNewVideoLinkWaiting: (listener) => {
+    const ask = () => {
+      void ipcRenderer.invoke(NEW_VIDEO_LINK_WAITING_CHANNEL).then(listener);
+    };
+
+    ipcRenderer.on(NEW_VIDEO_LINK_CHANNEL, ask);
+    ask();
+
+    return () => {
+      ipcRenderer.removeListener(NEW_VIDEO_LINK_CHANNEL, ask);
     };
   },
   setLicenseKey: (key) => ipcRenderer.invoke(SET_LICENSE_KEY_CHANNEL, key),

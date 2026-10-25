@@ -5,6 +5,8 @@ type FixState = Exclude<AgentSetup["state"], "ready">;
 /** The first launch's copy, kept apart from the board's so neither file grows past reading. */
 export const onboardingEn = {
   step: (current: number, total: number) => `Step ${current} of ${total}`,
+  /** A `cutfac://new` link opened the app; its request opens on the board once setup is done. */
+  linkWaiting: "A video request from a link is waiting. It opens once setup is done.",
   welcome: {
     title: "Welcome to Cutfac",
     body: "Make short videos by asking your agent. Point at any moment to change it, and try a few versions side by side.",

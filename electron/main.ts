@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -36,7 +37,7 @@ import {
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
 import { startLicense, type License } from "./license.ts";
-import { handleLinks } from "./links.ts";
+import { handleLinks, type Links } from "./links.ts";
 import { menuTemplate, showTextMenu } from "./menu.ts";
 import { MESSAGES } from "./messages.ts";
 import { keepInsideApp } from "./navigation.ts";
@@ -81,6 +82,8 @@ let window: BrowserWindow | undefined;
 let sidecar: Sidecar | undefined;
 
 let updates: Updates | undefined;
+
+let links: Links | undefined;
 
 /** Only the packaged app checks its license key; a dev build leaves the saved one alone. */
 let license: License | undefined;
@@ -188,7 +191,7 @@ if (!app.requestSingleInstanceLock()) {
     void saveLocale(next);
   });
   handleAttention({ isFromApp, bringToFront, sendAppCommand, locale: () => locale });
-  handleLinks({ isFromApp, bringToFront, window: () => window });
+  links = handleLinks({ isFromApp, bringToFront, window: () => window });
   handleOnboarding({
     isFromApp,
     boardUrl,
@@ -264,6 +267,8 @@ function setMenu(): void {
     appCommand: sendAppCommand,
     editCommand: sendEditCommand,
     openDevTools: devTools?.open,
+    openCopiedLink:
+      devTools && (() => void clipboard.readText().then((text) => links?.open(text.trim()))),
   });
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

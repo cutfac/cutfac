@@ -270,6 +270,12 @@ export const ko: Messages = {
     downloading: "영상을 받는 중…",
     sending: "시작하는 중…",
     create: "만들고 시작하기",
+    fromLink: (source) =>
+      source === undefined
+        ? "웹 페이지의 링크에서 가져온 요청이에요. 시작하기 전에 확인해 주세요."
+        : `링크(${source})에서 가져온 요청이에요. 시작하기 전에 확인해 주세요.`,
+    linkHeld: "링크로 다른 요청이 왔어요. 쓰던 내용은 그대로 뒀어요.",
+    useLink: "링크 요청으로 바꾸기",
   },
   license: {
     title: "라이선스 키",

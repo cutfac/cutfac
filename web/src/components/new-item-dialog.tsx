@@ -1,7 +1,8 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { PlusIcon } from "lucide-react";
+import { LinkIcon, PlusIcon } from "lucide-react";
 import {
   useEffect,
+  useEffectEvent,
   useState,
   type KeyboardEvent,
   type ReactElement,
@@ -10,6 +11,7 @@ import {
 import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,7 +43,7 @@ import {
   type NewItem,
   type Plan,
 } from "../api.ts";
-import { desktop } from "../desktop.ts";
+import { desktop, type NewVideoLink } from "../desktop.ts";
 import { href, type Live, useAgentStatuses, useModelPicks } from "../hooks.ts";
 import { type Messages, useMessages } from "../i18n/index.ts";
 import { freeVersion } from "../lib/license.ts";
@@ -122,6 +124,9 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   const [files, setFiles] = useState<ReadonlyArray<File>>([]);
   const [stage, setStage] = useState<Stage>();
   const [error, setError] = useState<string>();
+  // The link the prompt was filled in from, and one that came while the user had a draft.
+  const [linked, setLinked] = useState<NewVideoLink>();
+  const [held, setHeld] = useState<NewVideoLink>();
   const addFiles = (added: ReadonlyArray<File>) => setFiles((current) => [...current, ...added]);
   const drop = useFileDrop(addFiles);
   const chosen = formats?.find((f) => f.id === format);
@@ -131,15 +136,22 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   const links = writtenLinks(text);
   const body = text.trim();
 
+  function fillFrom(link: NewVideoLink) {
+    setText(link.prompt);
+    setLinked(link);
+    setHeld(undefined);
+  }
+
   // A link from a web page opens the dialog with its prompt, for the user to look over and send.
-  useEffect(
-    () =>
-      desktop?.onNewVideoPrompt((prompt) => {
-        setText(prompt);
-        openNewItem();
-      }),
-    [],
-  );
+  // What the user wrote themselves stays, with the link's prompt to switch to.
+  const receive = useEffectEvent((link: NewVideoLink) => {
+    if (body === "" || text === linked?.prompt) fillFrom(link);
+    else setHeld(link);
+
+    openNewItem();
+  });
+
+  useEffect(() => desktop?.onNewVideoLink(receive), []);
 
   /** Add the files and links, then send the description; the item is there whatever fails. */
   async function fill(item: ItemDetail) {
@@ -223,6 +235,8 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
     setFormat(null);
     setInputs({});
     setFiles([]);
+    setLinked(undefined);
+    setHeld(undefined);
   }
 
   const ready = body !== "" && stage === undefined && missing.length === 0;
@@ -279,6 +293,22 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
               <DialogDescription>{t.newItem.description}</DialogDescription>
             </DialogHeader>
             <form onSubmit={submit} className="grid gap-6">
+              {held === undefined ? null : (
+                <Alert>
+                  <LinkIcon />
+                  <AlertTitle>{t.newItem.linkHeld}</AlertTitle>
+                  <AlertDescription className="mt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fillFrom(held)}
+                    >
+                      {t.newItem.useLink}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="new-item-text">{t.newItem.promptLabel}</FieldLabel>
@@ -291,6 +321,9 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
                     placeholder={t.newItem.promptPlaceholder}
                     className="max-h-60 min-h-24"
                   />
+                  {linked === undefined || body === "" ? null : (
+                    <FieldDescription>{t.newItem.fromLink(linked.source)}</FieldDescription>
+                  )}
                   <LinkChips
                     links={links}
                     onRemove={(link) => setText((current) => withoutLink(current, link))}
