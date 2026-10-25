@@ -27,7 +27,7 @@ export function Thumbnail({
 
   const box = large
     ? "aspect-9/16 w-full overflow-hidden rounded-2xl bg-muted"
-    : "aspect-9/16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted";
+    : "aspect-9/16 w-16 shrink-0 overflow-hidden rounded-2xl bg-muted";
 
   if (media === undefined) {
     return (

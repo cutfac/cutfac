@@ -144,13 +144,13 @@ export function CompareDialog({
                   preload="auto"
                   // Both playing aloud would talk over each other; the result is the one to hear.
                   muted={side === "before"}
-                  className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
+                  className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
                 />
               ) : (
                 <img
                   src={sides[side]}
                   alt={t.compare.image(feedback.media, t.compare[side])}
-                  className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
+                  className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
                 />
               )}
             </figure>
@@ -290,13 +290,13 @@ export function VersionsDialog({
                   playsInline
                   preload="auto"
                   muted={index !== audible}
-                  className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
+                  className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
                 />
               ) : (
                 <img
                   src={src}
                   alt={t.compare.image(media, label)}
-                  className="max-h-[60vh] w-full rounded-lg bg-muted object-contain"
+                  className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
                 />
               )}
               {variant === undefined ? null : (

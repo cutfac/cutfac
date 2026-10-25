@@ -902,7 +902,7 @@ function Zone({
       ref={setNodeRef}
       data-over={isOver}
       data-disabled={disabled || undefined}
-      className="flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border-2 border-dashed border-dock/60 bg-dock/10 p-2 data-[disabled]:opacity-40 data-[over=true]:border-solid data-[over=true]:border-dock data-[over=true]:bg-dock/20"
+      className="flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-dock/60 bg-dock/10 p-2 data-[disabled]:opacity-40 data-[over=true]:border-solid data-[over=true]:border-dock data-[over=true]:bg-dock/20"
     >
       <span className="max-w-full truncate rounded-full bg-background px-3 py-1 text-xs font-medium text-dock shadow-sm">
         {children}

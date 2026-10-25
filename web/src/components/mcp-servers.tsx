@@ -271,7 +271,7 @@ function Launch({ name, server }: { name?: string | undefined; server: McpLaunch
   return (
     <SelectionArea render={<div className="flex flex-col gap-1 text-xs" />}>
       {name === undefined ? null : <p className="font-medium">{name}</p>}
-      <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono wrap-break-word whitespace-pre-wrap">
+      <pre className="max-h-32 overflow-auto rounded-2xl bg-muted px-2.5 py-2 font-mono wrap-break-word whitespace-pre-wrap">
         {server.launch}
       </pre>
       <Names label={t.mcp.env} names={server.env} />

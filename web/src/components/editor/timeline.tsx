@@ -186,7 +186,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
       <div
         // Pointer only: the keyboard has I, O and the arrow keys for the same moves.
         aria-hidden="true"
-        className="group/track relative h-14 cursor-text touch-none overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10"
+        className="group/track relative h-14 cursor-text touch-none overflow-hidden rounded-2xl bg-muted"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -201,7 +201,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
               src={frame}
               alt=""
               draggable={false}
-              className="h-full min-w-0 flex-1 object-cover opacity-80"
+              className="h-full min-w-0 flex-1 object-cover"
             />
           ))}
         </div>

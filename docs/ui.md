@@ -140,6 +140,11 @@ softly squared (`rounded-2xl`), as their settings draw them. Only what sits amon
 the composer's buttons and the chat's chips are pills (`Button pill`), and its icon buttons are
 circles. Fields stay softly squared, and cards and panels keep their larger radius.
 
+Radii come in a few steps: controls, rows, thumbnails and code blocks inside a panel are
+`rounded-2xl`; the stage and large previews take a card's `rounded-3xl`; the chat's cards are the
+round 16px squircle. An inner frame is a fill (`bg-muted`), not a ring or a shadow. A ring marks only
+what is picked or focused, and numbers that change in place are `tabular-nums`.
+
 Tabs and other segmented choices have no box around them: only the picked one is filled, and the
 rest are quiet text. Controls in a title bar are ghosts that tint under the pointer, as Aside's are;
 the one main action keeps its fill.

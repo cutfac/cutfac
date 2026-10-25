@@ -61,7 +61,7 @@ export function ApprovalCard({
             </Badge>
           ) : null}
           {approval.detail === undefined ? null : (
-            <pre className="max-h-40 overflow-y-auto rounded-lg bg-muted px-2.5 py-2 font-mono text-xs break-all whitespace-pre-wrap text-foreground">
+            <pre className="max-h-40 overflow-y-auto rounded-2xl bg-muted px-2.5 py-2 font-mono text-xs break-all whitespace-pre-wrap text-foreground">
               {approval.detail}
             </pre>
           )}

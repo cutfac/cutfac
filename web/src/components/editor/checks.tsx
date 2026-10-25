@@ -184,7 +184,7 @@ function FrameReview({ review, video }: { review: MediaReview; video: Media }) {
     <div className="flex flex-col gap-2">
       <p className="flex items-baseline justify-between gap-2">
         <span className="truncate font-medium">{video.name}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {t.checks.reviewed(formatAgo(review.at, locale))}
         </span>
       </p>
@@ -205,7 +205,7 @@ function FrameReview({ review, video }: { review: MediaReview; video: Media }) {
       {review.strips.map((strip) => (
         <figure key={strip.file} className="flex flex-col gap-1">
           <Zoomable src={url(strip.file)} title={t.checks.strip(formatTime(strip.t))} />
-          <figcaption className="text-xs text-muted-foreground">
+          <figcaption className="text-xs text-muted-foreground tabular-nums">
             {t.checks.strip(formatTime(strip.t))}
           </figcaption>
         </figure>
@@ -230,7 +230,7 @@ function Zoomable({ src, title }: { src: string; title: string }) {
           src={src}
           alt=""
           loading="lazy"
-          className="w-full cursor-zoom-in rounded-md ring-1 ring-foreground/10 in-focus-visible:ring-2 in-focus-visible:ring-ring"
+          className="w-full cursor-zoom-in rounded-2xl in-focus-visible:ring-2 in-focus-visible:ring-ring"
         />
       </DialogTrigger>
       <DialogContent className="sm:max-w-5xl">

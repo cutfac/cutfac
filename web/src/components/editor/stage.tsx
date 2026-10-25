@@ -181,7 +181,7 @@ export function Stage({
       >
         <div
           style={{ "--ratio": frameRatio }}
-          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] overflow-hidden rounded-xl bg-muted shadow-sm ring-1 ring-foreground/10"
+          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] overflow-hidden rounded-3xl bg-muted"
         >
           {kind === "video" ? (
             // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet

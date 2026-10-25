@@ -194,7 +194,7 @@ export function Board() {
         title={t.board.title}
         aside={
           items ? (
-            <span className="shrink-0 text-sm text-muted-foreground">
+            <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
               {t.board.count(items.length)}
             </span>
           ) : null

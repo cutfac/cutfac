@@ -407,7 +407,7 @@ function RenderLog({ log, failed }: { log: ReadonlyArray<string>; failed: boolea
         <ChevronRightIcon data-icon="inline-end" className={open ? "rotate-90" : undefined} />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <SelectionArea className="mt-1 max-h-40 overflow-auto rounded bg-muted p-2 font-mono text-xs whitespace-pre-wrap">
+        <SelectionArea className="mt-1 max-h-40 overflow-auto rounded-2xl bg-muted px-2.5 py-2 font-mono text-xs whitespace-pre-wrap">
           {log.join("\n")}
         </SelectionArea>
       </CollapsibleContent>

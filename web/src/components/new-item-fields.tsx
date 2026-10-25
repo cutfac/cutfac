@@ -176,7 +176,9 @@ export function FilesField({ files, dragging, onAdd, onRemove }: FilesFieldProps
           >
             <Icon className="size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate">{file.name}</span>
-            <span className="shrink-0 text-muted-foreground">{megabytes(file.size)}</span>
+            <span className="shrink-0 text-muted-foreground tabular-nums">
+              {megabytes(file.size)}
+            </span>
             <Button
               type="button"
               variant="ghost"

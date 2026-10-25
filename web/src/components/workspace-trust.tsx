@@ -65,7 +65,7 @@ export function TrustCard() {
                 <span className="font-mono">{keyOf(item) ?? t.trust.wholeFile}</span>
                 <span className="text-muted-foreground"> · {item.file}</span>
               </p>
-              <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 font-mono text-xs">
+              <pre className="max-h-48 overflow-auto rounded-2xl bg-muted px-2.5 py-2 font-mono text-xs">
                 {shown(item)}
               </pre>
             </li>

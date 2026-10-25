@@ -361,7 +361,7 @@ function Command({ command }: { command: string }) {
     <div className="flex items-start gap-2">
       <SelectionArea
         render={
-          <code className="min-w-0 flex-1 rounded-lg bg-muted px-2.5 py-2 font-mono text-xs break-all" />
+          <code className="min-w-0 flex-1 rounded-2xl bg-muted px-2.5 py-2 font-mono text-xs break-all" />
         }
       >
         {command}

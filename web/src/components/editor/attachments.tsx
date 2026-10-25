@@ -341,7 +341,7 @@ export function FileStrip({
         <button
           type="button"
           title={addLabel}
-          className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-1 text-xs text-muted-foreground outline-none select-none hover:bg-muted focus-visible:bg-muted"
+          className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed p-1 text-xs text-muted-foreground outline-none select-none hover:bg-muted focus-visible:bg-muted"
           onClick={() => openFiles.current?.()}
         >
           {uploading ? <Spinner /> : <PlusIcon className="size-4" />}
@@ -423,13 +423,13 @@ export function ReferenceStrip({ item, onItem, onAttach, onDetach }: ReferenceSt
             <button
               type="button"
               title={t.attachments.attachTile(label)}
-              className="flex w-full flex-col gap-1 rounded-lg p-1 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted"
+              className="flex w-full flex-col gap-1 rounded-2xl p-1 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted"
               onClick={() => onAttach(reference.path)}
             >
               <ReferenceThumb
                 owner={item}
                 reference={reference}
-                className="aspect-square w-full rounded-md ring-1 ring-foreground/10"
+                className="aspect-square w-full rounded-2xl bg-muted"
               />
               <span className="truncate text-xs text-muted-foreground">{label}</span>
             </button>

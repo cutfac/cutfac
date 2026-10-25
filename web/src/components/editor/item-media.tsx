@@ -151,7 +151,7 @@ export function MediaStrip({
           type="button"
           aria-pressed={media.name === shown.name}
           title={media.name}
-          className="group/media flex w-20 shrink-0 flex-col gap-1 rounded-lg p-1 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted"
+          className="group/media flex w-20 shrink-0 flex-col gap-1 rounded-2xl p-1 text-left outline-none select-none hover:bg-muted focus-visible:bg-muted"
           onClick={() => onPick(media.name)}
         >
           <Thumbnail src={mediaUrl(item, media)} media={media} />
@@ -166,7 +166,7 @@ export function MediaStrip({
 
 function Thumbnail({ src, media }: { src: string; media: Media }) {
   const frame =
-    "aspect-square w-full rounded-md bg-muted object-cover ring-1 ring-foreground/10 group-aria-pressed/media:ring-2 group-aria-pressed/media:ring-selection";
+    "aspect-square w-full rounded-2xl bg-muted object-cover group-aria-pressed/media:ring-2 group-aria-pressed/media:ring-selection";
 
   if (media.kind === "image") return <img src={src} alt="" loading="lazy" className={frame} />;
 
