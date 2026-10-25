@@ -20,7 +20,7 @@ import { handleAttention } from "./attention.ts";
 import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPages.ts";
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
 import { handleDevTools } from "./devTools.ts";
-import { pickSource, pickWorkspace } from "./dialogs.ts";
+import { describeError, pickSource, pickWorkspace, showStartFailure } from "./dialogs.ts";
 import { stopWatching } from "./fullDiskAccess.ts";
 import {
   APP_COMMAND_CHANNEL,
@@ -203,10 +203,6 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(boot);
 }
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}
-
 /** Whether `url` is on the board shown now, as opposed to a page it linked to. */
 const isAppUrl = (url: string) => originOf(url) === appOrigin;
 
@@ -251,11 +247,7 @@ async function boot(): Promise<void> {
   try {
     await showOnboarding(step);
   } catch (error) {
-    await dialog.showMessageBox({
-      type: "error",
-      message: MESSAGES[locale].couldNotStart,
-      detail: describeError(error),
-    });
+    await showStartFailure(MESSAGES[locale].couldNotStart, describeError(error));
     app.quit();
   }
 }
@@ -320,11 +312,7 @@ async function activate(workspace: string): Promise<boolean> {
   try {
     return await open(workspace);
   } catch (error) {
-    await dialog.showMessageBox({
-      type: "error",
-      message: MESSAGES[locale].couldNotStart,
-      detail: describeError(error),
-    });
+    await showStartFailure(MESSAGES[locale].couldNotStart, describeError(error));
 
     return false;
   }

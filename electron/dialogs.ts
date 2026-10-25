@@ -37,3 +37,12 @@ export function pickSource(
 ): Promise<string | undefined> {
   return pickOne(owner, { properties: ["openDirectory", "openFile"], message });
 }
+
+export function describeError(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** Says the app couldn't start, with what went wrong under it. */
+export async function showStartFailure(message: string, detail: string): Promise<void> {
+  await dialog.showMessageBox({ type: "error", message, detail });
+}
