@@ -120,11 +120,11 @@ nothing else is colored, gold always means "this is for you": do it, or look at 
 - **Gold (`brand`)**: the primary action (a default `Button`: send, save, create, keep), what the
   user marked on the video (`selection`, an alias of `brand`), and what waits for them (a request
   that needs an answer, a video to review, versions to pick from). Keep to one gold button per
-  screen or dialog; the other buttons are `outline`, `secondary` or `ghost`. A control that is used
-  over and over, such as play, is not the primary action.
-- **Dim gold**: a primary action that can't run yet. Buttons keep their gold and fade with
-  `disabled:opacity-50`, so the user sees what lights up once they're ready, instead of a gray
-  button that looks like another control.
+  screen or dialog; the other buttons are `outline`, `secondary` or `ghost`. Rows that each offer
+  the same first step, such as connecting each agent in Settings, may each have theirs. A control
+  that is used over and over, such as play, is not the primary action.
+- **Gray when it can't run**: a primary action that can't run yet goes gray (`muted`), so a gold
+  button is always one to press.
 - **Gray**: everything else, including the agent at work. Work in progress pulses or spins in
   `muted-foreground`; it turns gold only when the result is the user's to look at.
 - **Red (`destructive`)**: failures and deleting, nothing else.

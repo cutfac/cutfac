@@ -9,7 +9,9 @@ const toggleVariants = cva(
     variants: {
       variant: {
         default: "bg-transparent",
-        outline: "border border-input bg-transparent hover:bg-muted",
+        // Filled rather than edged, like the outline button; picked ones fill deeper.
+        outline:
+          "bg-foreground/6 hover:bg-foreground/10 focus-visible:bg-foreground/10 aria-pressed:bg-foreground/16 aria-pressed:text-foreground",
       },
       size: {
         default:
