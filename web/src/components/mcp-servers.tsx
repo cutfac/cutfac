@@ -146,7 +146,7 @@ export function McpServersCard() {
               </CollapsibleTrigger>
             </div>
             <CollapsibleContent>
-              <ItemGroup className="mt-3">{rows.map(({ row }) => row)}</ItemGroup>
+              <ItemGroup className="mt-3 gap-0">{rows.map(({ row }) => row)}</ItemGroup>
             </CollapsibleContent>
           </Collapsible>
         </div>
@@ -257,7 +257,7 @@ function McpRow({ media, name, ask, about, access, state, decision, children }: 
   const pending = waits(state);
 
   return (
-    <Item variant="outline">
+    <Item variant="row">
       <ItemMedia variant="image">{media}</ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle>{pending ? ask : name}</ItemTitle>

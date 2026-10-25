@@ -58,7 +58,7 @@ export function Setup() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              <ItemGroup>
+              <ItemGroup className="gap-0">
                 {agents.map((a) => (
                   <AgentRow
                     key={a.agent}
@@ -154,7 +154,7 @@ function AgentRow({ status, permissions, onChange }: AgentRowProps) {
   };
 
   return (
-    <Item variant="outline">
+    <Item variant="row">
       <ItemContent>
         <ItemTitle>{label}</ItemTitle>
         <ItemDescription>
@@ -194,7 +194,7 @@ function AgentRow({ status, permissions, onChange }: AgentRowProps) {
       </ItemActions>
       {status.installed && permissions !== undefined ? (
         <ItemFooter>
-          <div className="w-full border-t pt-3">
+          <div className="w-full">
             <AgentPermissions view={permissions} />
           </div>
         </ItemFooter>

@@ -40,6 +40,9 @@ const itemVariants = cva(
         default: "border-transparent",
         outline: "border-border",
         muted: "border-transparent bg-muted/50",
+        // One of a list set straight in a card, split from the one above by a hairline, as the
+        // Codex app lists its settings.
+        row: "rounded-none border-transparent border-t-border first:border-t-transparent",
       },
       size: {
         default: "gap-3.5 px-4 py-3.5",
@@ -47,6 +50,8 @@ const itemVariants = cva(
         xs: "gap-2 px-2.5 py-2 in-data-[slot=dropdown-menu-content]:p-0",
       },
     },
+    // A row lines up with the card's own edges.
+    compoundVariants: [{ variant: "row", className: "px-0" }],
     defaultVariants: {
       variant: "default",
       size: "default",
