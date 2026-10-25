@@ -53,12 +53,14 @@ interface Kept {
 
 /**
  * The MCP servers the user set up for Claude Code and Codex, and the plugins that bring some,
- * each off for runs from the board until the user turns it on. Nothing while there are none.
+ * each off for runs from the board until the user turns it on. The list folds into one line of how
+ * many there are and how many are in use, opened to review them. Nothing while there are none.
  */
 export function McpServersCard() {
   const t = useMessages();
   const { data: status, error, reload } = useLive("mcp-servers", mcpApi.servers);
   const [kept, setKept] = useState<Kept>({ states: {} });
+  const [open, setOpen] = useState(false);
 
   if (error !== undefined) return <ErrorAlert title={t.mcp.error} message={error} />;
 
@@ -127,7 +129,26 @@ export function McpServersCard() {
               </AlertDescription>
             </Alert>
           ) : null}
-          <ItemGroup>{rows.map(({ row }) => row)}</ItemGroup>
+          <Collapsible open={open} onOpenChange={setOpen}>
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{t.mcp.summary(rows.length)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t.mcp.inUse(rows.filter(({ state }) => state === "on").length)}
+                </p>
+              </div>
+              <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
+                {open ? t.mcp.hide : t.mcp.review}
+                <ChevronRightIcon
+                  data-icon="inline-end"
+                  className={open ? "rotate-90" : undefined}
+                />
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent>
+              <ItemGroup className="mt-3">{rows.map(({ row }) => row)}</ItemGroup>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </CardContent>
       <CardFooter>

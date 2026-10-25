@@ -5,6 +5,13 @@ export const mcpKo: McpMessages = {
   title: "영상 작업에 쓸 도구",
   body: "Claude Code와 Codex에 설정된 MCP 서버와 플러그인이에요. 보드에서 시작한 작업은 여기서 켠 것만 쓰고, 켠 것의 도구는 모두 써요. 켜기 전에 무엇을 실행하는지 확인해 주세요.",
   footnote: "claude.ai 커넥터는 여기 나오지 않아요. 플러그인을 꺼도 스킬은 그대로 써요.",
+  summary: (count) => `내 도구 ${count}개`,
+  inUse: (on) =>
+    on === 0
+      ? "쓰는 도구가 없어요. 켜기 전까지는 쓰지 않아요."
+      : `${on}개를 쓰고 있어요. 나머지는 켜기 전까지 쓰지 않아요.`,
+  review: "검토하기",
+  hide: "접기",
   error: "에이전트의 MCP 서버를 읽지 못했어요",
   problems: "에이전트의 MCP 설정 중 일부를 읽지 못했어요",
   sources: {

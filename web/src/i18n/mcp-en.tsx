@@ -3,6 +3,14 @@ export const mcpEn = {
   title: "Tools for video work",
   body: "These MCP servers and plugins are set up in your Claude Code and Codex. Work you start from the board uses only the ones you turn on here, with all of their tools, so look over what each one runs first.",
   footnote: "claude.ai connectors aren't listed here. A plugin's skills still load while it's off.",
+  /** The one line the list folds into: how many there are, and how many video work uses. */
+  summary: (count: number) => `My tools: ${count}`,
+  inUse: (on: number) =>
+    on === 0
+      ? "None in use. Each stays off until you turn it on."
+      : `${on} in use. The rest stay off until you turn them on.`,
+  review: "Review",
+  hide: "Hide",
   error: "Could not read your agents' MCP servers",
   problems: "Some of your agents' MCP setup couldn't be read",
   sources: {
