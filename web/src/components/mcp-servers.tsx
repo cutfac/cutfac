@@ -146,7 +146,7 @@ export function McpServersCard() {
               </CollapsibleTrigger>
             </div>
             <CollapsibleContent>
-              <ItemGroup className="mt-3 gap-0">{rows.map(({ row }) => row)}</ItemGroup>
+              <ItemGroup className="mt-3">{rows.map(({ row }) => row)}</ItemGroup>
             </CollapsibleContent>
           </Collapsible>
         </div>

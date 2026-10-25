@@ -58,7 +58,7 @@ export function Setup() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              <ItemGroup className="gap-0">
+              <ItemGroup>
                 {agents.map((a) => (
                   <AgentRow
                     key={a.agent}
