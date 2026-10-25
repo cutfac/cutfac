@@ -94,6 +94,7 @@ import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
 import { requireTrust, trustProblem, trustStatus, trustWorkspace } from "../core/workspaceTrust.ts";
 import { createCountedItem, planStatus } from "../plan.ts";
+import { approvalRoutes } from "./approvals.ts";
 import { briefRoutes } from "./brief.ts";
 import { requestGuard } from "./guard.ts";
 import { renderChanges, renderRoutes } from "./render.ts";
@@ -1037,17 +1038,18 @@ const staticRoutes = Layer.mergeAll(
 );
 
 /** Every route of the board's API, the workspace files, and the board itself. */
-export const routes = (options: ServerOptions) =>
-  options.webDir === undefined
-    ? Layer.mergeAll(staticRoutes, apiRoutes(options), briefRoutes, renderRoutes, historyRoutes)
-    : Layer.mergeAll(
-        staticRoutes,
-        apiRoutes(options),
-        briefRoutes,
-        renderRoutes,
-        historyRoutes,
-        boardRoutes(options.webDir),
-      );
+export const routes = (options: ServerOptions) => {
+  const api = Layer.mergeAll(
+    staticRoutes,
+    apiRoutes(options),
+    briefRoutes,
+    renderRoutes,
+    historyRoutes,
+    approvalRoutes,
+  );
+
+  return options.webDir === undefined ? api : Layer.merge(api, boardRoutes(options.webDir));
+};
 
 /** The board and its API on a local port. Needs the workspace; brings everything else. */
 export const serverLayer = (options: ListenOptions) =>
