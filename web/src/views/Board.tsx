@@ -1,50 +1,17 @@
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  pointerWithin,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import {
   ArchiveIcon,
-  ArrowRightLeftIcon,
   BookOpenIcon,
   ClapperboardIcon,
-  FolderOpenIcon,
   KanbanIcon,
   LayoutGridIcon,
-  MessageSquareIcon,
   PlusIcon,
-  SquarePenIcon,
 } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
-import { StatusDot } from "@/components/app-sidebar";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuGroup,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuRadioGroup,
-  ContextMenuRadioItem,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import {
   Empty,
   EmptyContent,
@@ -65,17 +32,15 @@ import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { api, STATUSES, type ItemSummary, type Status } from "../api.ts";
-import { desktop } from "../desktop.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
-import { gridColumns, stepCard, stepOf } from "../lib/board-keys.ts";
-import { QUIET_DRAG } from "../lib/drag.ts";
-import { modHeld } from "../lib/edit-commands.ts";
-import { archiveItems, moveItem, revealItem } from "../lib/items.ts";
+import { gridColumns } from "../lib/board-keys.ts";
+import { moveItem } from "../lib/items.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { byWork, isBusy, itemWork } from "../lib/work.ts";
+import { BoardColumns, BoardSkeleton } from "./BoardColumns.tsx";
+import { ItemMenu, usePicks } from "./BoardPicks.tsx";
 import { Tile } from "./GalleryTile.tsx";
-import { Thumbnail } from "./Thumbnail.tsx";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
@@ -332,97 +297,6 @@ export function Board() {
   );
 }
 
-/** The card an element is on, by its id. */
-const cardOf = (element: Element | null) =>
-  element?.closest<HTMLElement>("[data-card]")?.dataset.card;
-
-/** Focus a card's link, and scroll the card into view. */
-function focusCard(id: string) {
-  const card = document.querySelector(`[data-card="${CSS.escape(id)}"]`);
-
-  card?.querySelector<HTMLElement>("[data-card-link]")?.focus({ preventScroll: true });
-  card?.scrollIntoView({ block: "nearest", inline: "nearest" });
-}
-
-/**
- * The cards picked, and the keys that step through them. The arrow keys, or J and K, step through
- * the cards in `columns()`, their ids as {@link stepCard} takes them; Shift with them, or Shift or
- * ⌘ with a click, picks several, and a right click on a picked card takes all of them. No key
- * steps while `held`, as in a drag.
- */
-function usePicks(items: readonly ItemSummary[], columns: () => string[][], held = false) {
-  const t = useMessages();
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-
-  const picked = items.filter((i) => selected.has(i.id));
-  // A drag or a menu on a picked card takes all the picked ones; on any other card, that card.
-  const takenBy = (item: ItemSummary) => (selected.has(item.id) ? picked : [item]);
-
-  const onKey = useEffectEvent((event: KeyboardEvent) => {
-    if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || held) return;
-
-    const focused = document.activeElement;
-    const from = cardOf(focused);
-
-    // Only from a card or from nowhere, so fields, menus and dialogs keep their keys.
-    if (from === undefined && focused !== null && focused !== document.body) return;
-
-    if (event.code === "Escape") {
-      if (selected.size === 0) return;
-
-      event.preventDefault();
-      setSelected(new Set());
-
-      return;
-    }
-
-    const step = stepOf(event.code);
-
-    if (step === undefined) return;
-
-    event.preventDefault();
-
-    const to = stepCard(columns(), from, step);
-
-    if (to === undefined) return;
-
-    if (event.shiftKey)
-      setSelected((current) => new Set([...current, ...(from ? [from] : []), to]));
-
-    focusCard(to);
-  });
-
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => onKey(event);
-
-    addEventListener("keydown", listener);
-
-    return () => removeEventListener("keydown", listener);
-  }, []);
-
-  function toggle(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-
-      if (!next.delete(id)) next.add(id);
-
-      return next;
-    });
-  }
-
-  // A right click outside the picked cards is about that card alone.
-  function menuOn(item: ItemSummary) {
-    if (!selected.has(item.id)) setSelected(new Set());
-  }
-
-  function archive(archiving: readonly ItemSummary[]) {
-    setSelected(new Set());
-    void archiveItems(archiving, t);
-  }
-
-  return { selected, setSelected, takenBy, toggle, menuOn, archive };
-}
-
 /** The tracks a grid lays out across, from its computed style. */
 const trackCount = (grid: HTMLElement | null) =>
   grid === null ? 1 : getComputedStyle(grid).gridTemplateColumns.split(" ").length;
@@ -480,106 +354,6 @@ function Gallery({
   );
 }
 
-/**
- * The columns of cards, one for each status. A card drags to another column, and a drag on a
- * picked card takes all of them.
- */
-function BoardColumns({
-  items,
-  statuses,
-  formatTitle,
-  onMove,
-}: {
-  items: ItemSummary[];
-  statuses: Status[];
-  formatTitle: (id: string) => string;
-  onMove: (items: readonly ItemSummary[], status: Status) => void;
-}) {
-  const [dragged, setDragged] = useState<ItemSummary>();
-  // A press that moves a little is still a click on the card.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
-  const columns = statuses.map((status) => ({
-    status,
-    cards: items.filter((i) => i.status === status).toSorted((a, b) => b.updatedAt - a.updatedAt),
-  }));
-
-  const { selected, setSelected, takenBy, toggle, menuOn, archive } = usePicks(
-    items,
-    () => columns.map(({ cards }) => cards.map((i) => i.id)),
-    dragged !== undefined,
-  );
-
-  const moving = dragged === undefined ? [] : takenBy(dragged);
-
-  function startDrag({ active }: DragStartEvent) {
-    const item = items.find((i) => i.id === active.id);
-
-    if (item !== undefined && !selected.has(item.id)) setSelected(new Set());
-
-    setDragged(item);
-  }
-
-  function drop({ over }: DragEndEvent) {
-    const status = STATUSES.find((s) => s === over?.id);
-
-    setDragged(undefined);
-
-    if (status !== undefined) onMove(moving, status);
-  }
-
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      // A card's menu moves it without a mouse.
-      accessibility={QUIET_DRAG}
-      onDragStart={startDrag}
-      onDragCancel={() => setDragged(undefined)}
-      onDragEnd={drop}
-    >
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-6">
-        {columns.map(({ status, cards }) => (
-          <Column
-            key={status}
-            status={status}
-            count={cards.length}
-            // Cards let go over the column they are all in stay put.
-            disabled={moving.length > 0 && moving.every((i) => i.status === status)}
-          >
-            {cards.map((item) => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                formatTitle={formatTitle}
-                selected={selected.has(item.id)}
-                faded={moving.includes(item)}
-                onToggle={() => toggle(item.id)}
-                onMenu={() => menuOn(item)}
-                menu={<ItemMenu items={takenBy(item)} onMove={onMove} onArchive={archive} />}
-              />
-            ))}
-          </Column>
-        ))}
-      </div>
-      <DragOverlay dropAnimation={null}>
-        {dragged ? (
-          <div className="relative cursor-grabbing">
-            <div className="*:shadow-lg">
-              <Card size="sm">
-                <CardBody item={dragged} formatTitle={formatTitle} overlay />
-              </Card>
-            </div>
-            {moving.length > 1 ? (
-              <Badge className="absolute -top-2 -right-2">{moving.length}</Badge>
-            ) : null}
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
-  );
-}
-
 function GallerySkeleton() {
   return (
     <div className="@container min-h-0 flex-1 overflow-hidden pb-6" aria-busy="true">
@@ -589,232 +363,5 @@ function GallerySkeleton() {
         ))}
       </div>
     </div>
-  );
-}
-
-function BoardSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1 gap-3 overflow-hidden pb-6" aria-busy="true">
-      {[3, 2, 1].map((count) => (
-        <div
-          key={count}
-          className="flex max-w-96 min-w-72 flex-1 flex-col gap-2 rounded-3xl bg-muted/40 p-2"
-        >
-          <Skeleton className="h-5 w-24" />
-          {Array.from({ length: count }, (_, n) => (
-            <Skeleton key={n} className="h-32 w-full" />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** A status column, where a card dragged from another column can be let go. */
-function Column({
-  status,
-  count,
-  disabled,
-  children,
-}: {
-  status: Status;
-  count: number;
-  disabled: boolean;
-  children: ReactNode;
-}) {
-  const t = useMessages();
-  const { setNodeRef, isOver } = useDroppable({ id: status, disabled });
-
-  return (
-    <section
-      ref={setNodeRef}
-      aria-label={t.status[status]}
-      data-over={isOver}
-      className="flex max-w-96 min-w-72 flex-1 flex-col gap-2 rounded-3xl bg-muted/40 p-2 transition-colors data-[over=true]:bg-muted data-[over=true]:ring-2 data-[over=true]:ring-ring/40"
-    >
-      <h2 className="flex items-center justify-between px-1 text-sm font-medium">
-        {t.status[status]}
-        <Badge variant="secondary">{count}</Badge>
-      </h2>
-      <div className="-m-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-1">
-        {count === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-            {t.board.emptyColumn}
-          </p>
-        ) : null}
-        {children}
-      </div>
-    </section>
-  );
-}
-
-/** What a card shows; the copy that follows a drag shows it without the links. */
-function CardBody({
-  item,
-  formatTitle,
-  overlay = false,
-  selected = false,
-}: {
-  item: ItemSummary;
-  formatTitle: (id: string) => string;
-  overlay?: boolean;
-  selected?: boolean;
-}) {
-  const t = useMessages();
-  const title = "line-clamp-2 text-sm leading-snug font-medium";
-
-  return (
-    <CardContent>
-      <div className="flex gap-3">
-        <Thumbnail item={item} overlay={overlay} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {overlay ? (
-            <span className={title}>{item.title}</span>
-          ) : (
-            // The link's ::after stretches over the whole card, so the card is one click target.
-            <a
-              href={href("item", item.id)}
-              data-card-link
-              className={`${title} outline-none after:absolute after:inset-0 after:rounded-3xl`}
-            >
-              {item.title}
-              {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
-            </a>
-          )}
-          {item.hook ? (
-            <p className="line-clamp-2 text-xs text-muted-foreground">{item.hook}</p>
-          ) : null}
-          <div className="mt-auto flex flex-wrap items-center gap-1.5">
-            {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
-            {item.openFeedback > 0 ? (
-              <Badge variant="destructive">
-                <MessageSquareIcon data-icon="inline-start" />
-                {t.board.openFeedback(item.openFeedback)}
-              </Badge>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </CardContent>
-  );
-}
-
-/** A card on the board, with its menu; a picked card has a ring, and the focused one an outline. */
-function ItemCard({
-  item,
-  formatTitle,
-  selected,
-  faded,
-  onToggle,
-  onMenu,
-  menu,
-}: {
-  item: ItemSummary;
-  formatTitle: (id: string) => string;
-  selected: boolean;
-  /** On its way to another column, in a drag. */
-  faded: boolean;
-  onToggle: () => void;
-  onMenu: () => void;
-  menu: ReactNode;
-}) {
-  const { listeners, setNodeRef } = useDraggable({ id: item.id });
-
-  return (
-    <ContextMenu>
-      {/* Without dnd-kit's attributes, which would make the card a button of its own: the card's
-          link and menu stand for it. */}
-      <div
-        ref={setNodeRef}
-        {...listeners}
-        data-card={item.id}
-        data-selected={selected}
-        data-faded={faded}
-        className="relative cursor-grab rounded-3xl transition **:cursor-grab hover:*:bg-muted/50 hover:*:shadow-md has-focus-visible:*:bg-muted/50 has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:bg-muted/50 *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
-      >
-        <ContextMenuTrigger
-          render={<Card size="sm" />}
-          onClick={(event) => {
-            // Shift or ⌘ picks the card, or puts it back, instead of opening it.
-            if (!(event.shiftKey || modHeld(event))) return;
-
-            event.preventDefault();
-            onToggle();
-          }}
-          onContextMenu={onMenu}
-        >
-          <CardBody item={item} formatTitle={formatTitle} selected={selected} />
-        </ContextMenuTrigger>
-      </div>
-      {menu}
-    </ContextMenu>
-  );
-}
-
-/**
- * What a right click on a card offers: open it, move it to another column, find its files. For
- * several picked cards, moving and archiving take them all.
- */
-function ItemMenu({
-  items,
-  onMove,
-  onArchive,
-}: {
-  items: readonly ItemSummary[];
-  onMove: (items: readonly ItemSummary[], status: Status) => void;
-  onArchive: (items: readonly ItemSummary[]) => void;
-}) {
-  const t = useMessages();
-  const single = items.length === 1 ? items[0] : undefined;
-  const archivable = items.filter((i) => i.status !== "archived");
-
-  return (
-    <ContextMenuContent>
-      {single ? (
-        <ContextMenuItem onClick={() => (location.hash = href("item", single.id))}>
-          <SquarePenIcon />
-          {t.itemActions.open}
-        </ContextMenuItem>
-      ) : (
-        <ContextMenuGroup>
-          <ContextMenuLabel>{t.board.selectedCount(items.length)}</ContextMenuLabel>
-        </ContextMenuGroup>
-      )}
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>
-          <ArrowRightLeftIcon />
-          {t.itemActions.moveTo}
-        </ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuRadioGroup
-            // Several cards can be in several columns, so none is marked.
-            value={single?.status ?? null}
-            onValueChange={(status: Status) => onMove(items, status)}
-          >
-            {STATUSES.map((status) => (
-              <ContextMenuRadioItem key={status} value={status}>
-                <StatusDot status={status} />
-                {t.status[status]}
-              </ContextMenuRadioItem>
-            ))}
-          </ContextMenuRadioGroup>
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      {desktop && single ? (
-        <ContextMenuItem onClick={() => void revealItem(single)}>
-          <FolderOpenIcon />
-          {t.itemActions.showFolder}
-        </ContextMenuItem>
-      ) : null}
-      {archivable.length > 0 ? (
-        <>
-          <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => onArchive(archivable)}>
-            <ArchiveIcon />
-            {t.itemActions.archive}
-          </ContextMenuItem>
-        </>
-      ) : null}
-    </ContextMenuContent>
   );
 }
