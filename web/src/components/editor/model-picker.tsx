@@ -19,16 +19,21 @@ interface ModelPickerProps {
   onPick: (settings: ModelSettings) => void;
 }
 
-/** One quiet setting under the composer: its value by name, opening a list to pick from. */
+/**
+ * One quiet setting under the composer: its value by name, opening a list to pick from. A `bare`
+ * one shows its chevron only while pointed at or open, so the model reads as a plain name.
+ */
 function Setting({
   label,
   value,
   options,
+  bare = false,
   onPick,
 }: {
   label: string;
   value: string | undefined;
   options: ReadonlyArray<{ value: string; label: string }>;
+  bare?: boolean;
   onPick: (value: string) => void;
 }) {
   const shown = options.find((option) => option.value === value)?.label ?? value ?? "";
@@ -41,12 +46,18 @@ function Setting({
           <InputGroupButton
             title={`${label}: ${shown}`}
             aria-label={`${label}: ${shown}`}
-            className="min-w-0 shrink"
+            className="group/setting min-w-0 shrink"
           />
         }
       >
         <span className="truncate">{shown}</span>
-        <ChevronDownIcon className="text-muted-foreground" />
+        <ChevronDownIcon
+          className={
+            bare
+              ? "hidden text-muted-foreground group-hover/setting:block group-data-popup-open/setting:block"
+              : "text-muted-foreground"
+          }
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="end" className="w-auto min-w-40">
         <DropdownMenuRadioGroup value={value ?? ""} onValueChange={onPick}>
@@ -77,6 +88,7 @@ export function ModelPicker({ status, settings, onPick }: ModelPickerProps) {
         <Setting
           label={m.model}
           value={settings.model}
+          bare
           options={status.models.map((option) => ({ value: option.id, label: option.label }))}
           onPick={(model) => pick({ ...settings, model })}
         />

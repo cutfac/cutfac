@@ -37,15 +37,8 @@ export const offersModels = (status: AgentStatus | undefined): status is AgentSt
   status !== undefined && (status.models.length > 0 || status.efforts.length > 0);
 
 /** The model the agent runs when none is picked, when it says and its list names it. */
-export function ownModel(status: AgentStatus) {
-  const own = status.defaultModel;
-
-  if (own === undefined) return undefined;
-
-  // Claude names a release, such as `Opus 5.5`, of an alias it lists as `Opus`.
-  return status.models.find((option) => own === option.label || own.startsWith(`${option.label} `))
-    ?.id;
-}
+export const ownModel = (status: AgentStatus) =>
+  status.models.find((option) => option.label === status.defaultModel)?.id;
 
 /** The effort to run with when none is picked: the model's own, else High, else the middle one. */
 function defaultEffort(efforts: ReadonlyArray<string>, own: string | undefined) {
@@ -56,8 +49,9 @@ function defaultEffort(efforts: ReadonlyArray<string>, own: string | undefined) 
 
 /**
  * What a request is sent with: the pick, with a model and effort the agent offers filled in where
- * it has none or no longer offers it, so the picker always names what runs. With no list to check
- * against, nothing is picked.
+ * it has none or no longer offers it, so the picker always names what runs. The model filled in is
+ * the agent's first listed, its newest, rather than whatever its own config names. With no list to
+ * check against, nothing is picked.
  */
 export function usableSettings(
   status: AgentStatus | undefined,
@@ -68,9 +62,7 @@ export function usableSettings(
   const settings: ModelSettings = {};
 
   const option =
-    status.models.find((candidate) => candidate.id === pick?.model) ??
-    status.models.find((candidate) => candidate.id === ownModel(status)) ??
-    status.models[0];
+    status.models.find((candidate) => candidate.id === pick?.model) ?? status.models[0];
 
   if (option !== undefined) settings.model = option.id;
 

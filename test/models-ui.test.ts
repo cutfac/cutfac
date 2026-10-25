@@ -68,18 +68,11 @@ describe("picking a model and effort", () => {
     expect(usableSettings(undefined, { model: "opus" })).toEqual({});
   });
 
-  test("the agent's own default model is the one picked when it names one", () => {
+  test("with nothing picked, the first listed model runs whatever the agent's config names", () => {
     expect(usableSettings({ ...codex, defaultModel: "GPT-B" }, {})).toEqual({
-      model: "gpt-b",
-      effort: "medium",
+      model: "gpt-a",
+      effort: "low",
     });
-    // Claude names a release, such as Opus 5.5, of an alias it lists as Opus.
-    const opus = { id: "opus", label: "Opus", efforts: ["low", "high", "max"] };
-    const sonnet = { id: "sonnet", label: "Sonnet", efforts: ["low", "high", "max"] };
-
-    expect(
-      usableSettings({ ...codex, models: [sonnet, opus], defaultModel: "Opus 5.5" }, {}),
-    ).toEqual({ model: "opus", effort: "high" });
   });
 
   test("each agent sends its own pick, and a copied prompt none", () => {
