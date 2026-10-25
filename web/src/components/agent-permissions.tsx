@@ -95,7 +95,9 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
       >
         {warns(access) ? <TriangleAlertIcon className="mt-px size-3.5 shrink-0" /> : null}
         <span>
-          {mode === "follow" ? `${t.permissions.followed(agent, shown.setting)} ` : null}
+          {mode === "follow"
+            ? `${t.permissions.followed(agent, shown.setting !== undefined)} `
+            : null}
           {accessText(access, agent, t)}
         </span>
       </p>
