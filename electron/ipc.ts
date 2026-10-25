@@ -13,6 +13,9 @@ export const EDIT_COMMAND_CHANNEL = "cutfac:edit-command";
 /** The palette, a new video, the sidebar or a page from the app menu, for the board to open. */
 export const APP_COMMAND_CHANNEL = "cutfac:app-command";
 
+/** What waits for the user, for the Dock badge and a notification when an agent asks. */
+export const ATTENTION_CHANNEL = "cutfac:attention";
+
 /** Check a license key from the board's dialog and keep it to unlock the paid plan. */
 export const SET_LICENSE_KEY_CHANNEL = "cutfac:set-license-key";
 

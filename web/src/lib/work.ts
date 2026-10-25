@@ -1,4 +1,5 @@
 import type { Feedback, ItemSummary } from "../api.ts";
+import type { Attention } from "../desktop.ts";
 import { renderShare, type RenderState } from "./render.ts";
 import { hasResult, versionsOf } from "./requests.ts";
 import { runView } from "./run.ts";
@@ -136,3 +137,14 @@ export const waitingCount = (
   items: ReadonlyArray<ItemSummary>,
   seen?: (render: RenderState) => boolean,
 ) => items.filter((item) => needsYou(itemWork(item, seen))).length;
+
+/** What waits for the user, for the desktop app to tell them while they are elsewhere. */
+export const attention = (
+  items: ReadonlyArray<ItemSummary>,
+  seen?: (render: RenderState) => boolean,
+): Attention => ({
+  waiting: waitingCount(items, seen),
+  asking: items.flatMap((item) =>
+    itemWork(item, seen).kind === "approval" ? [{ id: item.id, title: item.title }] : [],
+  ),
+});

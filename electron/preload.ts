@@ -12,6 +12,7 @@ import {
   AGENTS_CHANNEL,
   APP_COMMAND_CHANNEL,
   APP_ICON_CHANNEL,
+  ATTENTION_CHANNEL,
   CHOOSE_FOLDER_CHANNEL,
   CREATE_WORKSPACE_CHANNEL,
   DEFAULT_FOLDER_CHANNEL,
@@ -123,6 +124,7 @@ const bridge = {
   pickPath: (): Promise<string | undefined> => ipcRenderer.invoke(PICK_PATH_CHANNEL),
   startDrag: (target) => ipcRenderer.send(START_DRAG_CHANNEL, target),
   setLocale: (locale) => ipcRenderer.send(SET_LOCALE_CHANNEL, locale),
+  setAttention: (attention) => ipcRenderer.send(ATTENTION_CHANNEL, attention),
   onEditCommand: (listener) => {
     // Only the main process sends on this channel, but check what arrives all the same.
     const forward = (_event: IpcRendererEvent, command: string) => {

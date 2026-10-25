@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { AgentRun, Feedback, ItemSummary } from "../web/src/api.ts";
 import type { RenderState } from "../web/src/lib/render.ts";
 import {
+  attention,
   byWork,
   inProgress,
   isBusy,
@@ -203,5 +204,20 @@ describe("the sidebar's videos", () => {
     expect(
       waitingCount([summary({ requests: [{ ...versions, run: run("running") }], running: true })]),
     ).toBe(0);
+  });
+});
+
+describe("attention", () => {
+  test("counts what waits for the user and names the videos whose agent asks", () => {
+    const items = [
+      summary({ id: "asking", title: "Asking", running: true, approvals: 2 }),
+      summary({ id: "versions", requests: [versions] }),
+      summary({ id: "working", running: true }),
+    ];
+
+    expect(attention(items)).toEqual({
+      waiting: 2,
+      asking: [{ id: "asking", title: "Asking" }],
+    });
   });
 });

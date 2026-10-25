@@ -12,7 +12,7 @@ import {
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { BriefRow } from "@/components/brief-sheet";
@@ -58,7 +58,7 @@ import {
 import { APP_KEYS } from "../lib/app-commands.ts";
 import type { BriefView } from "../lib/brief.ts";
 import { failureSeen } from "../lib/render-seen.ts";
-import { inProgress, waitingCount } from "../lib/work.ts";
+import { attention, inProgress } from "../lib/work.ts";
 
 interface MainNavItem {
   view: "board" | "learn" | "templates";
@@ -315,6 +315,10 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
   const editing = view === "item" && id ? id : undefined;
   const waiting = useMcpWaiting();
   const setupWaiting = waiting > 0 ? t.mcp.waiting(waiting) : undefined;
+  const notice = attention(items, failureSeen);
+
+  // The desktop app's Dock badge and notifications follow what waits for the user.
+  useEffect(() => desktop?.setAttention(notice), [notice]);
 
   // An open video that is not listed leaves Board lit, as the board is where it lives.
   const boardActive =
@@ -355,7 +359,7 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
                   to={href(target)}
                   active={target === "board" ? boardActive : view === target}
                   tooltip={withKeys(t.nav[target], APP_KEYS[target])}
-                  badge={target === "board" ? waitingCount(items, failureSeen) : undefined}
+                  badge={target === "board" ? notice.waiting : undefined}
                 >
                   <Icon />
                   <span>{t.nav[target]}</span>

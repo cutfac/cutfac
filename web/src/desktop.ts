@@ -116,6 +116,14 @@ export interface CutfacDevTools {
   reveal: (path: string) => Promise<void>;
 }
 
+/** What waits for the user on the board, as the app's Dock badge and notifications tell it. */
+export interface Attention {
+  /** How many videos wait for the user. */
+  waiting: number;
+  /** The videos whose agent waits for the user to answer what it asked. */
+  asking: { id: string; title: string }[];
+}
+
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
 export interface CutfacDesktop {
   /** Ask for a workspace folder and restart the local server on it. Resolves false if cancelled. */
@@ -135,6 +143,11 @@ export interface CutfacDesktop {
   startDrag: (path: string) => void;
   /** Tell the app which language the board shows, so its menus and dialogs match. */
   setLocale: (locale: Locale) => void;
+  /**
+   * Tell the app what waits for the user, for its Dock badge, and a notification when an agent
+   * starts asking while the app is in the background.
+   */
+  setAttention: (attention: Attention) => void;
   /** Undo and Redo chosen from the app menu or its shortcuts. Returns an unsubscribe. */
   onEditCommand: (listener: (command: EditCommand) => void) => () => void;
   /** A command chosen from the app menu or its shortcuts. Returns an unsubscribe. */

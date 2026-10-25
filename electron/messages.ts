@@ -53,6 +53,7 @@ const en = {
   upToDateDetail: (version: string) => `Cutfac ${version} is the newest version.`,
   updateCheckFailed: "Couldn't check for updates",
   licenseKey: "License Key…",
+  asking: "An agent is waiting for your OK",
 };
 
 export type Messages = typeof en;
@@ -113,5 +114,6 @@ export const MESSAGES: Record<Locale, Messages> = {
     upToDateDetail: (version) => `컷팩 ${version} 버전이 가장 최신이에요.`,
     updateCheckFailed: "업데이트를 확인하지 못했어요",
     licenseKey: "라이선스 키…",
+    asking: "에이전트가 허락을 기다려요",
   },
 };

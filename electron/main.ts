@@ -16,6 +16,7 @@ import {
 import type { AppCommand, EditCommand, OnboardingStep } from "../web/src/desktop.ts";
 import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
 import { stopFixes } from "./agents.ts";
+import { handleAttention } from "./attention.ts";
 import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPages.ts";
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
 import { handleDevTools } from "./devTools.ts";
@@ -185,6 +186,7 @@ if (!app.requestSingleInstanceLock()) {
     setMenu();
     void saveLocale(next);
   });
+  handleAttention({ isFromApp, bringToFront, sendAppCommand, locale: () => locale });
   handleOnboarding({
     isFromApp,
     boardUrl,
