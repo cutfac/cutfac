@@ -8,6 +8,7 @@ import type {
   ModelSettings,
   RunMessage,
 } from "../api.ts";
+import type { Approval } from "../approvalsApi.ts";
 
 export type RunStep =
   | { readonly kind: "text"; readonly text: string }
@@ -27,6 +28,8 @@ export interface LiveRun {
   readonly effort?: string | undefined;
   readonly status: AgentRun["status"];
   readonly steps: ReadonlyArray<RunStep>;
+  /** What the agent asks before using a tool and waits on the user's answer to, oldest first. */
+  readonly approvals: ReadonlyArray<Approval>;
   /** The agent is compacting the conversation right now. */
   readonly compacting?: boolean;
   readonly reply?: string;
@@ -49,6 +52,7 @@ export const NO_RUN: LiveRun = {
   agent: undefined,
   status: "done",
   steps: [],
+  approvals: [],
 };
 
 const append = (run: LiveRun, step: RunStep): LiveRun => ({ ...run, steps: [...run.steps, step] });
@@ -83,14 +87,24 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
           : { kind: "tool", name: message.name, detail: message.detail },
       );
 
+    case "approval": {
+      const { type: _, ...approval } = message;
+
+      return { ...run, approvals: [...run.approvals, approval] };
+    }
+
+    case "approval-settled":
+      return { ...run, approvals: run.approvals.filter(({ id }) => id !== message.id) };
+
+    // Nothing waits on an answer once the run is over.
     case "done":
-      return { ...run, status: "done", reply: message.reply };
+      return { ...run, status: "done", reply: message.reply, approvals: [] };
 
     case "stopped":
-      return { ...run, status: "stopped" };
+      return { ...run, status: "stopped", approvals: [] };
 
     case "error":
-      return { ...run, status: "failed", error: message.error };
+      return { ...run, status: "failed", error: message.error, approvals: [] };
 
     case "compaction":
       if (message.state === "running") return { ...run, compacting: true };
@@ -260,6 +274,8 @@ export interface RunView {
   /** The agent is compacting the conversation right now. */
   readonly compacting: boolean;
   readonly steps: ReadonlyArray<RunStep>;
+  /** What the agent waits on the user's answer to; only a streamed run asks. */
+  readonly approvals: ReadonlyArray<Approval>;
   readonly reply: string | undefined;
   readonly error: string | undefined;
 }
@@ -287,6 +303,7 @@ export function runView(
     running,
     compacting: running && live?.compacting === true,
     steps: live?.steps ?? (saved?.compacted === true ? [COMPACTION] : []),
+    approvals: running ? (live?.approvals ?? []) : [],
     reply: live?.reply ?? saved?.reply,
     error: live?.error ?? saved?.error,
   };

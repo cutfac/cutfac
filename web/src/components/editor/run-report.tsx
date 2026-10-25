@@ -11,7 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { AgentStatus } from "../../api.ts";
-import { useMessages } from "../../i18n/index.ts";
+import { useMessages, type Messages } from "../../i18n/index.ts";
 import { answerer } from "../../lib/models.ts";
 import {
   closingReply,
@@ -21,38 +21,55 @@ import {
   type RunView,
   type ToolStep,
 } from "../../lib/run.ts";
+import { ApprovalCard, type OnAnswer } from "./approval-card.tsx";
 import { useRenderLine } from "./render-card.tsx";
 
 /** Past this many stretches of text and tool calls, a finished run folds them away behind its reply. */
 const FOLD_STEPS = 4;
 
+/** What the running line says: what waits on the user first, then what the agent is busy with. */
+function runningText(run: RunView, rendering: string | undefined, t: Messages) {
+  if (run.approvals.length > 0) return t.approval.waiting;
+
+  return run.compacting ? t.chat.compacting : (rendering ?? t.chat.working);
+}
+
 /**
- * The agent's answer to one message: the steps it took, its reply, and how it ended. The message
- * adds what it offers next.
+ * The agent's answer to one message: the steps it took, what it asks before going on, its reply,
+ * and how it ended. The message adds what it offers next.
  */
 export function RunReport({
   run,
   statuses,
   onStop,
+  onAnswer,
 }: {
   run: RunView;
   /** What the agents list, to name the model the run used. */
   statuses?: ReadonlyArray<AgentStatus> | undefined;
   onStop: () => void;
+  /** Where the run can ask the user; a run with nowhere to ask is turned down instead. */
+  onAnswer?: OnAnswer | undefined;
 }) {
   const { steps, reply } = closingReply(run.steps, run.reply);
   const t = useMessages();
   const rendering = useRenderLine();
+  const agent = t.setup.agents[run.agent ?? "claude"];
 
   return (
     <>
       <MessageHeader>{answerer(run.agent, run, statuses, t)}</MessageHeader>
       {steps.length > 0 ? <Steps steps={steps} running={run.running} /> : null}
       {reply === undefined ? null : <Reply text={reply} />}
+      {onAnswer === undefined
+        ? null
+        : run.approvals.map((approval) => (
+            <ApprovalCard key={approval.id} approval={approval} agent={agent} onAnswer={onAnswer} />
+          ))}
       {run.running ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />
-          {run.compacting ? t.chat.compacting : (rendering ?? t.chat.working)}
+          {runningText(run, rendering, t)}
           <Button variant="ghost" size="xs" onClick={onStop}>
             <CircleStopIcon data-icon="inline-start" />
             {t.chat.stop}

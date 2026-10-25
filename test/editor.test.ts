@@ -102,6 +102,7 @@ describe("run transcript", () => {
         { kind: "text", text: "Trimming the intro." },
         { kind: "tool", name: "Bash", detail: "ffmpeg -i in.mp4" },
       ],
+      approvals: [],
       reply: "Trimmed 0.4s.",
     });
   });
@@ -127,8 +128,32 @@ describe("run transcript", () => {
 
     const second = fold([{ type: "start", subject: "f2", agent: "claude" }], first);
 
-    expect(second).toEqual({ subject: "f2", agent: "claude", status: "running", steps: [] });
+    expect(second).toEqual({
+      subject: "f2",
+      agent: "claude",
+      status: "running",
+      steps: [],
+      approvals: [],
+    });
     expect(fold([{ type: "stopped" }], second).status).toBe("stopped");
+  });
+
+  test("keeps what the agent asks until it is settled or the run ends", () => {
+    const ffmpeg = { id: "r1", tool: "Bash", detail: "ffmpeg", always: true, rules: [] };
+    const curl = { id: "r2", tool: "Bash", detail: "curl", always: false, rules: [] };
+
+    const asked = fold([
+      { type: "start", subject: "f1", agent: "claude" },
+      { type: "approval", ...ffmpeg },
+      { type: "approval", ...curl },
+    ]);
+
+    expect(asked.approvals).toEqual([ffmpeg, curl]);
+    expect(fold([{ type: "approval-settled", id: "r1" }], asked).approvals).toEqual([curl]);
+    expect(fold([{ type: "stopped" }], asked).approvals).toEqual([]);
+    expect(runView(undefined, asked, true).approvals).toHaveLength(2);
+    // A run that streamed its end waits on nothing, whatever it asked.
+    expect(runView(undefined, { ...asked, status: "done" }, true).approvals).toEqual([]);
   });
 
   test("moves a reply the last text step already said out of the steps", () => {
@@ -168,6 +193,7 @@ describe("run transcript", () => {
       running: false,
       compacting: false,
       steps: [],
+      approvals: [],
       reply: "Saved reply.",
       error: undefined,
     });

@@ -26,6 +26,7 @@ import { hasResult, runOffer, versionsMedia, versionsOf } from "../../lib/reques
 import { closingReply, runView, type LiveRun } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf } from "../../lib/target.ts";
 import { clockTime } from "../../lib/time.ts";
+import type { OnAnswer } from "./approval-card.tsx";
 import { SentAttachments } from "./attachments.tsx";
 import { CompareDialog, VersionsDialog } from "./compare-dialog.tsx";
 import { Reply, RunReport } from "./run-report.tsx";
@@ -38,6 +39,8 @@ export interface RequestActions {
   run: (feedback: Feedback, agent: AgentName) => void;
   copy: (feedback: Feedback) => void;
   stop: () => void;
+  /** Answer what the agent asks before using a tool; resolves once the answer was sent. */
+  answer: OnAnswer;
   approve: (feedback: Feedback) => void;
   restore: (feedback: Feedback) => void;
   /** Keep one of the versions the agent saved; the others are thrown away. */
@@ -112,7 +115,12 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
         <MessageContent>
           {ahead === undefined ? (
             <>
-              <RunReport run={state} statuses={statuses} onStop={actions.stop} />
+              <RunReport
+                run={state}
+                statuses={statuses}
+                onStop={actions.stop}
+                onAnswer={actions.answer}
+              />
               {offer === "send" ? (
                 <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
               ) : null}

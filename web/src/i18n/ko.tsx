@@ -1,4 +1,5 @@
 import type { ToolKind } from "../lib/run.ts";
+import { approvalKo } from "./approval-ko.tsx";
 import type { Messages } from "./en.tsx";
 import { galleryKo } from "./gallery-ko.tsx";
 import { mcpKo } from "./mcp-ko.tsx";
@@ -659,4 +660,5 @@ export const ko: Messages = {
   permissions: permissionsKo,
   gallery: galleryKo,
   render: renderKo,
+  approval: approvalKo,
 };

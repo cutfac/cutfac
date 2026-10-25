@@ -1,3 +1,4 @@
+import type { Approval } from "./approvalsApi.ts";
 import type { RenderState } from "./lib/render.ts";
 
 /**
@@ -225,7 +226,10 @@ export type RunEvent =
   | { type: "done"; reply: string }
   | { type: "stopped" }
   | { type: "error"; error: string }
-  | { type: "compaction"; state: "running" | "done" | "failed" };
+  | { type: "compaction"; state: "running" | "done" | "failed" }
+  /** The agent asks before using a tool; settled once answered, taken back, or the run stops. */
+  | ({ type: "approval" } & Approval)
+  | { type: "approval-settled"; id: string };
 
 /**
  * What a run stream says: what the run is about (first on every connect), then its events. On an

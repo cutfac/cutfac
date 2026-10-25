@@ -3,8 +3,11 @@ import { type AgentName, request, send } from "./api.ts";
 /** How much a run from the board may do: as the user's own settings say, or one of Cutfac's three. */
 export type PermissionMode = "follow" | "edit" | "auto" | "full";
 
-/** What a run may do in the end: edit in the workspace, more as a reviewer agrees, anything, or less. */
-export type Access = "edit" | "auto" | "full" | "limited";
+/**
+ * What a run may do in the end: ask the board before it acts, edit in the workspace, more as a
+ * reviewer agrees, anything, or less.
+ */
+export type Access = "asks" | "edit" | "auto" | "full" | "limited";
 
 /** How an agent's runs may act; see src/core/agentPermissions.ts. */
 export interface PermissionView {

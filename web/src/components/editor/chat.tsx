@@ -30,6 +30,7 @@ import {
   type Media,
   type ModelSettings,
 } from "../../api.ts";
+import { approvalsApi } from "../../approvalsApi.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
@@ -116,6 +117,8 @@ export function Chat({
     stop: () => {
       api.stopEdit(item.id).catch(sendFailed);
     },
+    answer: (approval, answer) =>
+      approvalsApi.answer(item.id, approval.id, answer).then(() => undefined),
     approve: (feedback) => {
       api.approveEdit(item.id, feedback.id).then(onItem, sendFailed);
     },

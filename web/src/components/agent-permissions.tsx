@@ -10,7 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { useMessages } from "../i18n/index.ts";
+import type { AgentName } from "../api.ts";
+import { type Messages, useMessages } from "../i18n/index.ts";
 import {
   type Access,
   type PermissionMode,
@@ -22,6 +23,20 @@ const MODES: ReadonlyArray<PermissionMode> = ["follow", "edit", "auto", "full"];
 
 /** Access that asks the user to look twice: anything on the computer, or too little to edit. */
 const warns = (access: Access) => access === "full" || access === "limited";
+
+/** What `access` comes to for runs of `agent`, named `name`. */
+function accessText(access: Access, agent: AgentName, name: string, t: Messages) {
+  switch (access) {
+    case "asks":
+    case "auto":
+      return t.permissions.access[access](name);
+    case "edit":
+      return t.permissions.access.edit[agent];
+    case "full":
+    case "limited":
+      return t.permissions.access[access];
+  }
+}
 
 /** How much an agent's runs from the board may do, as the user picks it, and what that comes to. */
 export function AgentPermissions({ view }: { view: PermissionView }) {
@@ -49,8 +64,6 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
       })
       .finally(() => setBusy(undefined));
   };
-
-  const about = access === "auto" ? t.permissions.access.auto(agent) : t.permissions.access[access];
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -84,7 +97,7 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
         {warns(access) ? <TriangleAlertIcon className="mt-px size-3.5 shrink-0" /> : null}
         <span>
           {mode === "follow" ? `${t.permissions.followed(agent, shown.setting)} ` : null}
-          {about}
+          {accessText(access, view.agent, agent, t)}
         </span>
       </p>
     </div>
