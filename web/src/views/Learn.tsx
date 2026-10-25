@@ -10,6 +10,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { BriefCard } from "@/components/brief-card";
 import { ErrorAlert, ListSkeleton, Page } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -48,6 +49,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { safeHttpUrl } from "@/lib/utils";
 
 import { api, fileUrl, type Learned, type LearnedList, type LearnResult } from "../api.ts";
+import { briefApi } from "../briefApi.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
@@ -337,14 +339,23 @@ function LearnedCard({
   );
 }
 
-/** What the user taught the workspace about, and about.md as agents read it. */
+/**
+ * The Brief page: what the videos are for and where they go, then the material the user taught the
+ * workspace about, and about.md as agents read it.
+ */
 export function Learn() {
   const t = useMessages();
+  const brief = useLive("brief", briefApi.brief);
   const { data, error, reload, setData } = useLive("learned", api.learned);
   const about = data?.about;
 
   return (
     <Page width="default" title={t.learn.title} description={t.learn.description}>
+      <BriefCard brief={brief} />
+      <section className="flex flex-col gap-1.5 pt-4">
+        <h2 className="font-medium">{t.learn.materials}</h2>
+        <p className="text-sm text-muted-foreground">{t.learn.materialsBody}</p>
+      </section>
       <AddSource onLearned={reload} />
       {error ? (
         <ErrorAlert title={t.learn.loadError} message={error} />

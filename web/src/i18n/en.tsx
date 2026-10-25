@@ -47,7 +47,7 @@ export const en = {
     newVideo: "New video",
     main: "Main",
     board: "Videos",
-    learn: "Learn",
+    learn: "Brief",
     templates: "Templates",
     setup: "Setup",
     sendFeedback: "Send feedback",
@@ -107,14 +107,16 @@ export const en = {
     learnHint: {
       title: "Teach your agent about your product",
       body: "Paste a link to your app or site, or point at a project folder. The next videos will fit it better.",
-      action: "Learn",
+      action: "Add material",
       dismiss: "Not now",
     },
   },
   learn: {
-    title: "Learn",
-    description:
-      "Teach your agent about your product, your audience, and videos you like. It all goes into about.md, which your agent reads before it makes a video.",
+    title: "Brief",
+    description: "What your agent reads before it makes a video.",
+    materials: "Material",
+    materialsBody:
+      "Your product, your audience, and videos you like. It all goes into about.md, which your agent reads before it makes a video.",
     loadError: "Could not load what your agent has learned",
     input: "Link or path",
     placeholder: "Paste a link, or a folder path on this computer",

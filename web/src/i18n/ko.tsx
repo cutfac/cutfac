@@ -36,7 +36,7 @@ export const ko: Messages = {
     newVideo: "새 영상",
     main: "메인",
     board: "영상",
-    learn: "학습",
+    learn: "브리프",
     templates: "템플릿",
     setup: "설정",
     sendFeedback: "피드백 보내기",
@@ -96,13 +96,15 @@ export const ko: Messages = {
     learnHint: {
       title: "에이전트에게 제품을 알려 주세요",
       body: "앱이나 사이트 링크를 붙여 넣거나 프로젝트 폴더를 가리키면, 다음 영상부터 제품에 더 잘 맞춰 만들어요.",
-      action: "학습하기",
+      action: "자료 추가",
       dismiss: "나중에",
     },
   },
   learn: {
-    title: "학습",
-    description:
+    title: "브리프",
+    description: "에이전트가 영상을 만들기 전에 읽는 내용이에요.",
+    materials: "자료",
+    materialsBody:
       "제품, 시청자, 마음에 드는 영상을 에이전트에게 알려 주세요. 모두 about.md에 모이고, 에이전트는 영상을 만들기 전에 이 파일을 읽어요.",
     loadError: "학습한 내용을 불러오지 못했어요",
     input: "링크 또는 경로",

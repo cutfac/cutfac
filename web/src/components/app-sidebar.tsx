@@ -1,6 +1,6 @@
 import {
   ArrowRightIcon,
-  BookOpenIcon,
+  TargetIcon,
   ChevronsUpDownIcon,
   ClapperboardIcon,
   FolderOpenIcon,
@@ -15,7 +15,6 @@ import {
 import { useEffect, useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { BriefRow } from "@/components/brief-sheet";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
@@ -56,7 +55,6 @@ import {
   useMessages,
 } from "../i18n/index.ts";
 import { APP_KEYS } from "../lib/app-commands.ts";
-import type { BriefView } from "../lib/brief.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { attention, inProgress } from "../lib/work.ts";
 
@@ -67,7 +65,7 @@ interface MainNavItem {
 
 export const MAIN_NAV: ReadonlyArray<MainNavItem> = [
   { view: "board", icon: ClapperboardIcon },
-  { view: "learn", icon: BookOpenIcon },
+  { view: "learn", icon: TargetIcon },
   { view: "templates", icon: LayoutTemplateIcon },
 ];
 
@@ -302,13 +300,12 @@ function withKeys(label: string, keys: string | undefined): ReactNode {
 interface AppSidebarProps {
   ws: WorkspaceInfo | undefined;
   plan: Live<Plan>;
-  brief: Live<BriefView>;
   view: string;
   /** The open item or template, from the second part of the route. */
   id: string | undefined;
 }
 
-export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
+export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
   const t = useMessages();
   const items = useLive("items", api.items).data ?? [];
   const videos = inProgress(items, failureSeen).slice(0, MAX_VIDEOS);
@@ -334,7 +331,6 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
           <SidebarMenuItem>
             <WorkspaceMenu ws={ws} />
           </SidebarMenuItem>
-          <BriefRow brief={brief} />
           <SidebarMenuItem>
             <NewItemTrigger
               render={

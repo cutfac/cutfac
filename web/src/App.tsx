@@ -81,7 +81,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
       // On macOS the title bar runs across the window above the sidebar and the content.
       className={cn("min-h-0", insetTitleBar ? "mt-10 h-[calc(100dvh-2.5rem)]" : "h-dvh")}
     >
-      <AppSidebar ws={ws} plan={plan} brief={brief} view={view} id={id} />
+      <AppSidebar ws={ws} plan={plan} view={view} id={id} />
       <SidebarInset className="min-h-0 min-w-0 [view-transition-name:page]">
         <TitleBar>
           {error ? (

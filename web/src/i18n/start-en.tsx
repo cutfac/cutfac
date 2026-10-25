@@ -13,7 +13,7 @@ interface PurposeCopy {
 
 /**
  * The brief and the first template: what the videos are for, the reference to start from, and the
- * first video while the agent makes the template. The brief's form shows again in the sidebar.
+ * first video while the agent makes the template. The brief's form shows again on the Brief page.
  */
 export const startEn = {
   brief: {
@@ -58,17 +58,15 @@ export const startEn = {
       shorts: "Shorts",
       reels: "Reels",
     } satisfies Record<Platform, string>,
-    /** The sidebar's line when the brief says nothing yet. */
-    add: "Add a brief",
-    sheetTitle: "Brief",
-    sheetBody: "What your videos are for. Your agent reads it before every template and video.",
+    title: "Purpose and platforms",
+    body: "Your agent reads it before every template and video.",
     save: "Save",
     saved: "Brief saved",
     saveFailed: (message: string) => `Could not save the brief: ${message}`,
   },
   whatToMake: {
     title: "What will you make?",
-    body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later.",
+    body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later under Brief in the sidebar.",
     optional: "Optional",
     material: {
       label: "Your material",
