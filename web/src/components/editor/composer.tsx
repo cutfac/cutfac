@@ -235,6 +235,8 @@ interface ComposerProps {
   onPick: (agent: AgentName, settings: ModelSettings) => void;
   /** An agent is working on this item, so an empty composer offers to stop it. */
   running: boolean;
+  /** The agent asked something and waits, so what the user writes next is the answer. */
+  answering: boolean;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   /** Files going with the next request. */
   files: Attachments;
@@ -258,6 +260,7 @@ export function Composer({
   settings,
   onPick,
   running,
+  answering,
   inputRef,
   files,
   onItem,
@@ -324,7 +327,7 @@ export function Composer({
     <Dropzone paste label={t.attachments.drop.composer} openRef={openFiles} onFiles={files.add}>
       <div className="flex flex-col gap-2 border-t p-3">
         <div className="flex flex-wrap gap-1.5">
-          {t.composer.ideas[scope].map((idea) => (
+          {(answering ? [] : t.composer.ideas[scope]).map((idea) => (
             <Button
               key={idea}
               variant="outline"
@@ -364,7 +367,7 @@ export function Composer({
             ref={inputRef}
             value={body}
             rows={2}
-            placeholder={t.composer.placeholder[scope]}
+            placeholder={answering ? t.composer.placeholder.answer : t.composer.placeholder[scope]}
             aria-label={t.composer.request}
             onChange={(event) => setBody(event.target.value)}
             onKeyDown={onKeyDown}

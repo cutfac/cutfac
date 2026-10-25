@@ -541,6 +541,7 @@ export const ko: Messages = {
       range: "이 부분에서 무엇을 바꿀까요?",
       box: "박스 안에서 무엇을 바꿀까요?",
       whole: "무엇을 바꿀까요? 구간을 먼저 고르면 더 정확해요.",
+      answer: "에이전트에게 보낼 답을 적으세요…",
       new: "원하는 영상을 설명하세요…",
     },
     promptCopied: "프롬프트를 복사했어요. 이 워크스페이스의 Claude Code나 Codex에 붙여넣으세요.",

@@ -582,6 +582,7 @@ export const en = {
       range: "What should change in this part?",
       box: "What should change in the box?",
       whole: "What should change? Select a part first to be precise.",
+      answer: "Write your answer to the agent…",
       new: "Describe the video you want…",
     },
     promptCopied: "Prompt copied. Paste it into Claude Code or Codex in this workspace.",

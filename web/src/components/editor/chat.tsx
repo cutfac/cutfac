@@ -34,8 +34,8 @@ import { approvalsApi } from "../../approvalsApi.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { inOrder, linePaused, versionsOf, waitingLine } from "../../lib/requests.ts";
-import { liveFor, type LiveRun, type OnRun } from "../../lib/run.ts";
+import { asksUser, inOrder, linePaused, versionsOf, waitingLine } from "../../lib/requests.ts";
+import { liveFor, runView, type LiveRun, type OnRun } from "../../lib/run.ts";
 import { targetOf, type Target } from "../../lib/target.ts";
 import type { Attachments } from "./attachments.tsx";
 import { Composer, copyPrompt, editInput, sendRequest } from "./composer.tsx";
@@ -91,6 +91,10 @@ export function Chat({
   const requests = inOrder(item);
   const line = waitingLine(requests);
   const running = item.running || run.status === "running";
+
+  const answering =
+    !running &&
+    requests.some((feedback) => asksUser(item, feedback, runView(feedback.run, undefined, false)));
 
   /** How many requests run before a waiting one, counting the run going now. */
   const aheadOf = (feedback: Feedback) => {
@@ -217,6 +221,7 @@ export function Chat({
         settings={pickedSettings(statuses, picks, agent)}
         onPick={onPick}
         running={running}
+        answering={answering}
         inputRef={inputRef}
         files={files}
         onItem={onItem}
