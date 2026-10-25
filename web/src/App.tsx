@@ -100,7 +100,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
           )}
         </TitleBar>
       </SidebarInset>
-      <NewItemDialog formats={ws?.formats} plan={plan} />
+      <NewItemDialog formats={ws?.formats} plan={plan} defaultAgent={ws?.config.agent.default} />
       <CommandPalette editing={editing} />
       {desktop ? <DesktopLicense desktop={desktop} /> : null}
       <AnnouncementDialog />

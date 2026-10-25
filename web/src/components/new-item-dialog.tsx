@@ -1,10 +1,9 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { FileVideoIcon, ImageIcon, PlusIcon, UploadIcon, XIcon } from "lucide-react";
-import { useState, type DragEvent, type ReactElement, type SubmitEvent } from "react";
+import { PlusIcon } from "lucide-react";
+import { useState, type KeyboardEvent, type ReactElement, type SubmitEvent } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
-import { UpgradeButton } from "@/components/plan-card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +16,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -25,119 +23,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { megabytes } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
-import { api, fileUrl, type Format, type InputField, type NewItem, type Plan } from "../api.ts";
-import { desktop } from "../desktop.ts";
-import { href, type Live } from "../hooks.ts";
-import { useMessages } from "../i18n/index.ts";
+import {
+  type AgentChoice,
+  api,
+  type EditInput,
+  type Format,
+  type ItemDetail,
+  type NewItem,
+  type Plan,
+} from "../api.ts";
+import { href, type Live, useAgentStatuses, useModelPicks } from "../hooks.ts";
+import { type Messages, useMessages } from "../i18n/index.ts";
 import { freeVersion } from "../lib/license.ts";
-import { filledInputs, isClip, missingInputs } from "../lib/templates.ts";
+import { pickedSettings } from "../lib/models.ts";
+import { draftTitle, withoutLink, writtenLinks } from "../lib/newVideo.ts";
+import { filledInputs, missingInputs } from "../lib/templates.ts";
+import { copyPrompt, preferredAgent } from "./editor/composer.tsx";
+import {
+  FilesField,
+  FreeLimit,
+  LinkChips,
+  TemplateInput,
+  useFileDrop,
+} from "./new-item-fields.tsx";
 
+/** Pictures and videos become the item's media; anything else goes with the request as a file. */
 const isMedia = (file: File) => file.type.startsWith("video/") || file.type.startsWith("image/");
 
-function openItem(id: string) {
-  location.hash = href("item", id);
-}
+/** What the dialog is doing after Create, as its button says. */
+type Stage = "creating" | "uploading" | "downloading" | "sending";
 
-interface TemplateInputProps {
-  field: InputField;
-  /** The template's folder, which its choice previews are relative to. */
-  dir: string;
-  value: string;
-  onChange: (value: string) => void;
-}
-
-/** One of a template's inputs: a pick from its choices, or free text. Blank means its default. */
-function TemplateInput({ field, dir, value, onChange }: TemplateInputProps) {
-  const t = useMessages();
-  const id = `new-item-input-${field.id}`;
-  const needed = field.required && field.default === undefined;
-
-  const items = [
-    ...(needed || field.default !== undefined ? [] : [{ value: null, label: t.newItem.none }]),
-    ...field.choices.map((choice) => ({ value: choice.id, label: choice.title })),
-  ];
-
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>
-        {field.title}
-        {needed ? <span className="text-muted-foreground">({t.newItem.required})</span> : null}
-      </FieldLabel>
-      {field.choices.length === 0 ? (
-        <Input
-          id={id}
-          required={needed}
-          value={value}
-          placeholder={field.default ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <Select
-          items={items}
-          value={value === "" ? (field.default ?? null) : value}
-          onValueChange={(next) => onChange(next ?? "")}
-        >
-          <SelectTrigger id={id} className="w-full">
-            <SelectValue placeholder={t.newItem.choose} />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {items.map((item) => {
-              const preview = field.choices.find((c) => c.id === item.value)?.preview;
-
-              return (
-                <SelectItem key={item.value ?? "none"} value={item.value}>
-                  {preview === undefined || isClip(preview) ? null : (
-                    <img
-                      src={fileUrl(`${dir}/${preview}`)}
-                      alt=""
-                      className="size-6 rounded-md object-cover"
-                    />
-                  )}
-                  {item.label}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-      )}
-      {field.description === undefined ? null : (
-        <FieldDescription>{field.description}</FieldDescription>
-      )}
-    </Field>
-  );
-}
-
-/** In place of the form once the free version has made all of its videos. */
-function FreeLimit({ limit, onClose }: { limit: number; onClose: () => void }) {
-  const t = useMessages();
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>{t.plan.limitTitle(limit)}</DialogTitle>
-        <DialogDescription>{t.plan.limitBody}</DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        {desktop ? (
-          <Button
-            variant="outline"
-            onClick={() => {
-              onClose();
-              desktop?.requestLicenseKey();
-            }}
-          >
-            {t.plan.enterKey}
-          </Button>
-        ) : null}
-        <UpgradeButton />
-      </DialogFooter>
-    </>
-  );
-}
+const stageLabel = (stage: Stage, t: Messages) =>
+  ({
+    creating: t.newItem.creating,
+    uploading: t.newItem.uploading,
+    downloading: t.newItem.downloading,
+    sending: t.newItem.sending,
+  })[stage];
 
 /** The one new item dialog, which buttons anywhere open without each having one of their own. */
 const handle = DialogPrimitive.createHandle();
@@ -145,7 +70,7 @@ const handle = DialogPrimitive.createHandle();
 /** Open the new item dialog, as from a shortcut or the command palette. */
 export const openNewItem = (): void => handle.open(null);
 
-/** A button that opens the new item dialog. Defaults to a "New item" button. */
+/** A button that opens the new item dialog. Defaults to a "New video" button. */
 export function NewItemTrigger({ render }: { render?: ReactElement }) {
   const t = useMessages();
 
@@ -168,48 +93,99 @@ interface NewItemDialogProps {
   formats: Format[] | undefined;
   /** The free version says when this is its last video, and past that, how to make more. */
   plan: Live<Plan>;
+  /** The workspace's agent, which the first request goes to when it is installed. */
+  defaultAgent: AgentChoice | undefined;
 }
 
 /**
- * Create an item from a title, an optional template and its inputs, and optionally a clip to
- * start from. Mount it once; {@link NewItemTrigger} and {@link openNewItem} open it.
+ * Start a video from what the user wants made, with files and links to go with it. The item is
+ * titled from the description for now, its video links are downloaded into its references, and
+ * the description goes to the agent as the first request, so work starts at once. A template
+ * shows only when the workspace has some. Mount it once; {@link NewItemTrigger} and
+ * {@link openNewItem} open it.
  */
-export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
+export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProps) {
   const t = useMessages();
+  const statuses = useAgentStatuses();
+  const [picks] = useModelPicks();
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
   const [format, setFormat] = useState<string | null>(null);
   const [inputs, setInputs] = useState<Partial<Record<string, string>>>({});
-  const [file, setFile] = useState<File | undefined>(undefined);
-  const [dragging, setDragging] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState<ReadonlyArray<File>>([]);
+  const [stage, setStage] = useState<Stage>();
   const [error, setError] = useState<string>();
+  const addFiles = (added: ReadonlyArray<File>) => setFiles((current) => [...current, ...added]);
+  const drop = useFileDrop(addFiles);
   const chosen = formats?.find((f) => f.id === format);
   const fields = chosen?.doc.inputs ?? [];
   const missing = missingInputs(fields, inputs);
   const free = freeVersion(plan.data);
+  const links = writtenLinks(text);
+  const body = text.trim();
 
-  function pick(candidate: File | undefined) {
-    if (!candidate) return;
+  /** Add the files and links, then send the description; the item is there whatever fails. */
+  async function fill(item: ItemDetail) {
+    const attachments: string[] = [];
+    const others = files.filter((file) => !isMedia(file));
 
-    if (isMedia(candidate)) setFile(candidate);
-    else toast.error(t.newItem.notMedia);
-  }
+    if (files.length > 0) setStage("uploading");
 
-  function onDrop(event: DragEvent) {
-    event.preventDefault();
-    setDragging(false);
-    pick(event.dataTransfer.files[0]);
-  }
+    for (const file of files.filter(isMedia)) {
+      await api
+        .uploadMedia(item.id, file)
+        .catch((cause: Error) => toast.error(t.newItem.uploadFailed(file.name, cause.message)));
+    }
 
-  function onDragLeave(event: DragEvent) {
-    const into = event.relatedTarget;
+    if (others.length > 0) {
+      await api
+        .uploadReferences(
+          item.id,
+          others.map((file) => ({ file, path: file.name })),
+        )
+        .then(({ added }) => attachments.push(...added))
+        .catch((cause: Error) => toast.error(t.newItem.filesFailed(cause.message)));
+    }
 
-    if (!(into instanceof Node && event.currentTarget.contains(into))) setDragging(false);
+    const videos = links.filter((link) => link.video);
+
+    if (videos.length > 0) setStage("downloading");
+
+    // The link stays in the request, so the agent can still reach a video that failed here.
+    const downloads = await Promise.allSettled(
+      videos.map(({ url }) => api.addLinkedVideo(item.id, url)),
+    );
+
+    downloads.forEach((download, at) => {
+      if (download.status === "fulfilled") attachments.push(...download.value.added);
+      else {
+        const reason = download.reason instanceof Error ? download.reason.message : "";
+
+        toast.warning(t.newItem.linkFailed(videos[at]?.url ?? ""), { description: reason });
+      }
+    });
+
+    setStage("sending");
+
+    const agent = preferredAgent(defaultAgent, statuses);
+    const input: EditInput = { body, agent, ...pickedSettings(statuses, picks, agent) };
+
+    if (attachments.length > 0) input.attachments = attachments;
+
+    await api.requestEdit(item.id, input).then(
+      (receipt) => {
+        for (const warning of receipt.warnings) toast.warning(warning);
+
+        if (receipt.sent === "queue") copyPrompt(receipt.prompt);
+      },
+      (cause: Error) => toast.error(t.newItem.sendFailed, { description: cause.message }),
+    );
   }
 
   async function create() {
-    const input: NewItem = { title: title.trim() };
+    setStage("creating");
+
+    const input: NewItem = { title: draftTitle(body) ?? t.newItem.untitled };
 
     if (format) input.format = format;
 
@@ -219,31 +195,26 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
 
     const item = await api.createItem(input);
 
-    if (file) {
-      // The item exists either way, so a failed upload shouldn't strand the user here.
-      await api
-        .uploadMedia(item.id, file)
-        .catch((cause: Error) => toast.error(t.newItem.uploadFailed(cause.message)));
-    }
-
-    openItem(item.id);
+    await fill(item);
+    location.hash = href("item", item.id);
   }
 
   // The dialog outlives the page it opened on, so a made item leaves it closed and empty.
   function reset() {
     setOpen(false);
-    setTitle("");
+    setText("");
     setFormat(null);
     setInputs({});
-    setFile(undefined);
+    setFiles([]);
   }
 
-  function submit(event: SubmitEvent) {
-    event.preventDefault();
+  const ready = body !== "" && stage === undefined && missing.length === 0;
 
-    if (!title.trim() || busy) return;
+  function submit(event?: SubmitEvent) {
+    event?.preventDefault();
 
-    setBusy(true);
+    if (!ready) return;
+
     setError(undefined);
     create()
       .then(reset)
@@ -252,15 +223,20 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
         // Another workspace may have made the last free video, which this one hasn't heard of.
         plan.reload();
       })
-      .finally(() => setBusy(false));
+      .finally(() => setStage(undefined));
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      submit();
+    }
   }
 
   const formatItems = [
     { value: null, label: t.newItem.noFormat },
     ...(formats ?? []).map((f) => ({ value: f.id, label: f.doc.title })),
   ];
-
-  const FileIcon = file?.type.startsWith("image/") ? ImageIcon : FileVideoIcon;
 
   return (
     <Dialog
@@ -276,15 +252,7 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
         }
       }}
     >
-      <DialogContent
-        data-drop-target=""
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-      >
+      <DialogContent data-drop-target="" {...drop.handlers}>
         {free && free.used >= free.limit ? (
           <FreeLimit limit={free.limit} onClose={() => setOpen(false)} />
         ) : (
@@ -296,18 +264,30 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
             <form onSubmit={submit} className="grid gap-6">
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="new-item-title">{t.newItem.titleLabel}</FieldLabel>
-                  <Input
-                    id="new-item-title"
+                  <FieldLabel htmlFor="new-item-text">{t.newItem.promptLabel}</FieldLabel>
+                  <Textarea
+                    id="new-item-text"
                     required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={t.newItem.titlePlaceholder}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    placeholder={t.newItem.promptPlaceholder}
+                    className="max-h-60 min-h-24"
+                  />
+                  <LinkChips
+                    links={links}
+                    onRemove={(link) => setText((current) => withoutLink(current, link))}
                   />
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="new-item-format">{t.newItem.format}</FieldLabel>
-                  {formats ? (
+                <FilesField
+                  files={files}
+                  dragging={drop.dragging}
+                  onAdd={addFiles}
+                  onRemove={(file) => setFiles((current) => current.filter((f) => f !== file))}
+                />
+                {formats === undefined || formats.length === 0 ? null : (
+                  <Field>
+                    <FieldLabel htmlFor="new-item-format">{t.newItem.format}</FieldLabel>
                     <Select
                       items={formatItems}
                       value={format}
@@ -327,11 +307,9 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <Skeleton className="h-8 w-full" />
-                  )}
-                  <FieldDescription>{t.newItem.formatHint}</FieldDescription>
-                </Field>
+                    <FieldDescription>{t.newItem.formatHint}</FieldDescription>
+                  </Field>
+                )}
                 {chosen === undefined
                   ? null
                   : fields.map((field) => (
@@ -343,42 +321,6 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
                         onChange={(value) => setInputs((prev) => ({ ...prev, [field.id]: value }))}
                       />
                     ))}
-                <Field>
-                  <FieldLabel htmlFor="new-item-file">{t.newItem.file}</FieldLabel>
-                  {file ? (
-                    <div className="flex items-center gap-3 rounded-2xl border bg-muted/50 p-3 text-sm">
-                      <FileIcon className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                      <span className="shrink-0 text-muted-foreground">{megabytes(file.size)}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t.newItem.removeFile}
-                        onClick={() => setFile(undefined)}
-                      >
-                        <XIcon />
-                      </Button>
-                    </div>
-                  ) : (
-                    <label
-                      className={`flex flex-col items-center gap-1 rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground transition-colors select-none hover:bg-muted/50 has-focus-visible:bg-muted/50 ${dragging ? "border-ring bg-muted/50" : ""}`}
-                    >
-                      <UploadIcon className="size-5" />
-                      <span>{t.newItem.drop}</span>
-                      <input
-                        id="new-item-file"
-                        type="file"
-                        accept="video/*,image/*"
-                        className="sr-only"
-                        onChange={(e) => {
-                          pick(e.target.files?.[0]);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  )}
-                </Field>
               </FieldGroup>
               {free && free.limit - free.used === 1 ? (
                 <p className="text-sm text-muted-foreground">{t.plan.lastFree}</p>
@@ -388,9 +330,9 @@ export function NewItemDialog({ formats, plan }: NewItemDialogProps) {
                 <DialogClose render={<Button type="button" variant="outline" />}>
                   {t.common.cancel}
                 </DialogClose>
-                <Button type="submit" disabled={!title.trim() || busy || missing.length > 0}>
-                  {busy ? <Spinner data-icon="inline-start" /> : null}
-                  {busy ? (file ? t.newItem.uploading : t.newItem.creating) : t.newItem.create}
+                <Button type="submit" disabled={!ready}>
+                  {stage === undefined ? null : <Spinner data-icon="inline-start" />}
+                  {stage === undefined ? t.newItem.create : stageLabel(stage, t)}
                 </Button>
               </DialogFooter>
             </form>

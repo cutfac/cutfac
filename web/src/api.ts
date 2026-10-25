@@ -710,6 +710,13 @@ export const api = {
       method: "POST",
       body: uploadForm(uploads),
     }),
+  /** Download a video link with yt-dlp into the item's references. */
+  addLinkedVideo: (id: string, url: string) =>
+    send<{ item: ItemDetail; added: string[] }, { url: string }>(
+      "POST",
+      `/api/item/references/link${q(id)}`,
+      { url },
+    ),
   removeReference: (id: string, path: string) =>
     send<ItemDetail, { path: string }>("POST", `/api/item/references/remove${q(id)}`, { path }),
   addFeedback: (id: string, input: NewFeedback) =>
