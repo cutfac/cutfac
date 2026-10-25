@@ -16,7 +16,7 @@ import { importAgent } from "../../lib/imports.ts";
 import { errorText } from "../../lib/notify.ts";
 import { onboardingAgent, skipStart } from "../../lib/onboarding.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
-import { StepActions, StepHeader } from "./frame.tsx";
+import { StepHeader } from "./frame.tsx";
 import { MaterialPicker } from "./material-picker.tsx";
 
 /**
@@ -112,14 +112,14 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
   );
 
   const back = (
-    <Button variant="ghost" disabled={busy} onClick={() => go(-1)}>
+    <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
       {t.back}
     </Button>
   );
 
   const screens: Record<
     Part,
-    { title: string; body: string; field: ReactNode; actions: ReactNode }
+    { title: string; body: string; field: ReactNode; primary: ReactNode; secondary: ReactNode }
   > = {
     purpose: {
       title: t.title,
@@ -133,36 +133,26 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
           }}
         />
       ),
-      actions: (
-        <>
-          {next(t.next, brief.purpose !== null)}
-          <Button variant="ghost" onClick={skip}>
-            {t.skip}
-          </Button>
-        </>
+      primary: next(t.next, brief.purpose !== null),
+      secondary: (
+        <Button size="lg" variant="ghost" onClick={skip}>
+          {t.skip}
+        </Button>
       ),
     },
     details: {
       title: own ? b.ownBodyLabel : b.bodyLabel,
       body: own ? t.details.ownBody : t.details.body,
       field: <BriefBody {...parts} focusOnOpen />,
-      actions: (
-        <>
-          {next(own || brief.body.trim() !== "" ? t.next : t.skipPart, briefReady(brief))}
-          {back}
-        </>
-      ),
+      primary: next(own || brief.body.trim() !== "" ? t.next : t.skipPart, briefReady(brief)),
+      secondary: back,
     },
     platforms: {
       title: b.platformsLabel,
       body: b.platformsHint,
       field: <PlatformToggles {...parts} />,
-      actions: (
-        <>
-          {next(brief.platforms.length > 0 ? t.next : t.skipPart)}
-          {back}
-        </>
-      ),
+      primary: next(brief.platforms.length > 0 ? t.next : t.skipPart),
+      secondary: back,
     },
     material: {
       title: t.material.title,
@@ -170,16 +160,14 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       field: (
         <MaterialPicker sources={sources} draft={typed} onSources={setSources} onDraft={setTyped} />
       ),
-      actions: (
-        <>
-          <Button size="lg" disabled={busy} onClick={() => void start()}>
-            {busy ? <Spinner data-icon="inline-start" /> : null}
-            {busy ? t.starting : t.start}
-            {busy ? null : <ArrowRightIcon data-icon="inline-end" />}
-          </Button>
-          {back}
-        </>
+      primary: (
+        <Button size="lg" disabled={busy} onClick={() => void start()}>
+          {busy ? <Spinner data-icon="inline-start" /> : null}
+          {busy ? t.starting : t.start}
+          {busy ? null : <ArrowRightIcon data-icon="inline-end" />}
+        </Button>
       ),
+      secondary: back,
     },
   };
 
@@ -194,7 +182,11 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       <StepHeader title={screen.title} body={screen.body} />
       {screen.field}
       {error === undefined ? null : <ErrorAlert message={error} />}
-      <StepActions>{screen.actions}</StepActions>
+      {/* One row at the bottom right, the way back beside the way on, so the step stays short. */}
+      <div className="flex items-center justify-end gap-2">
+        {screen.secondary}
+        {screen.primary}
+      </div>
     </div>
   );
 }
