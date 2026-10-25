@@ -199,6 +199,10 @@ frame, with the box drawn in red), and `before.*` (the media as it was). Open th
 change anything. Write the result over the same media file name and never touch `before.*`; the
 user compares the two and keeps or rolls back the edit. Change only the selected part unless the
 request says otherwise, and end with a plain summary for someone who does not use video editors.
+Call `resolve_feedback` only when you changed the media. When you need the user's answer first, ask
+in your reply and leave the request open; their next request is the answer. In replies, name parts
+by time and what is on screen, never by request or feedback ids or by `clip.mp4`, `frame.png`, and
+`before.*`, which the user never sees.
 
 Files the user drops or pastes on the board are kept in the item's `references/` folder; a dropped
 folder keeps its structure. A request lists the ones attached to it in `attachments`, and

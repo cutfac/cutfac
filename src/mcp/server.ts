@@ -380,7 +380,8 @@ const ListOpenFeedback = tool("list_open_feedback", {
 
 const ResolveFeedback = tool("resolve_feedback", {
   description:
-    "Mark an edit request as handled and describe what changed. Call it after writing the edited media; " +
+    "Mark an edit request as handled and describe what changed. Call it after writing the edited media, and only then: " +
+    "when you changed nothing and need the user's answer, ask in your reply and leave the request open. " +
     "the edited file is saved as the 'after' version the user compares and approves. " +
     "With versions saved by save_variant, the media goes back to how it was until the user picks one on the board.",
   parameters: Schema.Struct({ item: Id, feedbackId: Schema.String, resolution: Schema.String }),
