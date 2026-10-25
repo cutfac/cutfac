@@ -8,6 +8,7 @@ import {
   linePaused,
   MAX_VARIANTS as BOARD_MAX_VARIANTS,
   pinsOn,
+  runOffer,
   versionsMedia,
   versionsOf,
   waitingLine,
@@ -154,6 +155,27 @@ describe("hasResult", () => {
 
   test("offers as many versions as the server holds", () => {
     expect(BOARD_MAX_VARIANTS).toBe(MAX_VARIANTS);
+  });
+});
+
+describe("runOffer", () => {
+  const idle = { status: undefined, running: false };
+
+  test("offers to send a request nothing ran yet, and to run a halted one again", () => {
+    expect(runOffer(true, idle, false)).toBe("send");
+    expect(runOffer(true, { status: "failed", running: false }, false)).toBe("retry");
+    expect(runOffer(true, { status: "stopped", running: false }, false)).toBe("retry");
+  });
+
+  test("offers nothing while it runs, after it finished, or once it is closed", () => {
+    expect(runOffer(true, { status: "running", running: true }, false)).toBeUndefined();
+    expect(runOffer(true, { status: "done", running: false }, false)).toBeUndefined();
+    expect(runOffer(false, idle, false)).toBeUndefined();
+  });
+
+  test("offers nothing once a result came in, from the user's own agent too", () => {
+    expect(runOffer(true, idle, true)).toBeUndefined();
+    expect(runOffer(true, { status: "failed", running: false }, true)).toBeUndefined();
   });
 });
 

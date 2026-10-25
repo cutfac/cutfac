@@ -1,5 +1,5 @@
 import type { Feedback, ItemDetail, Variant } from "../api.ts";
-import { liveFor, runView, type LiveRun } from "./run.ts";
+import { liveFor, runView, type LiveRun, type RunView } from "./run.ts";
 
 /** The item's requests in the order they were made, which is how the chat numbers them. */
 export const inOrder = (item: ItemDetail) =>
@@ -55,6 +55,21 @@ export function hasResult(
   const current = item.media.find((media) => media.name === feedback.media);
 
   return current !== undefined && current.mtime > Date.parse(feedback.baseline ?? feedback.at);
+}
+
+/**
+ * How the chat offers to run an open request: to send it, when nothing ran it yet; to run it
+ * again, after a run that failed or was stopped; or not at all, while it runs, after a run that
+ * finished, or once its result came in, which the user's own agent can also bring.
+ */
+export function runOffer(
+  open: boolean,
+  run: Pick<RunView, "status" | "running">,
+  result: boolean,
+): "send" | "retry" | undefined {
+  if (!open || result || run.running || run.status === "done") return undefined;
+
+  return run.status === undefined ? "send" : "retry";
 }
 
 /** Where a request still in play stands, as its pin on the frame shows it. */

@@ -22,7 +22,7 @@ import { agentInstalled, href } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
 import { AGENTS, agentLabel, answerer } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { hasResult, versionsMedia, versionsOf } from "../../lib/requests.ts";
+import { hasResult, runOffer, versionsMedia, versionsOf } from "../../lib/requests.ts";
 import { closingReply, runView, type LiveRun } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf } from "../../lib/target.ts";
 import { clockTime } from "../../lib/time.ts";
@@ -66,6 +66,7 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
   const target = targetOf(feedback);
   const result = hasResult(item, feedback, state.running);
   const open = feedback.status === "open" && feedback.decision === undefined;
+  const offer = runOffer(open, state, result);
   const replied = closingReply(state.steps, state.reply).reply !== undefined;
   const t = useMessages();
   const locale = useLocale();
@@ -112,17 +113,17 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
           {ahead === undefined ? (
             <>
               <RunReport run={state} statuses={statuses} onStop={actions.stop} />
-              {state.status === undefined && open ? (
+              {offer === "send" ? (
                 <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
               ) : null}
-              {open && !state.running && state.status !== "done" ? (
+              {offer === undefined ? null : (
                 <RunActions
                   feedback={feedback}
                   statuses={statuses}
-                  retry={state.status !== undefined}
+                  retry={offer === "retry"}
                   actions={actions}
                 />
-              ) : null}
+              )}
             </>
           ) : (
             <Waiting
