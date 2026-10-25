@@ -14,7 +14,16 @@ import {
   textOf,
   toolDetail,
 } from "./agentParse.ts";
-import type { ApprovalAnswer, ApprovalKind } from "./approval.ts";
+import {
+  type Answer,
+  type Approval,
+  type ApprovalAnswer,
+  type ApprovalKind,
+  type Question,
+  QuestionOption,
+  answersGiven,
+  choiceOf,
+} from "./approval.ts";
 
 const ClaudeEnvelope = Schema.Struct({
   type: Schema.String,
@@ -125,6 +134,11 @@ const IN_PERSON =
   "The user is following this run on the Cutfac board, which can't answer this tool. Go on " +
   "without it, and say in your reply what you needed from the user.";
 
+/** What the agent hears when the user closes its questions without answering them. */
+const UNANSWERED =
+  "The user closed your questions without answering them. Go on without the answers if you " +
+  "can; otherwise ask again in your reply.";
+
 /** What an answer to a `can_use_tool` request has to carry back. */
 interface ToolUse {
   readonly id: string;
@@ -161,6 +175,66 @@ const claudeAnswer = (use: ToolUse, answer: ApprovalAnswer, message = REJECTED) 
       response: claudeDecision(use, answer, message),
     },
   });
+
+/** Claude Code's own tool for asking the user questions, which the board answers in its stead. */
+const ASK_TOOL = "AskUserQuestion";
+
+const AskInput = Schema.Struct({
+  questions: Schema.Array(
+    Schema.Struct({
+      question: Schema.String,
+      header: Schema.optional(Schema.String),
+      options: Schema.optional(Schema.Array(QuestionOption)),
+      multiSelect: Schema.optional(Schema.Boolean),
+    }),
+  ),
+});
+
+const decodeAskInput = Schema.decodeUnknownOption(AskInput);
+
+/**
+ * `AskUserQuestion`'s questions put to the board. Claude Code takes the answers in the tool's
+ * input, keyed by the question's text, several picked ones joined as its own prompt joins them,
+ * and always lets the user write an answer of their own. None of its questions, or a tool input
+ * it can't read, leaves it to the deny for a tool the board can't stand in for.
+ */
+function questionRequest(use: ToolUse): AgentControl | undefined {
+  const asked = Option.getOrUndefined(decodeAskInput(use.input))?.questions ?? [];
+
+  if (asked.length === 0) return undefined;
+
+  const questions = asked.map((question): Question => ({
+    id: question.question,
+    header: question.header === "" ? undefined : question.header,
+    question: question.question,
+    options: question.options ?? [],
+    multiple: question.multiSelect === true,
+    other: true,
+  }));
+
+  const approval: Approval = {
+    id: use.id,
+    tool: ASK_TOOL,
+    kind: "question",
+    always: false,
+    rules: [],
+    questions,
+  };
+
+  const answer = (given: Answer) => {
+    const picked = answersGiven(given);
+
+    if (picked === undefined) return claudeAnswer(use, "deny", UNANSWERED);
+
+    const answers = Object.fromEntries(
+      Object.entries(picked).map(([question, values]) => [question, values.join(", ")]),
+    );
+
+    return claudeAnswer({ ...use, input: { ...use.input, answers } }, "allow");
+  };
+
+  return { kind: "ask", request: { approval, answer } };
+}
 
 /** The answer to a request of a kind the board doesn't take, so Claude goes on without it. */
 const claudeRefusal = (id: string, error: string) =>
@@ -220,8 +294,9 @@ const allowRules = (suggestions: ReadonlyArray<Schema.Json>) =>
 
 /**
  * A `can_use_tool` request, read one field at a time, so a field a later Claude Code leaves out or
- * changes costs only what it would have shown. A tool that needs the user at Claude Code itself is
- * turned down at once, as the board can't stand in for them.
+ * changes costs only what it would have shown. Questions the agent asks the user go to the board;
+ * any other tool that needs the user at Claude Code itself is turned down at once, as the board
+ * can't stand in for them.
  */
 function toolRequest(
   id: string,
@@ -232,18 +307,22 @@ function toolRequest(
   const suggestions = Option.getOrElse(decodeList(request["permission_suggestions"]), () => []);
   const use: ToolUse = { id, input, suggestions, toolUseId: textOf(request, "tool_use_id") };
 
+  const display = textOf(request, "display_name");
+  const tool = textOf(request, "tool_name") ?? display ?? "tool";
+  const question = tool === ASK_TOOL ? questionRequest(use) : undefined;
+
+  if (question !== undefined) return question;
+
   if (request["requires_user_interaction"] === true) {
     return { kind: "reply", lines: [claudeAnswer(use, "deny", IN_PERSON)] };
   }
 
-  const display = textOf(request, "display_name");
   const shown = (text: string | undefined) => (text === undefined ? text : shownText(text, root));
 
   // All of what the user agrees to, as Claude Code's own prompt shows it: the whole command or
   // path, or else every argument, such as the message a tool would send.
   const everything = Object.keys(input).length === 0 ? undefined : JSON.stringify(input, null, 2);
 
-  const tool = textOf(request, "tool_name") ?? display ?? "tool";
   const kind = KINDS.get(tool) ?? "tool";
 
   const approval = {
@@ -259,7 +338,10 @@ function toolRequest(
     session: forSession(suggestions),
   };
 
-  return { kind: "ask", request: { approval, answer: (answer) => claudeAnswer(use, answer) } };
+  return {
+    kind: "ask",
+    request: { approval, answer: (answer) => claudeAnswer(use, choiceOf(answer)) },
+  };
 }
 
 /** A request Claude Code waits on an answer to, or one it takes back. */

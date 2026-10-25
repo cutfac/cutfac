@@ -55,6 +55,10 @@ export type Decision =
 /** The answer to a request of the server's. */
 export type ServerResult =
   | { readonly decision: Decision }
+  /** The user's answers to `request_user_input`, by question id. */
+  | {
+      readonly answers: Readonly<Record<string, { readonly answers: ReadonlyArray<string> }>>;
+    }
   /** The extra access granted, in the shape Codex asked for it. */
   | { readonly permissions: Schema.JsonObject; readonly scope: "turn" | "session" }
   | {

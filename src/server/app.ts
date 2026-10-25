@@ -19,6 +19,7 @@ import {
 } from "../core/agentPermissions.ts";
 import { RunRegistry } from "../core/agentRun.ts";
 import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
+import type { Approval } from "../core/approval.ts";
 import {
   approveEdit,
   awaitsDecision,
@@ -303,6 +304,13 @@ const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: stri
   return { item: yield* itemDetail(yield* getItem(id)), added };
 });
 
+/** How many of the run's asks wait on the user to let it use a tool, and how many to answer it. */
+const asked = (pending: ReadonlyArray<Approval>) => {
+  const questions = pending.filter((approval) => approval.kind === "question").length;
+
+  return { approvals: pending.length - questions, questions };
+};
+
 /**
  * What the gallery shows of an item: its requests still open or waiting for the user's decision,
  * whether an agent works on it and how many of its asks wait for an answer, and its render while
@@ -323,7 +331,7 @@ const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
     openFeedback: feedback.filter((f) => f.status === "open").length,
     requests: feedback.filter((f) => f.status === "open" || awaitsDecision(f)),
     running: yield* runs.isRunning(item.id),
-    approvals: yield* runs.pending(item.id),
+    ...asked(yield* runs.pending(item.id)),
     render: render?.status === "running" || render?.status === "failed" ? render : undefined,
     media: item.media,
     updatedAt: item.updatedAt,

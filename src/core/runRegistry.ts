@@ -14,7 +14,7 @@ import {
 } from "effect";
 
 import type { RunEvent } from "./agentParse.ts";
-import type { ApprovalAnswer, Ask } from "./approval.ts";
+import { type Answer, type Approval, type Ask, answers } from "./approval.ts";
 import { Conflict } from "./errors.ts";
 
 export type Emit = (event: RunEvent) => Effect.Effect<void>;
@@ -61,13 +61,14 @@ export interface Runs<I> {
   readonly stop: (key: string) => Effect.Effect<boolean>;
   /**
    * Answer what the key's run asked; false when it is no longer waiting on that request, as after
-   * another answer, the agent taking it back, or the run's end.
+   * another answer, the agent taking it back, or the run's end, or when `answer` doesn't fit it,
+   * as answers to questions on a tool.
    */
-  readonly answer: (key: string, id: string, answer: ApprovalAnswer) => Effect.Effect<boolean>;
+  readonly answer: (key: string, id: string, answer: Answer) => Effect.Effect<boolean>;
   /** Whether the key has a run that has not reported its end yet. */
   readonly isRunning: (key: string) => Effect.Effect<boolean>;
-  /** How many requests the key's run waits on the board to answer. */
-  readonly pending: (key: string) => Effect.Effect<number>;
+  /** The requests the key's run waits on the board to answer. */
+  readonly pending: (key: string) => Effect.Effect<ReadonlyArray<Approval>>;
   /**
    * The key each time its run puts a request to the board or has one settled, so a view of every
    * key, such as the gallery, can look again without following each run.
@@ -84,12 +85,18 @@ export interface Runs<I> {
   ) => Effect.Effect<A, E, R>;
 }
 
+/** A request a run waits on, and where its answer goes. */
+interface Pending {
+  readonly approval: Approval;
+  readonly answer: Deferred.Deferred<Answer>;
+}
+
 /** A run; it holds its key until it reports how it ended. */
 interface LiveRun {
   fiber: Fiber.Fiber<void> | undefined;
   ended: RunEvent["type"] | undefined;
   /** The requests it waits on an answer to, by the agent's id for them. */
-  readonly pending: Map<string, Deferred.Deferred<ApprovalAnswer>>;
+  readonly pending: Map<string, Pending>;
 }
 
 interface Channel {
@@ -117,15 +124,16 @@ const askVia =
     Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const { id } = approval;
-        const answer = yield* Deferred.make<ApprovalAnswer>();
-        run.pending.set(id, answer);
+        const answer = yield* Deferred.make<Answer>();
+        const pending: Pending = { approval, answer };
+        run.pending.set(id, pending);
         yield* emit({ type: "approval", ...approval });
         yield* changed;
 
         return yield* restore(Deferred.await(answer)).pipe(
           Effect.ensuring(
             Effect.suspend(() => {
-              if (run.pending.get(id) === answer) run.pending.delete(id);
+              if (run.pending.get(id) === pending) run.pending.delete(id);
 
               return Effect.andThen(emit({ type: "approval-settled", id }), changed);
             }),
@@ -252,16 +260,21 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
       return true;
     });
 
-  const answer = (key: string, id: string, choice: ApprovalAnswer) =>
+  const answer = (key: string, id: string, choice: Answer) =>
     Effect.suspend(() => {
       const pending = channels.get(key)?.live?.pending.get(id);
 
-      return pending === undefined ? Effect.succeed(false) : Deferred.succeed(pending, choice);
+      return pending === undefined || !answers(pending.approval, choice)
+        ? Effect.succeed(false)
+        : Deferred.succeed(pending.answer, choice);
     });
 
   const isRunning = (key: string) => Effect.sync(() => channels.get(key)?.live !== undefined);
 
-  const pending = (key: string) => Effect.sync(() => channels.get(key)?.live?.pending.size ?? 0);
+  const pending = (key: string) =>
+    Effect.sync(() =>
+      [...(channels.get(key)?.live?.pending.values() ?? [])].map(({ approval }) => approval),
+    );
 
   const subscribe = (key: string) =>
     Effect.gen(function* () {

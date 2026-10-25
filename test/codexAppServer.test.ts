@@ -258,7 +258,7 @@ describe("what a Codex turn asks", () => {
 
   test("refuses a request the board doesn't answer, so Codex goes on", () => {
     const [refusal] = sent(
-      started()(send({ id: "u1", method: "item/tool/requestUserInput", params: {} })).control,
+      started()(send({ id: "u1", method: "item/tool/call", params: {} })).control,
     );
 
     expect(refusal).toMatchObject({ id: "u1", error: { code: -32601 } });

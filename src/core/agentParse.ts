@@ -1,6 +1,6 @@
 import { Option, Predicate, Schema } from "effect";
 
-import { Approval, type ApprovalAnswer } from "./approval.ts";
+import { type Answer, Approval } from "./approval.ts";
 import { AgentName, ModelSettings } from "./schema.ts";
 
 /**
@@ -28,7 +28,7 @@ export const RunEvent = Schema.Union([
     type: Schema.Literal("compaction"),
     state: Schema.Literals(["running", "done", "failed"]),
   }),
-  /** The agent asks before it uses a tool, and waits for the answer. */
+  /** The agent asks before it uses a tool, or asks the user questions, and waits for the answer. */
   Schema.Struct({ type: Schema.Literal("approval"), ...Approval.fields }),
   /** The request was answered, here or elsewhere, or the agent took it back. */
   Schema.Struct({ type: Schema.Literal("approval-settled"), id: Schema.String }),
@@ -39,7 +39,7 @@ export type RunEvent = typeof RunEvent.Type;
 /** A request the agent waits on, as the board puts it, with the line that answers it each way. */
 export interface AgentRequest {
   readonly approval: Approval;
-  readonly answer: (answer: ApprovalAnswer) => string;
+  readonly answer: (answer: Answer) => string;
 }
 
 /**

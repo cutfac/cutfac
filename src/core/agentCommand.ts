@@ -130,6 +130,9 @@ const CODEX_EDIT: CodexPermissions = {
   approvalsReviewer: "user",
 };
 
+/** Codex's own tool for asking the user questions, which the board answers for edit runs. */
+const CODEX_ASKS = "features.default_mode_request_user_input=true";
+
 /**
  * `codex app-server` over stdio for one turn: the connection opens with the first line, and the
  * thread, the turn and the answers to what Codex asks follow as it replies.
@@ -178,7 +181,7 @@ export function agentInvocation(agent: AgentName, options: InvocationOptions): A
           ],
           options,
         )
-      : codexInvocation(options);
+      : codexInvocation({ ...options, codexConfig: [...(options.codexConfig ?? []), CODEX_ASKS] });
 
   return env === undefined ? invocation : { ...invocation, env };
 }

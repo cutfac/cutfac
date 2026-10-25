@@ -2,15 +2,16 @@ import { Effect, Schema } from "effect";
 import { HttpRouter, HttpServerRequest } from "effect/http";
 
 import { RunRegistry } from "../core/agentRun.ts";
-import { ApprovalAnswer } from "../core/approval.ts";
+import { Answer } from "../core/approval.ts";
 import { json, withId } from "./respond.ts";
 
 /** The user's answer to a request the agent working on the item put to the board. */
-const AnswerBody = Schema.Struct({ request: Schema.NonEmptyString, answer: ApprovalAnswer });
+const AnswerBody = Schema.Struct({ request: Schema.NonEmptyString, answer: Answer });
 
 /**
- * What the board answers when the agent asks before using a tool. `answered` is false once the
- * request is settled, as by the agent taking it back or a stop, which the run's stream says too.
+ * What the board answers when the agent asks before using a tool, or asks the user questions.
+ * `answered` is false once the request is settled, as by the agent taking it back or a stop, which
+ * the run's stream says too, or when the answer doesn't fit the request.
  */
 export const approvalRoutes = HttpRouter.addAll([
   json(

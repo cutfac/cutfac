@@ -1,7 +1,15 @@
 import { Option, Schema } from "effect";
 
 import { type AgentControl, UNSUPPORTED, mainArgument, shownText, textOf } from "./agentParse.ts";
-import type { Approval, ApprovalAnswer } from "./approval.ts";
+import {
+  type Answer,
+  type Approval,
+  type ApprovalAnswer,
+  type Question,
+  QuestionOption,
+  answersGiven,
+  choiceOf,
+} from "./approval.ts";
 import {
   type Decision,
   METHOD_NOT_FOUND,
@@ -25,14 +33,18 @@ const decodePersist = Schema.decodeUnknownOption(
 );
 
 /** Request `id` put to the board, with what to send back for each answer. */
-const ask = (
+const askAnswer = (
   id: RequestId,
   approval: Approval,
-  result: (answer: ApprovalAnswer) => ServerResult,
+  result: (answer: Answer) => ServerResult,
 ): AgentControl => ({
   kind: "ask",
   request: { approval, answer: (answer) => line({ id, result: result(answer) }) },
 });
+
+/** Request `id` for the user's OK on a tool put to the board, with what to send back for each choice. */
+const ask = (id: RequestId, approval: Approval, result: (answer: ApprovalAnswer) => ServerResult) =>
+  askAnswer(id, approval, (answer) => result(choiceOf(answer)));
 
 /** Codex's decision for `answer`, where Always allow keeps `always`. */
 function decision(answer: ApprovalAnswer, always: Decision): Decision {
@@ -201,6 +213,56 @@ function mcpApproval(
   });
 }
 
+const QuestionParams = Schema.Struct({
+  id: Schema.String,
+  header: Schema.optional(Schema.String),
+  question: Schema.String,
+  isOther: Schema.optional(Schema.Boolean),
+  isSecret: Schema.optional(Schema.Boolean),
+  options: Schema.optional(Schema.NullOr(Schema.Array(QuestionOption))),
+});
+
+const decodeQuestions = Schema.decodeUnknownOption(Schema.Array(QuestionParams));
+
+/**
+ * Questions Codex asks the user with `request_user_input`, which picks one option each or, where
+ * Codex lets them, an answer of their own. Without options there is only the latter to give. The
+ * answers go back by question id; when the user closes the questions unanswered, none do.
+ */
+function userInput(id: RequestId, params: Schema.JsonObject): AgentControl {
+  const asked = Option.getOrElse(decodeQuestions(params["questions"]), () => []);
+
+  if (asked.length === 0) return reply({ id, result: { answers: {} } });
+
+  const questions = asked.map((question): Question => ({
+    id: question.id,
+    header: question.header === "" ? undefined : question.header,
+    question: question.question,
+    options: question.options ?? [],
+    multiple: false,
+    other: question.isOther === true || (question.options ?? []).length === 0,
+    secret: question.isSecret,
+  }));
+
+  const approval: Approval = {
+    id: String(id),
+    tool: "request_user_input",
+    kind: "question",
+    always: false,
+    rules: [],
+    questions,
+  };
+
+  return askAnswer(id, approval, (answer) => ({
+    answers: Object.fromEntries(
+      Object.entries(answersGiven(answer) ?? {}).map(([question, picked]) => [
+        question,
+        { answers: picked },
+      ]),
+    ),
+  }));
+}
+
 /** A request Codex waits on an answer to: put to the board, or refused when the board can't answer it. */
 export function serverRequest(
   id: RequestId,
@@ -218,6 +280,8 @@ export function serverRequest(
       return permissionsApproval(id, params, root);
     case "mcpServer/elicitation/request":
       return mcpApproval(id, params, root);
+    case "item/tool/requestUserInput":
+      return userInput(id, params);
     default:
       return reply({ id, error: { code: METHOD_NOT_FOUND, message: UNSUPPORTED } });
   }

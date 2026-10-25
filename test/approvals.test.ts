@@ -117,7 +117,7 @@ describe("what Claude asks on stdout", () => {
 
   test("can need the user at Claude itself, which is turned down at once", () => {
     const question = parseClaudeLine(
-      canUse("r1", { tool_name: "AskUserQuestion", input: {}, requires_user_interaction: true }),
+      canUse("r1", { tool_name: "ExitPlanMode", input: {}, requires_user_interaction: true }),
     ).control;
 
     if (question?.kind !== "reply") throw new Error("not answered at once");
@@ -304,7 +304,7 @@ describe("the board's answer", () => {
     Effect.gen(function* () {
       yield* emit({ type: "start", subject: run.feedbackId, agent: run.agent });
       const answer = yield* ask(approval);
-      yield* emit({ type: "done", reply: answer });
+      yield* emit({ type: "done", reply: JSON.stringify(answer) });
     });
 
   const spec: RunSpec<RunInput, never> = {
@@ -353,17 +353,19 @@ describe("the board's answer", () => {
       Effect.all([
         registry.answer("other", "r1", "allow"),
         registry.answer("item", "r2", "allow"),
+        // Answers to questions don't answer a tool.
+        registry.answer("item", "r1", { answers: { q: ["yes"] } }),
         registry.answer("item", "r1", "always"),
         registry.answer("item", "r1", "deny"),
       ]),
     );
 
-    expect(result.acted).toEqual([false, false, true, false]);
+    expect(result.acted).toEqual([false, false, false, true, false]);
     expect(result.events).toEqual([
       { type: "start", subject: "f1", agent: "claude" },
       { type: "approval", ...approval },
       { type: "approval-settled", id: "r1" },
-      { type: "done", reply: "always" },
+      { type: "done", reply: '"always"' },
     ]);
     expect(result.late).toBe(false);
   });
@@ -387,13 +389,13 @@ describe("the board's answer", () => {
             Stream.runDrain,
           );
 
-          const waiting = yield* registry.pending("item");
+          const waiting = (yield* registry.pending("item")).length;
           yield* registry.answer("item", "r1", "allow");
 
           return {
             waiting,
             named: yield* Fiber.join(named),
-            after: yield* registry.pending("item"),
+            after: (yield* registry.pending("item")).length,
           };
         }),
       ),
