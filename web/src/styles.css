@@ -81,6 +81,8 @@
   --radius-2xl: var(--radius);
   --radius-3xl: calc(var(--radius) * 1.25);
   --radius-4xl: calc(var(--radius) * 1.25);
+  /* The chat rounds further, as Aside and the Codex app do: its cards 16px. */
+  --radius-5xl: calc(var(--radius) * 2);
 }
 
 :root {
@@ -169,6 +171,11 @@
 .dark[data-vibrancy] {
   --sidebar: transparent;
   --sidebar-accent: oklch(1 0 0 / 10%);
+}
+
+/* The softer corner Aside and the Codex app draw, between a circle's and a square's. */
+@utility squircle {
+  corner-shape: superellipse(1.4);
 }
 
 @layer base {

@@ -72,7 +72,7 @@ export function SourceChips({ item, onItem }: SourcesProps) {
 
         return (
           <li key={sourceKey(source)} className="min-w-0">
-            <Badge variant="outline" className="h-6 max-w-64" title={view.full}>
+            <Badge variant="secondary" pill className="h-6 max-w-64" title={view.full}>
               <Icon data-icon="inline-start" />
               {view.kind === "link" ? (
                 <a
@@ -88,6 +88,7 @@ export function SourceChips({ item, onItem }: SourcesProps) {
               )}
               <Button
                 variant="ghost"
+                pill
                 size="icon-xs"
                 className="size-5"
                 data-icon="inline-end"
@@ -202,7 +203,14 @@ export function AddMenu({ item, onItem, onFiles }: SourcesProps & { onFiles: () 
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<InputGroupButton ref={anchor} size="icon-sm" aria-label={t.composer.add} />}
+          render={
+            <InputGroupButton
+              ref={anchor}
+              variant="secondary"
+              size="icon-sm"
+              aria-label={t.composer.add}
+            />
+          }
         >
           <PlusIcon />
         </DropdownMenuTrigger>

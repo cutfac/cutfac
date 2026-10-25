@@ -333,12 +333,13 @@ export function Composer({
 
   return (
     <Dropzone paste label={t.attachments.drop.composer} openRef={openFiles} onFiles={files.add}>
-      <div className="flex flex-col gap-2 border-t p-3">
+      <div className="flex flex-col gap-2 p-3">
         <div className="flex flex-wrap gap-1.5">
           {(answering ? [] : t.composer.ideas[scope]).map((idea) => (
             <Button
               key={idea}
-              variant="outline"
+              variant="soft"
+              pill
               size="xs"
               onClick={() => {
                 setBody(idea);
@@ -352,10 +353,11 @@ export function Composer({
         <SourceChips item={item} onItem={onItem} />
         <AttachmentChips item={item} files={files} />
         {empty ? null : (
-          <span className="flex w-fit items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
+          <span className="flex w-fit items-center gap-1 rounded-full bg-selection py-0.5 pr-0.5 pl-2.5 text-xs font-medium text-selection-foreground tabular-nums">
             {describeTarget(target, t.target.boxAt)}
             <Button
               variant="ghost"
+              pill
               size="icon-xs"
               aria-label={t.composer.clear}
               onClick={onClearTarget}
@@ -364,11 +366,8 @@ export function Composer({
             </Button>
           </span>
         )}
-        {/* One line like a chat app's, the + and send keeping to its foot as it grows. */}
-        <InputGroup className="items-end">
-          <InputGroupAddon align="inline-start">
-            <AddMenu item={item} onItem={onItem} onFiles={() => openFiles.current?.()} />
-          </InputGroupAddon>
+        {/* The text on top and the + and send in a row under it, as in Aside and the Codex app. */}
+        <InputGroup variant="floating">
           <InputGroupTextarea
             ref={inputRef}
             value={body}
@@ -378,7 +377,8 @@ export function Composer({
             onChange={(event) => setBody(event.target.value)}
             onKeyDown={onKeyDown}
           />
-          <InputGroupAddon align="inline-end">
+          <InputGroupAddon align="block-end" className="justify-between">
+            <AddMenu item={item} onItem={onItem} onFiles={() => openFiles.current?.()} />
             {running && text === "" ? (
               <InputGroupButton
                 variant="secondary"

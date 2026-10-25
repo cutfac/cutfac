@@ -282,13 +282,13 @@ function RenderCard({ view, compact = false }: { view: RenderView; compact?: boo
         {running ? <Spinner /> : null}
         <span className="min-w-0 truncate font-medium">{headline(render, elapsed, t)}</span>
         {render.label === undefined ? null : (
-          <Badge variant="outline" className="shrink-0">
+          <Badge variant="secondary" pill className="shrink-0">
             {render.label}
           </Badge>
         )}
         <span className="ml-auto flex shrink-0 items-center">
           {running ? (
-            <Button variant="ghost" size="xs" onClick={view.stop}>
+            <Button variant="ghost" pill size="xs" onClick={view.stop}>
               <CircleStopIcon data-icon="inline-start" />
               {t.render.stop}
             </Button>
@@ -374,7 +374,7 @@ function ShellCard({
 
 const cardClass = (compact: boolean) =>
   cn(
-    "flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-card-foreground shadow-sm",
+    "flex flex-col gap-2 rounded-5xl bg-card p-3 text-sm text-card-foreground squircle",
     "animate-in fade-in",
     compact && "mx-4 mb-2 gap-1.5 py-2",
   );

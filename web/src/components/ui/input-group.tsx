@@ -6,16 +6,35 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
+const inputGroupVariants = cva(
+  "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-2xl border border-transparent bg-input/50 transition-colors duration-200 outline-none in-data-[slot=combobox-content]:focus-within:border-inherit has-[[data-slot][aria-invalid=true]]:border-destructive has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
+  {
+    variants: {
+      variant: {
+        default: "",
+        // The chat's composer: the text on top and its buttons in a row under it, rounded in
+        // concentrically from the corners.
+        floating: "rounded-[1.5rem] ring-[0.5px] ring-foreground/10 squircle",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
+
+function InputGroup({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & VariantProps<typeof inputGroupVariants>) {
   return (
     <div
       data-slot="input-group"
+      data-variant={variant}
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- fieldset can not be a flex container in every browser
       role="group"
-      className={cn(
-        "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-2xl border border-transparent bg-input/50 transition-colors duration-200 outline-none in-data-[slot=combobox-content]:focus-within:border-inherit has-[[data-slot][aria-invalid=true]]:border-destructive has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
-        className,
-      )}
+      className={cn(inputGroupVariants({ variant }), className)}
       {...props}
     />
   );
@@ -31,7 +50,7 @@ const inputGroupAddonVariants = cva(
         "block-start":
           "order-first w-full justify-start px-2.5 pt-2 group-has-[>input]/input-group:pt-2 [.border-b]:pb-2",
         "block-end":
-          "order-last w-full justify-start px-2.5 pb-2 group-has-[>input]/input-group:pb-2 [.border-t]:pt-2",
+          "order-last w-full justify-start px-2.5 pb-2 group-has-[>input]/input-group:pb-2 group-data-[variant=floating]/input-group:px-2 [.border-t]:pt-2",
       },
     },
     defaultVariants: {
@@ -59,7 +78,7 @@ function InputGroupAddon({
           return;
         }
 
-        e.currentTarget.parentElement?.querySelector("input")?.focus();
+        e.currentTarget.parentElement?.querySelector<HTMLElement>("input, textarea")?.focus();
       }}
       {...props}
     />
@@ -132,7 +151,7 @@ function InputGroupTextarea({ className, ...props }: React.ComponentProps<"texta
     <Textarea
       data-slot="input-group-control"
       className={cn(
-        "max-h-60 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none dark:bg-transparent",
+        "max-h-60 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none group-data-[variant=floating]/input-group:px-3.5 group-data-[variant=floating]/input-group:pt-3 group-data-[variant=floating]/input-group:pb-1 dark:bg-transparent",
         className,
       )}
       {...props}

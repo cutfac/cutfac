@@ -142,12 +142,13 @@ function FileChip({ icon, label, title, onDetach }: FileChipProps) {
 
   return (
     <li className="min-w-0">
-      <Badge variant="outline" className="h-6 max-w-64" title={title}>
+      <Badge variant="secondary" pill className="h-6 max-w-64" title={title}>
         {icon}
         <span className="truncate">{label}</span>
         {onDetach === undefined ? null : (
           <Button
             variant="ghost"
+            pill
             size="icon-xs"
             className="size-5"
             data-icon="inline-end"
@@ -187,7 +188,7 @@ export function AttachmentChips({ item, files }: AttachmentChipsProps) {
       ))}
       {files.uploading === 0 ? null : (
         <li>
-          <Badge variant="outline" className="h-6">
+          <Badge variant="secondary" pill className="h-6">
             <Spinner data-icon="inline-start" />
             {t.attachments.uploading}
           </Badge>

@@ -258,17 +258,17 @@ function Paused({
   const t = useMessages();
 
   return (
-    <div className="flex flex-col gap-2 border-t bg-muted/50 px-4 py-3">
+    <div className="mx-3 flex flex-col gap-2 rounded-5xl bg-card p-3 squircle">
       <p className="flex items-center gap-1.5 text-sm">
         <HourglassIcon className="size-3.5 shrink-0 text-muted-foreground" />
         {t.chat.paused(count)}
       </p>
       <div className="flex gap-1.5">
-        <Button size="xs" onClick={onResume}>
+        <Button pill size="xs" onClick={onResume}>
           <PlayIcon data-icon="inline-start" />
           {t.chat.resume}
         </Button>
-        <Button variant="outline" size="xs" onClick={onCancelAll}>
+        <Button variant="soft" pill size="xs" onClick={onCancelAll}>
           <XIcon data-icon="inline-start" />
           {t.chat.cancelAll}
         </Button>

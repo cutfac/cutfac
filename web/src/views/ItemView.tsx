@@ -412,7 +412,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
         chat={
           <aside className="flex min-h-0 flex-1 flex-col">
             <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
-              <div className="flex items-center gap-1 border-b p-2">
+              <div className="flex items-center gap-1 p-2">
                 <TabsList className="min-w-0 flex-1">
                   <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
                   <TabsTrigger value="checks">{t.item.checks}</TabsTrigger>

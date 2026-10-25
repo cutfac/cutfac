@@ -21,6 +21,9 @@ const badgeVariants = cva(
           "hover:bg-muted hover:text-muted-foreground focus-visible:bg-muted focus-visible:text-muted-foreground dark:hover:bg-muted/50 dark:focus-visible:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline focus-visible:underline",
       },
+      pill: {
+        true: "rounded-full",
+      },
     },
     defaultVariants: {
       variant: "default",
@@ -31,6 +34,7 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant = "default",
+  pill,
   render,
   ...props
 }: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
@@ -38,7 +42,7 @@ function Badge({
     defaultTagName: "span",
     props: mergeProps<"span">(
       {
-        className: cn(badgeVariants({ variant }), className),
+        className: cn(badgeVariants({ variant, pill }), className),
       },
       props,
     ),

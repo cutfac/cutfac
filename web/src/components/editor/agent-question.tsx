@@ -68,7 +68,8 @@ export function Answers({
       {answers.map((answer) => (
         <Button
           key={answer}
-          variant="outline"
+          variant="soft"
+          pill
           size="sm"
           disabled={sending}
           onClick={() => send(answer)}
