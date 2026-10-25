@@ -9,18 +9,10 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { ErrorAlert } from "@/components/page";
+import { ErrorAlert, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Item,
@@ -110,51 +102,39 @@ export function McpServersCard() {
   ].toSorted((a, b) => Number(waits(b.state)) - Number(waits(a.state)));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t.mcp.title}</CardTitle>
-        <CardDescription>{t.mcp.body}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-3">
-          {status.problems.length > 0 ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t.mcp.problems}</AlertTitle>
-              <AlertDescription>
-                <SelectionArea render={<ul className="list-disc pl-4" />}>
-                  {status.problems.map((problem) => (
-                    <li key={problem}>{problem}</li>
-                  ))}
-                </SelectionArea>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          <Collapsible open={open} onOpenChange={setOpen}>
-            <div className="flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{t.mcp.summary(rows.length)}</p>
-                <p className="text-sm text-muted-foreground">
-                  {t.mcp.inUse(rows.filter(({ state }) => state === "on").length)}
-                </p>
-              </div>
-              <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
-                {open ? t.mcp.hide : t.mcp.review}
-                <ChevronRightIcon
-                  data-icon="inline-end"
-                  className={open ? "rotate-90" : undefined}
-                />
-              </CollapsibleTrigger>
+    <Section title={t.mcp.title} description={t.mcp.body} note={t.mcp.footnote}>
+      <div className="flex flex-col gap-3 py-3">
+        {status.problems.length > 0 ? (
+          <Alert variant="destructive">
+            <AlertTitle>{t.mcp.problems}</AlertTitle>
+            <AlertDescription>
+              <SelectionArea render={<ul className="list-disc pl-4" />}>
+                {status.problems.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </SelectionArea>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{t.mcp.summary(rows.length)}</p>
+              <p className="text-sm text-muted-foreground">
+                {t.mcp.inUse(rows.filter(({ state }) => state === "on").length)}
+              </p>
             </div>
-            <CollapsibleContent>
-              <ItemGroup className="mt-3">{rows.map(({ row }) => row)}</ItemGroup>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-      </CardContent>
-      <CardFooter>
-        <p className="text-xs text-muted-foreground">{t.mcp.footnote}</p>
-      </CardFooter>
-    </Card>
+            <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
+              {open ? t.mcp.hide : t.mcp.review}
+              <ChevronRightIcon data-icon="inline-end" className={open ? "rotate-90" : undefined} />
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent>
+            <ItemGroup className="mt-3">{rows.map(({ row }) => row)}</ItemGroup>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    </Section>
   );
 }
 

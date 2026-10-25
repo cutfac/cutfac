@@ -5,11 +5,10 @@ import { toast } from "sonner";
 import { AgentPermissions } from "@/components/agent-permissions";
 import { McpServersCard } from "@/components/mcp-servers";
 import { OutdatedAgentNote } from "@/components/outdated-agent";
-import { ErrorAlert, Page } from "@/components/page";
+import { ErrorAlert, Page, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Item,
   ItemActions,
@@ -43,61 +42,59 @@ export function Setup() {
   return (
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
       <TrustCard />
-      <Card>
-        <CardHeader>
-          <CardTitle>{t.setup.connectTitle}</CardTitle>
-          <CardDescription>{t.setup.connectBody}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {agentsError ? (
+      <Section title={t.setup.connectTitle} description={t.setup.connectBody}>
+        {agentsError ? (
+          <div className="py-3">
             <ErrorAlert title={t.setup.agentsError} message={agentsError} />
-          ) : agents === undefined ? (
-            <div className="flex flex-col gap-2" aria-busy="true">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <ItemGroup>
-                {agents.map((a) => (
-                  <AgentRow
-                    key={a.agent}
-                    status={a}
-                    permissions={permissions?.find((p) => p.agent === a.agent)}
-                    onChange={reload}
-                  />
-                ))}
-              </ItemGroup>
-              {permissionsError ? (
+          </div>
+        ) : agents === undefined ? (
+          <div className="flex flex-col gap-2 py-3" aria-busy="true">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : (
+          <ItemGroup>
+            {agents.map((a) => (
+              <AgentRow
+                key={a.agent}
+                status={a}
+                permissions={permissions?.find((p) => p.agent === a.agent)}
+                onChange={reload}
+              />
+            ))}
+            {permissionsError ? (
+              <div className="pb-3">
                 <ErrorAlert title={t.permissions.error} message={permissionsError} />
-              ) : null}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            ) : null}
+          </ItemGroup>
+        )}
+      </Section>
 
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>{t.setup.workspaceTitle}</CardTitle>
-          <CardDescription>{t.setup.workspaceBody}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {ws === undefined ? (
-            <Skeleton className="h-24 w-full" />
-          ) : (
-            <div className="flex flex-col gap-4">
-              <SelectionArea
-                render={<dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm" />}
-              >
-                <dt className="text-muted-foreground">{t.setup.name}</dt>
-                <dd>{ws.name}</dd>
-                <dt className="text-muted-foreground">{t.setup.folder}</dt>
-                <dd className="font-mono text-xs break-all">{ws.root}</dd>
-                <dt className="text-muted-foreground">{t.setup.defaultAgent}</dt>
-                <dd>{t.setup.agents[ws.config.agent.default]}</dd>
-              </SelectionArea>
+      <Section title={t.setup.workspaceTitle} description={t.setup.workspaceBody}>
+        {ws === undefined ? (
+          <Skeleton className="my-3 h-24 w-full" />
+        ) : (
+          <ItemGroup>
+            <Item variant="row">
+              <ItemContent>
+                <ItemTitle>{t.setup.name}</ItemTitle>
+              </ItemContent>
+              <ItemActions>
+                <SelectionArea render={<span className="text-sm" />}>{ws.name}</SelectionArea>
+              </ItemActions>
+            </Item>
+            <Item variant="row" className="flex-nowrap">
+              <ItemContent className="min-w-0">
+                <ItemTitle>{t.setup.folder}</ItemTitle>
+                <SelectionArea
+                  render={<p className="font-mono text-xs break-all text-muted-foreground" />}
+                >
+                  {ws.root}
+                </SelectionArea>
+              </ItemContent>
               {desktop ? (
-                <div>
+                <ItemActions>
                   <Button
                     variant="outline"
                     size="sm"
@@ -110,12 +107,20 @@ export function Setup() {
                     <FolderOpenIcon data-icon="inline-start" />
                     {t.setup.showFolder}
                   </Button>
-                </div>
+                </ItemActions>
               ) : null}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </Item>
+            <Item variant="row">
+              <ItemContent>
+                <ItemTitle>{t.setup.defaultAgent}</ItemTitle>
+              </ItemContent>
+              <ItemActions>
+                <span className="text-sm">{t.setup.agents[ws.config.agent.default]}</span>
+              </ItemActions>
+            </Item>
+          </ItemGroup>
+        )}
+      </Section>
       <McpServersCard />
     </Page>
   );

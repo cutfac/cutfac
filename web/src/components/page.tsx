@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { InTitleBar } from "@/components/title-bar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useMessages } from "../i18n/index.ts";
@@ -49,6 +50,35 @@ export function Page({ title, description, actions, width, children }: PageProps
       {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       {children}
     </div>
+  );
+}
+
+/**
+ * A group of settings as the Codex app and Aside lay theirs out: its name and what it is for above
+ * a card that holds only its rows, and a note under the card when it has one.
+ */
+export function Section({
+  title,
+  description,
+  note,
+  children,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  note?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <header className="flex flex-col gap-0.5 px-1">
+        <h2 className="text-sm font-medium">{title}</h2>
+        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+      </header>
+      <Card size="rows">
+        <CardContent>{children}</CardContent>
+      </Card>
+      {note ? <p className="px-1 text-xs text-muted-foreground">{note}</p> : null}
+    </section>
   );
 }
 

@@ -139,3 +139,11 @@ Shapes follow the Codex app and Aside. Buttons, select triggers, toggles and seg
 softly squared (`rounded-2xl`), as their settings draw them. Only what sits among the chat is round:
 the composer's buttons and the chat's chips are pills (`Button pill`), and its icon buttons are
 circles. Fields stay softly squared, and cards and panels keep their larger radius.
+
+Tabs and other segmented choices have no box around them: only the picked one is filled, and the
+rest are quiet text. Controls in a title bar are ghosts that tint under the pointer, as Aside's are;
+the one main action keeps its fill.
+
+A settings page groups its rows as both apps do: each group's name and what it is for sit above a
+card that holds only the rows (`Section` in `components/page.tsx`), split by hairlines
+(`Item variant="row"`).
