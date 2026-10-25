@@ -1,3 +1,4 @@
+import { withParticle } from "../lib/korean.ts";
 import type { StartMessages } from "./start-en.tsx";
 
 /** 브리프와 첫 템플릿 문구, 해요체. */
@@ -72,7 +73,7 @@ export const startKo: StartMessages = {
     start: "만들기 시작",
     starting: "시작하는 중…",
     skip: "나중에 하기",
-    learnFailed: (source, message) => `${source}을(를) 읽지 못했어요: ${message}`,
+    learnFailed: (source, message) => `${withParticle(source, "을/를")} 읽지 못했어요: ${message}`,
     noAgent: "준비된 에이전트가 없어요. 설정에서 준비한 뒤 다시 시도해 주세요.",
   },
   gallery: {

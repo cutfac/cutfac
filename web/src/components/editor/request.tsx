@@ -340,9 +340,7 @@ function Result({
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border p-3">
-      <p className="text-sm">
-        {t.chat.edited(<span className="font-medium">{feedback.media}</span>)}
-      </p>
+      <p className="text-sm">{t.chat.edited(feedback.media ?? t.chat.newMedia)}</p>
       <div className="flex flex-wrap items-center gap-1.5">
         <CompareDialog
           item={item}

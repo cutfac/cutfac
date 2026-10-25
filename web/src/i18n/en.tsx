@@ -93,7 +93,7 @@ export const en = {
     layout: "Layout",
     gallery: "Gallery",
     board: "Board",
-    count: (count: number) => (count === 1 ? "1 item" : `${count} items`),
+    count: (count: number) => (count === 1 ? "1 video" : `${count} videos`),
     allFormats: "All templates",
     filterByFormat: "Filter by template",
     archived: "Archived",
@@ -191,7 +191,7 @@ export const en = {
     author: "Author",
     license: "License",
     inputs: "Inputs",
-    inputsBody: "Picked or written when a new item is made from this template.",
+    inputsBody: "Picked or written when a new video is made from this template.",
     required: "Required",
     freeText: "Free text",
     default: "Default",
@@ -348,7 +348,7 @@ export const en = {
     ),
   },
   item: {
-    openError: "Cannot open this item",
+    openError: "Cannot open this video",
     imageHint: "Drag on the image to mark the area an edit is about.",
     chat: "Chat",
     checks: "Checks",
@@ -358,8 +358,7 @@ export const en = {
     asking: (agent: string) => `${agent} is waiting for your OK`,
     status: "Status",
     noMediaTitle: "No video yet",
-    noMediaBody:
-      "Drop a video or an image here to start from, or ask in the chat and an agent will make a first cut.",
+    noMediaBody: "Drop footage or an image here if you have some to start from.",
     addMedia: "Add a video or image",
     add: "Add",
     format: "Template",
@@ -416,7 +415,7 @@ export const en = {
     backTo: (change: string) => `Back to right after: ${change}`,
     backToOriginal: "Back to the original",
     restoredVersion: (media: string) => `Restored an earlier ${media}`,
-    running: "An agent is working on this item. Wait for it or stop it before going back.",
+    running: "An agent is working on this video. Wait for it or stop it before going back.",
     emptyTitle: "No changes yet",
     emptyBody:
       "Edits, rollbacks, and changes to the details land here, and you can step back to any of them.",
@@ -476,8 +475,7 @@ export const en = {
     editBody:
       "Drag across the timeline to select a part, or drag a box on the video. Then type what should change there and press Enter. An agent makes the edit and you compare before and after.",
     newTitle: "Ask for a first cut",
-    newBody:
-      "Describe the video you want below and an agent will make it, or add a video or an image to start from.",
+    newBody: "Describe the video you want below and the agent will make a first cut.",
     showTarget: "Show this part on the video",
     newMedia: "New media",
     working: "Working on it…",
@@ -497,7 +495,11 @@ export const en = {
     retryWith: (agent: string) => `Try again with ${agent}`,
     copyPrompt: "Copy prompt",
     connectAgent: "Connect an agent",
-    edited: (media: ReactNode) => <>{media} was edited. Does it look right?</>,
+    edited: (media: string) => (
+      <>
+        <span className="font-medium">{media}</span> was edited. Does it look right?
+      </>
+    ),
     keep: "Keep",
     restore: "Restore before",
     askAgain: "Ask again",

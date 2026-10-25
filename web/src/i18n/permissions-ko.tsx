@@ -1,3 +1,4 @@
+import { withParticle } from "../lib/korean.ts";
 import type { PermissionsMessages } from "./permissions-en.tsx";
 
 /** 에이전트마다 보드에서 시작한 실행이 묻지 않고 할 수 있는 범위를 고르는 문구, 해요체. */
@@ -11,7 +12,7 @@ export const permissionsKo: PermissionsMessages = {
   },
   access: {
     asks: (agent) =>
-      `파일을 편집하거나 명령을 실행하기 전에 여기서 물어봐요. 터미널에서 ${agent}이(가) 묻는 것과 같아요.`,
+      `파일을 편집하거나 명령을 실행하기 전에 여기서 물어봐요. 터미널에서 ${withParticle(agent, "이/가")} 묻는 것과 같아요.`,
     edit: "이 워크스페이스의 파일을 편집하고 컷팩의 도구를 써요. 그 밖의 작업은 여기서 먼저 물어봐요.",
     auto: (agent) =>
       `이 워크스페이스의 파일을 편집하고, 그 밖의 작업은 ${agent}의 자동 검토가 판단해요.`,

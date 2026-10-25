@@ -1,3 +1,4 @@
+import { withParticle } from "../lib/korean.ts";
 import type { ToolKind } from "../lib/run.ts";
 import { approvalKo } from "./approval-ko.tsx";
 import type { Messages } from "./en.tsx";
@@ -63,7 +64,7 @@ export const ko: Messages = {
     archive: "보관",
     archived: (titles) =>
       titles.length === 1
-        ? `"${titles[0]}"을(를) 보관했어요`
+        ? `${withParticle(`"${titles[0]}"`, "을/를")} 보관했어요`
         : `영상 ${titles.length}개를 보관했어요`,
     undo: "실행 취소",
   },
@@ -110,7 +111,7 @@ export const ko: Messages = {
     drop: "또는 파일을 여기에 끌어 놓거나 클릭해서 고르세요",
     choose: "폴더나 파일 고르기…",
     reading: (source) => `${source} 읽는 중…`,
-    learned: (title) => `"${title}"을(를) 학습했어요`,
+    learned: (title) => `${withParticle(`"${title}"`, "을/를")} 학습했어요`,
     error: "학습하지 못했어요",
     warnings: "학습했지만 확인할 점이 있어요",
     emptyTitle: "아직 학습한 게 없어요",
@@ -127,9 +128,9 @@ export const ko: Messages = {
     },
     uploaded: "업로드한 파일",
     forget: "지우기",
-    forgetTitle: (title) => `"${title}"을(를) 지울까요?`,
+    forgetTitle: (title) => `${withParticle(`"${title}"`, "을/를")} 지울까요?`,
     forgetBody: "저장한 파일과 about.md의 해당 부분이 지워져요.",
-    forgotten: (title) => `"${title}"을(를) 지웠어요`,
+    forgotten: (title) => `${withParticle(`"${title}"`, "을/를")} 지웠어요`,
     forgetError: "지우지 못했어요",
     aboutTitle: "에이전트가 아는 것",
     aboutBody: "에이전트가 읽는 about.md 그대로예요. 에이전트가 채우고, 직접 고쳐도 돼요.",
@@ -178,7 +179,7 @@ export const ko: Messages = {
     author: "만든 사람",
     license: "라이선스",
     inputs: "입력값",
-    inputsBody: "이 템플릿으로 새 아이템을 만들 때 고르거나 적는 값이에요.",
+    inputsBody: "이 템플릿으로 새 영상을 만들 때 고르거나 적는 값이에요.",
     required: "필수",
     freeText: "직접 입력",
     default: "기본값",
@@ -316,8 +317,8 @@ export const ko: Messages = {
     folder: "폴더",
     defaultAgent: "기본 에이전트",
     showFolder: "폴더 보기",
-    connected: (agent) => `${agent}을(를) 연결했어요`,
-    connectFailed: (agent) => `${agent}을(를) 연결하지 못했어요`,
+    connected: (agent) => `${withParticle(agent, "을/를")} 연결했어요`,
+    connectFailed: (agent) => `${withParticle(agent, "을/를")} 연결하지 못했어요`,
     agentReady: "준비됐어요. 컷팩의 도구를 쓸 수 있어요.",
     agentFound: "이 컴퓨터에 설치되어 있어요. 연결하면 컷팩의 도구를 쓸 수 있어요.",
     agentMissing: "이 컴퓨터에 설치되어 있지 않아요.",
@@ -327,24 +328,24 @@ export const ko: Messages = {
     notInstalled: "설치 안 됨",
     agentOutdated: (agent, version, minimum, command) => (
       <>
-        {agent} {version}은(는) 컷팩이 지원하는 최소 버전인 {minimum}보다 낮아서 일부 기능이 제대로
-        동작하지 않을 수 있어요. 터미널에서 {command}을(를) 실행해 업데이트해 주세요.
+        {withParticle(`${agent} ${version}`, "은/는")} 컷팩이 지원하는 최소 버전인 {minimum}보다
+        낮아서 일부 기능이 제대로 동작하지 않을 수 있어요. 터미널에서 {command} 명령을 실행해
+        업데이트해 주세요.
       </>
     ),
   },
   item: {
-    openError: "이 아이템을 열 수 없어요",
+    openError: "이 영상을 열 수 없어요",
     imageHint: "이미지 위를 드래그해서 수정할 영역을 표시하세요.",
     chat: "채팅",
     checks: "점검",
     details: "상세",
     history: "히스토리",
-    editing: (agent) => `${agent}이(가) 편집하는 중`,
-    asking: (agent) => `${agent}이(가) 허락을 기다려요`,
+    editing: (agent) => `${withParticle(agent, "이/가")} 편집하는 중`,
+    asking: (agent) => `${withParticle(agent, "이/가")} 허락을 기다려요`,
     status: "상태",
     noMediaTitle: "아직 영상이 없어요",
-    noMediaBody:
-      "시작할 영상이나 이미지를 여기에 놓거나, 채팅으로 요청하면 에이전트가 첫 버전을 만들어요.",
+    noMediaBody: "찍어 둔 영상이나 이미지가 있으면 여기에 놓으세요.",
     addMedia: "영상이나 이미지 추가",
     add: "추가",
     format: "템플릿",
@@ -377,7 +378,7 @@ export const ko: Messages = {
     frames: "프레임 검토",
     framesBody:
       "에이전트가 각 영상을 마지막으로 확인할 때 본 화면이에요. 처음부터 끝까지의 프레임과 컷마다의 움직임이에요.",
-    noReview: (file) => `${file}은(는) 아직 검토하지 않았어요.`,
+    noReview: (file) => `${withParticle(file, "은/는")} 아직 검토하지 않았어요.`,
     noReviewHint: "에이전트는 영상을 넘기기 전에 검토해요. 지금 검토하려면 채팅으로 요청하세요.",
     reviewed: (ago) => `${ago} 검토함`,
     stale: "검토한 뒤에 영상이 바뀌었어요.",
@@ -399,7 +400,7 @@ export const ko: Messages = {
     backTo: (change) => `이 변경 직후로 이동: ${change}`,
     backToOriginal: "처음 상태로 이동",
     restoredVersion: (media) => `${media} 이전 버전 복원`,
-    running: "에이전트가 이 아이템을 작업하는 중이에요. 끝나거나 멈춘 뒤에 되돌릴 수 있어요.",
+    running: "에이전트가 이 영상을 작업하는 중이에요. 끝나거나 멈춘 뒤에 되돌릴 수 있어요.",
     emptyTitle: "아직 변경이 없어요",
     emptyBody: "편집, 되돌리기, 상세 정보 변경이 여기 쌓이고, 언제든 그 시점으로 돌아갈 수 있어요.",
     changes: "변경 기록",
@@ -417,7 +418,7 @@ export const ko: Messages = {
     editMedia: (media) => `${media} 편집`,
     rollback: (media) => `${media} 되돌림`,
     version: (media) => `${media} 이전 버전 복원`,
-    outside: (media) => `${media}을(를) 요청 밖에서 변경`,
+    outside: (media) => `${withParticle(media, "을/를")} 요청 밖에서 변경`,
     renamed: (title) => `제목을 “${title}”(으)로 변경`,
     moved: (status) => `상태를 ${status}(으)로 변경`,
     changed: (fields) => `${fields} 변경`,
@@ -454,13 +455,12 @@ export const ko: Messages = {
     rolledBack: (media) =>
       media === undefined
         ? "미디어를 이전 상태로 되돌렸어요"
-        : `${media}을(를) 이전 상태로 되돌렸어요`,
+        : `${withParticle(media, "을/를")} 이전 상태로 되돌렸어요`,
     editTitle: "가리키고, 말하세요",
     editBody:
       "타임라인을 드래그해서 구간을 고르거나 영상 위에 박스를 그리세요. 그다음 바꿀 내용을 쓰고 Enter를 누르면 에이전트가 편집하고, 전후를 비교할 수 있어요.",
     newTitle: "첫 버전을 요청하세요",
-    newBody:
-      "원하는 영상을 아래에 설명하면 에이전트가 만들어요. 시작할 영상이나 이미지를 추가해도 돼요.",
+    newBody: "원하는 영상을 아래에 설명하면 에이전트가 첫 버전을 만들어요.",
     showTarget: "영상에서 이 부분 보기",
     newMedia: "새 미디어",
     working: "작업하는 중…",
@@ -478,7 +478,12 @@ export const ko: Messages = {
     retryWith: (agent) => `${agent}로 다시 시도`,
     copyPrompt: "프롬프트 복사",
     connectAgent: "에이전트 연결",
-    edited: (media) => <>{media}을(를) 편집했어요. 괜찮아 보이나요?</>,
+    edited: (media) => (
+      <>
+        <span className="font-medium">{withParticle(media, "을/를")}</span> 편집했어요. 괜찮아
+        보이나요?
+      </>
+    ),
     keep: "유지",
     restore: "이전으로 되돌리기",
     askAgain: "다시 요청",
@@ -605,7 +610,7 @@ export const ko: Messages = {
     media: "미디어",
     references: "참고 파일",
     referencesEmpty: "에이전트가 쓸 파일을 여기에 놓으세요",
-    attachTile: (name) => `${name}을(를) 채팅에 첨부`,
+    attachTile: (name) => `${withParticle(name, "을/를")} 채팅에 첨부`,
     remove: (name) => `${name} 삭제`,
     removed: "삭제했어요",
     undo: "되돌리기",
