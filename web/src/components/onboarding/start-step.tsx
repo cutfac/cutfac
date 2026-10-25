@@ -113,7 +113,7 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
 
   const screens: Record<
     Part,
-    { title: string; body: string; field: ReactNode; primary: ReactNode; skippable?: boolean }
+    { title: string; body: string; field: ReactNode; primary: ReactNode }
   > = {
     purpose: {
       title: t.title,
@@ -133,15 +133,13 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       title: own ? b.ownBodyLabel : b.bodyLabel,
       body: own ? t.details.ownBody : t.details.body,
       field: <BriefBody {...parts} focusOnOpen />,
-      primary: next(t.next, own ? briefReady(brief) : brief.body.trim() !== ""),
-      skippable: !own && brief.body.trim() === "",
+      primary: next(own || brief.body.trim() !== "" ? t.next : t.skipPart, briefReady(brief)),
     },
     platforms: {
       title: b.platformsLabel,
       body: b.platformsHint,
       field: <PlatformToggles {...parts} />,
-      primary: next(t.next, brief.platforms.length > 0),
-      skippable: brief.platforms.length === 0,
+      primary: next(brief.platforms.length > 0 ? t.next : t.skipPart),
     },
     material: {
       title: t.material.title,
@@ -167,16 +165,13 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       key={part}
       className="flex animate-in flex-col gap-8 duration-300 fade-in slide-in-from-bottom-2"
     >
-      {/* Leaving for the board sits apart from the steps, so the row below only moves between them. */}
-      <div className="flex items-start justify-between gap-4">
-        <StepHeader title={screen.title} body={screen.body} />
-        <Button size="sm" variant="ghost" disabled={busy} onClick={skip}>
-          {t.skip}
-        </Button>
-      </div>
+      <StepHeader title={screen.title} body={screen.body} />
       {screen.field}
       {error === undefined ? null : <ErrorAlert message={error} />}
-      {/* Back at the left; at the right, the way on and, while a part that can be left out is empty, skipping it. */}
+      {/*
+        Two buttons at most, each place keeping its meaning: back at the left, on at the far right.
+        Leaving for the board is offered once, beside the way on, before anything is asked.
+      */}
       <div className="flex items-center gap-2">
         {index === 0 ? null : (
           <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
@@ -184,9 +179,9 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
           </Button>
         )}
         <div className="ms-auto flex items-center gap-2">
-          {screen.skippable === true ? (
-            <Button size="lg" variant="ghost" onClick={() => go(1)}>
-              {t.skipPart}
+          {index === 0 ? (
+            <Button size="lg" variant="ghost" onClick={skip}>
+              {t.skip}
             </Button>
           ) : null}
           {screen.primary}
