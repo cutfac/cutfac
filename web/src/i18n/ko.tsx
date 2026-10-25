@@ -564,7 +564,7 @@ export const ko: Messages = {
     promptReady: "프롬프트를 복사할 준비가 됐어요",
     clear: "선택 해제",
     request: "편집 요청",
-    agent: "보낼 에이전트",
+    agent: "보낼 곳",
     models: {
       model: "모델",
       effort: "추론 강도",
@@ -578,10 +578,6 @@ export const ko: Messages = {
         xhigh: "매우 높음",
         max: "최대",
       },
-      cacheModel: (model) =>
-        `${model}(으)로 바꾸면 다음 요청 때 에이전트가 이 대화를 처음부터 다시 읽어요. 그만큼 느려지고 토큰을 더 써요.`,
-      cacheEffort: (effort) =>
-        `추론 강도를 ${effort}(으)로 바꾸면 다음 요청 때 에이전트가 이 대화를 처음부터 다시 읽어요. 그만큼 느려지고 토큰을 더 써요.`,
     },
     add: "파일이나 자료 추가",
     sources: {

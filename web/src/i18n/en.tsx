@@ -604,7 +604,7 @@ export const en = {
     promptReady: "The prompt is ready to copy",
     clear: "Clear the selection",
     request: "Edit request",
-    agent: "Agent to send to",
+    agent: "Send to",
     /** The model and reasoning effort the agent runs with; a default is the agent's own pick. */
     models: {
       model: "Model",
@@ -620,14 +620,6 @@ export const en = {
         xhigh: "Extra high",
         max: "Max",
       },
-      /**
-       * The agent keeps this conversation cached for the model and effort it last ran with; a
-       * change it cannot carry over makes it read the whole conversation again.
-       */
-      cacheModel: (model: string) =>
-        `Switching to ${model} means the agent re-reads this whole conversation on your next request, so it will be slower and use more tokens.`,
-      cacheEffort: (effort: string) =>
-        `Changing the reasoning effort to ${effort} means the agent re-reads this whole conversation on your next request, so it will be slower and use more tokens.`,
     },
     /** Folders, files, and web pages agents read whenever they work on the item. */
     /** The composer's + button, which attaches files or adds a source. */

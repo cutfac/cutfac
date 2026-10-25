@@ -12,13 +12,7 @@ import {
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TrustNote } from "@/components/workspace-trust";
 import { composing } from "@/lib/utils";
@@ -34,15 +28,14 @@ import {
   type ModelSettings,
 } from "../../api.ts";
 import { agentInstalled } from "../../hooks.ts";
-import { messages, useMessages, type Messages } from "../../i18n/index.ts";
+import { messages, useMessages } from "../../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
-import { offersModels, statusOf } from "../../lib/models.ts";
+import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
-import { CacheNote } from "./cache-note.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { AddMenu, SourceChips } from "./sources.tsx";
 
@@ -56,9 +49,6 @@ function scopeOf(target: Target, media: Media | undefined) {
 
   return "whole";
 }
-
-const agentLabel = (agent: AgentChoice, t: Messages) =>
-  ({ claude: "Claude", codex: "Codex", queue: t.composer.queue })[agent];
 
 /** The agent to send to: the workspace default if it is installed, else one that is. */
 export function preferredAgent(
@@ -218,14 +208,6 @@ export async function sendRequest(
   }
 }
 
-/** The agent picker's choices; an agent that is not installed shows but cannot be picked. */
-const agentItems = (statuses: ReadonlyArray<AgentStatus> | undefined, t: Messages) =>
-  (["claude", "codex", "queue"] as const).map((value) => ({
-    value,
-    label: agentLabel(value, t),
-    disabled: value !== "queue" && !agentInstalled(statuses, value),
-  }));
-
 export interface ComposerProps {
   item: ItemDetail;
   media: Media | undefined;
@@ -234,8 +216,8 @@ export interface ComposerProps {
   /** Where requests go; the frame's box prompt sends to the same one. */
   agent: AgentChoice;
   onAgent: (agent: AgentChoice) => void;
-  /** The model and effort the agent runs with, as a request to it is sent. */
-  settings: ModelSettings;
+  /** The model and effort picked for each agent. */
+  picks: ModelPicks;
   onPick: (agent: AgentName, settings: ModelSettings) => void;
   /** An agent is working on this item, so an empty composer offers to stop it. */
   running: boolean;
@@ -263,7 +245,7 @@ export function Composer({
   statuses,
   agent,
   onAgent,
-  settings,
+  picks,
   onPick,
   running,
   answering,
@@ -328,7 +310,7 @@ export function Composer({
     }
   }
 
-  const choices = agentItems(statuses, t);
+  const settings = pickedSettings(statuses, picks, agent);
   const status = statusOf(statuses, agent);
 
   return (
@@ -406,36 +388,17 @@ export function Composer({
         <div className="-mt-1 flex min-w-0 items-center gap-1">
           <VersionsPicker value={versions} onChange={setVersions} />
           <div className="ml-auto flex min-w-0 items-center gap-1">
-            <Select
-              items={choices}
-              value={agent}
-              onValueChange={(value) => {
-                if (value !== null) onAgent(value);
-              }}
-            >
-              <SelectTrigger variant="ghost" size="sm" aria-label={t.composer.agent}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                {choices.map((option) => (
-                  <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {agent !== "queue" && offersModels(status) ? (
-              <ModelPicker
-                status={status}
-                settings={settings}
-                onPick={(next) => onPick(agent, next)}
-              />
-            ) : null}
+            <ModelPicker
+              statuses={statuses}
+              agent={agent}
+              picks={picks}
+              onAgent={onAgent}
+              onPick={onPick}
+            />
           </div>
         </div>
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
         <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
-        <CacheNote item={item} agent={agent} settings={settings} status={status} />
         {status === undefined ? null : (
           <OutdatedAgentNote status={status} className="px-1 text-xs text-muted-foreground" />
         )}

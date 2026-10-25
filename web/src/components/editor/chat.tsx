@@ -197,9 +197,8 @@ export function Chat({
   );
 }
 
-type ChatComposerProps = Omit<ComposerProps, "settings" | "running" | "answering" | "onStop"> & {
+type ChatComposerProps = Omit<ComposerProps, "running" | "answering" | "onStop"> & {
   run: LiveRun;
-  picks: ModelPicks;
 };
 
 /**
@@ -207,8 +206,8 @@ type ChatComposerProps = Omit<ComposerProps, "settings" | "running" | "answering
  * user is looking. It offers to stop a run, and takes what the user writes as the answer when the
  * agent asked something.
  */
-export function ChatComposer({ run, picks, ...props }: ChatComposerProps) {
-  const { item, statuses, agent } = props;
+export function ChatComposer({ run, ...props }: ChatComposerProps) {
+  const { item } = props;
   const running = item.running || run.status === "running";
 
   const answering =
@@ -220,7 +219,6 @@ export function ChatComposer({ run, picks, ...props }: ChatComposerProps) {
   return (
     <Composer
       {...props}
-      settings={pickedSettings(statuses, picks, agent)}
       running={running}
       answering={answering}
       onStop={() => {
