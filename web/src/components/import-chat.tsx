@@ -433,7 +433,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
       <InputGroup>
         <InputGroupTextarea
           value={body}
-          rows={2}
+          rows={1}
           placeholder={placeholder}
           aria-label={t.imports.reply}
           onChange={(event) => setBody(event.target.value)}

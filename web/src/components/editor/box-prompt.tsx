@@ -110,7 +110,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
               <InputGroupTextarea
                 ref={inputRef}
                 value={body}
-                rows={2}
+                rows={1}
                 placeholder={t.composer.placeholder.box}
                 aria-label={t.boxPrompt.label}
                 onChange={(event) => setBody(event.target.value)}

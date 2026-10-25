@@ -351,37 +351,38 @@ export function Composer({
         </div>
         <SourceChips item={item} onItem={onItem} />
         <AttachmentChips item={item} files={files} />
-        <InputGroup>
-          {empty ? null : (
-            <InputGroupAddon align="block-start">
-              <span className="flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
-                {describeTarget(target, t.target.boxAt)}
-                <InputGroupButton
-                  size="icon-xs"
-                  aria-label={t.composer.clear}
-                  onClick={onClearTarget}
-                >
-                  <XIcon />
-                </InputGroupButton>
-              </span>
-            </InputGroupAddon>
-          )}
+        {empty ? null : (
+          <span className="flex w-fit items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
+            {describeTarget(target, t.target.boxAt)}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t.composer.clear}
+              onClick={onClearTarget}
+            >
+              <XIcon />
+            </Button>
+          </span>
+        )}
+        {/* One line like a chat app's, the + and send keeping to its foot as it grows. */}
+        <InputGroup className="items-end">
+          <InputGroupAddon align="inline-start">
+            <AddMenu item={item} onItem={onItem} onFiles={() => openFiles.current?.()} />
+          </InputGroupAddon>
           <InputGroupTextarea
             ref={inputRef}
             value={body}
-            rows={2}
+            rows={1}
             placeholder={answering ? t.composer.placeholder.answer : t.composer.placeholder[scope]}
             aria-label={t.composer.request}
             onChange={(event) => setBody(event.target.value)}
             onKeyDown={onKeyDown}
           />
-          <InputGroupAddon align="block-end">
-            <AddMenu item={item} onItem={onItem} onFiles={() => openFiles.current?.()} />
+          <InputGroupAddon align="inline-end">
             {running && text === "" ? (
               <InputGroupButton
                 variant="secondary"
                 size="icon-sm"
-                className="ml-auto"
                 aria-label={t.composer.stop}
                 onClick={onStop}
               >
@@ -391,7 +392,6 @@ export function Composer({
               <InputGroupButton
                 variant="default"
                 size="icon-sm"
-                className="ml-auto"
                 aria-label={t.composer.send}
                 disabled={!ready}
                 onClick={() => void send()}

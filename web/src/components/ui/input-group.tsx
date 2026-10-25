@@ -72,7 +72,7 @@ const inputGroupButtonVariants = cva("flex items-center gap-2 rounded-2xl text-s
       xs: "h-6 gap-1 rounded-xl px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
       sm: "",
       "icon-xs": "size-6 rounded-xl p-0 has-[>svg]:p-0",
-      "icon-sm": "size-8 p-0 has-[>svg]:p-0",
+      "icon-sm": "size-8 rounded-full p-0 has-[>svg]:p-0",
     },
   },
   defaultVariants: {
@@ -126,12 +126,13 @@ function InputGroupInput({ className, ...props }: React.ComponentProps<"input">)
   );
 }
 
+/** Starts at one line and grows with what is written, scrolling once it is a dozen lines tall. */
 function InputGroupTextarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (
     <Textarea
       data-slot="input-group-control"
       className={cn(
-        "flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none dark:bg-transparent",
+        "max-h-60 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none dark:bg-transparent",
         className,
       )}
       {...props}
