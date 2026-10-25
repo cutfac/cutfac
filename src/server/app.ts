@@ -21,6 +21,7 @@ import { RunRegistry } from "../core/agentRun.ts";
 import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
 import {
   approveEdit,
+  awaitsDecision,
   buildEditPrompt,
   cancelWaiting,
   pickVariant,
@@ -300,14 +301,14 @@ const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: stri
 });
 
 /**
- * What the gallery shows of an item: its open requests, whether an agent works on it, and its
- * render while it goes on or after it failed, so a tile can say what waits for the user and what
- * is under way.
+ * What the gallery shows of an item: its requests still open or waiting for the user's decision,
+ * whether an agent works on it, and its render while it goes on or after it failed, so a tile can
+ * say what waits for the user and what is under way.
  */
 const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
   const runs = yield* RunRegistry;
   const render = yield* readRender(item.id);
-  const requests = item.doc.feedback.filter((f) => f.status === "open");
+  const { feedback } = item.doc;
 
   return {
     id: item.id,
@@ -316,8 +317,8 @@ const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
     status: item.doc.status,
     format: item.doc.format,
     hook: item.doc.hook,
-    openFeedback: requests.length,
-    requests,
+    openFeedback: feedback.filter((f) => f.status === "open").length,
+    requests: feedback.filter((f) => f.status === "open" || awaitsDecision(f)),
     running: yield* runs.isRunning(item.id),
     render: render?.status === "running" || render?.status === "failed" ? render : undefined,
     media: item.media,

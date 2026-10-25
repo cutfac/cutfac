@@ -11,6 +11,7 @@ import { parseClaudeLine } from "../src/core/claudeStream.ts";
 import { CODEX_INITIALIZE } from "../src/core/codexProtocol.ts";
 import {
   approveEdit,
+  awaitsDecision,
   baselineMillis,
   beginEdit,
   buildEditPrompt,
@@ -591,12 +592,15 @@ describe("edit requests in a workspace", () => {
 
       expect(done?.status).toBe("resolved");
       expect(done?.context?.after).toBe(`${editDir}/after.mp4`);
+      // Resolved, the result still waits for the user to keep it or roll it back.
+      expect(done !== undefined && awaitsDecision(done)).toBe(true);
       expect(await readFile(join(itemDir, editDir, "after.mp4"), "utf8")).toBe("edited");
 
       const restored = await t.run(Effect.andThen(restoreBefore(id, feedback.id), getItem(id)));
 
       expect(await readFile(video)).toEqual(original);
       expect(restored.doc.feedback[0]?.decision).toBe("restored");
+      expect(restored.doc.feedback.some(awaitsDecision)).toBe(false);
 
       const approved = await t.run(approveEdit(id, feedback.id));
 
@@ -880,6 +884,7 @@ describe("versions to compare", () => {
     expect(f?.status).toBe("resolved");
     expect(f?.context?.after).toBeUndefined();
     expect(f?.variants?.saved.map((v) => v.label)).toEqual(["Big captions", "Fast cuts"]);
+    expect(f !== undefined && awaitsDecision(f)).toBe(true);
     expect(await read(id, VIDEO)).toBe("first");
 
     // Settling again leaves it alone, and only a pick or keeping none ends the request.
@@ -901,6 +906,7 @@ describe("versions to compare", () => {
     const after = `edits/${feedbackId}/after.mp4`;
 
     expect(f?.decision).toBe("approved");
+    expect(f !== undefined && awaitsDecision(f)).toBe(false);
     expect(f?.variants?.picked).toBe("Big captions");
     expect(f?.variants?.saved).toEqual([]);
     expect(f?.context?.after).toBe(after);

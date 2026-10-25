@@ -32,7 +32,11 @@ const runOf = (item: ItemSummary, feedback: Feedback) =>
 const halted = (item: ItemSummary, feedback: Feedback) => {
   const { status } = runOf(item, feedback);
 
-  return feedback.decision === undefined && (status === "failed" || status === "stopped");
+  return (
+    feedback.status === "open" &&
+    feedback.decision === undefined &&
+    (status === "failed" || status === "stopped")
+  );
 };
 
 /**

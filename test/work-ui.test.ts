@@ -91,6 +91,21 @@ describe("itemWork", () => {
     expect(itemWork(summary({ requests: [failed] }))).toEqual({ kind: "halted", request: failed });
   });
 
+  test("a resolved request still shows its versions and result until the user decides", () => {
+    const resolved = { status: "resolved", run: run("stopped") } as const;
+    const kept = { ...versions, ...resolved };
+    const changed = request("changed", { ...resolved, context: { before: "b", after: "a" } });
+
+    expect(itemWork(summary({ requests: [kept] }))).toMatchObject({ kind: "versions" });
+    expect(itemWork(summary({ requests: [changed] }))).toEqual({
+      kind: "result",
+      request: changed,
+    });
+    expect(itemWork(summary({ requests: [{ ...changed, decision: "approved" }] }))).toEqual({
+      kind: "quiet",
+    });
+  });
+
   test("a render reports its version and how much is done", () => {
     const work = itemWork(summary({ render }));
 

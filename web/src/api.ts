@@ -275,7 +275,10 @@ export interface ItemSummary {
   format?: string;
   hook?: string;
   openFeedback: number;
-  /** The requests still open, oldest first as saved. */
+  /**
+   * The requests still open, or whose versions or result wait for the user to decide, oldest
+   * first as saved.
+   */
   requests: Feedback[];
   /** An agent works on the item right now. */
   running: boolean;

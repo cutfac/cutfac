@@ -11,8 +11,10 @@ import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import type { RunEvent } from "../src/core/agentParse.ts";
 import { RunRegistry } from "../src/core/agentRun.ts";
+import { requestEdit, resolveEdit, saveVariant } from "../src/core/edits.ts";
 import { ImportRuns } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
+import { createItem } from "../src/core/items.ts";
 import type { Feedback } from "../src/core/schema.ts";
 import { DesktopData } from "../src/plan.ts";
 import { parseRange, routes } from "../src/server/app.ts";
@@ -122,6 +124,27 @@ describe("routes", () => {
 
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: "No such API route" });
+  });
+
+  test("the item list keeps a resolved request while its versions wait for a pick", async () => {
+    const VIDEO = "[9x16] video.mp4";
+    const item = await t.run(createItem({ title: "Takes" }));
+    const media = join(t.root, item.dir, VIDEO);
+    await writeFile(media, "first");
+
+    const { feedback } = await t.run(
+      requestEdit(item.id, { body: "Punchier", media: VIDEO, variants: 2 }),
+    );
+
+    await writeFile(media, "big captions");
+    await t.run(saveVariant(item.id, feedback.id, "Big captions"));
+    await t.run(resolveEdit(item.id, feedback.id, "One take"));
+
+    const listed = await send("/api/items");
+
+    expect(await listed.json()).toMatchObject([
+      { openFeedback: 0, requests: [{ id: feedback.id, status: "resolved" }] },
+    ]);
   });
 
   test("creates, lists, patches, and reads an item", async () => {

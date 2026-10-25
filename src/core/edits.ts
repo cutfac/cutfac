@@ -448,6 +448,13 @@ export type PendingVariants = Feedback & {
 export const pendingVariants = (f: Feedback): f is PendingVariants =>
   f.decision === undefined && f.variants?.media !== undefined && f.variants.saved.length > 0;
 
+/**
+ * The agent left versions to pick from or a result to keep or roll back, and the user hasn't
+ * decided yet. It waits for them even after the request was resolved.
+ */
+export const awaitsDecision = (f: Feedback) =>
+  pendingVariants(f) || (f.decision === undefined && f.context?.after !== undefined);
+
 /** The file a version is of when the agent does not name one. */
 const variantMedia = (item: Item, f: Feedback) =>
   f.variants?.media ?? f.media ?? (item.media.length === 1 ? item.media[0]?.name : undefined);
