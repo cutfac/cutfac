@@ -109,7 +109,7 @@ export function Toolbar({
           if (status !== null) api.updateItem(item.id, { status }).then(onItem, showError);
         }}
       >
-        <SelectTrigger size="sm" aria-label={t.item.status}>
+        <SelectTrigger size="sm" variant="ghost" aria-label={t.item.status}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>

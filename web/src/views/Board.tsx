@@ -203,9 +203,8 @@ export function Board() {
           items?.length ? (
             <>
               <ToggleGroup
-                variant="outline"
                 size="sm"
-                spacing={0}
+                spacing={1}
                 aria-label={t.board.layout}
                 value={[layout]}
                 onValueChange={chooseLayout}
@@ -226,6 +225,7 @@ export function Board() {
                 <Select items={formatItems} value={format} onValueChange={setFormat}>
                   <SelectTrigger
                     size="sm"
+                    variant="ghost"
                     aria-label={t.board.filterByFormat}
                     className="w-40 @max-2xl/title:w-28"
                   >
@@ -240,12 +240,7 @@ export function Board() {
                   </SelectContent>
                 </Select>
               ) : null}
-              <Toggle
-                variant="outline"
-                size="sm"
-                pressed={showArchived}
-                onPressedChange={setShowArchived}
-              >
+              <Toggle size="sm" pressed={showArchived} onPressedChange={setShowArchived}>
                 <ArchiveIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
                 <Label>{t.board.archived}</Label>
               </Toggle>
