@@ -1,11 +1,11 @@
-import { PauseIcon, PlayIcon, RepeatIcon, XIcon } from "lucide-react";
+import { PauseIcon, PlayIcon, RepeatIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
-import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
+import { hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 import { Hint, keepFocus } from "./hint.tsx";
 
@@ -16,11 +16,13 @@ interface TransportProps {
   onLoop: (loop: boolean) => void;
   onIn: () => void;
   onOut: () => void;
-  onClear: () => void;
 }
 
-/** Play, mark in and out at the playhead, loop the selection, and clear it. */
-export function Transport({ player, target, loop, onLoop, onIn, onOut, onClear }: TransportProps) {
+/**
+ * Play, mark in and out at the playhead, and loop the selection. The selection itself shows in
+ * the composer, where it goes with the request.
+ */
+export function Transport({ player, target, loop, onLoop, onIn, onOut }: TransportProps) {
   const paused = usePlayer(player, (state) => state.paused);
   const empty = isEmptyTarget(target);
   const t = useMessages();
@@ -62,24 +64,7 @@ export function Transport({ player, target, loop, onLoop, onIn, onOut, onClear }
           <RepeatIcon />
         </Toggle>
       </Hint>
-      {empty ? (
-        <p className="ml-auto text-xs text-muted-foreground">{t.transport.hint}</p>
-      ) : (
-        <div className="ml-auto flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
-          {describeTarget(target, t.target.boxAt)}
-          <Hint label={t.transport.clear} keys="Esc">
-            <button
-              type="button"
-              aria-label={t.transport.clear}
-              className="rounded-md p-1 hover:bg-foreground/10"
-              onMouseDown={keepFocus}
-              onClick={onClear}
-            >
-              <XIcon className="size-3" />
-            </button>
-          </Hint>
-        </div>
-      )}
+      {empty ? <p className="ml-auto text-xs text-muted-foreground">{t.transport.hint}</p> : null}
     </div>
   );
 }

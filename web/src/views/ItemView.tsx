@@ -415,7 +415,6 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     onOut={() =>
                       setTarget((current) => withEnd(current, roundTime(player.getState().time)))
                     }
-                    onClear={clear}
                   />
                 </>
               ) : (

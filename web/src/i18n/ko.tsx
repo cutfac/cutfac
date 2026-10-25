@@ -636,7 +636,6 @@ export const ko: Messages = {
     loop: "선택 구간 반복",
     loopHint: "선택 구간을 계속 반복 재생",
     hint: "타임라인을 드래그해 구간 선택 · 영상 위를 드래그해 영역 표시",
-    clear: "선택 해제",
   },
   target: {
     boxAt: (time) => `${time} 박스`,

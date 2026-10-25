@@ -693,7 +693,6 @@ export const en = {
     loop: "Loop the selection",
     loopHint: "Play the selection over and over",
     hint: "Drag on the timeline to select a part · drag on the video to mark an area",
-    clear: "Clear the selection",
   },
   target: {
     /** Follows a range in a selection's summary: `0:01.0–0:02.0 · box at 0:04.0`. */
