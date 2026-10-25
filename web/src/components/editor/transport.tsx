@@ -31,6 +31,7 @@ export function Transport({ player, target, loop, onLoop, onIn, onOut }: Transpo
     <div className="flex flex-wrap items-center gap-2">
       <Hint label={paused ? t.transport.play : t.transport.pause} keys="Space">
         <Button
+          variant="secondary"
           size="icon"
           aria-label={paused ? t.transport.play : t.transport.pause}
           onMouseDown={keepFocus}

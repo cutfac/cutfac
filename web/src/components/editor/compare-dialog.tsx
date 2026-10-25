@@ -300,7 +300,10 @@ export function VersionsDialog({
                 />
               )}
               {variant === undefined ? null : (
-                <DialogClose render={<Button size="sm" />} onClick={() => onPick(variant)}>
+                <DialogClose
+                  render={<Button variant="outline" size="sm" />}
+                  onClick={() => onPick(variant)}
+                >
                   <CheckIcon data-icon="inline-start" />
                   {t.versions.use}
                 </DialogClose>

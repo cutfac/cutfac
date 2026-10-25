@@ -39,7 +39,7 @@ export function workText(work: ItemWork, t: Messages) {
   }
 }
 
-/** The amber dot asks for the user; a pulsing one is work going on; the plain one, a new result. */
+/** The gold dot asks for the user; a pulsing one is work going on; the plain one, a new result. */
 export function workDot(work: ItemWork) {
   if (needsYou(work)) return "bg-selection";
 

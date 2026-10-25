@@ -111,3 +111,24 @@ Sources:
   link to another page keep the arrow by default; disabled ones get an explicit disabled cursor.
 - Adam Silver, [Buttons shouldn't have a hand cursor](https://adamsilver.io/blog/buttons-shouldnt-have-a-hand-cursor/):
   the hand marks links, and a button already looks clickable.
+
+## Color
+
+The board is gray, with one color: the gold of the logo, `brand` in `web/src/styles.css`. Because
+nothing else is colored, gold always means "this is for you": do it, or look at it.
+
+- **Gold (`brand`)**: the primary action (a default `Button`: send, save, create, keep), what the
+  user marked on the video (`selection`, an alias of `brand`), and what waits for them (a request
+  that needs an answer, a video to review, versions to pick from). Keep to one gold button per
+  screen or dialog; the other buttons are `outline`, `secondary` or `ghost`. A control that is used
+  over and over, such as play, is not the primary action.
+- **Dim gold**: a primary action that can't run yet. Buttons keep their gold and fade with
+  `disabled:opacity-50`, so the user sees what lights up once they're ready, instead of a gray
+  button that looks like another control.
+- **Gray**: everything else, including the agent at work. Work in progress pulses or spins in
+  `muted-foreground`; it turns gold only when the result is the user's to look at.
+- **Red (`destructive`)**: failures and deleting, nothing else.
+- **Blue (`dock`)**: where a section being dragged can go. It shows only during the drag.
+
+`primary` stays near-black (near-white in dark mode) for the small controls that use it, such as
+switches, progress and badges, so they don't compete with the gold.

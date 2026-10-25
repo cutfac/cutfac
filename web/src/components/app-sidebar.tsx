@@ -72,7 +72,7 @@ export const MAIN_NAV: ReadonlyArray<MainNavItem> = [
 /** How many videos the sidebar lists before pointing at the board. */
 const MAX_VIDEOS = 8;
 
-/** Fill and stroke for each status. The theme has one color, amber, and it is kept for review. */
+/** Fill and stroke for each status. The board's one color, gold, is kept for review. */
 function statusDot(status: Status): string {
   switch (status) {
     case "drafting":

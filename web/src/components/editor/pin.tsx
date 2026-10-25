@@ -21,7 +21,7 @@ export function PinBadge({
       style={style}
       data-state={pin.state}
       className={cn(
-        "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums shadow-sm ring-2 ring-background data-[state=halted]:bg-destructive data-[state=halted]:text-white data-[state=review]:bg-foreground data-[state=review]:text-background data-[state=waiting]:bg-background data-[state=waiting]:text-muted-foreground data-[state=working]:bg-selection data-[state=working]:text-selection-foreground",
+        "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums shadow-sm ring-2 ring-background data-[state=halted]:bg-destructive data-[state=halted]:text-white data-[state=review]:bg-brand data-[state=review]:text-brand-foreground data-[state=waiting]:bg-background data-[state=waiting]:text-muted-foreground data-[state=working]:bg-muted data-[state=working]:text-muted-foreground",
         className,
       )}
     >

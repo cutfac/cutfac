@@ -67,6 +67,8 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-selection: var(--selection);
   --color-selection-foreground: var(--selection-foreground);
   --color-dock: var(--dock);
@@ -114,9 +116,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  /* What the user marked on the video: the one colour in the editor, so it is never missed. */
-  --selection: oklch(0.8 0.16 85);
-  --selection-foreground: oklch(0.25 0.05 85);
+  /* The board's one colour, the gold of the logo. It goes only where the user is to act or look:
+     the primary action, what they marked, what waits for them. See docs/ui.md. */
+  --brand: oklch(0.8 0.16 85);
+  --brand-foreground: oklch(0.25 0.05 85);
+  /* What the user marked on the video, in the brand gold so it is never missed. */
+  --selection: var(--brand);
+  --selection-foreground: var(--brand-foreground);
   /* Where a section being moved can go. It shows only during the move, so it never competes with
      the selection. */
   --dock: oklch(0.62 0.19 255);
@@ -154,8 +160,7 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-  --selection: oklch(0.82 0.16 85);
-  --selection-foreground: oklch(0.25 0.05 85);
+  --brand: oklch(0.82 0.16 85);
   --dock: oklch(0.7 0.16 255);
 }
 
@@ -175,6 +180,10 @@
      and the page bouncing past its edges. A link marked draggable still drags. */
   :focus-visible {
     outline: none;
+  }
+  /* Selected text tints with the brand gold, lightly enough to read through. */
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 35%, transparent);
   }
   a {
     cursor: default;
