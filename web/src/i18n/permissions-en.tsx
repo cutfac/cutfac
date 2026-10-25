@@ -1,4 +1,3 @@
-import type { AgentName } from "../api.ts";
 import type { PermissionMode } from "../permissionsApi.ts";
 
 /** Choosing how much each agent's runs from the board may do without asking. */
@@ -14,15 +13,12 @@ export const permissionsEn = {
   access: {
     asks: (agent: string) =>
       `Runs ask you here before they edit files or run commands, as ${agent} asks in a terminal.`,
-    /** Claude asks the board for anything more; Codex has no way to ask yet, so it goes without. */
-    edit: {
-      claude:
-        "Runs edit files in this workspace and use Cutfac's tools, and ask you here before anything more.",
-      codex:
-        "Runs edit files in this workspace and use Cutfac's tools, and skip anything that would need your OK.",
-    } satisfies Record<AgentName, string>,
+    edit: "Runs edit files in this workspace and use Cutfac's tools, and ask you here before anything more.",
     auto: (agent: string) =>
       `Runs edit files in this workspace, and ${agent}'s automatic review decides on anything more.`,
+    /** Codex set never to ask: what would need the user's OK is declined. */
+    unasked:
+      "Runs edit files in this workspace and use Cutfac's tools, and skip anything that would need your OK.",
     full: "Runs can do anything on this computer without asking, such as run any command or change any file.",
     limited:
       "Your settings let runs do less than edit this workspace, so they may not be able to change your videos.",

@@ -7,7 +7,7 @@ export type PermissionMode = "follow" | "edit" | "auto" | "full";
  * What a run may do in the end: ask the board before it acts, edit in the workspace, more as a
  * reviewer agrees, anything, or less.
  */
-export type Access = "asks" | "edit" | "auto" | "full" | "limited";
+export type Access = "asks" | "edit" | "auto" | "full" | "unasked" | "limited";
 
 /** How an agent's runs may act; see src/core/agentPermissions.ts. */
 export interface PermissionView {

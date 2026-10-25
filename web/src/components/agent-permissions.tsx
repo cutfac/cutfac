@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import type { AgentName } from "../api.ts";
 import { type Messages, useMessages } from "../i18n/index.ts";
 import {
   type Access,
@@ -24,14 +23,14 @@ const MODES: ReadonlyArray<PermissionMode> = ["follow", "edit", "auto", "full"];
 /** Access that asks the user to look twice: anything on the computer, or too little to edit. */
 const warns = (access: Access) => access === "full" || access === "limited";
 
-/** What `access` comes to for runs of `agent`, named `name`. */
-function accessText(access: Access, agent: AgentName, name: string, t: Messages) {
+/** What `access` comes to for runs of an agent named `name`. */
+function accessText(access: Access, name: string, t: Messages) {
   switch (access) {
     case "asks":
     case "auto":
       return t.permissions.access[access](name);
     case "edit":
-      return t.permissions.access.edit[agent];
+    case "unasked":
     case "full":
     case "limited":
       return t.permissions.access[access];
@@ -97,7 +96,7 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
         {warns(access) ? <TriangleAlertIcon className="mt-px size-3.5 shrink-0" /> : null}
         <span>
           {mode === "follow" ? `${t.permissions.followed(agent, shown.setting)} ` : null}
-          {accessText(access, view.agent, agent, t)}
+          {accessText(access, agent, t)}
         </span>
       </p>
     </div>
