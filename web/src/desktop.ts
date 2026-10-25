@@ -153,6 +153,11 @@ export interface CutfacDesktop {
   /** A command chosen from the app menu or its shortcuts. Returns an unsubscribe. */
   onAppCommand: (listener: (command: AppCommand) => void) => () => void;
   /**
+   * The prompt a `cutfac://new` link on a web page opened the app with, for a new video the user
+   * sends themselves. One that came before this was called arrives at once. Returns an unsubscribe.
+   */
+  onNewVideoPrompt: (listener: (prompt: string) => void) => () => void;
+  /**
    * Check a license key with cutfac.com and keep it to unlock the paid plan, unless it is invalid.
    * Resolves what cutfac.com said.
    */

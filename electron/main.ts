@@ -36,6 +36,7 @@ import {
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
 import { startLicense, type License } from "./license.ts";
+import { handleLinks } from "./links.ts";
 import { menuTemplate, showTextMenu } from "./menu.ts";
 import { MESSAGES } from "./messages.ts";
 import { keepInsideApp } from "./navigation.ts";
@@ -187,6 +188,7 @@ if (!app.requestSingleInstanceLock()) {
     void saveLocale(next);
   });
   handleAttention({ isFromApp, bringToFront, sendAppCommand, locale: () => locale });
+  handleLinks({ isFromApp, bringToFront, window: () => window });
   handleOnboarding({
     isFromApp,
     boardUrl,

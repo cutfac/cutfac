@@ -31,6 +31,7 @@ import {
   FULL_DISK_ACCESS_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
+  NEW_VIDEO_LINK_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   OPEN_DEV_PANEL_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
@@ -41,6 +42,7 @@ import {
   SET_LOCALE_CHANNEL,
   START_APP_DRAG_CHANNEL,
   START_DRAG_CHANNEL,
+  TAKE_NEW_VIDEO_LINK_CHANNEL,
 } from "./ipc.ts";
 
 const SYSTEM_NAMES: Partial<Record<NodeJS.Platform, string>> = {
@@ -146,6 +148,21 @@ const bridge = {
 
     return () => {
       ipcRenderer.removeListener(APP_COMMAND_CHANNEL, forward);
+    };
+  },
+  onNewVideoPrompt: (listener) => {
+    const take = () => {
+      void ipcRenderer
+        .invoke(TAKE_NEW_VIDEO_LINK_CHANNEL)
+        .then((prompt: string | undefined) => prompt !== undefined && listener(prompt));
+    };
+
+    ipcRenderer.on(NEW_VIDEO_LINK_CHANNEL, take);
+    // The link may have come before the board was up to hear of it.
+    take();
+
+    return () => {
+      ipcRenderer.removeListener(NEW_VIDEO_LINK_CHANNEL, take);
     };
   },
   setLicenseKey: (key) => ipcRenderer.invoke(SET_LICENSE_KEY_CHANNEL, key),

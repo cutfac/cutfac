@@ -13,6 +13,12 @@ export const EDIT_COMMAND_CHANNEL = "cutfac:edit-command";
 /** The palette, a new video, the sidebar or a page from the app menu, for the board to open. */
 export const APP_COMMAND_CHANNEL = "cutfac:app-command";
 
+/** A `cutfac://new` link came, for the board to take its prompt into a new video. */
+export const NEW_VIDEO_LINK_CHANNEL = "cutfac:new-video-link";
+
+/** The prompt the last link came with, once; none when it was taken or none came. */
+export const TAKE_NEW_VIDEO_LINK_CHANNEL = "cutfac:take-new-video-link";
+
 /** What waits for the user, for the Dock badge and a notification when an agent asks. */
 export const ATTENTION_CHANNEL = "cutfac:attention";
 

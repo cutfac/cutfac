@@ -37,6 +37,13 @@ electronFuses:
   grantFileProtocolExtraPrivileges: false
   resetAdHocDarwinSignature: true
 
+# Web pages open the app with `cutfac://new?prompt=…` links (see electron/links.ts). This goes into
+# Info.plist, so macOS knows the app for the scheme once it is installed.
+protocols:
+  - name: Cutfac
+    schemes:
+      - cutfac
+
 mac:
   category: public.app-category.productivity
   # An Icon Composer bundle: Liquid Glass on macOS 26, with flat fallbacks for older systems.

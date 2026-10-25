@@ -1,6 +1,12 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { PlusIcon } from "lucide-react";
-import { useState, type KeyboardEvent, type ReactElement, type SubmitEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+  type SubmitEvent,
+} from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
@@ -35,6 +41,7 @@ import {
   type NewItem,
   type Plan,
 } from "../api.ts";
+import { desktop } from "../desktop.ts";
 import { href, type Live, useAgentStatuses, useModelPicks } from "../hooks.ts";
 import { type Messages, useMessages } from "../i18n/index.ts";
 import { freeVersion } from "../lib/license.ts";
@@ -123,6 +130,16 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   const free = freeVersion(plan.data);
   const links = writtenLinks(text);
   const body = text.trim();
+
+  // A link from a web page opens the dialog with its prompt, for the user to look over and send.
+  useEffect(
+    () =>
+      desktop?.onNewVideoPrompt((prompt) => {
+        setText(prompt);
+        openNewItem();
+      }),
+    [],
+  );
 
   /** Add the files and links, then send the description; the item is there whatever fails. */
   async function fill(item: ItemDetail) {
