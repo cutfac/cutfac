@@ -2,6 +2,7 @@
 export const galleryEn = {
   versions: (count: number) => (count === 1 ? "1 version to check" : `Pick from ${count} versions`),
   halted: "Stopped",
+  approval: "Waiting for your OK",
   working: "Working",
   result: "New result",
   compare: "Compare",

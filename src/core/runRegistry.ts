@@ -66,6 +66,13 @@ export interface Runs<I> {
   readonly answer: (key: string, id: string, answer: ApprovalAnswer) => Effect.Effect<boolean>;
   /** Whether the key has a run that has not reported its end yet. */
   readonly isRunning: (key: string) => Effect.Effect<boolean>;
+  /** How many requests the key's run waits on the board to answer. */
+  readonly pending: (key: string) => Effect.Effect<number>;
+  /**
+   * The key each time its run puts a request to the board or has one settled, so a view of every
+   * key, such as the gallery, can look again without following each run.
+   */
+  readonly asks: Stream.Stream<string>;
   readonly subscribe: (key: string) => Effect.Effect<RunSubscription, never, Scope.Scope>;
   /**
    * Run `effect` while no other exclusive effect on the key runs, so a check and the start it
@@ -105,7 +112,7 @@ const crashMessage = (cause: Cause.Cause<never>) =>
  * until it is settled, however that happens: an answer, the agent taking it back, or a stop.
  */
 const askVia =
-  (emit: Emit, run: LiveRun): Ask =>
+  (emit: Emit, run: LiveRun, changed: Effect.Effect<void>): Ask =>
   (approval) =>
     Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
@@ -113,13 +120,14 @@ const askVia =
         const answer = yield* Deferred.make<ApprovalAnswer>();
         run.pending.set(id, answer);
         yield* emit({ type: "approval", ...approval });
+        yield* changed;
 
         return yield* restore(Deferred.await(answer)).pipe(
           Effect.ensuring(
             Effect.suspend(() => {
               if (run.pending.get(id) === answer) run.pending.delete(id);
 
-              return emit({ type: "approval-settled", id });
+              return Effect.andThen(emit({ type: "approval-settled", id }), changed);
             }),
           ),
         );
@@ -136,6 +144,7 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   const context = yield* Effect.context<R>();
   const fibers = yield* FiberSet.make();
   const channels = new Map<string, Channel>();
+  const asked = yield* PubSub.unbounded<string>();
   // Recording an event and taking a snapshot for a new subscriber must not interleave, or a
   // subscriber would see an event twice or miss it.
   const lock = yield* Semaphore.make(1);
@@ -197,7 +206,9 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   const supervise = (input: I, channel: Channel, run: LiveRun) => {
     const emit = emitTo(channel, run);
 
-    return spec.runner(input, emit, askVia(emit, run)).pipe(
+    const changed = PubSub.publish(asked, spec.key(input)).pipe(Effect.asVoid);
+
+    return spec.runner(input, emit, askVia(emit, run, changed)).pipe(
       Effect.andThen(emit({ type: "error", error: "The agent run ended without a result" })),
       Effect.onInterrupt(() => emit({ type: "stopped" })),
       Effect.catchCause((cause) =>
@@ -250,6 +261,8 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
 
   const isRunning = (key: string) => Effect.sync(() => channels.get(key)?.live !== undefined);
 
+  const pending = (key: string) => Effect.sync(() => channels.get(key)?.live?.pending.size ?? 0);
+
   const subscribe = (key: string) =>
     Effect.gen(function* () {
       const channel = yield* channelFor(key);
@@ -275,7 +288,16 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   const exclusive = <A, E, R2>(key: string, effect: Effect.Effect<A, E, R2>) =>
     Effect.flatMap(channelFor(key), (channel) => channel.turns.withPermits(1)(effect));
 
-  const registry: Runs<I> = { start, stop, answer, isRunning, subscribe, exclusive };
+  const registry: Runs<I> = {
+    start,
+    stop,
+    answer,
+    isRunning,
+    pending,
+    asks: Stream.fromPubSub(asked),
+    subscribe,
+    exclusive,
+  };
 
   return registry;
 });

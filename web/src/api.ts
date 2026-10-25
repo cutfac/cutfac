@@ -282,6 +282,8 @@ export interface ItemSummary {
   requests: Feedback[];
   /** An agent works on the item right now. */
   running: boolean;
+  /** How many of the agent's asks before a tool wait for the user to answer. */
+  approvals: number;
   /** The render going on, or the last one when it failed. */
   render?: RenderState;
   media: Media[];

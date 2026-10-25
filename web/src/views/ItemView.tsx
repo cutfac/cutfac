@@ -326,6 +326,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           item={item}
           running={running}
           agent={run.agent}
+          asking={run.approvals.length > 0}
           onItem={setData}
           onEdit={edit}
           onShortcuts={() => setShortcuts(true)}
@@ -535,6 +536,7 @@ function Toolbar({
   item,
   running,
   agent,
+  asking,
   onItem,
   onEdit,
   onShortcuts,
@@ -542,6 +544,8 @@ function Toolbar({
   item: ItemDetail;
   running: boolean;
   agent: LiveRun["agent"];
+  /** The agent waits for the user to answer what it asked. */
+  asking: boolean;
   onItem: (item: ItemDetail) => void;
   onEdit: (command: EditCommand) => void;
   onShortcuts: () => void;
@@ -556,7 +560,12 @@ function Toolbar({
         {t.nav.board}
       </a>
       <h1 className="min-w-0 truncate text-sm font-semibold">{item.doc.title}</h1>
-      {running ? (
+      {running && asking ? (
+        <Badge variant="outline">
+          <span className="size-1.5 rounded-full bg-selection" />
+          {t.item.asking(agentLabel(agent) ?? t.chat.agent)}
+        </Badge>
+      ) : running ? (
         <Badge variant="secondary">
           <Spinner data-icon="inline-start" />
           {t.item.editing(agentLabel(agent) ?? t.chat.agent)}

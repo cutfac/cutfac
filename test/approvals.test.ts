@@ -365,6 +365,40 @@ describe("the board's answer", () => {
     expect(result.late).toBe(false);
   });
 
+  test("is counted on its item while it waits, which is named as it asks and is answered", async () => {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const registry = yield* makeRunRegistry(spec);
+
+          const named = yield* Effect.forkChild(
+            registry.asks.pipe(Stream.take(2), Stream.runCollect),
+            { startImmediately: true },
+          );
+
+          const subscription = yield* registry.subscribe("item");
+
+          yield* registry.start(input);
+          yield* subscription.events.pipe(
+            Stream.takeUntil((event) => event.type === "approval"),
+            Stream.runDrain,
+          );
+
+          const waiting = yield* registry.pending("item");
+          yield* registry.answer("item", "r1", "allow");
+
+          return {
+            waiting,
+            named: yield* Fiber.join(named),
+            after: yield* registry.pending("item"),
+          };
+        }),
+      ),
+    );
+
+    expect(result).toEqual({ waiting: 1, named: ["item", "item"], after: 0 });
+  });
+
   test("is no longer waited on once the run is stopped", async () => {
     const result = await asked((registry) => registry.stop("item"));
 

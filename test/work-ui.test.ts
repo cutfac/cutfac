@@ -49,6 +49,7 @@ function summary(extra: Partial<ItemSummary> = {}): ItemSummary {
     openFeedback: 0,
     requests: [],
     running: false,
+    approvals: 0,
     media: [{ name: "clip.mp4", kind: "video", size: 1, mtime: Date.parse(at(0)) }],
     updatedAt: 0,
     ...extra,
@@ -140,6 +141,19 @@ describe("itemWork", () => {
     expect(itemWork(summary({ running: true }))).toEqual({ kind: "working" });
   });
 
+  test("an agent that asks the board waits for the user before anything else", () => {
+    const going = request("going", { run: run("running") });
+
+    const work = itemWork(
+      summary({ requests: [versions, going], running: true, approvals: 1, render }),
+    );
+
+    expect(work).toEqual({ kind: "approval", request: going });
+    expect(needsYou(work)).toBe(true);
+    expect(isBusy(work)).toBe(false);
+    expect(itemWork(summary({ approvals: 1 }))).toEqual({ kind: "quiet" });
+  });
+
   test("changed media waits to be looked at, and nothing else is quiet", () => {
     const changed = request("changed", { context: { before: "clip.mp4", after: "clip.mp4" } });
 
@@ -158,9 +172,11 @@ describe("byWork", () => {
       summary({ id: "working", running: true }),
       summary({ id: "quiet-new", updatedAt: 2 }),
       summary({ id: "versions", requests: [versions] }),
+      summary({ id: "asking", running: true, approvals: 1 }),
     ].map((item) => ({ item, work: itemWork(item) }));
 
     expect(byWork(tiles).map((tile) => tile.item.id)).toEqual([
+      "asking",
       "versions",
       "working",
       "quiet-new",

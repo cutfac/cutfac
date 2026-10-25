@@ -340,6 +340,7 @@ export const ko: Messages = {
     details: "상세",
     history: "히스토리",
     editing: (agent) => `${agent}이(가) 편집하는 중`,
+    asking: (agent) => `${agent}이(가) 허락을 기다려요`,
     status: "상태",
     noMediaTitle: "아직 영상이 없어요",
     noMediaBody:

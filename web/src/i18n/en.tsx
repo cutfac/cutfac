@@ -355,6 +355,7 @@ export const en = {
     details: "Details",
     history: "History",
     editing: (agent: string) => `${agent} is editing`,
+    asking: (agent: string) => `${agent} is waiting for your OK`,
     status: "Status",
     noMediaTitle: "No video yet",
     noMediaBody:

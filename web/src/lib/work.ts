@@ -8,6 +8,8 @@ import { runView } from "./run.ts";
  * agent or a render is at work, a result came in, or nothing goes on.
  */
 export type ItemWork =
+  /** The agent waits for the user to let it use a tool. */
+  | { readonly kind: "approval"; readonly request?: Feedback }
   /** Versions wait for the user to keep one. */
   | { readonly kind: "versions"; readonly request: Feedback; readonly labels: string[] }
   /** A run failed or was stopped with its request still open. */
@@ -29,6 +31,13 @@ export type ItemWork =
 const runOf = (item: ItemSummary, feedback: Feedback) =>
   runView(feedback.run, undefined, item.running);
 
+/** The request the item's agent works on, when the board started the run. */
+const atWork = (item: ItemSummary) => {
+  const request = item.requests.find((feedback) => feedback.run?.status === "running");
+
+  return request === undefined ? {} : { request };
+};
+
 const halted = (item: ItemSummary, feedback: Feedback) => {
   const { status } = runOf(item, feedback);
 
@@ -49,6 +58,9 @@ export function itemWork(
 ): ItemWork {
   const { requests, render } = item;
 
+  // The agent can't go on until the user answers, so this comes before everything.
+  if (item.running && item.approvals > 0) return { kind: "approval", ...atWork(item) };
+
   for (const request of requests) {
     // The agent may still be making more of them; they wait for the user once its run ends.
     if (runOf(item, request).running) continue;
@@ -66,11 +78,7 @@ export function itemWork(
     return { kind: "rendering", label: render.label, share: renderShare(render) };
   }
 
-  if (item.running) {
-    const request = requests.find((feedback) => feedback.run?.status === "running");
-
-    return request === undefined ? { kind: "working" } : { kind: "working", request };
-  }
+  if (item.running) return { kind: "working", ...atWork(item) };
 
   if (render?.status === "failed" && !seen(render)) {
     return { kind: "renderFailed", label: render.label };
@@ -81,23 +89,30 @@ export function itemWork(
   return done === undefined ? { kind: "quiet" } : { kind: "result", request: done };
 }
 
-/** Nothing goes on until the user picks a version or sends the request again. */
+/** Nothing goes on until the user answers the agent, picks a version or sends the request again. */
 export const needsYou = (work: ItemWork) =>
-  work.kind === "versions" || work.kind === "halted" || work.kind === "renderFailed";
+  work.kind === "approval" ||
+  work.kind === "versions" ||
+  work.kind === "halted" ||
+  work.kind === "renderFailed";
 
 export const isBusy = (work: ItemWork) => work.kind === "rendering" || work.kind === "working";
 
 const RANK: Record<ItemWork["kind"], number> = {
-  versions: 0,
-  halted: 0,
-  renderFailed: 0,
-  rendering: 1,
-  working: 1,
-  result: 2,
-  quiet: 3,
+  approval: 0,
+  versions: 1,
+  halted: 1,
+  renderFailed: 1,
+  rendering: 2,
+  working: 2,
+  result: 3,
+  quiet: 4,
 };
 
-/** The gallery's order: what waits for the user, then work going on, then the rest by change. */
+/**
+ * The gallery's order: an agent held up on the user, then the rest of what waits for them, then
+ * work going on, then the rest by change.
+ */
 export function byWork<T extends { readonly item: ItemSummary; readonly work: ItemWork }>(
   tiles: ReadonlyArray<T>,
 ): T[] {

@@ -302,8 +302,8 @@ const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: stri
 
 /**
  * What the gallery shows of an item: its requests still open or waiting for the user's decision,
- * whether an agent works on it, and its render while it goes on or after it failed, so a tile can
- * say what waits for the user and what is under way.
+ * whether an agent works on it and how many of its asks wait for an answer, and its render while
+ * it goes on or after it failed, so a tile can say what waits for the user and what is under way.
  */
 const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
   const runs = yield* RunRegistry;
@@ -320,6 +320,7 @@ const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
     openFeedback: feedback.filter((f) => f.status === "open").length,
     requests: feedback.filter((f) => f.status === "open" || awaitsDecision(f)),
     running: yield* runs.isRunning(item.id),
+    approvals: yield* runs.pending(item.id),
     render: render?.status === "running" || render?.status === "failed" ? render : undefined,
     media: item.media,
     updatedAt: item.updatedAt,
@@ -624,15 +625,23 @@ const runStreamRoute = <I, R, E, R2>(
     return eventStream(events);
   });
 
-/** Workspace paths that changed on disk, and renders starting or ending, so agent work appears without a reload. */
+/**
+ * Workspace paths that changed on disk, renders starting or ending, and items whose agent asks the
+ * board or has its asking settled, so agent work appears without a reload.
+ */
 const changesRoute = Effect.gen(function* () {
   const ws = yield* Workspace;
   const renders = yield* renderChanges;
+  const runs = yield* RunRegistry;
 
   return eventStream(
-    Stream.merge(
-      Stream.map(ws.changes, (path) => sseEvent("change", path)),
-      renders,
+    Stream.mergeAll(
+      [
+        Stream.map(ws.changes, (path) => sseEvent("change", path)),
+        renders,
+        Stream.map(runs.asks, (id) => sseEvent("change", id)),
+      ],
+      { concurrency: "unbounded" },
     ),
   );
 });
