@@ -11,3 +11,6 @@ docs/business/
 
 # Local agent settings
 .claude/
+
+# Screenshots of the board and of other apps, kept locally for design reference.
+docs/references/
