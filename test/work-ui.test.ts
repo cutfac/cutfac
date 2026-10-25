@@ -155,6 +155,18 @@ describe("itemWork", () => {
     expect(itemWork(summary({ approvals: 1 }))).toEqual({ kind: "quiet" });
   });
 
+  test("a finished run that left its request open with no result waits for an answer", () => {
+    const asked = request("asked", { run: { ...run("done"), reply: "Above or below?" } });
+    const work = itemWork(summary({ requests: [asked] }));
+
+    expect(work).toEqual({ kind: "question", request: asked });
+    expect(needsYou(work)).toBe(true);
+    expect(itemWork(summary({ requests: [asked, versions] })).kind).toBe("versions");
+    expect(itemWork(summary({ requests: [{ ...asked, status: "resolved" }] }))).toEqual({
+      kind: "quiet",
+    });
+  });
+
   test("changed media waits to be looked at, and nothing else is quiet", () => {
     const changed = request("changed", { context: { before: "clip.mp4", after: "clip.mp4" } });
 
@@ -213,11 +225,19 @@ describe("attention", () => {
       summary({ id: "asking", title: "Asking", running: true, approvals: 2 }),
       summary({ id: "versions", requests: [versions] }),
       summary({ id: "working", running: true }),
+      summary({
+        id: "question",
+        title: "Question",
+        requests: [request("asked", { run: run("done") })],
+      }),
     ];
 
     expect(attention(items)).toEqual({
-      waiting: 2,
-      asking: [{ id: "asking", title: "Asking" }],
+      waiting: 3,
+      asking: [
+        { id: "asking", title: "Asking", about: "approval" },
+        { id: "question", title: "Question", about: "question" },
+      ],
     });
   });
 });

@@ -20,6 +20,7 @@ import { importState, isWorking, turnRun } from "../../lib/imports.ts";
 import { runPhase } from "../../lib/onboarding.ts";
 import { replyBlocks } from "../../lib/replyBlocks.ts";
 import type { LiveRun } from "../../lib/run.ts";
+import { Answers } from "../editor/agent-question.tsx";
 import { StepDone } from "./frame.tsx";
 
 interface TemplateStatusProps {
@@ -233,38 +234,6 @@ function Reply({
     >
       <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
     </SelectionArea>
-  );
-}
-
-/** The answers the agent offered, one click each. Held while one is on its way, so it goes once. */
-function Answers({
-  answers,
-  onReply,
-}: {
-  answers: ReadonlyArray<string>;
-  onReply: (body: string) => Promise<boolean>;
-}) {
-  const [sending, setSending] = useState(false);
-
-  const send = (answer: string) => {
-    setSending(true);
-    void onReply(answer).finally(() => setSending(false));
-  };
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {answers.map((answer) => (
-        <Button
-          key={answer}
-          variant="outline"
-          size="sm"
-          disabled={sending}
-          onClick={() => send(answer)}
-        >
-          {answer}
-        </Button>
-      ))}
-    </div>
   );
 }
 

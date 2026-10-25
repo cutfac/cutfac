@@ -482,6 +482,10 @@ export const ko: Messages = {
     keep: "유지",
     restore: "이전으로 되돌리기",
     askAgain: "다시 요청",
+    answerHint: (choices) =>
+      choices
+        ? "답을 기다려요. 하나를 고르거나 아래에 직접 적어 보내세요."
+        : "답을 기다려요. 아래에 적어 보내세요.",
     kept: "유지함",
     rolledBackBadge: "되돌림",
     versionsReady: (media, saved, wanted) =>

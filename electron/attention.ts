@@ -16,7 +16,13 @@ import { MESSAGES } from "./messages.ts";
 const isAttention = Schema.is(
   Schema.Struct({
     waiting: Schema.Finite,
-    asking: Schema.Array(Schema.Struct({ id: Schema.String, title: Schema.String })),
+    asking: Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        title: Schema.String,
+        about: Schema.Literals(["approval", "question"]),
+      }),
+    ),
   }),
 );
 
@@ -29,18 +35,24 @@ export interface AttentionHost {
 
 /**
  * Keeps the Dock's badge on how many videos wait for the user, and puts up a notification when an
- * agent starts asking while the app is in the background, since it can't go on until they answer.
+ * agent starts asking for an OK or an answer while the app is in the background, since it can't go
+ * on until they answer.
  */
 export function handleAttention(host: AttentionHost): void {
-  // The video each notification is about. A notification nothing holds on to is collected, and a
-  // click on it goes nowhere.
+  // What each notification is about, the video and what it asks. A notification nothing holds on
+  // to is collected, and a click on it goes nowhere.
   const shown = new Map<Notification, string>();
   let asking = new Set<string>();
 
-  const notify = (id: string, title: string) => {
-    const notice = new Notification({ title: MESSAGES[host.locale()].asking, body: title });
+  const notify = (key: string, title: string, about: "approval" | "question") => {
+    const messages = MESSAGES[host.locale()];
 
-    shown.set(notice, id);
+    const notice = new Notification({
+      title: about === "approval" ? messages.asking : messages.question,
+      body: title,
+    });
+
+    shown.set(notice, key);
     notice.on("close", () => shown.delete(notice));
     notice.on("click", () => {
       shown.delete(notice);
@@ -60,12 +72,14 @@ export function handleAttention(host: AttentionHost): void {
     const now = new Set<string>();
 
     for (const video of next.asking) {
-      if (away && !asking.has(video.id)) notify(video.id, video.title);
-      now.add(video.id);
+      const key = `${video.about} ${video.id}`;
+
+      if (away && !asking.has(key)) notify(key, video.title, video.about);
+      now.add(key);
     }
 
     // What was answered, wherever, no longer waits in Notification Center.
-    for (const [notice, id] of shown) if (!now.has(id)) notice.close();
+    for (const [notice, key] of shown) if (!now.has(key)) notice.close();
 
     asking = now;
   });

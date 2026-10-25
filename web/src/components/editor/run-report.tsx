@@ -1,7 +1,5 @@
 import { ChevronRightIcon, CircleStopIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -21,6 +19,7 @@ import {
   type RunView,
   type ToolStep,
 } from "../../lib/run.ts";
+import { ClosingReply, Reply } from "./agent-question.tsx";
 import { ApprovalCard, type OnAnswer } from "./approval-card.tsx";
 import { useRenderLine } from "./render-card.tsx";
 
@@ -43,6 +42,7 @@ export function RunReport({
   statuses,
   onStop,
   onAnswer,
+  onReply,
 }: {
   run: RunView;
   /** What the agents list, to name the model the run used. */
@@ -50,6 +50,8 @@ export function RunReport({
   onStop: () => void;
   /** Where the run can ask the user; a run with nowhere to ask is turned down instead. */
   onAnswer?: OnAnswer | undefined;
+  /** Where the user's answer goes while the run waits on what it asked at its end. */
+  onReply?: ((body: string) => Promise<void>) | undefined;
 }) {
   const { steps, reply } = closingReply(run.steps, run.reply);
   const t = useMessages();
@@ -60,7 +62,7 @@ export function RunReport({
     <>
       <MessageHeader>{answerer(run.agent, run, statuses, t)}</MessageHeader>
       {steps.length > 0 ? <Steps steps={steps} running={run.running} /> : null}
-      {reply === undefined ? null : <Reply text={reply} />}
+      {reply === undefined ? null : <ClosingReply text={reply} onAnswer={onReply} />}
       {onAnswer === undefined
         ? null
         : run.approvals.map((approval) => (
@@ -194,14 +196,6 @@ function ToolLine({ tool }: { tool: ToolStep }) {
       <WrenchIcon className="size-3 shrink-0" />
       <span className="shrink-0 font-medium text-foreground">{tool.name}</span>
       {tool.detail === undefined ? null : <span className="truncate">{tool.detail}</span>}
-    </div>
-  );
-}
-
-export function Reply({ text }: { text: string }) {
-  return (
-    <div className="typeset typeset-chat">
-      <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
     </div>
   );
 }

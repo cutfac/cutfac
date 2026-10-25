@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { MAX_VARIANTS } from "../src/core/schema.ts";
 import type { AgentRun, EditReceipt, Feedback, ItemDetail } from "../web/src/api.ts";
 import {
+  asksUser,
   hasResult,
   inOrder,
   linePaused,
@@ -155,6 +156,24 @@ describe("hasResult", () => {
 
   test("offers as many versions as the server holds", () => {
     expect(BOARD_MAX_VARIANTS).toBe(MAX_VARIANTS);
+  });
+});
+
+describe("asksUser", () => {
+  const done = { status: "done" as const, running: false };
+
+  test("is a finished run whose open request has no result to look at", () => {
+    const asked = request("a", 1, { run: saved("done") });
+
+    expect(asksUser(itemWith([asked]), asked, done)).toBe(true);
+    expect(asksUser(itemWith([asked]), asked, { ...done, running: true })).toBe(false);
+    expect(asksUser(itemWith([asked]), asked, { status: "failed", running: false })).toBe(false);
+    expect(asksUser(itemWith([asked]), { ...asked, status: "resolved" }, done)).toBe(false);
+
+    const changed = { media: [{ name: "clip.mp4", kind: "video" as const, size: 1, mtime: 9e15 }] };
+    const edited = { ...asked, context: { before: "edits/a/before.mp4" } };
+
+    expect(asksUser(itemWith([edited], changed), edited, done)).toBe(false);
   });
 });
 

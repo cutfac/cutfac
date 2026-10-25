@@ -58,6 +58,21 @@ export function hasResult(
 }
 
 /**
+ * The agent's run ended with the request still open and nothing to look at: it asked the user and
+ * waits for the answer, which goes to it as the next request.
+ */
+export const asksUser = (
+  item: Pick<ItemDetail, "media">,
+  feedback: Feedback,
+  run: Pick<RunView, "status" | "running">,
+) =>
+  feedback.status === "open" &&
+  feedback.decision === undefined &&
+  !run.running &&
+  run.status === "done" &&
+  !hasResult(item, feedback, false);
+
+/**
  * How the chat offers to run an open request: to send it, when nothing ran it yet; to run it
  * again, after a run that failed or was stopped; or not at all, while it runs, after a run that
  * finished, or once its result came in, which the user's own agent can also bring.

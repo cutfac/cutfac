@@ -1,7 +1,7 @@
 import type { Feedback, ItemSummary } from "../api.ts";
 import type { Attention } from "../desktop.ts";
 import { renderShare, type RenderState } from "./render.ts";
-import { hasResult, versionsOf } from "./requests.ts";
+import { asksUser, hasResult, versionsOf } from "./requests.ts";
 import { runView } from "./run.ts";
 
 /**
@@ -13,6 +13,8 @@ export type ItemWork =
   | { readonly kind: "approval"; readonly request?: Feedback }
   /** Versions wait for the user to keep one. */
   | { readonly kind: "versions"; readonly request: Feedback; readonly labels: string[] }
+  /** The agent asked the user something and waits for the answer. */
+  | { readonly kind: "question"; readonly request: Feedback }
   /** A run failed or was stopped with its request still open. */
   | { readonly kind: "halted"; readonly request: Feedback }
   /** A render goes on; `share` is how much of it is done, from 0 to 1, when it can tell. */
@@ -71,6 +73,10 @@ export function itemWork(
     if (labels.length > 0) return { kind: "versions", request, labels };
   }
 
+  const asked = requests.findLast((request) => asksUser(item, request, runOf(item, request)));
+
+  if (asked !== undefined) return { kind: "question", request: asked };
+
   const stuck = requests.find((request) => halted(item, request));
 
   if (stuck !== undefined) return { kind: "halted", request: stuck };
@@ -94,6 +100,7 @@ export function itemWork(
 export const needsYou = (work: ItemWork) =>
   work.kind === "approval" ||
   work.kind === "versions" ||
+  work.kind === "question" ||
   work.kind === "halted" ||
   work.kind === "renderFailed";
 
@@ -102,6 +109,7 @@ export const isBusy = (work: ItemWork) => work.kind === "rendering" || work.kind
 const RANK: Record<ItemWork["kind"], number> = {
   approval: 0,
   versions: 1,
+  question: 1,
   halted: 1,
   renderFailed: 1,
   rendering: 2,
@@ -144,7 +152,11 @@ export const attention = (
   seen?: (render: RenderState) => boolean,
 ): Attention => ({
   waiting: waitingCount(items, seen),
-  asking: items.flatMap((item) =>
-    itemWork(item, seen).kind === "approval" ? [{ id: item.id, title: item.title }] : [],
-  ),
+  asking: items.flatMap((item) => {
+    const { kind } = itemWork(item, seen);
+
+    return kind === "approval" || kind === "question"
+      ? [{ id: item.id, title: item.title, about: kind }]
+      : [];
+  }),
 });

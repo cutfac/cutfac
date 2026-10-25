@@ -5,6 +5,7 @@ export const galleryKo: GalleryMessages = {
   versions: (count) => (count === 1 ? "확인할 버전 1개" : `버전 ${count}개 중 고르기`),
   halted: "멈춤",
   approval: "허락을 기다려요",
+  question: "답을 기다려요",
   working: "작업 중",
   result: "새 결과",
   compare: "비교하러 가기",

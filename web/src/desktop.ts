@@ -120,8 +120,8 @@ export interface CutfacDevTools {
 export interface Attention {
   /** How many videos wait for the user. */
   waiting: number;
-  /** The videos whose agent waits for the user to answer what it asked. */
-  asking: { id: string; title: string }[];
+  /** The videos whose agent waits for the user's OK on a tool, or their answer to a question. */
+  asking: { id: string; title: string; about: "approval" | "question" }[];
 }
 
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */

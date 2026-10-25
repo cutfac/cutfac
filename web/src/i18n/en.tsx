@@ -501,6 +501,11 @@ export const en = {
     keep: "Keep",
     restore: "Restore before",
     askAgain: "Ask again",
+    /** Under the agent's question while it waits; `choices` when it offered answers to pick. */
+    answerHint: (choices: boolean): string =>
+      choices
+        ? "Waiting for your answer. Pick one, or write your own below."
+        : "Waiting for your answer. Write it below.",
     kept: "Kept",
     rolledBackBadge: "Rolled back",
     /** Versions the agent saved of `media`; `wanted` is how many the request asked for. */

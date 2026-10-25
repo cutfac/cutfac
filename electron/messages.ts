@@ -54,6 +54,7 @@ const en = {
   updateCheckFailed: "Couldn't check for updates",
   licenseKey: "License Key…",
   asking: "An agent is waiting for your OK",
+  question: "An agent is waiting for your answer",
 };
 
 export type Messages = typeof en;
@@ -115,5 +116,6 @@ export const MESSAGES: Record<Locale, Messages> = {
     updateCheckFailed: "업데이트를 확인하지 못했어요",
     licenseKey: "라이선스 키…",
     asking: "에이전트가 허락을 기다려요",
+    question: "에이전트가 답을 기다려요",
   },
 };

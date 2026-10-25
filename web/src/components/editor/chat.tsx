@@ -36,9 +36,9 @@ import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { inOrder, linePaused, versionsOf, waitingLine } from "../../lib/requests.ts";
 import { liveFor, type LiveRun, type OnRun } from "../../lib/run.ts";
-import type { Target } from "../../lib/target.ts";
+import { targetOf, type Target } from "../../lib/target.ts";
 import type { Attachments } from "./attachments.tsx";
-import { Composer, copyPrompt } from "./composer.tsx";
+import { Composer, copyPrompt, editInput, sendRequest } from "./composer.tsx";
 import { Request, type RequestActions } from "./request.tsx";
 
 interface ChatProps {
@@ -119,6 +119,21 @@ export function Chat({
     },
     answer: (approval, answer) =>
       approvalsApi.answer(item.id, approval.id, answer).then(() => undefined),
+    reply: (feedback, body) => {
+      // The agent that asked keeps the conversation the question is in.
+      const runner = feedback.run?.agent ?? agent;
+      const file = item.media.find((entry) => entry.name === feedback.media);
+      const settings = pickedSettings(statuses, picks, runner);
+
+      return sendRequest(
+        item,
+        editInput(body, runner, settings, file, targetOf(feedback)),
+        onItem,
+        onRun,
+      )
+        .then(() => undefined)
+        .catch(sendFailed);
+    },
     approve: (feedback) => {
       api.approveEdit(item.id, feedback.id).then(onItem, sendFailed);
     },

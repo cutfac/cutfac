@@ -22,14 +22,15 @@ import { agentInstalled, href } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
 import { AGENTS, agentLabel, answerer } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { hasResult, runOffer, versionsMedia, versionsOf } from "../../lib/requests.ts";
+import { asksUser, hasResult, runOffer, versionsMedia, versionsOf } from "../../lib/requests.ts";
 import { closingReply, runView, type LiveRun } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf } from "../../lib/target.ts";
 import { clockTime } from "../../lib/time.ts";
+import { Reply } from "./agent-question.tsx";
 import type { OnAnswer } from "./approval-card.tsx";
 import { SentAttachments } from "./attachments.tsx";
 import { CompareDialog, VersionsDialog } from "./compare-dialog.tsx";
-import { Reply, RunReport } from "./run-report.tsx";
+import { RunReport } from "./run-report.tsx";
 
 /** What the chat can do with a request; one object so each message takes one prop for it. */
 export interface RequestActions {
@@ -41,6 +42,8 @@ export interface RequestActions {
   stop: () => void;
   /** Answer what the agent asks before using a tool; resolves once the answer was sent. */
   answer: OnAnswer;
+  /** Send the user's answer to the question the agent ended its run with, as the next request. */
+  reply: (feedback: Feedback, body: string) => Promise<void>;
   approve: (feedback: Feedback) => void;
   restore: (feedback: Feedback) => void;
   /** Keep one of the versions the agent saved; the others are thrown away. */
@@ -71,6 +74,7 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
   const open = feedback.status === "open" && feedback.decision === undefined;
   const offer = runOffer(open, state, result);
   const replied = closingReply(state.steps, state.reply).reply !== undefined;
+  const asks = asksUser(item, feedback, state);
   const t = useMessages();
   const locale = useLocale();
 
@@ -120,6 +124,7 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
                 statuses={statuses}
                 onStop={actions.stop}
                 onAnswer={actions.answer}
+                onReply={asks ? (body) => actions.reply(feedback, body) : undefined}
               />
               {offer === "send" ? (
                 <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>

@@ -17,6 +17,8 @@ export function workText(work: ItemWork, t: Messages) {
       return t.gallery.halted;
     case "approval":
       return t.gallery.approval;
+    case "question":
+      return t.gallery.question;
     case "rendering": {
       const text =
         work.share === undefined
