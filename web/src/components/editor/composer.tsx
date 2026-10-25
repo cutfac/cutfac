@@ -1,11 +1,4 @@
-import {
-  ArrowUpIcon,
-  CrosshairIcon,
-  LayersIcon,
-  PaperclipIcon,
-  SquareIcon,
-  XIcon,
-} from "lucide-react";
+import { CrosshairIcon, PaperclipIcon, SquareIcon, XIcon } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
 
@@ -45,13 +38,13 @@ import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { CacheNote } from "./cache-note.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { AddSource, SourceChips } from "./sources.tsx";
+import { SendButton, VersionChips } from "./versions.tsx";
 
 /** What the request points at, which picks the starting points and the placeholder. */
 function scopeOf(target: Target, media: Media | undefined) {
@@ -99,47 +92,6 @@ export function copyPrompt(prompt: string) {
           },
         },
       }),
-  );
-}
-
-/** How many versions the agent should make of one request. */
-export function VersionsPicker({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (versions: number) => void;
-}) {
-  const t = useMessages();
-
-  const counts = Array.from({ length: MAX_VARIANTS }, (_, index) => ({
-    value: index + 1,
-    label: t.composer.versions.count(index + 1),
-  }));
-
-  return (
-    <Select
-      value={value}
-      onValueChange={(next) => {
-        if (next !== null) onChange(next);
-      }}
-    >
-      <SelectTrigger
-        size="sm"
-        title={t.composer.versions.label}
-        aria-label={`${t.composer.versions.label}: ${value}`}
-      >
-        <LayersIcon />
-        <span className="tabular-nums">{value}</span>
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        {counts.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -282,7 +234,7 @@ export function Composer({
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
 
-  async function send() {
+  async function send(count = versions) {
     if (!ready) return;
 
     setSending(true);
@@ -292,7 +244,7 @@ export function Composer({
 
       const sentTo = await sendRequest(
         item,
-        editInput(text, agent, settings, media, target, versions, attached),
+        editInput(text, agent, settings, media, target, count, attached),
         onItem,
         onRun,
       );
@@ -412,7 +364,6 @@ export function Composer({
                   onPick={(next) => onPick(agent, next)}
                 />
               ) : null}
-              <VersionsPicker value={versions} onChange={setVersions} />
             </div>
             {running && text === "" ? (
               <InputGroupButton
@@ -425,19 +376,15 @@ export function Composer({
                 <SquareIcon />
               </InputGroupButton>
             ) : (
-              <InputGroupButton
-                variant="default"
-                size="icon-sm"
-                className="ml-auto"
-                aria-label={t.composer.send}
+              <SendButton
+                label={t.composer.send}
                 disabled={!ready}
-                onClick={() => void send()}
-              >
-                <ArrowUpIcon />
-              </InputGroupButton>
+                onSend={(count) => void send(count)}
+              />
             )}
           </InputGroupAddon>
         </InputGroup>
+        <VersionChips value={versions} onChange={setVersions} />
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
         <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
         <CacheNote item={item} agent={agent} settings={settings} status={status} />

@@ -639,7 +639,7 @@ export const en = {
     /** How many takes on the request the agent makes, to compare and pick from. */
     versions: {
       label: "Versions to make",
-      count: (count: number) => (count === 1 ? "1 version" : `${count} versions`),
+      sendAs: (count: number) => (count === 1 ? "Send as 1 version" : `Send as ${count} versions`),
     },
     stop: "Stop the agent",
     send: "Send (Enter)",

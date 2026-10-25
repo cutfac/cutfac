@@ -590,7 +590,7 @@ export const ko: Messages = {
     },
     versions: {
       label: "만들 버전 수",
-      count: (count) => `버전 ${count}개`,
+      sendAs: (count) => `${count}개 버전으로 보내기`,
     },
     stop: "에이전트 중지",
     send: "보내기 (Enter)",
