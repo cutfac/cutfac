@@ -319,6 +319,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                         setRun,
                       ).then((sentTo) => {
                         setTab("chat");
+
                         // `/feedback` leaves the box drawn, so the request about it can still follow.
                         if (sentTo === "item") clear();
 
