@@ -1,20 +1,18 @@
-import { ArrowRightIcon, MessageSquareIcon, SquareIcon } from "lucide-react";
+import { ArrowRightIcon, MessageSquareIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { toast } from "sonner";
 
 import { StatusDot } from "@/components/app-sidebar";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Progress } from "@/components/ui/progress";
-import { workDot, workText } from "@/components/work-state";
+import { StopButton, workDot, workText } from "@/components/work-state";
 
-import { api, type ItemSummary } from "../api.ts";
+import type { ItemSummary } from "../api.ts";
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { modHeld } from "../lib/edit-commands.ts";
 import { isBusy, needsYou, type ItemWork } from "../lib/work.ts";
-import { stopRender } from "../renderApi.ts";
 import { POSTER_TIME, Thumbnail } from "./Thumbnail.tsx";
 
 /** The tile's video plays, muted, while the pointer rests on it, and goes back to its start after. */
@@ -53,36 +51,6 @@ function RenderBar({ share }: { share: number }) {
   return (
     <span className="pointer-events-none absolute inset-x-3 bottom-3 z-10">
       <Progress value={Math.round(share * 100)} />
-    </span>
-  );
-}
-
-/** Stops the agent or the render at work on the item, from its tile. */
-function StopButton({ item, work }: { item: ItemSummary; work: ItemWork }) {
-  const t = useMessages().render;
-
-  const stop = () =>
-    (work.kind === "rendering" ? stopRender(item.id) : api.stopEdit(item.id)).catch(
-      (cause: Error) => toast.error(cause.message),
-    );
-
-  return (
-    // Shown while the pointer is on the tile or the button has focus.
-    <span className="absolute top-2 right-2 z-20 rounded-2xl opacity-0 shadow-sm transition-opacity group-hover/tile:opacity-100 has-focus-visible:opacity-100">
-      <Button
-        variant="secondary"
-        size="icon-xs"
-        aria-label={t.stop}
-        title={t.stop}
-        onClick={(event) => {
-          // The tile under it opens the video; this only stops the work.
-          event.preventDefault();
-          event.stopPropagation();
-          void stop();
-        }}
-      >
-        <SquareIcon className="fill-current" />
-      </Button>
     </span>
   );
 }
@@ -164,7 +132,13 @@ export function Tile({
             {work.kind === "rendering" && work.share !== undefined ? (
               <RenderBar share={work.share} />
             ) : null}
-            {isBusy(work) ? <StopButton item={item} work={work} /> : null}
+            {isBusy(work) ? (
+              <StopButton
+                item={item}
+                work={work}
+                className="absolute top-2 right-2 group-hover/tile:opacity-100"
+              />
+            ) : null}
           </div>
           <div className="mt-2 flex flex-col gap-1.5 px-1">
             {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
