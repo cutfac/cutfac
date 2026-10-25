@@ -85,7 +85,6 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
           {isEmptyTarget(target) ? null : (
             <Button
               variant="soft"
-              pill
               size="xs"
               title={t.chat.showTarget}
               onClick={() => actions.show(feedback)}
@@ -178,7 +177,6 @@ function RunActions({
         <Button
           key={agent}
           variant="soft"
-          pill
           size="xs"
           disabled={!agentInstalled(statuses, agent)}
           onClick={() => actions.run(feedback, agent)}
@@ -186,7 +184,7 @@ function RunActions({
           {retry ? t.chat.retryWith(label) : t.chat.runWith(label)}
         </Button>
       ))}
-      <Button variant="ghost" pill size="xs" onClick={() => actions.copy(feedback)}>
+      <Button variant="ghost" size="xs" onClick={() => actions.copy(feedback)}>
         <ClipboardCopyIcon data-icon="inline-start" />
         {t.chat.copyPrompt}
       </Button>
@@ -224,11 +222,11 @@ function Waiting({
         {t.chat.waiting(agent, ahead)}
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button variant="soft" pill size="xs" onClick={onReword}>
+        <Button variant="soft" size="xs" onClick={onReword}>
           <PencilIcon data-icon="inline-start" />
           {t.chat.reword}
         </Button>
-        <Button variant="ghost" pill size="xs" onClick={onCancel}>
+        <Button variant="ghost" size="xs" onClick={onCancel}>
           <XIcon data-icon="inline-start" />
           {t.chat.cancelRequest}
         </Button>
@@ -285,10 +283,10 @@ function Reword({
         }}
       />
       <div className="flex justify-end gap-1.5">
-        <Button variant="ghost" pill size="xs" onClick={onCancel}>
+        <Button variant="ghost" size="xs" onClick={onCancel}>
           {t.chat.cancel}
         </Button>
-        <Button pill size="xs" disabled={next === "" || saving} onClick={save}>
+        <Button size="xs" disabled={next === "" || saving} onClick={save}>
           {t.chat.save}
         </Button>
       </div>
@@ -327,11 +325,11 @@ function Result({
             onPick={(variant) => actions.pick(feedback, variant)}
             onKeepNone={() => actions.restore(feedback)}
           />
-          <Button variant="soft" pill size="xs" onClick={() => actions.restore(feedback)}>
+          <Button variant="soft" size="xs" onClick={() => actions.restore(feedback)}>
             <Undo2Icon data-icon="inline-start" />
             {t.chat.keepNone}
           </Button>
-          <Button variant="ghost" pill size="xs" onClick={() => actions.retarget(feedback)}>
+          <Button variant="ghost" size="xs" onClick={() => actions.retarget(feedback)}>
             <MessageSquareReplyIcon data-icon="inline-start" />
             {t.chat.askAgain}
           </Button>
@@ -351,15 +349,15 @@ function Result({
           onApprove={() => actions.approve(feedback)}
           onRestore={() => actions.restore(feedback)}
         />
-        <Button pill size="xs" onClick={() => actions.approve(feedback)}>
+        <Button size="xs" onClick={() => actions.approve(feedback)}>
           <CheckIcon data-icon="inline-start" />
           {t.chat.keep}
         </Button>
-        <Button variant="soft" pill size="xs" onClick={() => actions.restore(feedback)}>
+        <Button variant="soft" size="xs" onClick={() => actions.restore(feedback)}>
           <Undo2Icon data-icon="inline-start" />
           {t.chat.restore}
         </Button>
-        <Button variant="ghost" pill size="xs" onClick={() => actions.retarget(feedback)}>
+        <Button variant="ghost" size="xs" onClick={() => actions.retarget(feedback)}>
           <MessageSquareReplyIcon data-icon="inline-start" />
           {t.chat.askAgain}
         </Button>

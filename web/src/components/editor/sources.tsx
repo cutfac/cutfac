@@ -88,7 +88,6 @@ export function SourceChips({ item, onItem }: SourcesProps) {
               )}
               <Button
                 variant="ghost"
-                pill
                 size="icon-xs"
                 className="size-5"
                 data-icon="inline-end"

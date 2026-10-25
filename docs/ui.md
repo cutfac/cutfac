@@ -132,3 +132,9 @@ nothing else is colored, gold always means "this is for you": do it, or look at 
 
 `primary` stays near-black (near-white in dark mode) for the small controls that use it, such as
 switches, progress and badges, so they don't compete with the gold.
+
+## Shape
+
+Anything pressed is round, as the Codex app and Aside draw theirs: buttons, toggles, tabs, chips
+and select triggers are pills, and an icon button is a circle. Fields stay softly squared, and cards
+and panels keep their larger radius. Don't pass `rounded-*` to a button to square it again.

@@ -69,7 +69,6 @@ export function Answers({
         <Button
           key={answer}
           variant="soft"
-          pill
           size="sm"
           disabled={sending}
           onClick={() => send(answer)}

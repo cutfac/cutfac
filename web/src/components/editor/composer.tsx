@@ -325,7 +325,6 @@ export function Composer({
               <Button
                 key={idea}
                 variant="soft"
-                pill
                 size="xs"
                 onClick={() => {
                   setBody(idea);
@@ -344,7 +343,6 @@ export function Composer({
             {describeTarget(target, t.target.boxAt)}
             <Button
               variant="ghost"
-              pill
               size="icon-xs"
               aria-label={t.composer.clear}
               onClick={onClearTarget}

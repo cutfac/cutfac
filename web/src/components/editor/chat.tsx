@@ -262,11 +262,11 @@ function Paused({
         {t.chat.paused(count)}
       </p>
       <div className="flex gap-1.5">
-        <Button pill size="xs" onClick={onResume}>
+        <Button size="xs" onClick={onResume}>
           <PlayIcon data-icon="inline-start" />
           {t.chat.resume}
         </Button>
-        <Button variant="soft" pill size="xs" onClick={onCancelAll}>
+        <Button variant="soft" size="xs" onClick={onCancelAll}>
           <XIcon data-icon="inline-start" />
           {t.chat.cancelAll}
         </Button>
