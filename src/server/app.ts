@@ -61,6 +61,7 @@ import {
 } from "../core/items.ts";
 import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/learn.ts";
 import { getFormat, listFormats } from "../core/library.ts";
+import { addLinkedVideo } from "../core/linkedVideos.ts";
 import {
   McpDecision,
   McpPluginDecision,
@@ -223,6 +224,9 @@ const NewImportForm = Schema.Struct({ ...NewImportBody.fields, ...ReferencesForm
 const ImportReplyForm = Schema.Struct({ ...ReferencesForm.fields, body: Schema.String });
 
 const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
+
+/** A video link to download into an item's references. */
+const LinkBody = Schema.Struct({ url: Schema.NonEmptyString });
 
 const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
 
@@ -801,6 +805,18 @@ const apiRoutes = (options: ServerOptions) =>
       ),
     ),
     json("POST", "/api/item/references", withId(addReferencesRoute)),
+    json(
+      "POST",
+      "/api/item/references/link",
+      withId((id) =>
+        Effect.gen(function* () {
+          const { url } = yield* HttpServerRequest.schemaBodyJson(LinkBody);
+          const added = yield* addLinkedVideo(itemReferences(yield* getItem(id)), url);
+
+          return { item: yield* itemDetail(yield* getItem(id)), added: [added] };
+        }),
+      ),
+    ),
     json(
       "POST",
       "/api/item/references/remove",

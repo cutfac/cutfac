@@ -14,6 +14,7 @@ import { extension, mediaKind, probe } from "./media.ts";
 import { downloadVideo, preprocessVideo, readPreprocess } from "./preprocess.ts";
 import { type ItemSource, LearnedDoc, type PreprocessResult } from "./schema.ts";
 import { cleanPath, cleanUrl } from "./sources.ts";
+import { isVideoLink } from "./videoLinks.ts";
 import { Workspace, type WorkspaceService, foldersWith, nowIso, slugify } from "./workspace.ts";
 
 /** What the workspace makes videos about, in the workspace root. Agents read it; anyone edits it. */
@@ -84,41 +85,6 @@ interface Found {
 }
 
 export const learnedDir = (ws: WorkspaceService, id: string) => `${ws.config.paths.learned}/${id}`;
-
-const VIDEO_PATH = /\.(mp4|mov|webm|m4v)$/i;
-
-/** Whether a link is a video yt-dlp can download: a post on a video site, or a video file. */
-export function isVideoLink(link: string): boolean {
-  const url = URL.parse(link);
-
-  if (url === null) return false;
-  const path = url.pathname;
-
-  if (VIDEO_PATH.test(path)) return true;
-
-  switch (url.hostname.replace(/^(www|m)\./, "")) {
-    case "youtube.com":
-      return path === "/watch" || /^\/(shorts|live)\/./.test(path);
-    case "youtu.be":
-    case "vm.tiktok.com":
-    case "vt.tiktok.com":
-    case "fb.watch":
-      return path.length > 1;
-    case "tiktok.com":
-      return /\/video\/\d+/.test(path);
-    case "instagram.com":
-      return /^\/(reels?|p|tv)\/./.test(path);
-    case "vimeo.com":
-      return /^\/\d+/.test(path);
-    case "x.com":
-    case "twitter.com":
-      return /\/status\/\d+/.test(path);
-    case "facebook.com":
-      return /^\/(reel|watch)\b/.test(path) || /\/videos\//.test(path);
-    default:
-      return false;
-  }
-}
 
 /** Learn a link, a path, or an upload: save what a first look finds and add it to about.md. */
 export const learn = Effect.fn("learn.learn")(function* (input: LearnInput) {
