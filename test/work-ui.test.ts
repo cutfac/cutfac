@@ -51,6 +51,7 @@ function summary(extra: Partial<ItemSummary> = {}): ItemSummary {
     requests: [],
     running: false,
     approvals: 0,
+    questions: 0,
     media: [{ name: "clip.mp4", kind: "video", size: 1, mtime: Date.parse(at(0)) }],
     updatedAt: 0,
     ...extra,
@@ -153,6 +154,16 @@ describe("itemWork", () => {
     expect(needsYou(work)).toBe(true);
     expect(isBusy(work)).toBe(false);
     expect(itemWork(summary({ approvals: 1 }))).toEqual({ kind: "quiet" });
+  });
+
+  test("an agent that asks with its own tool waits for the answer, after a tool it asks for", () => {
+    const going = request("going", { run: run("running") });
+    const work = itemWork(summary({ requests: [versions, going], running: true, questions: 1 }));
+
+    expect(work).toEqual({ kind: "question", request: going });
+    expect(needsYou(work)).toBe(true);
+    expect(itemWork(summary({ running: true, approvals: 1, questions: 1 })).kind).toBe("approval");
+    expect(itemWork(summary({ questions: 1 }))).toEqual({ kind: "quiet" });
   });
 
   test("a finished run that left its request open with no result waits for an answer", () => {

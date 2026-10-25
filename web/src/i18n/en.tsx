@@ -359,7 +359,9 @@ export const en = {
     details: "Details",
     history: "History",
     editing: (agent: string) => `${agent} is editing`,
-    asking: (agent: string) => `${agent} is waiting for your OK`,
+    /** The agent waits on the user: for an answer to its questions, or an OK to use a tool. */
+    asking: (agent: string, question: boolean) =>
+      `${agent} is waiting for your ${question ? "answer" : "OK"}`,
     status: "Status",
     noMediaTitle: "No video yet",
     noMediaBody: "Drop footage or an image here if you have some to start from.",

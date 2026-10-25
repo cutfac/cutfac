@@ -12,6 +12,7 @@ export const approvalKo: ApprovalMessages = {
       edit: `${who} 파일을 고치려고 해요`,
       access: `${who} 권한을 더 달라고 해요`,
       tool: `${who} ${tool} 도구를 쓰려고 해요`,
+      question: `${who} 물어봐요`,
     }[kind];
   },
   network: "인터넷 접속",
@@ -33,5 +34,11 @@ export const approvalKo: ApprovalMessages = {
     );
   },
   deny: "거부",
+  question: {
+    other: "직접 입력하기",
+    secret: "여기에 입력하세요",
+    send: "보내기",
+    skip: "건너뛰기",
+  },
   waiting: "답을 기다리는 중…",
 };

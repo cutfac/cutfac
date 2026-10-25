@@ -268,7 +268,13 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           item={item}
           running={running}
           agent={run.agent}
-          asking={run.approvals.length > 0}
+          asking={
+            run.approvals.length === 0
+              ? undefined
+              : run.approvals.some((approval) => approval.kind !== "question")
+                ? "approval"
+                : "question"
+          }
           onItem={setData}
           onEdit={edit}
           onShortcuts={() => setShortcuts(true)}

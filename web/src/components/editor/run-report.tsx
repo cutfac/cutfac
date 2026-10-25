@@ -21,6 +21,7 @@ import {
 } from "../../lib/run.ts";
 import { ClosingReply, Reply } from "./agent-question.tsx";
 import { ApprovalCard, type OnAnswer } from "./approval-card.tsx";
+import { QuestionCard } from "./question-card.tsx";
 import { useRenderLine } from "./render-card.tsx";
 
 /** Past this many stretches of text and tool calls, a finished run folds them away behind its reply. */
@@ -65,9 +66,11 @@ export function RunReport({
       {reply === undefined ? null : <ClosingReply text={reply} onAnswer={onReply} />}
       {onAnswer === undefined
         ? null
-        : run.approvals.map((approval) => (
-            <ApprovalCard key={approval.id} approval={approval} agent={agent} onAnswer={onAnswer} />
-          ))}
+        : run.approvals.map((approval) => {
+            const Card = approval.kind === "question" ? QuestionCard : ApprovalCard;
+
+            return <Card key={approval.id} approval={approval} agent={agent} onAnswer={onAnswer} />;
+          })}
       {run.running ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />

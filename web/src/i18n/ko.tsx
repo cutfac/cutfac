@@ -346,7 +346,8 @@ export const ko: Messages = {
     details: "상세",
     history: "히스토리",
     editing: (agent) => `${withParticle(agent, "이/가")} 편집하는 중`,
-    asking: (agent) => `${withParticle(agent, "이/가")} 허락을 기다려요`,
+    asking: (agent, question) =>
+      `${withParticle(agent, "이/가")} ${question ? "답을" : "허락을"} 기다려요`,
     status: "상태",
     noMediaTitle: "아직 영상이 없어요",
     noMediaBody: "찍어 둔 영상이나 이미지가 있으면 여기에 놓으세요.",

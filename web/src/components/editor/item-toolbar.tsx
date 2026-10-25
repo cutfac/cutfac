@@ -38,8 +38,8 @@ export function Toolbar({
   item: ItemDetail;
   running: boolean;
   agent: LiveRun["agent"];
-  /** The agent waits for the user to answer what it asked. */
-  asking: boolean;
+  /** What the agent waits on the user for: a tool it asks to use, or its questions. */
+  asking: "approval" | "question" | undefined;
   onItem: (item: ItemDetail) => void;
   onEdit: (command: EditCommand) => void;
   onShortcuts: () => void;
@@ -54,10 +54,10 @@ export function Toolbar({
         {t.nav.board}
       </a>
       <h1 className="min-w-0 truncate text-sm font-semibold">{item.doc.title}</h1>
-      {running && asking ? (
+      {running && asking !== undefined ? (
         <Badge variant="outline">
           <span className="size-1.5 rounded-full bg-selection" />
-          {t.item.asking(agentLabel(agent) ?? t.chat.agent)}
+          {t.item.asking(agentLabel(agent) ?? t.chat.agent, asking === "question")}
         </Badge>
       ) : running ? (
         <Badge variant="secondary">

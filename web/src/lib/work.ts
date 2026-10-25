@@ -14,7 +14,7 @@ export type ItemWork =
   /** Versions wait for the user to keep one. */
   | { readonly kind: "versions"; readonly request: Feedback; readonly labels: string[] }
   /** The agent asked the user something and waits for the answer. */
-  | { readonly kind: "question"; readonly request: Feedback }
+  | { readonly kind: "question"; readonly request?: Feedback }
   /** A run failed or was stopped with its request still open. */
   | { readonly kind: "halted"; readonly request: Feedback }
   /** A render goes on; `share` is how much of it is done, from 0 to 1, when it can tell. */
@@ -63,6 +63,8 @@ export function itemWork(
 
   // The agent can't go on until the user answers, so this comes before everything.
   if (item.running && item.approvals > 0) return { kind: "approval", ...atWork(item) };
+
+  if (item.running && item.questions > 0) return { kind: "question", ...atWork(item) };
 
   for (const request of requests) {
     // The agent may still be making more of them; they wait for the user once its run ends.

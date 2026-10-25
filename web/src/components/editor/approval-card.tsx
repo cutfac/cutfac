@@ -5,12 +5,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import type { Approval, ApprovalAnswer } from "../../approvalsApi.ts";
+import type { Answer, Approval, ApprovalAnswer } from "../../approvalsApi.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { sendFailed } from "../../lib/notify.ts";
 
 /** Answer what the agent asks; resolves once the answer reached the server. */
-export type OnAnswer = (approval: Approval, answer: ApprovalAnswer) => Promise<void>;
+export type OnAnswer = (approval: Approval, answer: Answer) => Promise<void>;
 
 /**
  * What the agent asks before it uses a tool, with the answers its own prompt gives in a terminal.

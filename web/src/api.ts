@@ -286,6 +286,8 @@ export interface ItemSummary {
   running: boolean;
   /** How many of the agent's asks before a tool wait for the user to answer. */
   approvals: number;
+  /** How many of the agent's questions, asked with its own tool, wait for the user's answer. */
+  questions: number;
   /** The render going on, or the last one when it failed. */
   render?: RenderState;
   media: Media[];

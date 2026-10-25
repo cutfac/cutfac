@@ -17,6 +17,7 @@ export const approvalEn = {
       edit: `${agent} wants to change files`,
       access: `${agent} asks for more access`,
       tool: `${agent} wants to use ${tool}`,
+      question: `${agent} asks you`,
     })[kind],
   /** A badge on a request that lets the agent reach the internet. */
   network: "Internet access",
@@ -37,6 +38,16 @@ export const approvalEn = {
     );
   },
   deny: "Deny",
+  /** The agent's questions, asked with its own tool. */
+  question: {
+    /** In the field for an answer of the user's own. */
+    other: "Or write your own",
+    /** In the field for a secret the agent asks for. */
+    secret: "Type it here",
+    send: "Send",
+    /** Goes on without answering. */
+    skip: "Skip",
+  },
   /** By the spinner while the run waits on an answer. */
   waiting: "Waiting for your answer…",
 };
