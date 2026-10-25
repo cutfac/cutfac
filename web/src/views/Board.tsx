@@ -1,15 +1,9 @@
-import {
-  ArchiveIcon,
-  BookOpenIcon,
-  ClapperboardIcon,
-  KanbanIcon,
-  LayoutGridIcon,
-  PlusIcon,
-} from "lucide-react";
+import { ArchiveIcon, BookOpenIcon, KanbanIcon, LayoutGridIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
+import { StackMark } from "@/components/stack-mark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -277,8 +271,8 @@ export function Board() {
         <div className="mb-6 flex min-h-0 flex-1 rounded-3xl border border-dashed">
           <Empty>
             <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <ClapperboardIcon />
+              <EmptyMedia>
+                <StackMark />
               </EmptyMedia>
               <EmptyTitle>{t.board.emptyTitle}</EmptyTitle>
               <EmptyDescription>{t.board.emptyBody}</EmptyDescription>

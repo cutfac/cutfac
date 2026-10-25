@@ -1,7 +1,8 @@
-import { ClapperboardIcon, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { StackMark } from "@/components/stack-mark";
 import { Button } from "@/components/ui/button";
 import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
 import {
@@ -95,8 +96,8 @@ export function NoMedia({
       <div className="flex flex-1 rounded-3xl border border-dashed">
         <Empty>
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ClapperboardIcon />
+            <EmptyMedia>
+              <StackMark />
             </EmptyMedia>
             <EmptyTitle>{t.item.noMediaTitle}</EmptyTitle>
             <EmptyDescription>{t.item.noMediaBody}</EmptyDescription>
