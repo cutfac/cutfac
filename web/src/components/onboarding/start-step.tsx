@@ -111,15 +111,9 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
     </Button>
   );
 
-  const back = (
-    <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
-      {t.back}
-    </Button>
-  );
-
   const screens: Record<
     Part,
-    { title: string; body: string; field: ReactNode; primary: ReactNode; secondary: ReactNode }
+    { title: string; body: string; field: ReactNode; primary: ReactNode }
   > = {
     purpose: {
       title: t.title,
@@ -134,25 +128,18 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
         />
       ),
       primary: next(t.next, brief.purpose !== null),
-      secondary: (
-        <Button size="lg" variant="ghost" onClick={skip}>
-          {t.skip}
-        </Button>
-      ),
     },
     details: {
       title: own ? b.ownBodyLabel : b.bodyLabel,
       body: own ? t.details.ownBody : t.details.body,
       field: <BriefBody {...parts} focusOnOpen />,
       primary: next(own || brief.body.trim() !== "" ? t.next : t.skipPart, briefReady(brief)),
-      secondary: back,
     },
     platforms: {
       title: b.platformsLabel,
       body: b.platformsHint,
       field: <PlatformToggles {...parts} />,
       primary: next(brief.platforms.length > 0 ? t.next : t.skipPart),
-      secondary: back,
     },
     material: {
       title: t.material.title,
@@ -167,7 +154,6 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
           {busy ? null : <ArrowRightIcon data-icon="inline-end" />}
         </Button>
       ),
-      secondary: back,
     },
   };
 
@@ -179,12 +165,30 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       key={part}
       className="flex animate-in flex-col gap-8 duration-300 fade-in slide-in-from-bottom-2"
     >
-      <StepHeader title={screen.title} body={screen.body} />
+      {/* Leaving for the board sits apart from the steps, so the row below only goes back and on. */}
+      <div className="flex items-start justify-between gap-4">
+        <StepHeader title={screen.title} body={screen.body} />
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+
+          onClick={skip}
+        >
+          {t.skip}
+        </Button>
+      </div>
       {screen.field}
       {error === undefined ? null : <ErrorAlert message={error} />}
-      {/* One row at the bottom right, the way back beside the way on, so the step stays short. */}
-      <div className="flex items-center justify-end gap-2">
-        {screen.secondary}
+      {/* The way back at the left and the way on at the right, as a setup assistant has them. */}
+      <div className="flex items-center justify-between gap-2">
+        {index === 0 ? (
+          <span />
+        ) : (
+          <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
+            {t.back}
+          </Button>
+        )}
         {screen.primary}
       </div>
     </div>
