@@ -264,7 +264,7 @@ export function Board() {
           <BoardSkeleton />
         )
       ) : items.length === 0 ? (
-        <div className="mb-6 flex min-h-0 flex-1 rounded-3xl border border-dashed">
+        <div className="mb-6 flex min-h-0 flex-1">
           <Empty>
             <EmptyHeader>
               <EmptyMedia>

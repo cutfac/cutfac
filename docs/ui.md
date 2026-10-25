@@ -148,3 +148,6 @@ A page groups what it holds as both apps do: each group's name, what it is for a
 above it, never inside a card (`Section` in `components/page.tsx`). Settings go in a card that
 holds only rows split by hairlines (`Item variant="row"`), a form in a plain card, and anything else
 stands open.
+
+An empty page has no box around it: its icon, words and the one way to start stand in the open, and
+the title bar doesn't repeat that way. A dashed edge marks only a place to drop files.

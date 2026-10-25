@@ -360,17 +360,15 @@ export function Learn() {
           ) : data === undefined ? (
             <ListSkeleton rows={3} />
           ) : data.learned.length === 0 ? (
-            <div className="rounded-3xl border border-dashed">
-              <Empty>
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <GraduationCapIcon />
-                  </EmptyMedia>
-                  <EmptyTitle>{t.learn.emptyTitle}</EmptyTitle>
-                  <EmptyDescription>{t.learn.emptyBody}</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            </div>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <GraduationCapIcon />
+                </EmptyMedia>
+                <EmptyTitle>{t.learn.emptyTitle}</EmptyTitle>
+                <EmptyDescription>{t.learn.emptyBody}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {data.learned.map((entry) => (

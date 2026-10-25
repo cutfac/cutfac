@@ -317,40 +317,43 @@ export function Templates({ selected }: { selected: string | undefined }) {
         ? templates?.[0]
         : templates?.find((s) => s.id === selected);
 
+  const empty = templates?.length === 0 && open.length === 0 && importId === undefined;
+
   return (
     <Page
       width="wide"
       title={t.templates.title}
       description={t.templates.description}
       actions={
-        ws === undefined ? null : <AddTemplate ws={ws} onStarted={imports.reload} size="sm" />
+        // With nothing yet, the empty page offers the one way to add.
+        ws === undefined || empty ? null : (
+          <AddTemplate ws={ws} onStarted={imports.reload} size="sm" />
+        )
       }
     >
       {error ? (
         <ErrorAlert title={t.templates.loadError} message={error} />
       ) : templates === undefined ? (
         <ListSkeleton rows={4} />
-      ) : templates.length === 0 && open.length === 0 && importId === undefined ? (
-        <div className="rounded-3xl border border-dashed">
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <LayoutTemplateIcon />
-              </EmptyMedia>
-              <EmptyTitle>{t.templates.emptyTitle}</EmptyTitle>
-              <EmptyDescription>
-                {t.templates.emptyBody((text) => (
-                  <a href={href("learn")}>{text}</a>
-                ))}
-              </EmptyDescription>
-            </EmptyHeader>
-            {ws === undefined ? null : (
-              <EmptyContent>
-                <AddTemplate ws={ws} onStarted={imports.reload} />
-              </EmptyContent>
-            )}
-          </Empty>
-        </div>
+      ) : empty ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <LayoutTemplateIcon />
+            </EmptyMedia>
+            <EmptyTitle>{t.templates.emptyTitle}</EmptyTitle>
+            <EmptyDescription>
+              {t.templates.emptyBody((text) => (
+                <a href={href("learn")}>{text}</a>
+              ))}
+            </EmptyDescription>
+          </EmptyHeader>
+          {ws === undefined ? null : (
+            <EmptyContent>
+              <AddTemplate ws={ws} onStarted={imports.reload} />
+            </EmptyContent>
+          )}
+        </Empty>
       ) : (
         <div className="grid grid-cols-[18rem_minmax(0,1fr)] items-start gap-6">
           <div className="flex flex-col gap-4">
@@ -377,17 +380,15 @@ export function Templates({ selected }: { selected: string | undefined }) {
           ) : current ? (
             <TemplateDetail status={current} root={ws?.root} />
           ) : (
-            <div className="rounded-3xl border border-dashed">
-              <Empty>
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <LayoutTemplateIcon />
-                  </EmptyMedia>
-                  <EmptyTitle>{t.templates.missingTitle}</EmptyTitle>
-                  <EmptyDescription>{t.templates.missingBody}</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            </div>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <LayoutTemplateIcon />
+                </EmptyMedia>
+                <EmptyTitle>{t.templates.missingTitle}</EmptyTitle>
+                <EmptyDescription>{t.templates.missingBody}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
         </div>
       )}
