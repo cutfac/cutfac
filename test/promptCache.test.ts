@@ -225,9 +225,5 @@ describe("the notice that a pick makes the agent read the conversation again", (
     const ranOnDefault = itemWith([ran({ agent: "claude" })]);
 
     expect(notice(ranOnDefault, unsaid, { model: "sonnet" })).toBeUndefined();
-    // Claude names a release of the alias it lists, which the conversation already ran on.
-    expect(
-      notice(ranOnDefault, { ...CLAUDE, defaultModel: "Opus 5.5" }, { model: "opus" }),
-    ).toBeUndefined();
   });
 });

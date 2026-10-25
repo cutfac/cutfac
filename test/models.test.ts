@@ -166,8 +166,8 @@ describe("the model an agent picks itself", () => {
     expect(claudeModelName("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
     expect(claudeModelName("claude-opus-4-6[1m]")).toBe("Opus 4.6");
     expect(claudeModelName("claude-3-5-sonnet-20241022")).toBe("Sonnet 3.5");
-    expect(claudeModelName("opus")).toBe("Opus");
-    expect(claudeModelName("Opus[1m]")).toBe("Opus");
+    expect(claudeModelName("opus")).toBe("Opus 5.5");
+    expect(claudeModelName("Opus[1m]")).toBe("Opus 5.5");
     expect(claudeModelName("us.anthropic.custom")).toBe("us.anthropic.custom");
     expect(claudeModelName("default")).toBeUndefined();
     expect(claudeModelName(" ")).toBeUndefined();
@@ -238,7 +238,7 @@ exit 1
 
     // The workspace's own settings come before the user's, and its local ones before both.
     await writeFile(join(t.root, ".claude/settings.json"), '{"model":"sonnet"}');
-    expect((await named())[0]).toBe("Sonnet");
+    expect((await named())[0]).toBe("Sonnet 5.5");
     await writeFile(join(t.root, ".claude/settings.local.json"), '{"model":"claude-haiku-4-5"}');
     expect((await named())[0]).toBe("Haiku 4.5");
 

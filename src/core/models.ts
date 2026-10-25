@@ -29,13 +29,17 @@ export const NO_MODELS: AgentModels = { models: [], efforts: [] };
 
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 
-/** Claude Code's aliases, which follow each family's latest model. */
+/**
+ * Claude's current models by their exact ids, so the name shown is the model that runs; an alias
+ * such as `opus` moves to a newer model without saying. The first is the one run when Claude does
+ * not say its own default.
+ */
 export const CLAUDE_MODELS: AgentModels = {
   models: [
-    { id: "fable", label: "Fable", efforts: CLAUDE_EFFORTS },
-    { id: "opus", label: "Opus", efforts: CLAUDE_EFFORTS },
-    { id: "sonnet", label: "Sonnet", efforts: CLAUDE_EFFORTS },
-    { id: "haiku", label: "Haiku", efforts: CLAUDE_EFFORTS },
+    { id: "claude-opus-5-5", label: "Opus 5.5", efforts: CLAUDE_EFFORTS },
+    { id: "claude-fable-5-1", label: "Fable 5.1", efforts: CLAUDE_EFFORTS },
+    { id: "claude-sonnet-5-5", label: "Sonnet 5.5", efforts: CLAUDE_EFFORTS },
+    { id: "claude-haiku-5-5", label: "Haiku 5.5", efforts: CLAUDE_EFFORTS },
   ],
   efforts: CLAUDE_EFFORTS,
 };
@@ -50,8 +54,9 @@ const familyName = (family: string, major: string, minor: string | undefined) =>
   `${family.charAt(0).toUpperCase()}${family.slice(1)} ${minor === undefined ? major : `${major}.${minor}`}`;
 
 /**
- * A Claude model as people say it: `claude-opus-5-5` is Opus 5.5 and the alias `opus` is Opus. A
- * name the board cannot read comes back as it is; `default`, the account's own pick, is unknown.
+ * A Claude model as people say it: `claude-opus-5-5` is Opus 5.5, and the alias `opus` is the Opus
+ * listed. A name the board cannot read comes back as it is; `default`, the account's own pick, is
+ * unknown.
  */
 export function claudeModelName(model: string): string | undefined {
   const id = model
@@ -61,7 +66,9 @@ export function claudeModelName(model: string): string | undefined {
 
   if (id === "" || id === "default") return undefined;
 
-  const alias = CLAUDE_MODELS.models.find((option) => option.id === id);
+  const alias = CLAUDE_MODELS.models.find((option) =>
+    option.label.toLowerCase().startsWith(`${id} `),
+  );
 
   if (alias !== undefined) return alias.label;
 
