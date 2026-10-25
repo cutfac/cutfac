@@ -148,6 +148,7 @@ function FileChip({ icon, label, title, onDetach }: FileChipProps) {
         {onDetach === undefined ? null : (
           <Button
             variant="ghost"
+            pill
             size="icon-xs"
             className="size-5"
             data-icon="inline-end"

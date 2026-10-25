@@ -288,7 +288,7 @@ function RenderCard({ view, compact = false }: { view: RenderView; compact?: boo
         )}
         <span className="ml-auto flex shrink-0 items-center">
           {running ? (
-            <Button variant="ghost" size="xs" onClick={view.stop}>
+            <Button variant="ghost" pill size="xs" onClick={view.stop}>
               <CircleStopIcon data-icon="inline-start" />
               {t.render.stop}
             </Button>

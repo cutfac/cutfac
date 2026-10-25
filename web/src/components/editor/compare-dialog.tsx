@@ -117,7 +117,9 @@ export function CompareDialog({
         if (open) onOpen();
       }}
     >
-      <DialogTrigger render={<Button variant="soft" size="xs" />}>{t.compare.open}</DialogTrigger>
+      <DialogTrigger render={<Button variant="soft" pill size="xs" />}>
+        {t.compare.open}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{t.compare.title}</DialogTitle>
@@ -259,7 +261,7 @@ export function VersionsDialog({
         if (open) onOpen();
       }}
     >
-      <DialogTrigger render={<Button size="xs" />}>
+      <DialogTrigger render={<Button pill size="xs" />}>
         <LayersIcon data-icon="inline-start" />
         {t.versions.title}
       </DialogTrigger>

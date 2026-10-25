@@ -135,6 +135,7 @@ switches, progress and badges, so they don't compete with the gold.
 
 ## Shape
 
-Anything pressed is round, as the Codex app and Aside draw theirs: buttons, toggles, tabs, chips
-and select triggers are pills, and an icon button is a circle. Fields stay softly squared, and cards
-and panels keep their larger radius. Don't pass `rounded-*` to a button to square it again.
+Shapes follow the Codex app and Aside. Buttons, select triggers, toggles and segmented controls are
+softly squared (`rounded-2xl`), as their settings draw them. Only what sits among the chat is round:
+the composer's buttons and the chat's chips are pills (`Button pill`), and its icon buttons are
+circles. Fields stay softly squared, and cards and panels keep their larger radius.

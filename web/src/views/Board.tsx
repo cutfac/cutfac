@@ -102,7 +102,7 @@ function LearnHint() {
 
   // One quiet line with no edge, as the Codex app notes something, rather than a boxed alert.
   return (
-    <div className="flex items-center gap-3 rounded-full bg-foreground/4 py-1.5 ps-4 pe-1.5 text-sm">
+    <div className="flex items-center gap-3 rounded-2xl bg-foreground/4 py-1.5 ps-3 pe-1.5 text-sm">
       <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" />
       <p className="min-w-0 flex-1 truncate" title={t.board.learnHint.body}>
         <span className="font-medium">{t.board.learnHint.title}</span>
