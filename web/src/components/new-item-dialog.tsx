@@ -135,6 +135,8 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   const free = freeVersion(plan.data);
   const links = writtenLinks(text);
   const body = text.trim();
+  // Says where the prompt came from only while it is still the link's, not once the user rewrote it.
+  const fromLink = text === linked?.prompt ? linked : undefined;
 
   function fillFrom(link: NewVideoLink) {
     setText(link.prompt);
@@ -145,7 +147,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   // A link from a web page opens the dialog with its prompt, for the user to look over and send.
   // What the user wrote themselves stays, with the link's prompt to switch to.
   const receive = useEffectEvent((link: NewVideoLink) => {
-    if (body === "" || text === linked?.prompt) fillFrom(link);
+    if (body === "" || fromLink !== undefined) fillFrom(link);
     else setHeld(link);
 
     openNewItem();
@@ -321,8 +323,8 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
                     placeholder={t.newItem.promptPlaceholder}
                     className="max-h-60 min-h-24"
                   />
-                  {linked === undefined || body === "" ? null : (
-                    <FieldDescription>{t.newItem.fromLink(linked.source)}</FieldDescription>
+                  {fromLink === undefined ? null : (
+                    <FieldDescription>{t.newItem.fromLink(fromLink.source)}</FieldDescription>
                   )}
                   <LinkChips
                     links={links}
