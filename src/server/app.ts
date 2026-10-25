@@ -67,7 +67,6 @@ import {
   decideMcpPlugin,
   decideMcpServer,
   mcpServersStatus,
-  mcpWaiting,
 } from "../core/mcpApprovals.ts";
 import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
@@ -749,7 +748,6 @@ const apiRoutes = (options: ServerOptions) =>
       Effect.flatMap(HttpServerRequest.schemaBodyJson(PermissionChoice), setAgentPermissions),
     ),
     json("GET", "/api/mcp-servers", mcpServersStatus()),
-    json("GET", "/api/mcp-servers/waiting", mcpWaiting()),
     json(
       "POST",
       "/api/mcp-servers",

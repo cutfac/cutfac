@@ -7,7 +7,6 @@ export const mcpKo: McpMessages = {
   footnote: "claude.ai 커넥터는 여기 나오지 않아요. 플러그인을 꺼도 스킬은 그대로 써요.",
   error: "에이전트의 MCP 서버를 읽지 못했어요",
   problems: "에이전트의 MCP 설정 중 일부를 읽지 못했어요",
-  waiting: (count) => `정해 주길 기다리는 도구 ${count}개`,
   sources: {
     user: "모든 워크스페이스",
     local: "이 폴더만",

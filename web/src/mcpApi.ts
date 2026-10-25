@@ -62,35 +62,11 @@ export interface McpPluginDecision {
   on: boolean;
 }
 
-/**
- * Who to tell once the user turned a server or plugin on or off. That changes nothing in the
- * workspace, so no live update says so.
- */
-const decidedListeners = new Set<() => void>();
-
-/** Call `listener` whenever the user turns a server or plugin on or off; returns how to stop. */
-export function onMcpDecided(listener: () => void) {
-  decidedListeners.add(listener);
-
-  return () => {
-    decidedListeners.delete(listener);
-  };
-}
-
-const told = <T>(decided: Promise<T>) =>
-  decided.then((view) => {
-    for (const notify of decidedListeners) notify();
-
-    return view;
-  });
-
 /** The board's calls for the MCP servers runs from it may use; see src/server/app.ts. */
 export const mcpApi = {
   servers: () => request<McpServersStatus>("/api/mcp-servers"),
-  /** How many wait for the user, read without starting Codex. */
-  waiting: () => request<{ count: number }>("/api/mcp-servers/waiting"),
   decide: (decision: McpDecision) =>
-    told(send<McpServerView, McpDecision>("POST", "/api/mcp-servers", decision)),
+    send<McpServerView, McpDecision>("POST", "/api/mcp-servers", decision),
   decidePlugin: (decision: McpPluginDecision) =>
-    told(send<McpPluginView, McpPluginDecision>("POST", "/api/mcp-plugins", decision)),
+    send<McpPluginView, McpPluginDecision>("POST", "/api/mcp-plugins", decision),
 };

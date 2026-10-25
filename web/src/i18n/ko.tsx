@@ -293,23 +293,16 @@ export const ko: Messages = {
   },
   setup: {
     title: "설정",
-    description: "에이전트를 연결하면 바로 영상을 만들기 시작할 수 있어요.",
+    description: "영상을 만들 에이전트, 에이전트가 할 수 있는 일, 파일이 있는 곳을 정해요.",
     agents: {
       claude: "Claude Code",
       codex: "Codex",
       queue: "복사해서 붙여넣기",
     },
-    connectTitle: "에이전트 연결",
+    connectTitle: "에이전트",
     connectBody:
-      "제작과 편집은 에이전트가 해요. 컷팩은 에이전트에게 도구와 파일, 그리고 여러분의 피드백을 전달해요.",
+      "보드에서 시작한 작업은 연결하지 않아도 컷팩의 도구로 에이전트를 실행해요. 연결하면 에이전트 자체 채팅에서도 컷팩을 쓸 수 있어요.",
     agentsError: "설치된 에이전트를 확인하지 못했어요",
-    readyTitle: "준비됐어요",
-    readyBody: (board, learn) => (
-      <>
-        {board("영상")} 화면에서 첫 영상을 만들어 보세요. 원할 때 {learn("제품을 알려 주면")} 영상이
-        제품에 더 잘 맞아요.
-      </>
-    ),
     workspaceTitle: "워크스페이스",
     workspaceBody:
       "컷팩이 만드는 모든 것은 이 폴더의 일반 파일이에요. 백업하거나 git에 올려도 돼요.",
@@ -319,8 +312,9 @@ export const ko: Messages = {
     showFolder: "폴더 보기",
     connected: (agent) => `${withParticle(agent, "을/를")} 연결했어요`,
     connectFailed: (agent) => `${withParticle(agent, "을/를")} 연결하지 못했어요`,
-    agentReady: "준비됐어요. 컷팩의 도구를 쓸 수 있어요.",
-    agentFound: "이 컴퓨터에 설치되어 있어요. 연결하면 컷팩의 도구를 쓸 수 있어요.",
+    agentReady: "연결됐어요. 에이전트 자체 채팅에서도 컷팩의 도구를 쓸 수 있어요.",
+    agentFound:
+      "이 컴퓨터에 설치되어 있어요. 연결하면 에이전트 자체 채팅에서도 컷팩을 쓸 수 있어요.",
     agentMissing: "이 컴퓨터에 설치되어 있지 않아요.",
     connectedBadge: "연결됨",
     connecting: "연결하는 중…",

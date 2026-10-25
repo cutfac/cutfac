@@ -46,7 +46,7 @@ import { workDot, workText } from "@/components/work-state";
 
 import { api, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
 import { desktop, insetTitleBar } from "../desktop.ts";
-import { href, useLive, useMcpWaiting, type Live } from "../hooks.ts";
+import { href, useLive, type Live } from "../hooks.ts";
 import {
   isLocale,
   LOCALE_NAMES,
@@ -313,8 +313,6 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
   const items = useLive("items", api.items).data ?? [];
   const videos = inProgress(items, failureSeen).slice(0, MAX_VIDEOS);
   const editing = view === "item" && id ? id : undefined;
-  const waiting = useMcpWaiting();
-  const setupWaiting = waiting > 0 ? t.mcp.waiting(waiting) : undefined;
   const notice = attention(items, failureSeen);
 
   // The desktop app's Dock badge and notifications follow what waits for the user.
@@ -403,13 +401,7 @@ export function AppSidebar({ ws, plan, brief, view, id }: AppSidebarProps) {
       <SidebarFooter>
         <PlanCard plan={plan.data} />
         <SidebarMenu>
-          <LinkRow
-            to={href("setup")}
-            active={view === "setup"}
-            // Folded to icons, the dot alone doesn't say what waits.
-            tooltip={setupWaiting === undefined ? t.nav.setup : `${t.nav.setup} · ${setupWaiting}`}
-            dot={setupWaiting}
-          >
+          <LinkRow to={href("setup")} active={view === "setup"} tooltip={t.nav.setup}>
             <PlugZapIcon />
             <span>{t.nav.setup}</span>
           </LinkRow>

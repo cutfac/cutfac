@@ -358,13 +358,6 @@ const waitingNow = Effect.fnUntraced(function* () {
   };
 });
 
-/** How many servers and plugins wait for the user, for the board to point at Setup. */
-export const mcpWaiting = Effect.fn("mcpApprovals.waiting")(function* () {
-  const { servers, plugins } = yield* waitingNow();
-
-  return { count: servers.length + plugins.length };
-});
-
 /** The servers waiting for the user, as workspace_overview says. */
 export const mcpNotices = Effect.fn("mcpApprovals.notices")(function* () {
   const { servers, plugins } = yield* waitingNow();

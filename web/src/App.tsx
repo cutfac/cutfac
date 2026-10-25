@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { AnnouncementDialog } from "@/components/announcement-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -50,7 +50,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
   const { data: ws, error } = useLive("workspace", api.workspace);
   const brief = useLive("brief", briefApi.brief);
   const plan = usePlan();
-  const needsSetup = useNeedsSetup();
+  useConnectAgents();
   const editing = view === "item" && id ? id : undefined;
   const [sidebarOpen, setSidebarOpen] = useSidebarOpen();
 
@@ -63,14 +63,11 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
 
   const landing = location.hash === "" && error === undefined && startFirst !== false;
 
-  // Opened with no page in mind, send the user to connect an agent if none is, since making the
-  // first template needs one, and else to the first template. Once; after that they roam freely.
+  // Opened with no page in mind, a new workspace starts on its first template. Once; after that
+  // the user roams freely.
   useEffect(() => {
-    if (location.hash !== "" || needsSetup === undefined) return;
-
-    if (needsSetup) location.hash = href("setup");
-    else if (startFirst) location.hash = href("start");
-  }, [needsSetup, startFirst]);
+    if (location.hash === "" && startFirst) location.hash = href("start");
+  }, [startFirst]);
 
   if (view === "start") return <Start id={id} ws={ws} brief={brief} />;
 
@@ -112,48 +109,27 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
 }
 
 /**
- * Whether no agent is connected to the workspace, checked once. Undefined while it checks, and
- * false when it can't, since there is nothing then to point the user at. In the app, every agent
- * ready to run connects first: the user set one up on the way to the workspace, so there is
- * nothing left to ask.
+ * In the app, connects every agent ready to run when none is connected yet, once: the user set one
+ * up on the way to the workspace, so there is nothing left to ask. Runs from the board don't need
+ * it, so nothing waits on it; connecting only lets the user's agent reach the workspace elsewhere.
  */
-function useNeedsSetup(): boolean | undefined {
-  const [needs, setNeeds] = useState<boolean>();
-
+function useConnectAgents(): void {
   useEffect(() => {
-    let alive = true;
+    if (desktop === undefined) return;
 
-    const check = async () => {
-      const statuses = await api.agents();
+    void api.agents().then(
+      (statuses) => {
+        if (statuses.some((status) => status.connected)) return;
 
-      const toConnect = statuses.some((status) => status.connected)
-        ? []
-        : agentsToConnect(statuses);
-
-      if (desktop === undefined || toConnect.length === 0) {
-        return !statuses.some((status) => status.connected);
-      }
-
-      await Promise.allSettled(toConnect.map((agent) => api.connectAgent(agent)));
-
-      return !(await api.agents()).some((status) => status.connected);
-    };
-
-    check().then(
-      (next) => {
-        if (alive) setNeeds(next);
+        return Promise.allSettled(
+          agentsToConnect(statuses).map((agent) => api.connectAgent(agent)),
+        );
       },
       () => {
-        if (alive) setNeeds(false);
+        // Setup shows what went wrong, when the user goes there.
       },
     );
-
-    return () => {
-      alive = false;
-    };
   }, []);
-
-  return needs;
 }
 
 function renderView(view: string, id: string | undefined) {

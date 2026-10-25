@@ -306,24 +306,17 @@ export const en = {
       "Upgrade to make new videos. You can keep editing the ones you have and make new versions of them.",
   },
   setup: {
-    title: "Set up",
-    description: "Connect your agent and it can start making videos.",
+    title: "Settings",
+    description: "Which agents make your videos, what they may do, and where the files live.",
     agents: {
       claude: "Claude Code",
       codex: "Codex",
       queue: "Copy-paste queue",
     } satisfies Record<AgentChoice, string>,
-    connectTitle: "Connect your agent",
+    connectTitle: "Your agents",
     connectBody:
-      "Your agent does the production and editing. Cutfac gives it tools, files, and your feedback.",
+      "Work you start from the board runs your agent with Cutfac's tools, connected or not. Connect it to use Cutfac from your agent's own chat too.",
     agentsError: "Could not check for installed agents",
-    readyTitle: "You're set",
-    readyBody: (board: Link, learn: Link) => (
-      <>
-        Make your first video in {board("Videos")}. Whenever you like,{" "}
-        {learn("teach it about your product")} so the videos fit it.
-      </>
-    ),
     workspaceTitle: "Your workspace",
     workspaceBody:
       "Everything Cutfac makes is a plain file in this folder. You can back it up or put it in git.",
@@ -333,8 +326,8 @@ export const en = {
     showFolder: "Show folder",
     connected: (agent: string) => `${agent} is connected`,
     connectFailed: (agent: string) => `Could not connect ${agent}`,
-    agentReady: "Ready. It can use Cutfac's tools.",
-    agentFound: "Found on this computer. Connect it so it can use Cutfac's tools.",
+    agentReady: "Connected. Its own chat can use Cutfac's tools too.",
+    agentFound: "Found on this computer. Connect it to use Cutfac from its own chat too.",
     agentMissing: "Not installed on this computer.",
     connectedBadge: "Connected",
     connecting: "Connecting…",

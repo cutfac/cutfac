@@ -1,4 +1,4 @@
-import { CheckCircle2Icon, CheckIcon, FolderOpenIcon } from "lucide-react";
+import { CheckIcon, FolderOpenIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -7,7 +7,6 @@ import { McpServersCard } from "@/components/mcp-servers";
 import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { ErrorAlert, Page } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,11 +25,11 @@ import { TrustCard } from "@/components/workspace-trust";
 
 import { api, type AgentStatus } from "../api.ts";
 import { desktop } from "../desktop.ts";
-import { href, useLive } from "../hooks.ts";
+import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { type PermissionView, permissionsApi } from "../permissionsApi.ts";
 
-/** First-run onboarding: connect an agent. Learning about the product waits until the user wants it. */
+/** Settings: the agents and what their runs may do, the workspace folder, and the tools for video work. */
 export function Setup() {
   const t = useMessages();
   const { data: agents, error: agentsError, reload } = useLive("agents", api.agents);
@@ -40,8 +39,6 @@ export function Setup() {
     "agent-permissions",
     permissionsApi.list,
   );
-
-  const connected = agents?.some((a) => a.connected) ?? false;
 
   return (
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
@@ -78,27 +75,6 @@ export function Setup() {
           )}
         </CardContent>
       </Card>
-
-      {connected ? (
-        <Alert>
-          <CheckCircle2Icon />
-          <AlertTitle>{t.setup.readyTitle}</AlertTitle>
-          <AlertDescription>
-            {t.setup.readyBody(
-              (text) => (
-                <a href={href("board")} className="underline underline-offset-4">
-                  {text}
-                </a>
-              ),
-              (text) => (
-                <a href={href("learn")} className="underline underline-offset-4">
-                  {text}
-                </a>
-              ),
-            )}
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       <Card size="sm">
         <CardHeader>
