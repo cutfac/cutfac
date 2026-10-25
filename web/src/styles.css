@@ -216,22 +216,30 @@
   }
 }
 
-/* Opening a video from the gallery zooms the page in, and going back zooms it out. */
+/* Opening a video from the gallery zooms the page in, and going back zooms it out. The sidebar
+   stays put; only the page beside it zooms. */
 @media (prefers-reduced-motion: no-preference) {
+  html:active-view-transition-type(zoom-in, zoom-out) {
+    &::view-transition-old(root),
+    &::view-transition-new(root) {
+      animation: none;
+    }
+  }
+
   html:active-view-transition-type(zoom-in) {
-    &::view-transition-old(root) {
+    &::view-transition-old(page) {
       animation: 160ms ease-in both zoom-away;
     }
-    &::view-transition-new(root) {
+    &::view-transition-new(page) {
       animation: 220ms cubic-bezier(0.2, 0, 0, 1) both zoom-arrive;
     }
   }
 
   html:active-view-transition-type(zoom-out) {
-    &::view-transition-old(root) {
+    &::view-transition-old(page) {
       animation: 160ms ease-in both reverse zoom-arrive;
     }
-    &::view-transition-new(root) {
+    &::view-transition-new(page) {
       animation: 220ms cubic-bezier(0.2, 0, 0, 1) both reverse zoom-away;
     }
   }

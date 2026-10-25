@@ -52,7 +52,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
   const plan = usePlan();
   const needsSetup = useNeedsSetup();
   const editing = view === "item" && id ? id : undefined;
-  const [sidebarOpen, setSidebarOpen] = useSidebarOpen(editing !== undefined);
+  const [sidebarOpen, setSidebarOpen] = useSidebarOpen();
 
   // Opened with no page in mind, a workspace with no template yet starts on making one. Unknown
   // until both have loaded; a brief that can't be read doesn't hold that up.
@@ -85,7 +85,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
       className={cn("min-h-0", insetTitleBar ? "mt-10 h-[calc(100dvh-2.5rem)]" : "h-dvh")}
     >
       <AppSidebar ws={ws} plan={plan} brief={brief} view={view} id={id} />
-      <SidebarInset className="min-h-0 min-w-0">
+      <SidebarInset className="min-h-0 min-w-0 [view-transition-name:page]">
         <TitleBar>
           {error ? (
             <div className="shrink-0 px-6 pb-2">

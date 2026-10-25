@@ -239,34 +239,17 @@ function writeSidebarOpen(open: boolean) {
 
 type SidebarOpen = readonly [open: boolean, setOpen: (open: boolean) => void];
 
-/**
- * Whether the sidebar is open. It follows the user's saved choice, except while editing a video:
- * the editor needs the width, so it opens collapsed there and the saved choice stays untouched.
- * Expanding it inside the editor is honoured until the user leaves the editor.
- */
-export function useSidebarOpen(editing: boolean): SidebarOpen {
-  const [saved, setSaved] = useState(readSidebarOpen);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [wasEditing, setWasEditing] = useState(editing);
+/** Whether the sidebar is open: the user's saved choice, the same on every page. */
+export function useSidebarOpen(): SidebarOpen {
+  const [open, setOpen] = useState(readSidebarOpen);
 
-  // Every visit to the editor starts collapsed again.
-  if (editing !== wasEditing) {
-    setWasEditing(editing);
-    setEditorOpen(false);
-  }
-
-  function setOpen(open: boolean) {
-    if (editing) {
-      setEditorOpen(open);
-
-      return;
-    }
-
-    setSaved(open);
-    writeSidebarOpen(open);
-  }
-
-  return [editing ? editorOpen : saved, setOpen];
+  return [
+    open,
+    (next) => {
+      setOpen(next);
+      writeSidebarOpen(next);
+    },
+  ];
 }
 
 /**
