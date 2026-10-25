@@ -1,4 +1,29 @@
-{"type":"thread.started","thread_id":"01a15cbb-ce4a-7520-952a-fe8655899d56"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"4721"}}
-{"type":"turn.completed","usage":{"input_tokens":125131,"cached_input_tokens":101888,"cache_write_input_tokens":0,"output_tokens":98,"reasoning_output_tokens":0}}
+{"id":1,"result":{}}
+{"method":"remoteControl/status/changed"}
+{"method":"mcpServer/startupStatus/updated"}
+{"method":"thread/status/changed"}
+{"id":2,"result":{"thread":{"id":"01a172e2-d495-7553-9d1b-fc56bcf72859","environments":[{"environmentId":"local","cwd":"/work/agent-check","runtimeWorkspaceRoots":["/work/agent-check"]}],"extra":null,"sessionId":"01a172e2-d495-7553-9d1b-fc56bcf72859","forkedFromId":null,"parentThreadId":null,"preview":"Call the workspace_overview tool of the cutfac MCP server once. Then reply with exactly ready-4721 and nothing else.","ephemeral":false,"section":null,"sectionEnteredAt":null,"projectId":null,"historyMode":"paginated","modelProvider":"openai","model":"gpt-6-astra","reasoningEffort":"xhigh","createdAt":1792928831,"updatedAt":1792928848,"recencyAt":1792928831,"status":{"type":"idle"},"path":"/home/user/.codex/sessions/2026/10/25/rollout-2026-10-25T20-47-11-01a172e2-d495-7553-9d1b-fc56bcf72859.jsonl","cwd":"/work/agent-check","cliVersion":"0.164.0","originator":"cutfac","source":"vscode","canAcceptDirectInput":true,"threadSource":null,"agentNickname":null,"agentRole":null,"gitInfo":null,"name":null,"daybreakEnabled":null,"turns":[]},"model":"gpt-6-astra","modelProvider":"openai","serviceTier":null,"disabledPluginIds":[],"cwd":"/work/agent-check","runtimeWorkspaceRoots":["/work/agent-check"],"instructionSources":["/home/user/.codex/AGENTS.md"],"approvalPolicy":"on-request","approvalsReviewer":"user","sandbox":{"type":"workspaceWrite","writableRoots":[],"networkAccess":false,"excludeTmpdirEnvVar":false,"excludeSlashTmp":false},"activePermissionProfile":null,"reasoningEffort":"xhigh","collaborationMode":{"mode":"default","settings":{"model":"gpt-6-astra","reasoning_effort":"xhigh","developer_instructions":null}},"multiAgentMode":"explicitRequestOnly","initialTurnsPage":null,"turnsBackwardsCursor":"{\"requestedThreadId\":\"01a172e2-d495-7553-9d1b-fc56bcf72859\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}","itemsBackwardsCursor":"{\"requestedThreadId\":\"01a172e2-d495-7553-9d1b-fc56bcf72859\",\"rolloutOrdinal\":24,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"}}
+{"method":"thread/tokenUsage/updated"}
+{"method":"thread/goal/cleared"}
+{"id":3,"result":{"turn":{"id":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","rootTurnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","items":[],"itemsView":"notLoaded","status":"inProgress","error":null,"startedAt":null,"completedAt":null,"durationMs":null}}}
+{"method":"thread/status/changed"}
+{"method":"turn/started","params":{"threadId":"01a172e2-d495-7553-9d1b-fc56bcf72859","turn":{"id":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","rootTurnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","items":[],"itemsView":"notLoaded","status":"inProgress","error":null,"startedAt":1792928848,"completedAt":null,"durationMs":null}},"emittedAtMs":1792928848267}
+{"method":"mcpServer/startupStatus/updated"}
+{"method":"mcpServer/startupStatus/updated"}
+{"method":"account/updated"}
+{"method":"hook/started"}
+{"method":"hook/completed"}
+{"method":"hook/started"}
+{"method":"hook/completed"}
+{"method":"item/started","params":{"item":{"type":"userMessage","id":"01a172e3-225b-7e71-ab72-1213eca1d875","clientId":null,"content":[{"type":"text","text":"Without calling any tool, repeat the number in the word you replied with just now.","text_elements":[]}]},"threadId":"01a172e2-d495-7553-9d1b-fc56bcf72859","turnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","startedAtMs":1792928850524},"emittedAtMs":1792928850524}
+{"method":"item/completed","params":{"item":{"type":"userMessage","id":"01a172e3-225b-7e71-ab72-1213eca1d875","clientId":null,"content":[{"type":"text","text":"Without calling any tool, repeat the number in the word you replied with just now.","text_elements":[]}]},"threadId":"01a172e2-d495-7553-9d1b-fc56bcf72859","turnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","completedAtMs":1792928850524},"emittedAtMs":1792928850525}
+{"method":"item/started","params":{"item":{"type":"agentMessage","id":"msg_03ef92bd03afd91e016addec553cdc8191bb8dca367ec32978","text":"","phase":"final_answer","memoryCitation":null,"delivery":null,"questions":null},"threadId":"01a172e2-d495-7553-9d1b-fc56bcf72859","turnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","startedAtMs":1792928853324},"emittedAtMs":1792928853325}
+{"method":"item/agentMessage/delta"}
+{"method":"item/agentMessage/delta"}
+{"method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_03ef92bd03afd91e016addec553cdc8191bb8dca367ec32978","text":"4721","phase":"final_answer","memoryCitation":null,"delivery":null,"questions":null},"threadId":"01a172e2-d495-7553-9d1b-fc56bcf72859","turnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","completedAtMs":1792928853384},"emittedAtMs":1792928853385}
+{"method":"thread/tokenUsage/updated"}
+{"method":"account/rateLimits/updated"}
+{"method":"hook/started"}
+{"method":"hook/completed"}
+{"method":"thread/status/changed"}
+{"method":"turn/completed","params":{"threadId":"01a172e2-d495-7553-9d1b-fc56bcf72859","turn":{"id":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","rootTurnId":"01a172e3-1986-7bf2-aa42-0120eda1a0e3","items":[{"type":"agentMessage","id":"msg_03ef92bd03afd91e016addec553cdc8191bb8dca367ec32978","text":"4721","phase":"final_answer","memoryCitation":null,"delivery":null,"questions":null}],"itemsView":"summary","status":"completed","error":null,"startedAt":1792928848,"completedAt":1792928853,"durationMs":5286}},"emittedAtMs":1792928853555}
