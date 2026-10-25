@@ -1,11 +1,4 @@
-import {
-  ArrowUpIcon,
-  CrosshairIcon,
-  LayersIcon,
-  PaperclipIcon,
-  SquareIcon,
-  XIcon,
-} from "lucide-react";
+import { ArrowUpIcon, LayersIcon, SquareIcon, XIcon } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
 
@@ -17,7 +10,6 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupText,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import {
@@ -52,7 +44,7 @@ import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { CacheNote } from "./cache-note.tsx";
 import { ModelPicker } from "./model-picker.tsx";
-import { AddSource, SourceChips } from "./sources.tsx";
+import { AddMenu, SourceChips } from "./sources.tsx";
 
 /** What the request points at, which picks the starting points and the placeholder. */
 function scopeOf(target: Target, media: Media | undefined) {
@@ -132,7 +124,11 @@ export function VersionsPicker({
       <Tooltip open={hint && !menuOpen} onOpenChange={setHint}>
         <TooltipTrigger
           render={
-            <SelectTrigger size="sm" aria-label={`${t.composer.versions.label}: ${value}`}>
+            <SelectTrigger
+              variant="ghost"
+              size="sm"
+              aria-label={`${t.composer.versions.label}: ${value}`}
+            >
               <LayersIcon />
               <span className="tabular-nums">{value}</span>
             </SelectTrigger>
@@ -356,13 +352,8 @@ export function Composer({
         <SourceChips item={item} onItem={onItem} />
         <AttachmentChips item={item} files={files} />
         <InputGroup>
-          <InputGroupAddon align="block-start">
-            {empty ? (
-              <InputGroupText>
-                <CrosshairIcon />
-                {media === undefined ? t.chat.newMedia : t.composer.wholeVideo}
-              </InputGroupText>
-            ) : (
+          {empty ? null : (
+            <InputGroupAddon align="block-start">
               <span className="flex items-center gap-1 rounded-lg bg-selection py-0.5 pr-0.5 pl-2 text-xs font-medium text-selection-foreground tabular-nums">
                 {describeTarget(target, t.target.boxAt)}
                 <InputGroupButton
@@ -373,8 +364,8 @@ export function Composer({
                   <XIcon />
                 </InputGroupButton>
               </span>
-            )}
-          </InputGroupAddon>
+            </InputGroupAddon>
+          )}
           <InputGroupTextarea
             ref={inputRef}
             value={body}
@@ -385,43 +376,7 @@ export function Composer({
             onKeyDown={onKeyDown}
           />
           <InputGroupAddon align="block-end">
-            {/* Packed close, so a narrow chat still has room for the model's name. */}
-            <div className="flex min-w-0 items-center gap-1">
-              <AddSource item={item} onItem={onItem} />
-              <InputGroupButton
-                size="icon-sm"
-                aria-label={t.attachments.attach}
-                onClick={() => openFiles.current?.()}
-              >
-                <PaperclipIcon />
-              </InputGroupButton>
-              <Select
-                items={choices}
-                value={agent}
-                onValueChange={(value) => {
-                  if (value !== null) onAgent(value);
-                }}
-              >
-                <SelectTrigger size="sm" aria-label={t.composer.agent}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  {choices.map((option) => (
-                    <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {agent !== "queue" && offersModels(status) ? (
-                <ModelPicker
-                  status={status}
-                  settings={settings}
-                  onPick={(next) => onPick(agent, next)}
-                />
-              ) : null}
-              <VersionsPicker value={versions} onChange={setVersions} />
-            </div>
+            <AddMenu item={item} onItem={onItem} onFiles={() => openFiles.current?.()} />
             {running && text === "" ? (
               <InputGroupButton
                 variant="secondary"
@@ -446,6 +401,38 @@ export function Composer({
             )}
           </InputGroupAddon>
         </InputGroup>
+        {/* The settings for the request sit under it, quiet until pointed at. In a narrow chat the
+            model's name gives way first. */}
+        <div className="-mt-1 flex min-w-0 items-center gap-1">
+          <VersionsPicker value={versions} onChange={setVersions} />
+          <div className="ml-auto flex min-w-0 items-center gap-1">
+            <Select
+              items={choices}
+              value={agent}
+              onValueChange={(value) => {
+                if (value !== null) onAgent(value);
+              }}
+            >
+              <SelectTrigger variant="ghost" size="sm" aria-label={t.composer.agent}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                {choices.map((option) => (
+                  <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {agent !== "queue" && offersModels(status) ? (
+              <ModelPicker
+                status={status}
+                settings={settings}
+                onPick={(next) => onPick(agent, next)}
+              />
+            ) : null}
+          </div>
+        </div>
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
         <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
         <CacheNote item={item} agent={agent} settings={settings} status={status} />

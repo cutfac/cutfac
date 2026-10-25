@@ -593,7 +593,6 @@ export const en = {
     },
     promptCopied: "Prompt copied. Paste it into Claude Code or Codex in this workspace.",
     promptReady: "The prompt is ready to copy",
-    wholeVideo: "Whole video",
     clear: "Clear the selection",
     request: "Edit request",
     agent: "Agent to send to",
@@ -626,8 +625,10 @@ export const en = {
         `Changing the reasoning effort to ${effort} means the agent re-reads this whole conversation on your next request, so it will be slower and use more tokens.`,
     },
     /** Folders, files, and web pages agents read whenever they work on the item. */
+    /** The composer's + button, which attaches files or adds a source. */
+    add: "Add files or sources",
     sources: {
-      add: "Add a folder, file, or link for agents to read",
+      menu: "Link or folder…",
       list: "What agents read",
       title: "Sources",
       description: "Agents read these whenever they work on this video.",

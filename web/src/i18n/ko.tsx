@@ -555,7 +555,6 @@ export const ko: Messages = {
     },
     promptCopied: "프롬프트를 복사했어요. 이 워크스페이스의 Claude Code나 Codex에 붙여넣으세요.",
     promptReady: "프롬프트를 복사할 준비가 됐어요",
-    wholeVideo: "영상 전체",
     clear: "선택 해제",
     request: "편집 요청",
     agent: "보낼 에이전트",
@@ -579,8 +578,9 @@ export const ko: Messages = {
       cacheEffort: (effort) =>
         `추론 강도를 ${effort}(으)로 바꾸면 다음 요청 때 에이전트가 이 대화를 처음부터 다시 읽어요. 그만큼 느려지고 토큰을 더 써요.`,
     },
+    add: "파일이나 자료 추가",
     sources: {
-      add: "에이전트가 읽을 폴더, 파일, 링크 추가",
+      menu: "링크나 폴더…",
       list: "에이전트가 읽는 자료",
       title: "참고 자료",
       description: "에이전트가 이 영상을 작업할 때마다 읽어요.",

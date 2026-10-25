@@ -1,8 +1,22 @@
-import { FileIcon, FolderIcon, FolderOpenIcon, LinkIcon, PlusIcon, XIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  FileIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  LinkIcon,
+  PaperclipIcon,
+  PlusIcon,
+  XIcon,
+} from "lucide-react";
+import { useRef, useState, type RefObject } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   InputGroup,
   InputGroupAddon,
@@ -15,7 +29,6 @@ import {
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import { composing } from "@/lib/utils";
 
@@ -91,12 +104,18 @@ export function SourceChips({ item, onItem }: SourcesProps) {
   );
 }
 
+interface AddSourceProps extends SourcesProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** What the popover opens from, since another menu opens it. */
+  anchor: RefObject<HTMLElement | null>;
+}
+
 /**
  * Point the item at a folder, file, or web page for agents to read: paste a path or a link, or
  * in the desktop app choose one from disk.
  */
-export function AddSource({ item, onItem }: SourcesProps) {
-  const [open, setOpen] = useState(false);
+function AddSource({ item, onItem, open, onOpenChange: setOpen, anchor }: AddSourceProps) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,12 +137,13 @@ export function AddSource({ item, onItem }: SourcesProps) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={<InputGroupButton size="icon-sm" aria-label={t.composer.sources.add} />}
+      <PopoverContent
+        anchor={anchor}
+        side="top"
+        align="start"
+        className="w-80"
+        initialFocus={inputRef}
       >
-        <PlusIcon />
-      </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-80" initialFocus={inputRef}>
         <PopoverHeader>
           <PopoverTitle>{t.composer.sources.title}</PopoverTitle>
           <PopoverDescription>{t.composer.sources.description}</PopoverDescription>
@@ -169,5 +189,41 @@ export function AddSource({ item, onItem }: SourcesProps) {
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** The composer's +: attach files to the request, or add a source the agent reads every time. */
+export function AddMenu({ item, onItem, onFiles }: SourcesProps & { onFiles: () => void }) {
+  const [adding, setAdding] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const t = useMessages();
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<InputGroupButton ref={anchor} size="icon-sm" aria-label={t.composer.add} />}
+        >
+          <PlusIcon />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="w-auto">
+          <DropdownMenuItem onClick={onFiles}>
+            <PaperclipIcon />
+            {t.attachments.attach}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAdding(true)}>
+            <LinkIcon />
+            {t.composer.sources.menu}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AddSource
+        item={item}
+        onItem={onItem}
+        open={adding}
+        onOpenChange={setAdding}
+        anchor={anchor}
+      />
+    </>
   );
 }
