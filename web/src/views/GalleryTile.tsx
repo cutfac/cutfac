@@ -161,7 +161,7 @@ export function Tile({
               </Badge>
               {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
               {work.kind === "quiet" && item.openFeedback > 0 ? (
-                <Badge variant="destructive">
+                <Badge variant="secondary">
                   <MessageSquareIcon data-icon="inline-start" />
                   {t.board.openFeedback(item.openFeedback)}
                 </Badge>
