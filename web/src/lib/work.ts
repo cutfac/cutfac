@@ -26,8 +26,11 @@ export type ItemWork =
   | { readonly kind: "result"; readonly request: Feedback }
   | { readonly kind: "quiet" };
 
+const runOf = (item: ItemSummary, feedback: Feedback) =>
+  runView(feedback.run, undefined, item.running);
+
 const halted = (item: ItemSummary, feedback: Feedback) => {
-  const status = runView(feedback.run, undefined, item.running).status;
+  const { status } = runOf(item, feedback);
 
   return feedback.decision === undefined && (status === "failed" || status === "stopped");
 };
@@ -43,6 +46,9 @@ export function itemWork(
   const { requests, render } = item;
 
   for (const request of requests) {
+    // The agent may still be making more of them; they wait for the user once its run ends.
+    if (runOf(item, request).running) continue;
+
     const labels = versionsOf(request).map((variant) => variant.label);
 
     if (labels.length > 0) return { kind: "versions", request, labels };

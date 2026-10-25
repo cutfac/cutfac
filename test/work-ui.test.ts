@@ -65,6 +65,19 @@ describe("itemWork", () => {
     expect(needsYou(work)).toBe(true);
   });
 
+  test("versions the agent is still making wait for its run to end", () => {
+    const making = { ...versions, run: run("running") };
+
+    expect(itemWork(summary({ requests: [making], running: true }))).toEqual({
+      kind: "working",
+      request: making,
+    });
+    expect(itemWork(summary({ requests: [{ ...making, run: run("done") }] }))).toMatchObject({
+      kind: "versions",
+      labels: ["A", "B"],
+    });
+  });
+
   test("a failed or stopped run with its request open waits for the user", () => {
     const failed = request("failed", { run: run("failed") });
 
