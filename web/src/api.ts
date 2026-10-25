@@ -275,7 +275,7 @@ export interface ItemSummary {
   requests: Feedback[];
   /** An agent works on the item right now. */
   running: boolean;
-  /** The render going on, while one is. */
+  /** The render going on, or the last one when it failed. */
   render?: RenderState;
   media: Media[];
   updatedAt: number;

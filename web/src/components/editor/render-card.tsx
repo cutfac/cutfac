@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 import { useMessages, type Messages } from "../../i18n/index.ts";
+import { failureSeen, seeFailure } from "../../lib/render-seen.ts";
 import {
   RENDER_STAGES,
   renderShare,
@@ -62,7 +63,10 @@ export function useItemRender(
   shell: string | undefined,
   onDone: (render: RenderState) => void,
 ): RenderView {
-  /** The item's latest render, and those seen running, by when they started: only those show their end. */
+  /**
+   * The item's latest render, and those seen running or failed unread, by when they started: only
+   * those show their end.
+   */
   const [seen, setSeen] = useState<Seen | undefined>(undefined);
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
   const done = useEffectEvent(onDone);
@@ -73,7 +77,10 @@ export function useItemRender(
     return onItemRender(id, (latest) => {
       const before = latest === undefined ? undefined : live.get(latest.startedAt);
 
-      if (latest !== undefined && (before !== undefined || latest.status === "running")) {
+      // A failure the gallery pointed the user at shows too, though it ended before they came.
+      const unread = latest?.status === "failed" && !failureSeen(latest);
+
+      if (latest !== undefined && (before !== undefined || latest.status === "running" || unread)) {
         live.set(latest.startedAt, latest);
       }
 
@@ -91,6 +98,11 @@ export function useItemRender(
     !hidden.has(latest.startedAt)
       ? latest
       : undefined;
+
+  // Once shown here, the failure no longer asks for the user from its gallery tile.
+  useEffect(() => {
+    if (render?.status === "failed") seeFailure(render);
+  }, [render]);
 
   const dismiss = () => {
     if (render !== undefined) setHidden((all) => new Set(all).add(render.startedAt));

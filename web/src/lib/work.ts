@@ -1,5 +1,5 @@
 import type { Feedback, ItemSummary } from "../api.ts";
-import { renderShare } from "./render.ts";
+import { renderShare, type RenderState } from "./render.ts";
 import { hasResult, versionsOf } from "./requests.ts";
 import { runView } from "./run.ts";
 
@@ -18,6 +18,8 @@ export type ItemWork =
       readonly label?: string | undefined;
       readonly share?: number | undefined;
     }
+  /** The last render failed, and the user hasn't opened the item since. */
+  | { readonly kind: "renderFailed"; readonly label?: string | undefined }
   /** An agent works on a request. */
   | { readonly kind: "working"; readonly request?: Feedback }
   /** The agent changed the media, and it waits to be looked at. */
@@ -30,8 +32,14 @@ const halted = (item: ItemSummary, feedback: Feedback) => {
   return feedback.decision === undefined && (status === "failed" || status === "stopped");
 };
 
-/** What the item's tile says, the most pressing first: what waits for the user, then work. */
-export function itemWork(item: ItemSummary): ItemWork {
+/**
+ * What the item's tile says, the most pressing first: what waits for the user, then work. `seen`
+ * says whether the user already looked at a failed render.
+ */
+export function itemWork(
+  item: ItemSummary,
+  seen: (render: RenderState) => boolean = () => false,
+): ItemWork {
   const { requests, render } = item;
 
   for (const request of requests) {
@@ -44,7 +52,7 @@ export function itemWork(item: ItemSummary): ItemWork {
 
   if (stuck !== undefined) return { kind: "halted", request: stuck };
 
-  if (render !== undefined) {
+  if (render?.status === "running") {
     return { kind: "rendering", label: render.label, share: renderShare(render) };
   }
 
@@ -54,19 +62,25 @@ export function itemWork(item: ItemSummary): ItemWork {
     return request === undefined ? { kind: "working" } : { kind: "working", request };
   }
 
+  if (render?.status === "failed" && !seen(render)) {
+    return { kind: "renderFailed", label: render.label };
+  }
+
   const done = requests.find((request) => hasResult(item, request, false));
 
   return done === undefined ? { kind: "quiet" } : { kind: "result", request: done };
 }
 
 /** Nothing goes on until the user picks a version or sends the request again. */
-export const needsYou = (work: ItemWork) => work.kind === "versions" || work.kind === "halted";
+export const needsYou = (work: ItemWork) =>
+  work.kind === "versions" || work.kind === "halted" || work.kind === "renderFailed";
 
 export const isBusy = (work: ItemWork) => work.kind === "rendering" || work.kind === "working";
 
 const RANK: Record<ItemWork["kind"], number> = {
   versions: 0,
   halted: 0,
+  renderFailed: 0,
   rendering: 1,
   working: 1,
   result: 2,

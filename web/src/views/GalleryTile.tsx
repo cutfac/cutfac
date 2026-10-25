@@ -48,6 +48,8 @@ function workText(work: ItemWork, t: ReturnType<typeof useMessages>) {
       return work.label === undefined ? text : `${work.label} · ${text}`;
     }
 
+    case "renderFailed":
+      return work.label === undefined ? t.render.failed : `${work.label} · ${t.render.failed}`;
     case "working":
       return t.gallery.working;
     case "result":

@@ -299,8 +299,9 @@ const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: stri
 });
 
 /**
- * What the gallery shows of an item: its open requests, whether an agent works on it, and the
- * render going on, so a tile can say what waits for the user and what is under way.
+ * What the gallery shows of an item: its open requests, whether an agent works on it, and its
+ * render while it goes on or after it failed, so a tile can say what waits for the user and what
+ * is under way.
  */
 const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
   const runs = yield* RunRegistry;
@@ -317,7 +318,7 @@ const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
     openFeedback: requests.length,
     requests,
     running: yield* runs.isRunning(item.id),
-    render: render?.status === "running" ? render : undefined,
+    render: render?.status === "running" || render?.status === "failed" ? render : undefined,
     media: item.media,
     updatedAt: item.updatedAt,
   };

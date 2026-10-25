@@ -79,6 +79,22 @@ describe("itemWork", () => {
     expect(isBusy(work)).toBe(true);
   });
 
+  test("a failed render waits for the user until they look at it", () => {
+    const failed: RenderState = { ...render, status: "failed", endedAt: 1, code: 1 };
+    const work = itemWork(summary({ render: failed }));
+
+    expect(work).toEqual({ kind: "renderFailed", label: "v2" });
+    expect(needsYou(work)).toBe(true);
+    expect(isBusy(work)).toBe(false);
+    expect(itemWork(summary({ render: failed }), () => true)).toEqual({ kind: "quiet" });
+  });
+
+  test("an agent at work outranks the render that failed before it", () => {
+    const failed: RenderState = { ...render, status: "failed" };
+
+    expect(itemWork(summary({ render: failed, running: true }))).toEqual({ kind: "working" });
+  });
+
   test("a running agent works on the request whose run is going", () => {
     const going = request("going", { run: run("running") });
 

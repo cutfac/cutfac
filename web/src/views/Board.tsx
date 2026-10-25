@@ -72,6 +72,7 @@ import { gridColumns, stepCard, stepOf } from "../lib/board-keys.ts";
 import { QUIET_DRAG } from "../lib/drag.ts";
 import { modHeld } from "../lib/edit-commands.ts";
 import { archiveItems, moveItem, revealItem } from "../lib/items.ts";
+import { failureSeen } from "../lib/render-seen.ts";
 import { byWork, isBusy, itemWork } from "../lib/work.ts";
 import { Tile } from "./GalleryTile.tsx";
 import { Thumbnail } from "./Thumbnail.tsx";
@@ -163,7 +164,7 @@ export function Board() {
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
   const [layout, setLayout] = useState(readLayout);
-  const busy = items?.some((item) => isBusy(itemWork(item))) ?? false;
+  const busy = items?.some((item) => isBusy(itemWork(item, failureSeen))) ?? false;
   const reloadItems = useEffectEvent(reload);
 
   // A render saves how far it is where the file watcher doesn't look, so the tiles ask again.
@@ -431,7 +432,7 @@ function Gallery({
 }) {
   const t = useMessages();
   const grid = useRef<HTMLDivElement>(null);
-  const tiles = byWork(items.map((item) => ({ item, work: itemWork(item) })));
+  const tiles = byWork(items.map((item) => ({ item, work: itemWork(item, failureSeen) })));
 
   const picks = usePicks(items, () =>
     gridColumns(
