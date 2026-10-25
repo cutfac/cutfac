@@ -31,9 +31,13 @@ export function endsInConsonant(word: string): boolean {
   return LATIN_WITH_FINAL.includes(last.toLowerCase());
 }
 
-/** `word` followed by the form of `particle` that fits it, such as "Codex가" or "영상을". */
-export function withParticle(word: string, particle: keyof typeof PARTICLES): string {
-  const [afterConsonant, afterVowel] = PARTICLES[particle];
+/** The form of `particle` that fits after `word`, for when the word is set apart from it. */
+export function particle(word: string, which: keyof typeof PARTICLES): string {
+  const [afterConsonant, afterVowel] = PARTICLES[which];
 
-  return `${word}${endsInConsonant(word) ? afterConsonant : afterVowel}`;
+  return endsInConsonant(word) ? afterConsonant : afterVowel;
 }
+
+/** `word` followed by the form of `particle` that fits it, such as "Codex가" or "영상을". */
+export const withParticle = (word: string, which: keyof typeof PARTICLES) =>
+  `${word}${particle(word, which)}`;

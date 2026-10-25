@@ -1,9 +1,9 @@
-import { ShieldQuestionIcon } from "lucide-react";
+import { GlobeIcon, ShieldQuestionIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { Approval, ApprovalAnswer } from "../../approvalsApi.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -14,7 +14,9 @@ export type OnAnswer = (approval: Approval, answer: ApprovalAnswer) => Promise<v
 
 /**
  * What the agent asks before it uses a tool, with the answers its own prompt gives in a terminal.
- * The run waits on it; it goes once the run says the request is settled.
+ * The heading says what kind of thing it wants to do, and what Always allow covers is spelled out
+ * under the answers rather than hidden. The run waits on it; it goes once the run says the request
+ * is settled.
  */
 export function ApprovalCard({
   approval,
@@ -38,12 +40,26 @@ export function ApprovalCard({
     });
   };
 
+  const kind = approval.kind ?? "tool";
+
+  // A tool the board can't name a kind for keeps the agent's own sentence for it, when it gives one.
+  const title =
+    kind === "tool" && approval.title !== undefined
+      ? approval.title
+      : t.approval.asks(agent, kind, approval.tool);
+
   return (
     <Alert>
       <ShieldQuestionIcon />
-      <AlertTitle>{approval.title ?? t.approval.asks(agent, approval.tool)}</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="mt-1">
         <div className="flex flex-col gap-2.5">
+          {approval.network === true ? (
+            <Badge variant="secondary">
+              <GlobeIcon />
+              {t.approval.network}
+            </Badge>
+          ) : null}
           {approval.detail === undefined ? null : (
             <pre className="max-h-40 overflow-y-auto rounded-lg bg-muted px-2.5 py-2 font-mono text-xs break-all whitespace-pre-wrap text-foreground">
               {approval.detail}
@@ -55,26 +71,19 @@ export function ApprovalCard({
               {t.approval.allow}
             </Button>
             {approval.always ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => answer("always")}
-                    />
-                  }
-                >
-                  {t.approval.always}
-                </TooltipTrigger>
-                <TooltipContent>{t.approval.keeps(agent, approval.rules)}</TooltipContent>
-              </Tooltip>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => answer("always")}>
+                {t.approval.always}
+              </Button>
             ) : null}
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => answer("deny")}>
               {t.approval.deny}
             </Button>
           </div>
+          {approval.always ? (
+            <p className="text-xs text-muted-foreground">
+              {t.approval.keeps(agent, approval.rules, approval.session === true)}
+            </p>
+          ) : null}
         </div>
       </AlertDescription>
     </Alert>
