@@ -40,16 +40,27 @@ describe("a command Codex asks to run", () => {
     expect(asked.approval).toEqual({
       id: "5",
       tool: "shell",
+      kind: "command",
+      network: false,
       detail: "ffmpeg -i a.mp4 out.mp4",
       reason: "needs the network",
       always: true,
       rules: ["ffmpeg"],
+      session: false,
     });
     expect(result(asked, "allow")).toEqual({ decision: "accept" });
     expect(result(asked, "deny")).toEqual({ decision: "decline" });
     expect(result(asked, "always")).toEqual({
       decision: { acceptWithExecpolicyAmendment: { execpolicy_amendment: ["ffmpeg"] } },
     });
+  });
+
+  test("shows the script a shell wrapper hands on, as the user agrees to it", () => {
+    const asked = request(method, {
+      command: `/bin/zsh -lc 'ffmpeg -i ${ROOT}/it'"'"'s.mp4 out.mp4'`,
+    });
+
+    expect(asked.approval.detail).toBe("ffmpeg -i it's.mp4 out.mp4");
   });
 
   test("asks for a host by name, and Always allow keeps allowing it", () => {
@@ -62,8 +73,13 @@ describe("a command Codex asks to run", () => {
       ],
     });
 
-    expect(asked.approval.detail).toBe("example.com");
-    expect(asked.approval.rules).toEqual(["example.com"]);
+    expect(asked.approval).toMatchObject({
+      kind: "network",
+      network: true,
+      detail: "example.com",
+      rules: ["example.com"],
+      session: false,
+    });
     expect(result(asked, "always")).toEqual({
       decision: {
         applyNetworkPolicyAmendment: {
@@ -76,7 +92,7 @@ describe("a command Codex asks to run", () => {
   test("with no rule proposed, Always allow covers the session", () => {
     const asked = request(method, { command: "rm -rf build" });
 
-    expect(asked.approval.rules).toEqual([]);
+    expect(asked.approval).toMatchObject({ rules: [], session: true });
     expect(result(asked, "always")).toEqual({ decision: "acceptForSession" });
   });
 });
@@ -88,7 +104,12 @@ describe("files Codex asks to change", () => {
     const changes = new Map([["c1", [`${ROOT}/a.yaml`, `${ROOT}/b.yaml`]]]);
     const asked = request(method, { itemId: "c1", reason: "outside" }, changes);
 
-    expect(asked.approval).toMatchObject({ tool: "edit", detail: "a.yaml\nb.yaml" });
+    expect(asked.approval).toMatchObject({
+      tool: "edit",
+      kind: "edit",
+      detail: "a.yaml\nb.yaml",
+      session: true,
+    });
     expect(result(asked, "always")).toEqual({ decision: "acceptForSession" });
     expect(result(asked, "deny")).toEqual({ decision: "decline" });
   });
@@ -107,6 +128,8 @@ describe("more access Codex asks for", () => {
   test("lists what it asks for", () => {
     expect(asked.approval).toMatchObject({
       tool: "request_permissions",
+      kind: "access",
+      network: true,
       detail: "network\nwrite x",
       reason: "fetch",
     });
@@ -147,6 +170,7 @@ describe("an MCP server's question", () => {
       reason: "Renders an item",
       always: true,
       rules: [],
+      session: true,
     });
   });
 

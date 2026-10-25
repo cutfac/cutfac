@@ -21,6 +21,7 @@ import {
   threadRequest,
   turnRequest,
 } from "./codexProtocol.ts";
+import { shellScript } from "./shellWords.ts";
 
 const decodeChanges = Schema.decodeUnknownOption(
   Schema.Array(Schema.Struct({ path: Schema.String })),
@@ -95,7 +96,10 @@ function itemStarted(item: Schema.JsonObject, state: TurnState, root: string | u
     case "commandExecution": {
       const command = textOf(item, "command");
 
-      return tool("shell", command === undefined ? undefined : clampDetail(command, root));
+      return tool(
+        "shell",
+        command === undefined ? undefined : clampDetail(shellScript(command), root),
+      );
     }
 
     case "fileChange": {

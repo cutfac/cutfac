@@ -14,7 +14,7 @@ import {
   textOf,
   toolDetail,
 } from "./agentParse.ts";
-import type { ApprovalAnswer } from "./approval.ts";
+import type { ApprovalAnswer, ApprovalKind } from "./approval.ts";
 
 const ClaudeEnvelope = Schema.Struct({
   type: Schema.String,
@@ -170,6 +170,8 @@ const claudeRefusal = (id: string, error: string) =>
 const Suggestion = Schema.Struct({
   type: Schema.String,
   behavior: Schema.optional(Schema.String),
+  /** Where Claude Code keeps it: `session` for this conversation, or one of its settings files. */
+  destination: Schema.optional(Schema.String),
   rules: Schema.optional(
     Schema.Array(
       Schema.Struct({ toolName: Schema.String, ruleContent: Schema.optional(Schema.String) }),
@@ -180,6 +182,27 @@ const Suggestion = Schema.Struct({
 const decodeSuggestion = Schema.decodeUnknownOption(Suggestion);
 
 const ADDS_RULES = new Set(["addRules", "replaceRules"]);
+
+/** Whether every one of `suggestions` lasts only for this conversation. */
+const forSession = (suggestions: ReadonlyArray<Schema.Json>) =>
+  suggestions.length > 0 &&
+  suggestions.every((json) =>
+    Option.match(decodeSuggestion(json), {
+      onNone: () => false,
+      onSome: (suggestion) => suggestion.destination === "session",
+    }),
+  );
+
+/** What each of Claude Code's own tools is for; any other, such as an MCP tool, is a tool. */
+const KINDS: ReadonlyMap<string, ApprovalKind> = new Map([
+  ["Bash", "command"],
+  ["Edit", "edit"],
+  ["MultiEdit", "edit"],
+  ["Write", "edit"],
+  ["NotebookEdit", "edit"],
+  ["WebFetch", "network"],
+  ["WebSearch", "network"],
+]);
 
 /** The allow rules `suggestions` would keep, written as Claude Code writes them in its settings. */
 const allowRules = (suggestions: ReadonlyArray<Schema.Json>) =>
@@ -220,14 +243,20 @@ function toolRequest(
   // path, or else every argument, such as the message a tool would send.
   const everything = Object.keys(input).length === 0 ? undefined : JSON.stringify(input, null, 2);
 
+  const tool = textOf(request, "tool_name") ?? display ?? "tool";
+  const kind = KINDS.get(tool) ?? "tool";
+
   const approval = {
     id,
-    tool: textOf(request, "tool_name") ?? display ?? "tool",
+    tool,
+    kind,
+    network: kind === "network",
     title: shown(textOf(request, "title") ?? display),
     detail: mainArgument(input, root) ?? shown(textOf(request, "blocked_path") ?? everything),
     reason: shown(textOf(request, "description") ?? textOf(request, "decision_reason")),
     always: suggestions.length > 0 && request["suppress_always_allow_rule"] !== true,
     rules: allowRules(suggestions),
+    session: forSession(suggestions),
   };
 
   return { kind: "ask", request: { approval, answer: (answer) => claudeAnswer(use, answer) } };

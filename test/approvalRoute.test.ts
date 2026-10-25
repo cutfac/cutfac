@@ -139,9 +139,12 @@ test("a board edit puts Claude's request on the board and takes the answer back 
     type: "approval",
     id: "r1",
     tool: "Bash",
+    kind: "command",
+    network: false,
     detail: "ffmpeg -i clip.mp4 out.mp4",
     always: true,
     rules: ["Bash(ffmpeg:*)"],
+    session: false,
   });
 
   const answered = await post("/api/item/edit/approval?id=clip", {

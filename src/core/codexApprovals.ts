@@ -13,6 +13,7 @@ import {
   shown,
   stringsOf,
 } from "./codexProtocol.ts";
+import { shellScript } from "./shellWords.ts";
 
 const decodeHosts = Schema.decodeUnknownOption(
   Schema.Array(Schema.Struct({ host: Schema.String, action: Schema.String })),
@@ -63,14 +64,18 @@ function commandApproval(
         : { applyNetworkPolicyAmendment: { network_policy_amendment: { host, action: "allow" } } };
 
   const target = network === undefined ? undefined : textOf(network, "host");
+  const command = textOf(params, "command");
 
   const approval: Approval = {
     id: String(id),
     tool: "shell",
-    detail: shown(target ?? textOf(params, "command"), root),
+    kind: network === undefined ? "command" : "network",
+    network: network !== undefined,
+    detail: shown(target ?? (command === undefined ? undefined : shellScript(command)), root),
     reason: shown(textOf(params, "reason"), root),
     always: true,
     rules: prefix.length > 0 ? [prefix.join(" ")] : host === undefined ? [] : [host],
+    session: prefix.length === 0 && host === undefined,
   };
 
   return ask(id, approval, (answer) => ({ decision: decision(answer, always) }));
@@ -90,10 +95,12 @@ function fileApproval(
   const approval: Approval = {
     id: String(id),
     tool: "edit",
+    kind: "edit",
     detail: shown(where, root),
     reason: shown(textOf(params, "reason"), root),
     always: true,
     rules: [],
+    session: true,
   };
 
   return ask(id, approval, (answer) => ({ decision: decision(answer, "acceptForSession") }));
@@ -128,10 +135,13 @@ function permissionsApproval(
   const approval: Approval = {
     id: String(id),
     tool: "request_permissions",
+    kind: "access",
+    network: objectOf(asked, "network")?.["enabled"] === true,
     detail: askedAccess(asked, root),
     reason: shown(textOf(params, "reason"), root),
     always: true,
     rules: [],
+    session: true,
   };
 
   return ask(id, approval, (answer) =>
@@ -180,6 +190,7 @@ function mcpApproval(
     reason: shown(textOf(meta, "tool_description"), root),
     always: persist !== undefined,
     rules: [],
+    session: persist === "session",
   };
 
   return ask(id, approval, (answer) => {

@@ -65,11 +65,14 @@ describe("what Claude asks on stdout", () => {
     expect(request.approval).toEqual({
       id: "r1",
       tool: "Bash",
+      kind: "command",
+      network: false,
       title: undefined,
       detail: "ffmpeg -i clip.mp4 out.mp4",
       reason: "Cuts the clip",
       always: true,
       rules: ["Bash(ffmpeg:*)"],
+      session: false,
     });
   });
 
