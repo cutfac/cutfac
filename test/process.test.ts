@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Effect } from "effect";
 
 import { runEdit } from "../src/core/agentRun.ts";
+import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";
 import { run } from "../src/core/process.ts";
 import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
@@ -55,6 +56,7 @@ describe("a command Cutfac runs on a Mac where the Codex desktop app is set up",
         yield* runEdit(undefined)(
           { itemId: created.id, feedbackId: feedback.id, agent: "codex" },
           () => Effect.void,
+          refuse,
         );
       }),
     );

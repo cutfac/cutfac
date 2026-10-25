@@ -5,11 +5,10 @@ import { CONFIG_FILE, Workspace } from "./workspace.ts";
 import { SETTINGS_FILES } from "./workspaceTrust.ts";
 
 /**
- * What a Claude Code run from the board may use besides Cutfac's tools and the servers the user
- * turned on: the workspace's files, and ffmpeg to look at and cut media. Whatever else a workspace
- * needs goes in its own `.claude/settings.json`, as for any Claude Code session there.
+ * What Cutfac let a Claude Code run from the board use unasked, before Claude asked the board: the
+ * rules format.yaml files listed when Cutfac wrote them, which no one chose.
  */
-export const CLAUDE_RUN_TOOLS = [
+const EARLIER_RUN_TOOLS = [
   "Read",
   "Write",
   "Edit",
@@ -21,7 +20,7 @@ export const CLAUDE_RUN_TOOLS = [
 
 /** What cutfac.yaml listed when Cutfac wrote it, which no one chose and so has nothing to move. */
 const EARLIER_DEFAULTS = new Set([
-  ...CLAUDE_RUN_TOOLS,
+  ...EARLIER_RUN_TOOLS,
   "Bash(bun:*)",
   "Bash(npx:*)",
   "Bash(ls:*)",
@@ -30,7 +29,7 @@ const EARLIER_DEFAULTS = new Set([
   "Bash(mv:*)",
 ]);
 
-const RUN_TOOLS = new Set(CLAUDE_RUN_TOOLS);
+const RUN_TOOLS = new Set(EARLIER_RUN_TOOLS);
 
 const Rules = Schema.Array(Schema.String);
 

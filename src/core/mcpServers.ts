@@ -346,17 +346,12 @@ export function launchView({ entry }: McpServer, home?: string): McpLaunchView {
   };
 }
 
-/** Claude Code's `--allowedTools` entry for every tool of the server `name`, as it names them. */
-export const claudeServerTools = (name: string) =>
-  `mcp__${name.replaceAll(/[^A-Za-z0-9_-]/g, "_")}`;
-
 /** What a Claude run loads of the servers the user turned on. */
 export interface ClaudeRunServers {
   /** Each by name, as its config has it, but with what could be a secret read from `env`. */
   readonly servers: Schema.JsonObject;
   /** The secrets, which Claude Code puts back in, out of the command line other users can see. */
   readonly env: Readonly<Record<string, string>>;
-  readonly tools: ReadonlyArray<string>;
 }
 
 const SECRET_VAR = "CUTFAC_MCP_SECRET_";
@@ -391,6 +386,5 @@ export function claudeRunServers(servers: ReadonlyArray<McpServer>): ClaudeRunSe
   return {
     servers: Object.fromEntries(servers.map((server) => [server.name, hidden(server.entry)])),
     env,
-    tools: servers.map((server) => claudeServerTools(server.name)),
   };
 }

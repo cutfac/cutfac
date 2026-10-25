@@ -215,9 +215,6 @@ describe("the servers a Claude run loads", () => {
       CUTFAC_MCP_SECRET_4: "https://api.example.com/mcp?key=k-1",
       CUTFAC_MCP_SECRET_5: "Bearer b-1",
     });
-
-    // Claude Code names a server's tools with anything but letters, digits, `_` and `-` as `_`.
-    expect(run.tools).toEqual(["mcp__files", "mcp__my_api"]);
   });
 });
 

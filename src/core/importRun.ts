@@ -7,7 +7,6 @@ import {
   codexConfig,
   codexImageFlags,
 } from "./agentCommand.ts";
-import { type TurnResult, converse, noteCompaction } from "./agentRun.ts";
 import {
   CLAUDE_MCP_TOOLS,
   MCP_READ_TOOLS,
@@ -20,6 +19,7 @@ import {
   codexServerName,
   ourMcpConfig,
 } from "./agents.ts";
+import { type TurnResult, converse, noteCompaction } from "./agentTurn.ts";
 import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
 import { freshPrompt, turnMessage } from "./importPrompts.ts";
 import {

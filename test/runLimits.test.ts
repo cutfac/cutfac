@@ -4,42 +4,33 @@ import { join } from "node:path";
 
 import { Effect } from "effect";
 
-import { agentInvocation, isSessionId, isToolRule } from "../src/core/agentCommand.ts";
-import { converse } from "../src/core/agentRun.ts";
+import { agentInvocation, isSessionId } from "../src/core/agentCommand.ts";
+import { converse } from "../src/core/agentTurn.ts";
 import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
 
 describe("what an agent run lets through to the CLI", () => {
-  test("a tool rule is one tool, with at most one specifier", () => {
-    for (const rule of [
-      "Read",
-      "Bash(uv:*)",
-      "Bash(npm run test:*)",
-      "mcp__cutfac",
-      "Edit(./**)",
-      "WebFetch(domain:example.com)",
-    ]) {
-      expect(isToolRule(rule)).toBe(true);
-    }
-
-    for (const rule of ["a,b", "x),Bash,WebFetch(y", "Bash(a(b))", "Bash (ls)", "Read\n", ""]) {
-      expect(isToolRule(rule)).toBe(false);
-    }
-  });
-
-  test("a host that would add rules of its own is left out of the run's", () => {
-    const { args } = agentInvocation("claude", {
+  test("claude allows only Cutfac's own tools, and asks on stdin about the rest", () => {
+    const { args, stdin, attended } = agentInvocation("claude", {
       bin: "/bin/x",
       prompt: "do it",
       sessionId: undefined,
       newSessionId: "new",
-      allowedTools: ["Read", "Bash,WebFetch"],
       hosts: ["x),bash,webfetch(y.com", "ok.com"],
     });
 
-    const allowed = args[args.indexOf("--allowedTools") + 1];
+    const allowed = args[args.indexOf("--allowedTools") + 1]?.split(",") ?? [];
 
-    expect(allowed).toBe("Read,WebFetch(domain:ok.com)");
+    expect(allowed.length).toBeGreaterThan(0);
+
+    for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
     expect(args).toContain("--strict-mcp-config");
+    expect(args[args.indexOf("--permission-prompt-tool") + 1]).toBe("stdio");
+    expect(args[args.indexOf("--input-format") + 1]).toBe("stream-json");
+    expect(attended).toBe(true);
+    expect(JSON.parse(stdin)).toEqual({
+      type: "user",
+      message: { role: "user", content: "do it" },
+    });
   });
 
   test("only an id an agent could have made counts as its session", () => {
@@ -69,7 +60,7 @@ describe("a stored session that is not one the agent made", () => {
 
     const bin = await fakes.bin(
       "claude",
-      `cat >/dev/null
+      `head -n 1 >/dev/null
 printf '%s\\n' "$@" > "${join(fakes.calls, "args")}"
 echo '{"type":"system","subtype":"init","session_id":"${fresh}"}'
 echo '{"type":"result","subtype":"success","session_id":"${fresh}","result":"ok"}'
@@ -83,9 +74,7 @@ echo '{"type":"result","subtype":"success","session_id":"${fresh}","result":"ok"
         agent: "claude",
         stored: "--dangerously-skip-permissions",
         invocation: (session) =>
-          Effect.succeed(
-            agentInvocation("claude", { bin, prompt: "hi", allowedTools: [], ...session }),
-          ),
+          Effect.succeed(agentInvocation("claude", { bin, prompt: "hi", ...session })),
         save: (session) =>
           Effect.sync(() => {
             saved.push(session);

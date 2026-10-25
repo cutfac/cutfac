@@ -14,8 +14,11 @@ export const PermissionMode = Schema.Literals(["follow", "edit", "auto", "full"]
 
 export type PermissionMode = typeof PermissionMode.Type;
 
-/** What a run may do in the end: edit in the workspace, more as a reviewer agrees, anything, or less. */
-export type Access = "edit" | "auto" | "full" | "limited";
+/**
+ * What a run may do in the end: ask the board before it acts, edit in the workspace, more as a
+ * reviewer agrees, anything, or less.
+ */
+export type Access = "asks" | "edit" | "auto" | "full" | "limited";
 
 /** The user's own permission setting for Claude Code: its `permissions.defaultMode`. */
 export interface ClaudePermissionSettings {
@@ -39,23 +42,17 @@ export interface PermissionView {
   readonly setting?: string | undefined;
 }
 
-/** Claude Code's modes that would ask before an edit, which a run has no one to ask. */
-const CLAUDE_ASKS = new Set([undefined, "default"]);
-
 /** The reviewers that answer Codex's requests for more access without the user. */
 const CODEX_REVIEWERS = new Set(["auto_review", "guardian_subagent"]);
 
 /**
- * Claude Code's flags for `mode`. Following the user's settings leaves their mode to Claude, except
- * one that would ask before an edit: a run has no one to ask, so it edits in the workspace.
+ * Claude Code's flags for `mode`. Following the user's settings leaves their mode to Claude, which
+ * asks the board whatever it would ask them in a terminal.
  */
-export function claudePermissionFlags(
-  mode: PermissionMode,
-  user: ClaudePermissionSettings,
-): ReadonlyArray<string> {
+export function claudePermissionFlags(mode: PermissionMode): ReadonlyArray<string> {
   switch (mode) {
     case "follow":
-      return CLAUDE_ASKS.has(user.defaultMode) ? ["--permission-mode", "acceptEdits"] : [];
+      return [];
     case "edit":
       return ["--permission-mode", "acceptEdits"];
     case "auto":
@@ -98,11 +95,19 @@ const codexReviewed = (user: CodexPermissionSettings) =>
 
 /** What following the user's Claude Code settings comes to. */
 export function claudeAccess(user: ClaudePermissionSettings): Access {
-  if (CLAUDE_ASKS.has(user.defaultMode) || user.defaultMode === "acceptEdits") return "edit";
-
-  if (user.defaultMode === "auto") return "auto";
-
-  return user.defaultMode === "bypassPermissions" ? "full" : "limited";
+  switch (user.defaultMode) {
+    case undefined:
+    case "default":
+      return "asks";
+    case "acceptEdits":
+      return "edit";
+    case "auto":
+      return "auto";
+    case "bypassPermissions":
+      return "full";
+    default:
+      return "limited";
+  }
 }
 
 /** What following the user's Codex settings comes to. */
@@ -205,11 +210,9 @@ const chosenMode = Effect.fnUntraced(function* (agent: AgentName) {
 export const runPermissions = Effect.fn("agentPermissions.run")(function* (agent: AgentName) {
   const mode = yield* chosenMode(agent);
 
-  // Only following the user's settings needs them.
-  if (agent === "claude") {
-    return claudePermissionFlags(mode, mode === "follow" ? yield* claudeSettings : {});
-  }
+  if (agent === "claude") return claudePermissionFlags(mode);
 
+  // Only following the user's settings needs them.
   return codexPermissionConfig(mode, mode === "follow" ? yield* codexSettings : {});
 });
 

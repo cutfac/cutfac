@@ -500,7 +500,7 @@ describe("an item's waiting line", () => {
       `n=$(ls "${fakes.calls}" | grep -c stdin)
 call="${fakes.calls}/$n"
 printf '%s\n' "$@" > "$call.args"
-cat > "$call.stdin"
+head -n 1 > "$call.stdin"
 while [ ! -f "${fakes.dir}/release" ]; do sleep 0.02; done
 echo '{"type":"system","subtype":"init","session_id":"sess-'$n'"}'
 if grep -q 'This one fails' "$call.stdin"; then echo 'boom' >&2; exit 1; fi
@@ -517,9 +517,13 @@ echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Do
     return Promise.all(names.map((name) => readFile(join(fakes.calls, name), "utf8")));
   };
 
-  /** The request each call was about, oldest first. */
+  /** The request each call was about, oldest first, from the prompt's line on stdin. */
   const asked = async () =>
-    (await recorded("stdin")).map((prompt) => /^Request: (.*)$/m.exec(prompt)?.[1]);
+    (await recorded("stdin")).map((line) => {
+      const prompt: string = JSON.parse(line).message.content;
+
+      return /^Request: (.*)$/m.exec(prompt)?.[1];
+    });
 
   /** The value after `flag` in each call's arguments, oldest first. */
   const flagged = async (flag: string) =>

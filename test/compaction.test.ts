@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer, ManagedRuntime, type Schema, Stream } from "effect";
 
 import { parseClaudeLine, type RunEvent } from "../src/core/agentParse.ts";
-import { noteCompaction } from "../src/core/agentRun.ts";
 import type { McpLaunch } from "../src/core/agents.ts";
+import { noteCompaction } from "../src/core/agentTurn.ts";
 import { ImportRuns, startImport } from "../src/core/importRun.ts";
 import { getImport } from "../src/core/imports.ts";
 import type { AgentRun, RunMessage } from "../web/src/api.ts";

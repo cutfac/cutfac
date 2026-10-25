@@ -7,8 +7,11 @@ import { Effect, Option, Schema } from "effect";
 
 import { runEdit } from "../src/core/agentRun.ts";
 import { AppData } from "../src/core/appData.ts";
+import { refuse } from "../src/core/approval.ts";
+import type { Approval, ApprovalAnswer } from "../src/core/approval.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import {
+  askingTrusted,
   fingerprintOf,
   requireTrust,
   trustCreated,
@@ -175,6 +178,94 @@ describe("trusting a workspace", () => {
   });
 });
 
+describe("Always allow on the board", () => {
+  let t: TestWorkspace;
+  let appDir: string;
+
+  const LOCAL = ".claude/settings.local.json";
+
+  const ffmpeg: Approval = {
+    id: "r1",
+    tool: "Bash",
+    detail: "ffmpeg -i a.mp4 b.mp4",
+    always: true,
+    rules: ["Bash(ffmpeg:*)"],
+  };
+
+  const inApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) =>
+    t.run(Effect.provideService(effect, AppData, Option.some(appDir)));
+
+  const write = (file: string, settings: Schema.JsonObject) =>
+    writeFile(join(t.root, file), JSON.stringify(settings, null, 2));
+
+  /**
+   * A Claude run that asks for ffmpeg, gets `answer`, then leaves the workspace's settings as
+   * `after` has them; whether Claude may still run there afterwards.
+   */
+  const run = async (
+    answer: ApprovalAnswer,
+    after: Readonly<Record<string, Schema.JsonObject>>,
+  ) => {
+    await inApp(
+      Effect.gen(function* () {
+        const trust = yield* requireTrust("claude");
+
+        yield* askingTrusted(
+          trust,
+          () => Effect.succeed(answer),
+          (ask) =>
+            Effect.andThen(
+              ask(ffmpeg),
+              Effect.promise(() =>
+                Promise.all(Object.entries(after).map(([file, settings]) => write(file, settings))),
+              ),
+            ),
+        );
+      }),
+    );
+
+    return !(await inApp(trustStatus())).needed;
+  };
+
+  beforeEach(async () => {
+    t = await makeWorkspace("Always");
+    appDir = await mkdtemp(join(tmpdir(), "cutfac-app-"));
+    await mkdir(join(t.root, ".claude"));
+  });
+
+  afterEach(async () => {
+    await rm(appDir, { recursive: true, force: true });
+    await t.remove();
+  });
+
+  test("keeps the workspace trusted for the rule Claude keeps for it", async () => {
+    expect(await run("always", { [LOCAL]: { permissions: { allow: ["Bash(ffmpeg:*)"] } } })).toBe(
+      true,
+    );
+  });
+
+  test("adds to the rules the user trusted before", async () => {
+    await write(SETTINGS, { permissions: { allow: ["Bash(ls:*)"] } });
+    await inApp(trustWorkspace((await inApp(trustStatus())).fingerprint));
+
+    const allow = ["Bash(ls:*)", "Bash(ffmpeg:*)"];
+
+    expect(await run("always", { [SETTINGS]: { permissions: { allow } } })).toBe(true);
+  });
+
+  test("doesn't cover anything else the run changed in the settings", async () => {
+    const rules = (allow: ReadonlyArray<string>) => ({ [LOCAL]: { permissions: { allow } } });
+
+    expect(await run("always", rules(["Bash(ffmpeg:*)", "Bash(curl:*)"]))).toBe(false);
+    await rm(join(t.root, LOCAL));
+    expect(await run("allow", rules(["Bash(ffmpeg:*)"]))).toBe(false);
+    await rm(join(t.root, LOCAL));
+    expect(
+      await run("always", { ...rules(["Bash(ffmpeg:*)"]), [SETTINGS]: { hooks: HOOKS } }),
+    ).toBe(false);
+  });
+});
+
 describe("an edit run in a workspace the user hasn't trusted", () => {
   let t: TestWorkspace;
   let fakes: FakeAgents;
@@ -202,7 +293,7 @@ describe("an edit run in a workspace the user hasn't trusted", () => {
         const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
         const input = { itemId: created.id, feedbackId: feedback.id, agent: "claude" as const };
 
-        yield* runEdit(undefined)(input, () => Effect.void);
+        yield* runEdit(undefined)(input, () => Effect.void, refuse);
 
         return yield* getItem(created.id);
       }),

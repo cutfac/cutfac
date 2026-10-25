@@ -11,7 +11,7 @@ import { AGENTS, type AgentName } from "./schema.ts";
 export const MIN_AGENT_VERSION: Readonly<Record<AgentName, string>> = {
   // 2.1.257 added `permissions.blockReadsOutsideWorkingDirectories`, which an import run sets
   // through `--settings`. Every other flag Cutfac passes, such as `--effort xhigh`, `--session-id`
-  // with `--resume` and `--allowedTools`, is older than that.
+  // with `--resume`, `--allowedTools` and `--permission-prompt-tool stdio`, is older than that.
   claude: "2.1.257",
   // 0.122.0 added `codex debug models`, which the model picker reads; the rest of what Cutfac
   // uses, such as `exec resume --json`, is older. 0.128.0 is a few releases on.

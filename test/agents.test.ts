@@ -218,7 +218,6 @@ exit 1
       prompt: "do it",
       sessionId: undefined,
       newSessionId: "new",
-      allowedTools: [],
       codexServer,
     });
 
@@ -232,18 +231,19 @@ exit 1
     for (const entry of codexServer) expect(args[args.indexOf(entry) - 1]).toBe("-c");
   });
 
-  test("a board run never gets the tool that sends feedback to the Cutfac team", () => {
+  test("a board run asks the user before it sends feedback to the Cutfac team", () => {
     const { args } = agentInvocation("claude", {
       bin: "/bin/claude",
       prompt: "do it",
       sessionId: undefined,
       newSessionId: "new",
-      allowedTools: ["mcp__cutfac"],
     });
 
-    expect(args[args.indexOf("--disallowedTools") + 1]).toBe(
-      "mcp__cutfac__send_feedback_to_cutfac",
-    );
+    const allowed = args[args.indexOf("--allowedTools") + 1]?.split(",");
+
+    expect(allowed).toContain("mcp__cutfac__get_item");
+    expect(allowed).not.toContain("mcp__cutfac__send_feedback_to_cutfac");
+    expect(args).not.toContain("--disallowedTools");
   });
 
   test("a codex board run switches off every other server and apps", () => {

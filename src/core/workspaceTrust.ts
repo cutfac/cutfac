@@ -1,5 +1,6 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Ref, Schema } from "effect";
 
+import type { Ask } from "./approval.ts";
 import { appStoreFile, peekAppStore, updateAppStore } from "./appStore.ts";
 import { Conflict } from "./errors.ts";
 import { byName, canonicalJson, isEmptyJson, isJsonObject } from "./json.ts";
@@ -171,12 +172,94 @@ export const trustNotices = Effect.fn("workspaceTrust.notices")(function* () {
   return problem === undefined ? [] : [problem];
 });
 
-/** Fail when `agent` can't run in this workspace until the user trusts it. */
+/**
+ * Fail when `agent` can't run in this workspace until the user trusts it; with the trust Claude
+ * runs on, or none for Codex.
+ */
 export const requireTrust = Effect.fn("workspaceTrust.require")(function* (agent: AgentName) {
-  const problem = yield* trustProblem(agent);
+  if (agent !== "claude") return undefined;
+  const status = yield* trustStatus();
 
-  if (problem !== undefined) return yield* new Conflict({ message: problem });
+  if (status.needed) return yield* new Conflict({ message: trustMessage(status.items) });
+
+  return status;
 });
+
+const itemKey = (item: TrustItem) => `${item.file}\0${item.key ?? ""}`;
+
+const sameJson = (a: Schema.Json, b: Schema.Json) =>
+  JSON.stringify(canonicalJson(a)) === JSON.stringify(canonicalJson(b));
+
+const decodeRules = Schema.decodeUnknownOption(Schema.Array(Schema.String));
+
+/**
+ * Whether all that changed from `before` to `after` is allow rules in `approved`: an item is as it
+ * was, or an allow list whose new rules are all approved.
+ */
+function onlyApproved(
+  before: ReadonlyArray<TrustItem>,
+  after: ReadonlyArray<TrustItem>,
+  approved: ReadonlySet<string>,
+) {
+  const was = new Map(before.map((item) => [itemKey(item), item.value]));
+
+  return after.every((item) => {
+    const earlier = was.get(itemKey(item));
+
+    if (earlier !== undefined && sameJson(earlier, item.value)) return true;
+
+    if (item.key !== "permissions.allow") return false;
+    const rules = decodeRules(item.value);
+    const kept = new Set(Option.getOrElse(decodeRules(earlier), () => []));
+
+    return (
+      Option.isSome(rules) && rules.value.every((rule) => kept.has(rule) || approved.has(rule))
+    );
+  });
+}
+
+/**
+ * Keep trusting the workspace after a run that started trusted, `before`, when all it changed in
+ * the settings are the rules the user kept with Always allow, `approved`.
+ */
+const keepTrust = Effect.fnUntraced(function* (
+  before: TrustStatus,
+  approved: ReadonlyArray<string>,
+) {
+  if (approved.length === 0) return;
+  const after = yield* trustStatus();
+
+  if (!after.needed || !onlyApproved(before.items, after.items, new Set(approved))) return;
+  yield* updateRecord((record) => ({ ...record, settings: after.fingerprint }));
+});
+
+/**
+ * Run `use` with `ask`, keeping the workspace trusted for the rules the user keeps with Always
+ * allow on the way, which Claude Code writes to the settings trust names. `trust` is the trust the
+ * run started on; none for an agent that needs none.
+ */
+export const askingTrusted = <A, E, R>(
+  trust: TrustStatus | undefined,
+  ask: Ask,
+  use: (ask: Ask) => Effect.Effect<A, E, R>,
+) =>
+  Effect.gen(function* () {
+    if (trust === undefined) return yield* use(ask);
+    const approved = yield* Ref.make<ReadonlyArray<string>>([]);
+
+    const noting: Ask = (approval) =>
+      Effect.tap(ask(approval), (answer) =>
+        answer === "always"
+          ? Ref.update(approved, (rules) => [...rules, ...approval.rules])
+          : Effect.void,
+      );
+
+    const keep = Effect.flatMap(Ref.get(approved), (rules) => keepTrust(trust, rules)).pipe(
+      Effect.ignore({ log: true }),
+    );
+
+    return yield* use(noting).pipe(Effect.ensuring(keep));
+  });
 
 /**
  * Trust the workspace's settings as the user saw them, named by `fingerprint`. Settings that

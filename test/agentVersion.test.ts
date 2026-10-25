@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { Effect } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
-import { converse } from "../src/core/agentRun.ts";
 import { agentStatus } from "../src/core/agents.ts";
+import { converse } from "../src/core/agentTurn.ts";
 import {
   type AgentRelease,
   MIN_AGENT_VERSION,
@@ -280,9 +280,7 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
         agent,
         stored,
         invocation: (session) =>
-          Effect.succeed(
-            agentInvocation(agent, { bin, prompt: "hi", allowedTools: [], ...session }),
-          ),
+          Effect.succeed(agentInvocation(agent, { bin, prompt: "hi", ...session })),
         save: (session) =>
           Effect.sync(() => {
             saved.push(session);
@@ -308,7 +306,7 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
   test("fails, naming the agent and its version, when claude prints nothing", async () => {
     const bin = await fakes.bin(
       "claude",
-      answeringVersion("2.1.301 (Claude Code)", "cat >/dev/null\n"),
+      answeringVersion("2.1.301 (Claude Code)", "head -n 1 >/dev/null\n"),
     );
 
     const { result } = await turn("claude", bin);
@@ -334,7 +332,7 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
   });
 
   test("fails without a version when the agent does not give one", async () => {
-    const bin = await fakes.bin("claude", "cat >/dev/null\n");
+    const bin = await fakes.bin("claude", "head -n 1 >/dev/null\n");
     const { result } = await turn("claude", bin);
 
     expect(result.failure).toBe("Couldn't read claude's output; Cutfac may need an update.");
@@ -343,7 +341,7 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
   test("tells an agent that is too old to update it", async () => {
     const bin = await fakes.bin(
       "claude",
-      answeringVersion("2.1.1 (Claude Code)", "cat >/dev/null\n"),
+      answeringVersion("2.1.1 (Claude Code)", "head -n 1 >/dev/null\n"),
     );
 
     const { result } = await turn("claude", bin);
@@ -357,7 +355,7 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
       "claude",
       answeringVersion(
         "99.0.0 (Claude Code)",
-        `cat >/dev/null
+        `head -n 1 >/dev/null
 echo '{"type":"system","subtype":"init","session_id":"s1"}'
 echo '{"type":"result","subtype":"success","session_id":"s1","result":""}'
 `,
@@ -373,7 +371,7 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":""}'
   test("keeps the stored session instead of starting over in a new conversation", async () => {
     const bin = await fakes.bin(
       "claude",
-      answeringVersion("99.0.0 (Claude Code)", `cat >/dev/null\n${countRun()}\n`),
+      answeringVersion("99.0.0 (Claude Code)", `head -n 1 >/dev/null\n${countRun()}\n`),
     );
 
     const { result, saved } = await turn("claude", bin, STORED);
@@ -388,7 +386,7 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":""}'
       "claude",
       answeringVersion(
         "99.0.0 (Claude Code)",
-        `cat >/dev/null
+        `head -n 1 >/dev/null
 ${countRun()}
 case "$*" in
   *--resume*) echo "No conversation found" >&2; exit 1 ;;

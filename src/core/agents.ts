@@ -83,8 +83,9 @@ export const MCP_WRITE_TOOLS = [
 ] as const;
 
 /**
- * The MCP tools a headless run from the board never gets: they send what the user has to see and
- * agree to first, and no one is there to ask.
+ * The MCP tools that send what the user has to see and agree to first. A Claude run from the board
+ * asks the board for them each time; a run that can't ask, such as Codex's or an import's, never
+ * gets them.
  */
 export const MCP_USER_ONLY_TOOLS = ["send_feedback_to_cutfac"] as const satisfies ReadonlyArray<
   (typeof MCP_WRITE_TOOLS)[number]

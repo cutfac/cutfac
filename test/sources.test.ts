@@ -116,7 +116,6 @@ describe("reading the web for sources", () => {
     prompt: "do it",
     sessionId: undefined,
     newSessionId: "new",
-    allowedTools: ["Read"],
   };
 
   test("hosts come from the links, each once", () => {
@@ -130,13 +129,10 @@ describe("reading the web for sources", () => {
     ).toEqual(["example.org", "www.example.net"]);
   });
 
-  test("claude may fetch only those hosts, and codex may search the web only with some", () => {
+  test("claude asks before it fetches them, and codex may search the web only with some", () => {
     const hosts = ["example.org", "www.example.net"];
 
-    expect(agentInvocation("claude", { ...opts, hosts }).args).toContain(
-      "Read,WebFetch(domain:example.org),WebFetch(domain:www.example.net)",
-    );
-    expect(agentInvocation("claude", opts).args).toContain("Read");
+    expect(agentInvocation("claude", { ...opts, hosts }).args.join(" ")).not.toContain("WebFetch");
     expect(agentInvocation("codex", { ...opts, hosts }).args).toContain('web_search="live"');
     expect(agentInvocation("codex", opts).args).not.toContain('web_search="live"');
   });

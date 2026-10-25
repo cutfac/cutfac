@@ -4,6 +4,7 @@ import { Effect, type Schema } from "effect";
 
 import { parseClaudeLine } from "../src/core/agentParse.ts";
 import { runEdit } from "../src/core/agentRun.ts";
+import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import type {
   AgentChoice,
@@ -56,7 +57,7 @@ describe("an edit run", () => {
   test("keeps what the agent said last about its cache, for the next request to go by", async () => {
     await fakes.bin(
       "claude",
-      `cat > /dev/null
+      `head -n 1 >/dev/null
 echo '{"type":"system","subtype":"init","session_id":"s1","per_turn_effort_active":true}'
 echo '{"type":"system","subtype":"per_turn_effort_changed","per_turn_effort_active":false}'
 echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
@@ -70,7 +71,7 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
         const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
         const input = { itemId: created.id, feedbackId: feedback.id, agent: "claude" as const };
 
-        yield* runEdit(undefined)(input, () => Effect.void);
+        yield* runEdit(undefined)(input, () => Effect.void, refuse);
 
         return yield* getItem(created.id);
       }),

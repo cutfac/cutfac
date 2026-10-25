@@ -117,7 +117,6 @@ describe("running on a model", () => {
     prompt: "do it",
     sessionId: undefined,
     newSessionId: "new",
-    allowedTools: ["Read"],
   };
 
   test("claude takes --model and --effort", () => {

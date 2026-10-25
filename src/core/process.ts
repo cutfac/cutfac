@@ -6,8 +6,8 @@ import { CommandFailed } from "./errors.ts";
 
 export interface RunOptions {
   readonly cwd?: string;
-  /** Written to the process's stdin, which is then closed. */
-  readonly stdin?: string;
+  /** Written to the process's stdin, which is closed after it, or when the stream ends. */
+  readonly stdin?: string | Stream.Stream<Uint8Array, PlatformError> | undefined;
   /** Added to the environment the command inherits. */
   readonly env?: Readonly<Record<string, string>> | undefined;
 }
@@ -68,10 +68,16 @@ export const UNINHERITED = {
   CODEX_APP_SERVER_USE_LOCAL_DAEMON: undefined,
 } satisfies Readonly<Record<string, undefined>>;
 
+const stdinOf = (stdin: RunOptions["stdin"]) => {
+  if (stdin === undefined) return "ignore";
+
+  return Predicate.isString(stdin) ? Stream.make(encoder.encode(stdin)) : stdin;
+};
+
 export function commandOptions(options: RunOptions): ChildProcess.CommandOptions {
   return {
     cwd: options.cwd,
-    stdin: options.stdin === undefined ? "ignore" : Stream.make(encoder.encode(options.stdin)),
+    stdin: stdinOf(options.stdin),
     env: { ...UNINHERITED, ...options.env },
     extendEnv: true,
   };

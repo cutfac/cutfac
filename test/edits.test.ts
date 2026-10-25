@@ -119,7 +119,6 @@ describe("agent CLIs", () => {
     bin: "/bin/x",
     prompt: "do it",
     newSessionId: "new",
-    allowedTools: ["Read", "Bash(ffmpeg:*)"],
   };
 
   test("claude starts a fixed session, then resumes it", () => {
@@ -128,8 +127,7 @@ describe("agent CLIs", () => {
 
     expect(first.command).toBe("/bin/x");
     expect(first.args).toContain("--session-id");
-    expect(first.args).toContain("Read,Bash(ffmpeg:*)");
-    expect(first.stdin).toBe("do it");
+    expect(JSON.parse(first.stdin).message.content).toBe("do it");
     expect(next.args.slice(-2)).toEqual(["--resume", "s1"]);
   });
 
@@ -397,7 +395,9 @@ describe("run registry", () => {
 
           // Like an import turn, whose last part always runs to the end once it began.
           const registry = yield* makeRunRegistry(
-            itemRuns((run, emit) => Effect.uninterruptible(heldRunner(started, finish)(run, emit))),
+            itemRuns((run, emit, ask) =>
+              Effect.uninterruptible(heldRunner(started, finish)(run, emit, ask)),
+            ),
           );
 
           const subscription = yield* registry.subscribe("item");

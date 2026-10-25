@@ -16,6 +16,7 @@ import {
 } from "../src/core/agentPermissions.ts";
 import { runEdit } from "../src/core/agentRun.ts";
 import { AppData } from "../src/core/appData.ts";
+import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";
 import type { AgentName } from "../src/core/schema.ts";
 import {
@@ -26,24 +27,11 @@ import {
   type TestWorkspace,
 } from "./support.ts";
 
-describe("Claude's flags", () => {
-  test("follow the user's mode, except one that would ask before an edit", () => {
-    expect(claudePermissionFlags("follow", {})).toEqual(["--permission-mode", "acceptEdits"]);
-    expect(claudePermissionFlags("follow", { defaultMode: "default" })).toEqual([
-      "--permission-mode",
-      "acceptEdits",
-    ]);
-    expect(claudePermissionFlags("follow", { defaultMode: "auto" })).toEqual([]);
-    expect(claudePermissionFlags("follow", { defaultMode: "plan" })).toEqual([]);
-  });
-
-  test("set Cutfac's own modes over the user's", () => {
-    const user = { defaultMode: "plan" };
-
-    expect(claudePermissionFlags("edit", user)).toEqual(["--permission-mode", "acceptEdits"]);
-    expect(claudePermissionFlags("auto", user)).toEqual(["--permission-mode", "auto"]);
-    expect(claudePermissionFlags("full", user)).toEqual(["--permission-mode", "bypassPermissions"]);
-  });
+test("Claude's flags leave the user's mode to Claude, or set one of Cutfac's over it", () => {
+  expect(claudePermissionFlags("follow")).toEqual([]);
+  expect(claudePermissionFlags("edit")).toEqual(["--permission-mode", "acceptEdits"]);
+  expect(claudePermissionFlags("auto")).toEqual(["--permission-mode", "auto"]);
+  expect(claudePermissionFlags("full")).toEqual(["--permission-mode", "bypassPermissions"]);
 });
 
 describe("Codex's config", () => {
@@ -90,7 +78,8 @@ describe("Codex's config", () => {
 });
 
 test("following the user's settings comes to what they let a run do", () => {
-  expect(claudeAccess({})).toBe("edit");
+  expect(claudeAccess({})).toBe("asks");
+  expect(claudeAccess({ defaultMode: "default" })).toBe("asks");
   expect(claudeAccess({ defaultMode: "acceptEdits" })).toBe("edit");
   expect(claudeAccess({ defaultMode: "auto" })).toBe("auto");
   expect(claudeAccess({ defaultMode: "bypassPermissions" })).toBe("full");
@@ -242,6 +231,7 @@ const edit = (agent: AgentName) =>
       yield* runEdit(undefined)(
         { itemId: created.id, feedbackId: feedback.id, agent },
         () => Effect.void,
+        refuse,
       );
     }),
   );
@@ -253,7 +243,7 @@ describe("an edit run", () => {
   beforeEach(async () => {
     await fakes.bin(
       "claude",
-      `cat > /dev/null
+      `head -n 1 >/dev/null
 printf '%s\\0' "$@" > "${fakes.calls}/args"
 echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
 `,
@@ -268,18 +258,13 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
     );
   });
 
-  test("of Claude leaves the mode to Claude when the user's settings set one", async () => {
-    await writeFile(join(config, "settings.json"), claudeMode("auto"));
-
+  test("of Claude leaves the user's mode to Claude, which asks the board what it would ask", async () => {
     await edit("claude");
 
-    expect(await given()).not.toContain("--permission-mode");
-  });
+    const argv = await given();
 
-  test("of Claude edits in the workspace when the user's mode would ask", async () => {
-    await edit("claude");
-
-    expect(after(await given(), "--permission-mode")).toBe("acceptEdits");
+    expect(argv).not.toContain("--permission-mode");
+    expect(after(argv, "--permission-prompt-tool")).toBe("stdio");
   });
 
   test("of Claude takes the mode the user chose", async () => {
@@ -299,9 +284,11 @@ printf '%s\\0' "$@" > "${fakes.calls}/args"
 
     await edit("claude");
 
-    expect(after(await given(), "--allowedTools")).toBe(
-      "Read,Write,Edit,Glob,Grep,Bash(ffmpeg:*),Bash(ffprobe:*),mcp__cutfac",
-    );
+    const allowed = after(await given(), "--allowedTools")?.split(",") ?? [];
+
+    expect(allowed).not.toContain("Bash(uv:*)");
+
+    for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
   });
 
   test("of Codex leaves a reviewer the user set to answer", async () => {

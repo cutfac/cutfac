@@ -1,5 +1,6 @@
 import { Option, Predicate, Schema } from "effect";
 
+import { Approval } from "./approval.ts";
 import { AgentName, ModelSettings } from "./schema.ts";
 
 /**
@@ -27,18 +28,46 @@ export const RunEvent = Schema.Union([
     type: Schema.Literal("compaction"),
     state: Schema.Literals(["running", "done", "failed"]),
   }),
+  /** The agent asks before it uses a tool, and waits for the answer. */
+  Schema.Struct({ type: Schema.Literal("approval"), ...Approval.fields }),
+  /** The request was answered, here or elsewhere, or the agent took it back. */
+  Schema.Struct({ type: Schema.Literal("approval-settled"), id: Schema.String }),
 ]);
 
 export type RunEvent = typeof RunEvent.Type;
 
+/** A tool the agent asks to use, with what its answer has to carry back. */
+export interface ToolRequest {
+  readonly approval: Approval;
+  readonly input: Schema.JsonObject;
+  /** The rules the agent would add to stop asking, which an Always allow hands back. */
+  readonly suggestions: ReadonlyArray<Schema.Json>;
+  readonly toolUseId: string | undefined;
+  /** Whether the tool needs the user at the agent itself, which the board can't stand in for. */
+  readonly inPerson: boolean;
+}
+
+/**
+ * What Claude Code sends when it asks rather than answers: a request to use a tool, the withdrawal
+ * of one, or a request of a kind the board doesn't answer.
+ */
+export type ClaudeControl =
+  | { readonly kind: "ask"; readonly request: ToolRequest }
+  | { readonly kind: "cancel"; readonly id: string }
+  | { readonly kind: "unsupported"; readonly id: string };
+
 /** What one line of agent output says. */
 export interface ParsedLine {
   readonly events: ReadonlyArray<RunEvent>;
+  /** A request the agent waits on an answer to. */
+  readonly control?: ClaudeControl | undefined;
   readonly sessionId?: string | undefined;
   readonly reply?: string | undefined;
   readonly error?: string | undefined;
   /** Whether a change of effort alone keeps the conversation's prompt cache, when the line says. */
   readonly effortKeepsCache?: boolean | undefined;
+  /** The agent's result for the turn, after which it takes no more input. */
+  readonly ended?: true | undefined;
 }
 
 const NOTHING: ParsedLine = { events: [] };
@@ -50,7 +79,7 @@ const DetailValue = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
 const decodeDetail = Schema.decodeUnknownOption(DetailValue);
 
-const DETAIL_KEYS = ["command", "file_path", "path", "pattern"] as const;
+const DETAIL_KEYS = ["command", "file_path", "path", "pattern", "url"] as const;
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -63,22 +92,36 @@ export const relativeToRoot = (text: string, root: string) =>
     match.endsWith("/") ? "" : ".",
   );
 
-const clampDetail = (value: string | ReadonlyArray<string>, root: string | undefined) => {
-  const joined = Predicate.isString(value) ? value : value.join(" ");
-  const text = root === undefined ? joined : relativeToRoot(joined, root);
+const shownText = (text: string, root: string | undefined) =>
+  root === undefined ? text : relativeToRoot(text, root);
 
-  return text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL - 3)}…` : text;
-};
+/** A command or path argument, or a list of them, as one line. */
+const shownValue = (value: string | ReadonlyArray<string>, root: string | undefined) =>
+  shownText(Predicate.isString(value) ? value : value.join(" "), root);
 
-/** The one argument worth showing for a tool call: its command, file, or search pattern. */
-export function toolDetail(input: Schema.JsonObject, root?: string): string | undefined {
+/** `text` cut short to fit on a tool line. */
+const clamp = (text: string) =>
+  text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL - 3)}…` : text;
+
+const clampDetail = (value: string | ReadonlyArray<string>, root: string | undefined) =>
+  clamp(shownValue(value, root));
+
+/** The one argument worth showing for a tool call, whole: its command, file, search pattern, or address. */
+function mainArgument(input: Schema.JsonObject, root: string | undefined): string | undefined {
   for (const key of DETAIL_KEYS) {
     const value = decodeDetail(input[key]);
 
-    if (Option.isSome(value)) return clampDetail(value.value, root);
+    if (Option.isSome(value)) return shownValue(value.value, root);
   }
 
   return undefined;
+}
+
+/** A tool call's main argument, cut short to fit on its line. */
+function toolDetail(input: Schema.JsonObject, root: string | undefined): string | undefined {
+  const text = mainArgument(input, root);
+
+  return text === undefined ? undefined : clamp(text);
 }
 
 const decodeJsonLine = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
@@ -153,6 +196,101 @@ function claudeCompaction(msg: ClaudeEnvelope): ReadonlyArray<RunEvent> {
   return msg.compact_result === "failed" ? [{ type: "compaction", state: "failed" }] : [];
 }
 
+const decodeText = Schema.decodeUnknownOption(Schema.String);
+
+const decodeObject = Schema.decodeUnknownOption(Schema.JsonObject);
+
+const decodeList = Schema.decodeUnknownOption(Schema.Array(Schema.Json));
+
+/** A change to its permissions that Claude Code offers to make if the user allows always. */
+const Suggestion = Schema.Struct({
+  type: Schema.String,
+  behavior: Schema.optional(Schema.String),
+  rules: Schema.optional(
+    Schema.Array(
+      Schema.Struct({ toolName: Schema.String, ruleContent: Schema.optional(Schema.String) }),
+    ),
+  ),
+});
+
+const decodeSuggestion = Schema.decodeUnknownOption(Suggestion);
+
+const ADDS_RULES = new Set(["addRules", "replaceRules"]);
+
+/** The allow rules `suggestions` would keep, written as Claude Code writes them in its settings. */
+const allowRules = (suggestions: ReadonlyArray<Schema.Json>) =>
+  suggestions.flatMap((json) =>
+    Option.match(decodeSuggestion(json), {
+      onNone: () => [],
+      onSome: (suggestion) =>
+        ADDS_RULES.has(suggestion.type) && suggestion.behavior === "allow"
+          ? (suggestion.rules ?? []).map(({ toolName, ruleContent }) =>
+              ruleContent === undefined ? toolName : `${toolName}(${ruleContent})`,
+            )
+          : [],
+    }),
+  );
+
+/** A text field of `json`, or none when it is missing or something else. */
+const textOf = (json: Schema.JsonObject, key: string) =>
+  Option.getOrUndefined(decodeText(json[key]));
+
+/**
+ * A `can_use_tool` request, read one field at a time, so a field a later Claude Code leaves out or
+ * changes costs only what it would have shown.
+ */
+function toolRequest(
+  id: string,
+  request: Schema.JsonObject,
+  root: string | undefined,
+): ToolRequest {
+  const input = Option.getOrElse(decodeObject(request["input"]), (): Schema.JsonObject => ({}));
+  const suggestions = Option.getOrElse(decodeList(request["permission_suggestions"]), () => []);
+  const display = textOf(request, "display_name");
+
+  const shown = (text: string | undefined) => (text === undefined ? text : shownText(text, root));
+
+  // All of what the user agrees to, as Claude Code's own prompt shows it: the whole command or
+  // path, or else every argument, such as the message a tool would send.
+  const everything = Object.keys(input).length === 0 ? undefined : JSON.stringify(input, null, 2);
+
+  return {
+    approval: {
+      id,
+      tool: textOf(request, "tool_name") ?? display ?? "tool",
+      title: shown(textOf(request, "title") ?? display),
+      detail: mainArgument(input, root) ?? shown(textOf(request, "blocked_path") ?? everything),
+      reason: shown(textOf(request, "description") ?? textOf(request, "decision_reason")),
+      always: suggestions.length > 0 && request["suppress_always_allow_rule"] !== true,
+      rules: allowRules(suggestions),
+    },
+    input,
+    suggestions,
+    toolUseId: textOf(request, "tool_use_id"),
+    inPerson: request["requires_user_interaction"] === true,
+  };
+}
+
+/** A request Claude Code waits on an answer to, or one it takes back. */
+function claudeControl(
+  type: string,
+  json: Schema.JsonObject,
+  root: string | undefined,
+): ClaudeControl | undefined {
+  const id = textOf(json, "request_id");
+
+  if (id === undefined) return undefined;
+
+  if (type === "control_cancel_request") return { kind: "cancel", id };
+  const request = Option.getOrUndefined(decodeObject(json["request"]));
+
+  return request !== undefined && textOf(request, "subtype") === "can_use_tool"
+    ? { kind: "ask", request: toolRequest(id, request, root) }
+    : { kind: "unsupported", id };
+}
+
+const CONTROL_TYPES = new Set(["control_request", "control_cancel_request"]);
+
 /**
  * One line of `claude -p --output-format stream-json`. Paths under `root`, the workspace the agent
  * runs in, show relative to it.
@@ -165,6 +303,11 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
 
   if (Option.isNone(envelope)) return NOTHING;
   const msg = envelope.value;
+
+  if (CONTROL_TYPES.has(msg.type)) {
+    return { events: [], control: claudeControl(msg.type, json.value, root) };
+  }
+
   const events = msg.type === "assistant" ? claudeEvents(json.value, root) : claudeCompaction(msg);
 
   if (msg.type !== "result") {
@@ -178,6 +321,7 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
     sessionId: msg.session_id,
     reply: failed ? undefined : msg.result,
     error: failed ? (msg.result ?? msg.subtype ?? "Claude failed") : undefined,
+    ended: true,
   };
 }
 

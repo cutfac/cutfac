@@ -7,6 +7,7 @@ import { ConfigProvider, Effect, type Layer, Option, type Schema } from "effect"
 
 import { runEdit } from "../src/core/agentRun.ts";
 import { AppData } from "../src/core/appData.ts";
+import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";
 import {
   type McpServersStatus,
@@ -96,7 +97,7 @@ describe("the MCP servers the user set up", () => {
       ["docs", "user", "new"],
       ["notes", "local", "new"],
     ]);
-    expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
+    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
 
     expect(
       (
@@ -112,7 +113,6 @@ describe("the MCP servers the user set up", () => {
     const approved = await inApp(approvedClaudeServers());
 
     expect(Object.keys(approved.servers)).toEqual(["docs"]);
-    expect(approved.tools).toEqual(["mcp__docs"]);
   });
 
   test("keep the user's own once for every workspace, and this folder's by its root", async () => {
@@ -146,7 +146,7 @@ describe("the MCP servers the user set up", () => {
     await setUpClaude({ mcpServers: { docs: { ...DOCS, command: "other-mcp" } } });
 
     expect(stateOf(await inApp(mcpServersStatus()), "docs")).toBe("changed");
-    expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
+    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
     expect(await inApp(mcpNotices())).toEqual([
       expect.stringContaining("docs (Claude Code, changed since turned on)"),
     ]);
@@ -225,6 +225,7 @@ const edit = (agent: AgentName) =>
       yield* runEdit(undefined)(
         { itemId: created.id, feedbackId: feedback.id, agent },
         () => Effect.void,
+        refuse,
       );
     }),
   );
@@ -233,7 +234,7 @@ describe("an edit run", () => {
   test("of Claude loads the servers the user turned on, their secrets off the command line", async () => {
     await fakes.bin(
       "claude",
-      `cat > /dev/null
+      `head -n 1 >/dev/null
 printf '%s\\0' "$@" > "${fakes.calls}/args"
 env | grep '^CUTFAC_MCP_SECRET_' > "${fakes.calls}/env"
 echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
@@ -253,10 +254,10 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
     expect(argv.join(" ")).not.toContain("t-1");
     expect(await readFile(join(fakes.calls, "env"), "utf8")).toBe("CUTFAC_MCP_SECRET_0=t-1\n");
 
+    // Claude asks the board before it uses their tools, as it would ask in a terminal.
     const allowed = (argv[argv.indexOf("--allowedTools") + 1] ?? "").split(",");
 
-    expect(allowed).toContain("mcp__docs");
-    expect(allowed).not.toContain("mcp__notes");
+    for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
   });
 
   test("of Codex keeps the servers the user turned on and switches off the rest", async () => {
@@ -320,7 +321,7 @@ describe("a plugin with MCP servers", () => {
       // Where the plugin is, filled in.
       servers: [{ name: "search", launch: `${pluginFolder(config, "docs@market")}/bin/search` }],
     });
-    expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
+    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
 
     const [notice] = await inApp(mcpNotices());
 
@@ -350,7 +351,6 @@ describe("a plugin with MCP servers", () => {
       command: `${root}/bin/search`,
     });
     expect(Object.values(approved.env)).toContain(root);
-    expect(approved.tools).toEqual(["mcp__plugin_docs_search"]);
   });
 
   test("is asked about again when what it starts changes, and not turned on unseen", async () => {
@@ -362,7 +362,7 @@ describe("a plugin with MCP servers", () => {
     });
 
     expect((await inApp(mcpServersStatus())).plugins[0]?.state).toBe("changed");
-    expect((await inApp(approvedClaudeServers())).tools).toEqual([]);
+    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
 
     const decision = { agent: "claude", id: "docs@market", on: true } as const;
 

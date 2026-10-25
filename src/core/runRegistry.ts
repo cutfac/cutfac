@@ -1,6 +1,7 @@
 import {
   Cause,
   type Context,
+  Deferred,
   Effect,
   Fiber,
   FiberSet,
@@ -13,12 +14,16 @@ import {
 } from "effect";
 
 import type { RunEvent } from "./agentParse.ts";
+import type { ApprovalAnswer, Ask } from "./approval.ts";
 import { Conflict } from "./errors.ts";
 
 export type Emit = (event: RunEvent) => Effect.Effect<void>;
 
-/** Runs one request to the end, reporting progress through `emit`. Never fails: errors become events. */
-export type Runner<I, R> = (input: I, emit: Emit) => Effect.Effect<void, never, R>;
+/**
+ * Runs one request to the end, reporting progress through `emit` and putting what the agent asks
+ * to the board through `ask`. Never fails: errors become events.
+ */
+export type Runner<I, R> = (input: I, emit: Emit, ask: Ask) => Effect.Effect<void, never, R>;
 
 /** The first line of `text`, kept short enough for a status or an error line. */
 export const firstLine = (text: string) => text.trim().split("\n")[0]?.slice(0, 200) ?? "";
@@ -54,6 +59,11 @@ export interface Runs<I> {
    * no run was working, including one that already reported its end.
    */
   readonly stop: (key: string) => Effect.Effect<boolean>;
+  /**
+   * Answer what the key's run asked; false when it is no longer waiting on that request, as after
+   * another answer, the agent taking it back, or the run's end.
+   */
+  readonly answer: (key: string, id: string, answer: ApprovalAnswer) => Effect.Effect<boolean>;
   /** Whether the key has a run that has not reported its end yet. */
   readonly isRunning: (key: string) => Effect.Effect<boolean>;
   readonly subscribe: (key: string) => Effect.Effect<RunSubscription, never, Scope.Scope>;
@@ -71,6 +81,8 @@ export interface Runs<I> {
 interface LiveRun {
   fiber: Fiber.Fiber<void> | undefined;
   ended: RunEvent["type"] | undefined;
+  /** The requests it waits on an answer to, by the agent's id for them. */
+  readonly pending: Map<string, Deferred.Deferred<ApprovalAnswer>>;
 }
 
 interface Channel {
@@ -87,6 +99,32 @@ const ENDINGS = new Set<RunEvent["type"]>(["done", "stopped", "error"]);
 
 const crashMessage = (cause: Cause.Cause<never>) =>
   firstLine(Cause.pretty(cause)) || "The agent run crashed";
+
+/**
+ * Put requests to whoever watches `run`. A request is on the board from the moment it is pending
+ * until it is settled, however that happens: an answer, the agent taking it back, or a stop.
+ */
+const askVia =
+  (emit: Emit, run: LiveRun): Ask =>
+  (approval) =>
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const { id } = approval;
+        const answer = yield* Deferred.make<ApprovalAnswer>();
+        run.pending.set(id, answer);
+        yield* emit({ type: "approval", ...approval });
+
+        return yield* restore(Deferred.await(answer)).pipe(
+          Effect.ensuring(
+            Effect.suspend(() => {
+              if (run.pending.get(id) === answer) run.pending.delete(id);
+
+              return emit({ type: "approval-settled", id });
+            }),
+          ),
+        );
+      }),
+    );
 
 /**
  * One run at a time per key. A run holds its key until it reports its end, not until its fiber
@@ -159,7 +197,7 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   const supervise = (input: I, channel: Channel, run: LiveRun) => {
     const emit = emitTo(channel, run);
 
-    return spec.runner(input, emit).pipe(
+    return spec.runner(input, emit, askVia(emit, run)).pipe(
       Effect.andThen(emit({ type: "error", error: "The agent run ended without a result" })),
       Effect.onInterrupt(() => emit({ type: "stopped" })),
       Effect.catchCause((cause) =>
@@ -181,7 +219,7 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
           if (channel.live !== undefined) return yield* new Conflict({ message: spec.busy });
 
           // The run's first event waits for this lock, so its fiber is known by then.
-          const run: LiveRun = { fiber: undefined, ended: undefined };
+          const run: LiveRun = { fiber: undefined, ended: undefined, pending: new Map() };
           channel.live = run;
           channel.subject = Option.some(spec.subject(input));
           channel.events = [];
@@ -201,6 +239,13 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
       yield* Fiber.interrupt(fiber);
 
       return true;
+    });
+
+  const answer = (key: string, id: string, choice: ApprovalAnswer) =>
+    Effect.suspend(() => {
+      const pending = channels.get(key)?.live?.pending.get(id);
+
+      return pending === undefined ? Effect.succeed(false) : Deferred.succeed(pending, choice);
     });
 
   const isRunning = (key: string) => Effect.sync(() => channels.get(key)?.live !== undefined);
@@ -230,7 +275,7 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
   const exclusive = <A, E, R2>(key: string, effect: Effect.Effect<A, E, R2>) =>
     Effect.flatMap(channelFor(key), (channel) => channel.turns.withPermits(1)(effect));
 
-  const registry: Runs<I> = { start, stop, isRunning, subscribe, exclusive };
+  const registry: Runs<I> = { start, stop, answer, isRunning, subscribe, exclusive };
 
   return registry;
 });
