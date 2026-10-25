@@ -322,9 +322,10 @@ export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
   return (
     <Sidebar
       collapsible="icon"
-      // On macOS it sits under the title bar, on the window's sidebar material, and the content
-      // beside it is a card.
-      {...(insetTitleBar && { variant: "inset", className: "top-10 h-[calc(100svh-2.5rem)]" })}
+      // The sidebar frames the content beside it, which sits in it as a card. On macOS it sits under
+      // the title bar, on the window's sidebar material.
+      variant="inset"
+      {...(insetTitleBar && { className: "top-10 h-[calc(100svh-2.5rem)]" })}
     >
       <SidebarHeader>
         <SidebarMenu>
