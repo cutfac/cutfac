@@ -127,7 +127,11 @@ const checkTimes = (
 const sheetLayout = (portrait: boolean) =>
   portrait ? { columns: 6, width: 240 } : { columns: 4, width: 360 };
 
-/** Join the frame files into one image; the concat filter avoids globbing names like `[9x16]`. */
+/**
+ * Join the frame files into one image; the concat filter avoids globbing names like `[9x16]`. The
+ * gaps and the cells a short last row leaves are a dark gray, so they read as empty on a dark board
+ * and still part frames that are white themselves.
+ */
 export function sheetArgs(abs: string, frames: ReadonlyArray<ReviewShot>, portrait: boolean) {
   const layout = sheetLayout(portrait);
   const columns = Math.min(frames.length, layout.columns);
@@ -137,7 +141,7 @@ export function sheetArgs(abs: string, frames: ReadonlyArray<ReviewShot>, portra
     ...frames.flatMap((frame) => ["-i", `${abs}/${frame.file}`]),
     "-filter_complex",
     `concat=n=${frames.length}:v=1:a=0,scale=${layout.width}:-2,` +
-      `tile=${columns}x${rows}:padding=4:margin=4:color=white`,
+      `tile=${columns}x${rows}:padding=4:margin=4:color=0x2a2a2a`,
     "-frames:v",
     "1",
     "-q:v",
