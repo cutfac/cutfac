@@ -265,6 +265,9 @@ export function Composer({
   const text = body.trim();
   const t = useMessages();
   const scope = scopeOf(target, media);
+  // Starting points help a first request, and one for a marked part; once the chat has requests,
+  // they only crowd it.
+  const ideas = answering || (empty && item.doc.feedback.length > 0) ? [] : t.composer.ideas[scope];
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
 
@@ -316,22 +319,24 @@ export function Composer({
   return (
     <Dropzone paste label={t.attachments.drop.composer} openRef={openFiles} onFiles={files.add}>
       <div className="flex flex-col gap-2 p-3">
-        <div className="flex flex-wrap gap-1.5">
-          {(answering ? [] : t.composer.ideas[scope]).map((idea) => (
-            <Button
-              key={idea}
-              variant="soft"
-              pill
-              size="xs"
-              onClick={() => {
-                setBody(idea);
-                inputRef.current?.focus();
-              }}
-            >
-              {idea}
-            </Button>
-          ))}
-        </div>
+        {ideas.length === 0 ? null : (
+          <div className="flex flex-wrap gap-1.5">
+            {ideas.map((idea) => (
+              <Button
+                key={idea}
+                variant="soft"
+                pill
+                size="xs"
+                onClick={() => {
+                  setBody(idea);
+                  inputRef.current?.focus();
+                }}
+              >
+                {idea}
+              </Button>
+            ))}
+          </div>
+        )}
         <SourceChips item={item} onItem={onItem} />
         <AttachmentChips item={item} files={files} />
         {empty ? null : (
