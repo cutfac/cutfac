@@ -27,7 +27,7 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "rea
 import { StatusDot } from "@/components/app-sidebar";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -121,6 +121,14 @@ function writeLayout(layout: Layout) {
   }
 }
 
+/**
+ * A control's words, left to its icon and to screen readers where the title bar is narrow. The
+ * control keeps the tighter padding on its icon's side, so the icon moves over to sit centred.
+ */
+function Label({ children }: { children: ReactNode }) {
+  return <span className="@max-2xl/title:sr-only">{children}</span>;
+}
+
 /** Once there is a video, suggest teaching the agent about the product, until learned or waved away. */
 function LearnHint() {
   const t = useMessages();
@@ -137,22 +145,21 @@ function LearnHint() {
   return (
     <Alert>
       <BookOpenIcon />
-      <AlertTitle>{t.board.learnHint.title}</AlertTitle>
-      <AlertDescription>{t.board.learnHint.body}</AlertDescription>
-      <AlertAction>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={dismiss}>
-            {t.board.learnHint.dismiss}
-          </Button>
-          <a
-            href={href("learn")}
-            onClick={dismiss}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            {t.board.learnHint.action}
-          </a>
-        </div>
-      </AlertAction>
+      <AlertTitle className="@2xl/board:mr-40">{t.board.learnHint.title}</AlertTitle>
+      <AlertDescription className="@2xl/board:mr-40">{t.board.learnHint.body}</AlertDescription>
+      {/* Beside the text where there is room, under it where there isn't. */}
+      <div className="col-start-2 mt-2 flex gap-2 @2xl/board:absolute @2xl/board:top-2.5 @2xl/board:right-3 @2xl/board:mt-0">
+        <Button variant="ghost" size="sm" onClick={dismiss}>
+          {t.board.learnHint.dismiss}
+        </Button>
+        <a
+          href={href("learn")}
+          onClick={dismiss}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {t.board.learnHint.action}
+        </a>
+      </div>
     </Alert>
   );
 }
@@ -222,7 +229,7 @@ export function Board() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pt-2">
+    <div className="@container/board flex min-h-0 flex-1 flex-col gap-4 px-6 pt-2">
       <PageHeader
         title={t.board.title}
         aside={
@@ -244,17 +251,24 @@ export function Board() {
                 onValueChange={chooseLayout}
               >
                 <ToggleGroupItem value="gallery">
-                  <LayoutGridIcon data-icon="inline-start" />
-                  {t.board.gallery}
+                  <LayoutGridIcon
+                    data-icon="inline-start"
+                    className="@max-2xl/title:translate-x-px"
+                  />
+                  <Label>{t.board.gallery}</Label>
                 </ToggleGroupItem>
                 <ToggleGroupItem value="board">
-                  <KanbanIcon data-icon="inline-start" />
-                  {t.board.board}
+                  <KanbanIcon data-icon="inline-start" className="@max-2xl/title:translate-x-px" />
+                  <Label>{t.board.board}</Label>
                 </ToggleGroupItem>
               </ToggleGroup>
               {usedFormats.length > 0 ? (
                 <Select items={formatItems} value={format} onValueChange={setFormat}>
-                  <SelectTrigger size="sm" aria-label={t.board.filterByFormat} className="w-40">
+                  <SelectTrigger
+                    size="sm"
+                    aria-label={t.board.filterByFormat}
+                    className="w-40 @max-2xl/title:w-28"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
@@ -272,14 +286,14 @@ export function Board() {
                 pressed={showArchived}
                 onPressedChange={setShowArchived}
               >
-                <ArchiveIcon data-icon="inline-start" />
-                {t.board.archived}
+                <ArchiveIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
+                <Label>{t.board.archived}</Label>
               </Toggle>
               <NewItemTrigger
                 render={
                   <Button size="sm">
-                    <PlusIcon data-icon="inline-start" />
-                    {t.newItem.open}
+                    <PlusIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
+                    <Label>{t.newItem.open}</Label>
                   </Button>
                 }
               />

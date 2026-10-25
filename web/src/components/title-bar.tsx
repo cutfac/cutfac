@@ -57,7 +57,7 @@ export function TitleBar({ children }: { children: ReactNode }) {
         ) : (
           toggle
         )}
-        <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2" />
+        <div ref={setSlot} className="@container/title flex min-w-0 flex-1 items-center gap-2" />
         {/* Last in the bar, so the area it keeps from dragging is not dragged again over it. */}
         {insetTitleBar ? <div className="fixed top-2.5 left-24 z-20">{toggle}</div> : null}
       </header>
