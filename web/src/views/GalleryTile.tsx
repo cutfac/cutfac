@@ -39,7 +39,7 @@ function WorkBadge({ work }: { work: ItemWork }) {
   if (text === undefined) return null;
 
   return (
-    <span className="pointer-events-none absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-full bg-background/90 px-2 py-0.5 text-xs font-medium shadow-sm backdrop-blur-sm">
+    <span className="pointer-events-none absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-full bg-background/90 px-2 py-0.5 text-xs font-medium backdrop-blur-sm">
       <span className={`size-1.5 rounded-full ${workDot(work)}`} />
       {text}
     </span>
@@ -60,7 +60,7 @@ function Versions({ item, labels }: { item: ItemSummary; labels: readonly string
   const t = useMessages().gallery;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="my-1 flex flex-wrap items-center gap-1.5">
       {labels.map((label) => (
         <Badge key={label} variant="outline">
           {label}
@@ -124,7 +124,7 @@ export function Tile({
           onContextMenu={onMenu}
         >
           <div
-            className="relative rounded-2xl transition group-hover/tile:shadow-md group-has-focus-visible/tile:shadow-md group-has-focus-visible/tile:outline-2 group-has-focus-visible/tile:outline-offset-2 group-has-focus-visible/tile:outline-ring group-data-popup-open/tile:shadow-md group-data-[selected=true]/tile:ring-2 group-data-[selected=true]/tile:ring-primary data-[needs=true]:ring-2 data-[needs=true]:ring-selection"
+            className="relative rounded-2xl transition group-hover/tile:shadow-md group-has-focus-visible/tile:shadow-md group-has-focus-visible/tile:outline-2 group-has-focus-visible/tile:outline-offset-2 group-has-focus-visible/tile:outline-ring group-data-popup-open/tile:shadow-md group-data-[selected=true]/tile:ring-2 group-data-[selected=true]/tile:ring-foreground/40 data-[needs=true]:ring-2 data-[needs=true]:ring-selection"
             data-needs={needsYou(work) && !selected}
           >
             <Thumbnail item={item} large />
@@ -140,7 +140,7 @@ export function Tile({
               />
             ) : null}
           </div>
-          <div className="mt-2 flex flex-col gap-1.5 px-1">
+          <div className="mt-2 flex flex-col gap-0.5 px-1">
             {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
             <a
               href={href("item", item.id)}
@@ -154,19 +154,22 @@ export function Tile({
               <p className="line-clamp-1 text-xs text-muted-foreground">{request.body}</p>
             )}
             {work.kind === "versions" ? <Versions item={item} labels={work.labels} /> : null}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline">
+            {/* Where it stands as one quiet line, as Codex sets a row's details under its name. */}
+            <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="-mx-0.5 flex shrink-0 [&_svg]:size-3.5">
                 <StatusDot status={item.status} />
+              </span>
+              <span className="truncate">
                 {t.status[item.status]}
-              </Badge>
-              {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
+                {item.format ? ` · ${formatTitle(item.format)}` : null}
+              </span>
               {work.kind === "quiet" && item.openFeedback > 0 ? (
-                <Badge variant="secondary">
-                  <MessageSquareIcon data-icon="inline-start" />
+                <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                  <MessageSquareIcon aria-hidden className="size-3" />
                   {t.board.openFeedback(item.openFeedback)}
-                </Badge>
+                </span>
               ) : null}
-            </div>
+            </p>
           </div>
         </ContextMenuTrigger>
       </div>

@@ -179,9 +179,10 @@ function Column({
       data-over={isOver}
       className="flex max-w-96 min-w-72 flex-1 flex-col gap-2 rounded-3xl bg-muted/40 p-2 transition-colors data-[over=true]:bg-muted data-[over=true]:ring-2 data-[over=true]:ring-ring/40"
     >
-      <h2 className="flex items-center justify-between px-1 text-sm font-medium">
+      {/* A quiet name and count, as Codex heads the groups in its sidebar. */}
+      <h2 className="flex items-center justify-between px-1.5 pt-1 text-xs font-medium text-muted-foreground">
         {t.status[status]}
-        <Badge variant="secondary">{count}</Badge>
+        <span className="tabular-nums">{count}</span>
       </h2>
       <div className="-m-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-1">
         {count === 0 ? (
@@ -222,7 +223,7 @@ function CardBody({
     <CardContent>
       <div className="flex gap-3">
         <Thumbnail item={item} overlay={overlay} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {overlay ? (
             <span className={title}>{item.title}</span>
           ) : (
@@ -237,19 +238,20 @@ function CardBody({
             </a>
           )}
           {line ? <p className="line-clamp-2 text-xs text-muted-foreground">{line}</p> : null}
-          <div className="mt-auto flex flex-wrap items-center gap-1.5">
+          <div className="mt-auto flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             {state === undefined ? null : (
-              <Badge variant="outline">
-                <span className={`size-1.5 rounded-full ${workDot(work)}`} />
-                {state}
-              </Badge>
+              <span className={`size-1.5 shrink-0 rounded-full ${workDot(work)}`} />
             )}
-            {item.format ? <Badge variant="secondary">{formatTitle(item.format)}</Badge> : null}
+            <span className="truncate">
+              {[state, item.format ? formatTitle(item.format) : undefined]
+                .filter((part) => part !== undefined)
+                .join(" · ")}
+            </span>
             {work.kind === "quiet" && item.openFeedback > 0 ? (
-              <Badge variant="secondary">
-                <MessageSquareIcon data-icon="inline-start" />
+              <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                <MessageSquareIcon aria-hidden className="size-3" />
                 {t.board.openFeedback(item.openFeedback)}
-              </Badge>
+              </span>
             ) : null}
             {isBusy(work) && !overlay ? (
               <StopButton
@@ -302,7 +304,7 @@ function ItemCard({
         data-selected={selected}
         data-faded={faded}
         data-needs={needsYou(work) && !selected}
-        className="relative cursor-grab rounded-3xl transition **:cursor-grab hover:*:bg-muted/50 hover:*:shadow-md has-focus-visible:*:bg-muted/50 has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:bg-muted/50 *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[needs=true]:ring-2 data-[needs=true]:ring-selection data-[selected=true]:ring-2 data-[selected=true]:ring-primary"
+        className="relative cursor-grab rounded-3xl transition **:cursor-grab hover:*:bg-muted/50 hover:*:shadow-md has-focus-visible:*:bg-muted/50 has-focus-visible:*:shadow-md has-focus-visible:*:outline-2 has-focus-visible:*:outline-offset-2 has-focus-visible:*:outline-ring *:data-popup-open:bg-muted/50 *:data-popup-open:shadow-md data-[faded=true]:opacity-40 data-[needs=true]:ring-2 data-[needs=true]:ring-selection data-[selected=true]:ring-2 data-[selected=true]:ring-foreground/40"
       >
         <ContextMenuTrigger
           render={<Card size="sm" />}
