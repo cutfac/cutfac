@@ -1,4 +1,11 @@
-import { CrosshairIcon, PaperclipIcon, SquareIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  CrosshairIcon,
+  LayersIcon,
+  PaperclipIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
 
@@ -20,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TrustNote } from "@/components/workspace-trust";
 import { composing } from "@/lib/utils";
 
@@ -38,13 +46,13 @@ import { messages, useMessages, type Messages } from "../../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { offersModels, statusOf } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
+import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { CacheNote } from "./cache-note.tsx";
 import { ModelPicker } from "./model-picker.tsx";
 import { AddSource, SourceChips } from "./sources.tsx";
-import { SendButton, VersionChips } from "./versions.tsx";
 
 /** What the request points at, which picks the starting points and the placeholder. */
 function scopeOf(target: Target, media: Media | undefined) {
@@ -92,6 +100,54 @@ export function copyPrompt(prompt: string) {
           },
         },
       }),
+  );
+}
+
+/** How many versions the agent should make of one request. */
+export function VersionsPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (versions: number) => void;
+}) {
+  const t = useMessages();
+  // The hint would sit over the list while it's open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hint, setHint] = useState(false);
+
+  const counts = Array.from({ length: MAX_VARIANTS }, (_, index) => ({
+    value: index + 1,
+    label: t.composer.versions.count(index + 1),
+  }));
+
+  return (
+    <Select
+      value={value}
+      onOpenChange={setMenuOpen}
+      onValueChange={(next) => {
+        if (next !== null) onChange(next);
+      }}
+    >
+      <Tooltip open={hint && !menuOpen} onOpenChange={setHint}>
+        <TooltipTrigger
+          render={
+            <SelectTrigger size="sm" aria-label={`${t.composer.versions.label}: ${value}`}>
+              <LayersIcon />
+              <span className="tabular-nums">{value}</span>
+            </SelectTrigger>
+          }
+        />
+        <TooltipContent>{t.composer.versions.label}</TooltipContent>
+      </Tooltip>
+      <SelectContent alignItemWithTrigger={false}>
+        {counts.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -234,7 +290,7 @@ export function Composer({
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
 
-  async function send(count = versions) {
+  async function send() {
     if (!ready) return;
 
     setSending(true);
@@ -244,7 +300,7 @@ export function Composer({
 
       const sentTo = await sendRequest(
         item,
-        editInput(text, agent, settings, media, target, count, attached),
+        editInput(text, agent, settings, media, target, versions, attached),
         onItem,
         onRun,
       );
@@ -364,6 +420,7 @@ export function Composer({
                   onPick={(next) => onPick(agent, next)}
                 />
               ) : null}
+              <VersionsPicker value={versions} onChange={setVersions} />
             </div>
             {running && text === "" ? (
               <InputGroupButton
@@ -376,15 +433,19 @@ export function Composer({
                 <SquareIcon />
               </InputGroupButton>
             ) : (
-              <SendButton
-                label={t.composer.send}
+              <InputGroupButton
+                variant="default"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label={t.composer.send}
                 disabled={!ready}
-                onSend={(count) => void send(count)}
-              />
+                onClick={() => void send()}
+              >
+                <ArrowUpIcon />
+              </InputGroupButton>
             )}
           </InputGroupAddon>
         </InputGroup>
-        <VersionChips value={versions} onChange={setVersions} />
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
         <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
         <CacheNote item={item} agent={agent} settings={settings} status={status} />

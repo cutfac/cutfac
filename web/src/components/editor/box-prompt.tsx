@@ -1,4 +1,4 @@
-import { PaperclipIcon } from "lucide-react";
+import { ArrowUpIcon, PaperclipIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { SlashFeedbackHint } from "@/components/feedback-dialog";
@@ -18,8 +18,7 @@ import { typingFeedbackCommand } from "../../lib/feedback.ts";
 import { agentLabel } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
-import type { SentTo } from "./composer.tsx";
-import { SendButton, VersionChips } from "./versions.tsx";
+import { type SentTo, VersionsPicker } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */
 export interface BoxAsk {
@@ -65,7 +64,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
 
-  function send(count = versions) {
+  function send() {
     if (!ready) return;
 
     setSending(true);
@@ -73,7 +72,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
     ask
       .onSend(
         text,
-        count,
+        versions,
         attachedReferences(ask.item, files.paths).map((reference) => reference.path),
       )
       .then((sentTo) => {
@@ -132,13 +131,22 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
                 >
                   <PaperclipIcon />
                 </InputGroupButton>
+                <VersionsPicker value={versions} onChange={setVersions} />
                 <span className="min-w-0 truncate text-xs font-normal">
                   {t.boxPrompt.hint(ask.agent === "queue" ? undefined : agentLabel(ask.agent))}
                 </span>
-                <SendButton label={t.boxPrompt.send} disabled={!ready} onSend={send} />
+                <InputGroupButton
+                  variant="default"
+                  size="icon-sm"
+                  className="ml-auto"
+                  aria-label={t.boxPrompt.send}
+                  disabled={!ready}
+                  onClick={send}
+                >
+                  <ArrowUpIcon />
+                </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
-            <VersionChips value={versions} onChange={setVersions} />
             {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
           </div>
         </Dropzone>

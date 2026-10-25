@@ -641,7 +641,7 @@ export const en = {
     /** How many takes on the request the agent makes, to compare and pick from. */
     versions: {
       label: "Versions to make",
-      sendAs: (count: number) => (count === 1 ? "Send as 1 version" : `Send as ${count} versions`),
+      count: (count: number) => (count === 1 ? "1 version" : `${count} versions`),
     },
     stop: "Stop the agent",
     send: "Send (Enter)",
