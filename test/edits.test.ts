@@ -133,7 +133,11 @@ describe("agent CLIs", () => {
     const first = agentInvocation("codex", { ...opts, sessionId: undefined });
 
     expect(first.command).toBe("/bin/x");
-    expect(first.args).toEqual(["app-server"]);
+    expect(first.args).toEqual([
+      "app-server",
+      "-c",
+      "features.default_mode_request_user_input=true",
+    ]);
     expect(first.stdin).toBe(CODEX_INITIALIZE);
     expect(first.attended).toBe(true);
   });

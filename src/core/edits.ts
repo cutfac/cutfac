@@ -873,7 +873,7 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
 
   lines.push(
     "Use ffmpeg/ffprobe or the format's render command, and run the final render through the render tool (not your shell) so the user sees its progress; call it again with just the id while it is running. Afterwards run verify_item; for a video, call review_media with `times` in and around the changed part and go through its checklist; for an image, open it at phone size. Then call resolve_feedback with this feedback id and one line on what changed.",
-    "Finish with a short, plain summary for someone who does not use video editors. If the request is unclear, ask instead of guessing and leave the feedback open. To ask, end your reply with the question in this block; the board shows each `- ` line as an answer to pick with one click, and the user's answer comes back as the next request:",
+    "Finish with a short, plain summary for someone who does not use video editors. If the request is unclear, ask instead of guessing. If you have the AskUserQuestion or request_user_input tool, ask with it: the user answers on the board and you go on in the same run. Otherwise leave the feedback open and end your reply with the question in this block; the board shows each `- ` line as an answer to pick with one click, and the user's answer comes back as the next request:",
     "```question",
     "Should the caption sit above or below the face?",
     "- Above",
