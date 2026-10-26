@@ -382,6 +382,11 @@ async function checkedVersion(
   }
 }
 
+/** Where the GitHub release's notes are written. */
+function notesPath(version: string): string {
+  return path.join(outputDir, `notes-${version}.md`);
+}
+
 /**
  * Tag the commit that was built, push it to main with the tag, and publish a source-only GitHub
  * release. The builds are live by now, so a failure here only leaves the remaining steps to run by
@@ -389,7 +394,7 @@ async function checkedVersion(
  */
 async function publishSource(version: string, commit: string, notes: string): Promise<void> {
   const tag = tagName(version);
-  const notesFile = path.join(outputDir, `notes-${version}.md`);
+  const notesFile = notesPath(version);
 
   await Bun.write(notesFile, notes);
 
@@ -471,6 +476,11 @@ async function release(args: ReleaseArgs): Promise<void> {
   console.log(`[release] Published ${version}. cutfac.com/download now hands it out.`);
 
   await publishSource(version, commit, releaseNotes(await subjectsSinceRelease(commit)));
+
+  // The site's changelog is written by hand for people using the app, so nothing here can add it.
+  console.log(
+    `[release] Next, add ${version} to cutfac.com/changelog, from ${path.relative(root, notesPath(version))}.`,
+  );
 }
 
 if (import.meta.main) {

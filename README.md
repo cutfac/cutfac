@@ -262,6 +262,8 @@ release needs no cache invalidation.
 Last, it tags the commit it built `v<version>`, pushes `main` and the tag together, and creates a
 GitHub release with no files attached, whose notes list the features and fixes since the last tag.
 If that step fails, the builds are already out and the script prints the commands left to run.
+It ends by reminding you to add the version to cutfac.com's changelog, which is written by hand
+from those notes.
 
 The feed is the `publish` url in `electron-builder.yml`, and every build keeps the URL it was built
 with. To move the feed, publish one release that points to the new place while the old one keeps
