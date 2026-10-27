@@ -1,6 +1,5 @@
 # Desktop app
 
-
 ```sh
 bun run desktop           # build the web UI and Electron shell, then open it
 bun run dist:desktop      # unsigned macOS app in release/, with the server compiled as a sidecar
@@ -92,7 +91,9 @@ bun run desktop:dev
 itself when `src/` changes, and the app restarts when `electron/` changes. A server restart cuts
 off any agent run in progress. Closing the app or Ctrl+C stops everything.
 
-On macOS it runs as Cutfac Dev (`com.cutfac.dev`), a copy of Electron under its own bundle id, so
-the permissions you grant it, such as an agent's computer use, stay with it and not with every app
-built on Electron. Its icon is the Cutfac icon with a DEV band across the bottom, compiled with
+On macOS it runs as Cutfac Dev (`com.cutfac.app.dev`), a copy of Electron under its own bundle id,
+so the permissions you grant it, such as an agent's computer use, stay with it and not with every
+app built on Electron. It keeps its settings in `~/Library/Application Support/Cutfac Dev`, apart
+from the released app's, so the two can run at once and the Dev Panel's Start over leaves the
+released app as it was. Its icon is the Cutfac icon with a DEV band across the bottom, compiled with
 Xcode 26's `actool`; without it the app keeps Electron's icon.

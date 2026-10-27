@@ -20,6 +20,7 @@ import { stopFixes } from "./agents.ts";
 import { handleAttention } from "./attention.ts";
 import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPages.ts";
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
+import { DEV_APP } from "./devApp.ts";
 import { handleDevTools } from "./devTools.ts";
 import { describeError, pickSource, pickWorkspace, showStartFailure } from "./dialogs.ts";
 import { stopWatching } from "./fullDiskAccess.ts";
@@ -115,8 +116,9 @@ const devTools = app.isPackaged
       activate,
     });
 
-// Keeps the same userData folder whether packaged or not, so the saved workspace is shared.
-app.setName("Cutfac");
+// The name picks the userData folder, and with it the single-instance lock. The dev build keeps
+// its own, so it runs beside the released app and the Dev Panel never resets the user's settings.
+app.setName(app.isPackaged ? "Cutfac" : DEV_APP.name);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
