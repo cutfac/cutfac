@@ -45,21 +45,30 @@ let unfollow: (() => void) | undefined;
 /** The picture the app drags as, made ahead, since a drag only starts in step with the press. */
 let dragIcon: NativeImage | undefined;
 
-/** A file only Full Disk Access opens: the user's own privacy database. */
-const probeFile = () =>
-  path.join(app.getPath("home"), "Library", "Application Support", "com.apple.TCC", "TCC.db");
+/**
+ * Files only Full Disk Access opens: the privacy databases. The system's is on every recent macOS,
+ * and the user's own is gone from macOS 27 on, so the first is the one that answers there.
+ */
+const probeFiles = () => [
+  "/Library/Application Support/com.apple.TCC/TCC.db",
+  path.join(app.getPath("home"), "Library", "Application Support", "com.apple.TCC", "TCC.db"),
+];
 
 /** Whether the app may read every file. Only macOS asks; elsewhere it always may. */
 export async function hasFullDiskAccess(): Promise<boolean> {
   if (process.platform !== "darwin") return true;
 
-  try {
-    await (await open(probeFile(), "r")).close();
+  for (const file of probeFiles()) {
+    try {
+      await (await open(file, "r")).close();
 
-    return true;
-  } catch {
-    return false;
+      return true;
+    } catch {
+      // Refused without the access, or missing on this macOS: the next file may answer.
+    }
   }
+
+  return false;
 }
 
 /** The app bundle itself, which is what the Full Disk Access list takes. */
