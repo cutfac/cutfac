@@ -1,4 +1,4 @@
-import { ArrowUpIcon, HandIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,10 @@ import type { CutfacOnboarding } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 
 /**
- * The panel that sits under System Settings, after PermissionFlow's: a sentence pointing up at the
- * Full Disk Access list, and the app as a card to drag into it. A drag from anywhere on the panel
- * drags the app itself, never the panel, which follows System Settings on its own. It goes away by
- * itself once the access is granted.
+ * The panel that sits under System Settings, after PermissionFlow's: the whole panel is one card,
+ * the app to drag into the Full Disk Access list above it, which drags the app itself. It shimmers
+ * and glows gold so it is easy to find beside the window, and goes away by itself once the access
+ * is granted.
  */
 export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
   const t = useMessages();
@@ -21,39 +21,39 @@ export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
   }, [onboarding]);
 
   return (
-    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- dragged with the mouse, as in Finder; the sentence on it says so
-    <div
-      draggable={app !== undefined}
-      className="group flex h-dvh cursor-grab flex-col gap-2.5 p-3 active:cursor-grabbing"
-      onDragStart={(event) => {
-        // The app drags its own bundle instead of the page.
-        event.preventDefault();
-        onboarding.startAppDrag();
-      }}
-    >
-      <div className="flex items-start gap-2">
-        <ArrowUpIcon className="mt-0.5 size-4 shrink-0 animate-bounce text-brand" />
-        <p className="flex-1 text-sm/snug text-pretty">
-          {t.onboarding.dragHelper.title(app?.name ?? "Cutfac")}
-        </p>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t.common.close}
-          className="-mt-0.5"
-          onClick={() => window.close()}
-        >
-          <XIcon />
-        </Button>
-      </div>
+    <div className="h-dvh p-1.5">
       {app === undefined ? null : (
-        <div className="flex animate-in items-center gap-3 rounded-2xl bg-foreground/6 py-2 pr-3 pl-2 transition-colors duration-300 fade-in group-hover:bg-foreground/10">
-          <img src={app.icon} alt="" draggable={false} className="size-8" />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
-          <span className="flex shrink-0 flex-col items-center text-muted-foreground">
-            <HandIcon className="size-4" />
-            <span className="text-xs">{t.onboarding.dragHelper.drag}</span>
-          </span>
+        // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- dragged with the mouse, as in Finder; the words on it say so
+        <div
+          draggable
+          className="relative flex h-full animate-access-glow cursor-grab items-center gap-3 overflow-hidden rounded-2xl bg-foreground/6 pr-2 pl-3 transition-colors duration-300 hover:bg-foreground/10 active:cursor-grabbing motion-reduce:animate-none"
+          onDragStart={(event) => {
+            // The app drags its own bundle instead of the card.
+            event.preventDefault();
+            onboarding.startAppDrag();
+          }}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 animate-access-shine bg-linear-to-r from-transparent via-foreground/12 to-transparent motion-reduce:hidden"
+          />
+          <img src={app.icon} alt="" draggable={false} className="size-10 shrink-0" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm font-semibold">{app.name}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {t.onboarding.dragHelper.hint}
+            </span>
+          </div>
+          <ArrowUpIcon className="size-5 shrink-0 animate-bounce text-brand motion-reduce:animate-none" />
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t.common.close}
+            className="shrink-0"
+            onClick={() => window.close()}
+          >
+            <XIcon />
+          </Button>
         </div>
       )}
     </div>

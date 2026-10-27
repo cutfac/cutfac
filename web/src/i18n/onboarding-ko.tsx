@@ -66,12 +66,6 @@ export const onboardingKo: OnboardingMessages = {
     creating: "준비하는 중…",
   },
   dragHelper: {
-    title: (app) => (
-      <>
-        <strong>{app}</strong> 앱을 위 목록에 끌어다 놓으면 <strong>전체 디스크 접근 권한</strong>이
-        켜져요.
-      </>
-    ),
-    drag: "끌기",
+    hint: "위 목록으로 끌어다 놓으세요",
   },
 };

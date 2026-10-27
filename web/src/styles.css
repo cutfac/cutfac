@@ -41,6 +41,9 @@
   --animate-access-pointer: access-pointer 3.6s ease-in-out infinite;
   --animate-access-arrow: access-arrow 3.6s step-end infinite;
   --animate-access-grab: access-grab 3.6s step-end infinite;
+  /* The access panel's card, so it is easy to find beside System Settings. */
+  --animate-access-shine: access-shine 2.4s ease-in-out infinite;
+  --animate-access-glow: access-glow 2.4s ease-in-out infinite;
   /* macOS's own colors, only for the picture of System Settings, so it reads as the real window. */
   --color-mac-close: oklch(0.68 0.2 25);
   --color-mac-minimize: oklch(0.83 0.16 80);
@@ -409,5 +412,27 @@
   }
   44% {
     opacity: 0;
+  }
+}
+
+/* A band of light crosses the card, then rests before crossing again. */
+@keyframes access-shine {
+  0% {
+    translate: -100% 0;
+  }
+  50%,
+  100% {
+    translate: 300% 0;
+  }
+}
+
+/* A gold ring breathes around the card, in time with the light crossing it. */
+@keyframes access-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--brand) 25%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--brand) 55%, transparent);
   }
 }

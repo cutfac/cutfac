@@ -25,9 +25,9 @@ const limits = {
 };
 
 const HELPER = {
-  /** Wide enough for its sentence on one line, as the list it points at is. */
+  /** As wide as the list it points at, at the least. */
   width: 440,
-  height: 120,
+  height: 72,
   /** The System Settings sidebar, which the panel leaves out to line up with the list beside it. */
   sidebar: 230,
   /** Between the panel and the window above it, and the screen's edges. */
