@@ -35,7 +35,7 @@ It reads its credentials from `.env.release`, which git ignores:
 - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` to notarize
 - `CUTFAC_RELEASES_BUCKET`, `CUTFAC_RELEASES_REGION` for the private S3 bucket the builds go to
 - `CUTFAC_POSTHOG_KEY`, the project token of the PostHog project error reports go to, which the
-  build writes into the app (see Error reports)
+  build writes into the app (see Error reports and usage statistics)
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` for a user that can read and write `mac/` in it
 
 Give that user only `s3:PutObject`, `s3:GetObject` and `s3:AbortMultipartUpload` on the bucket's
@@ -104,11 +104,14 @@ a chat or a key. A process that starts removes the days older than a week, then 
 the folder holds 50 MB or less. The log stays on this Mac unless the person sends it with feedback.
 The open-source CLI keeps none; from source, `CUTFAC_LOG_DIR` names a folder to keep one in.
 
-## Error reports
+## Error reports and usage statistics
 
-A release build can report failures to the Cutfac team's PostHog project (US cloud), once the
-person says yes. The board asks once, the first time it opens in a build that can send them, and
-Settings has the switch; nothing is sent before a yes, and a no takes hold at once. A report is a
+A release build can report failures and count usage to the Cutfac team's PostHog project (US
+cloud), once the person says yes. One question covers both, with "Share" and "Don't share" as
+equal answers and neither picked: the first launch asks it on its last step, and the board asks
+it once in a build that can send when nothing has answered it yet. Going on without an answer is
+not sharing. Settings has a switch for each; nothing is sent before a yes, and a no takes hold at
+once. A report is a
 PostHog `$exception`: the failure's type and message with the home folder as `~`, the operation
 that failed, the process (`app`, `server` or `mcp`), the app's version and platform, and the cause
 up to 4,000 characters. Its only identity is the install ID, a random ID made with the first
@@ -122,6 +125,11 @@ made with `CUTFAC_POSTHOG_KEY` set can send them: `build:sidecar` and `build:ele
 `--env='CUTFAC_POSTHOG_*'`, which writes the key into the build, and the release script requires
 it. Source builds and forks have no key, so they ask nothing and send nothing. The choice and the
 install ID live in `telemetry.json` in the app's data folder.
+
+Usage statistics, in `src/usageStats.ts`, count that something was done, never what it was about,
+under the same install ID and with no person profile: `onboarding_finished` (`answered`,
+`screen_recording`, `accessibility`), `video_created` (`template`), `edit_requested` (`versions`)
+and `take_kept`, each with the app's version and platform. No session replay and no autocapture.
 
 ## Running it from source
 

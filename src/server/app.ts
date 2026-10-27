@@ -101,9 +101,10 @@ import {
   feedbackInstallId,
   reportSettings,
   resetInstallId,
-  setErrorReports,
+  setReportChoices,
 } from "../errorReports.ts";
 import { createCountedItem, planStatus } from "../plan.ts";
+import { trackUsage } from "../usageStats.ts";
 import { approvalRoutes } from "./approvals.ts";
 import { briefRoutes } from "./brief.ts";
 import { requestGuard } from "./guard.ts";
@@ -250,12 +251,24 @@ const TeamFeedbackBody = Schema.Struct({
   logs: Schema.optional(Schema.Boolean),
 });
 
-const ErrorReportsBody = Schema.Struct({ on: Schema.Boolean });
+/** What the person chose to send; a choice left out stays as it was. */
+const ReportChoicesBody = Schema.Struct({
+  errorReports: Schema.optionalKey(Schema.Boolean),
+  usageStats: Schema.optionalKey(Schema.Boolean),
+});
 
-/** The error report settings as the board reads them. */
-const reportView = ({ available, errorReports, installId }: ReportSettings) => ({
+/** How the desktop app's first launch went, which the board hands on once the workspace is up. */
+const OnboardingFinishedBody = Schema.Struct({
+  answered: Schema.Boolean,
+  screen_recording: Schema.Boolean,
+  accessibility: Schema.Boolean,
+});
+
+/** The error report and usage statistics settings as the board reads them. */
+const reportView = ({ available, errorReports, usageStats, installId }: ReportSettings) => ({
   available,
   errorReports: Option.getOrNull(errorReports),
+  usageStats: Option.getOrNull(usageStats),
   installId: Option.getOrNull(installId),
 });
 
@@ -472,6 +485,8 @@ const editRoute = Effect.gen(function* () {
     id,
     Effect.gen(function* () {
       const { requested, dispatched } = yield* sendEdit(id, input, via, settings);
+
+      yield* trackUsage("edit_requested", { versions: input.variants ?? 1 });
 
       return {
         item: yield* itemDetail(requested.item),
@@ -810,7 +825,10 @@ const apiRoutes = (options: ServerOptions) =>
       "POST",
       "/api/items",
       Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), (body) =>
-        Effect.flatMap(createCountedItem(body), itemDetail),
+        createCountedItem(body).pipe(
+          Effect.tap(() => trackUsage("video_created", { template: body.format !== undefined })),
+          Effect.flatMap(itemDetail),
+        ),
       ),
     ),
     json(
@@ -932,7 +950,10 @@ const apiRoutes = (options: ServerOptions) =>
       "/api/item/edit/pick",
       withId((id) =>
         Effect.flatMap(HttpServerRequest.schemaBodyJson(PickBody), (body) =>
-          Effect.flatMap(pickVariant(id, body.feedbackId, body.variantId), itemDetail),
+          pickVariant(id, body.feedbackId, body.variantId).pipe(
+            Effect.tap(() => trackUsage("take_kept")),
+            Effect.flatMap(itemDetail),
+          ),
         ),
       ),
     ),
@@ -1020,11 +1041,18 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "POST",
       "/api/error-reports",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(ErrorReportsBody), ({ on }) =>
-        Effect.map(setErrorReports(on), reportView),
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(ReportChoicesBody), (choices) =>
+        Effect.map(setReportChoices(choices), reportView),
       ),
     ),
     json("POST", "/api/error-reports/install-id", Effect.map(resetInstallId(), reportView)),
+    json(
+      "POST",
+      "/api/usage/onboarding-finished",
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(OnboardingFinishedBody), (went) =>
+        Effect.as(trackUsage("onboarding_finished", went), { ok: true }),
+      ),
+    ),
     json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),
     json("GET", "/api/formats", listFormats()),
     json("GET", "/api/formats/status", formatStatuses()),

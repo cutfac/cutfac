@@ -25,8 +25,9 @@ import {
   feedbackInstallId,
   reportSettings,
   resetInstallId,
-  setErrorReports,
+  setReportChoices,
 } from "../src/errorReports.ts";
+import { trackUsage } from "../src/usageStats.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";
 
@@ -82,12 +83,13 @@ describe("the error report choice", () => {
       const data = yield* dataFolder;
 
       const before = yield* asApp(reportSettings, data, []);
-      const on = yield* asApp(setErrorReports(true), data, []);
-      const off = yield* asApp(setErrorReports(false), data, []);
+      const on = yield* asApp(setReportChoices({ errorReports: true }), data, []);
+      const off = yield* asApp(setReportChoices({ errorReports: false }), data, []);
 
       expect(before).toEqual({
         available: true,
         errorReports: Option.none(),
+        usageStats: Option.none(),
         installId: Option.none(),
       });
       expect(on.errorReports).toEqual(Option.some(true));
@@ -101,7 +103,7 @@ describe("the error report choice", () => {
     Effect.gen(function* () {
       const data = yield* dataFolder;
 
-      const first = yield* asApp(setErrorReports(true), data, []);
+      const first = yield* asApp(setReportChoices({ errorReports: true }), data, []);
       const renewed = yield* asApp(resetInstallId(), data, []);
 
       expect(Option.isSome(renewed.installId)).toBe(true);
@@ -115,11 +117,11 @@ describe("the error report choice", () => {
       const data = yield* dataFolder;
 
       const unasked = yield* asApp(feedbackInstallId(true), data, []);
-      const on = yield* asApp(setErrorReports(true), data, []);
+      const on = yield* asApp(setReportChoices({ errorReports: true }), data, []);
       const withLog = yield* asApp(feedbackInstallId(true), data, []);
       const withoutLog = yield* asApp(feedbackInstallId(false), data, []);
 
-      yield* asApp(setErrorReports(false), data, []);
+      yield* asApp(setReportChoices({ errorReports: false }), data, []);
 
       expect(unasked).toEqual(Option.none());
       expect(withLog).toEqual(on.installId);
@@ -142,7 +144,7 @@ describe("sending error reports", () => {
     Effect.gen(function* () {
       const data = yield* dataFolder;
       const sent: Sent = [];
-      const settings = yield* asApp(setErrorReports(true), data, sent);
+      const settings = yield* asApp(setReportChoices({ errorReports: true }), data, sent);
 
       yield* asApp(
         reported(
@@ -185,7 +187,7 @@ describe("sending error reports", () => {
       const sent: Sent = [];
       const broken = Effect.fn("items.get")(() => Effect.die(new TypeError("x is undefined")));
 
-      yield* asApp(setErrorReports(true), data, sent);
+      yield* asApp(setReportChoices({ errorReports: true }), data, sent);
       yield* asApp(
         reported(
           Effect.gen(function* () {
@@ -213,7 +215,7 @@ describe("sending error reports", () => {
       const fail = reported(Effect.logError("broke", new Error("broke")));
 
       yield* asApp(fail, data, sent);
-      yield* asApp(setErrorReports(false), data, sent);
+      yield* asApp(setReportChoices({ errorReports: false }), data, sent);
       yield* asApp(fail, data, sent);
 
       expect(sent).toEqual([]);
@@ -240,7 +242,7 @@ describe("sending error reports", () => {
         Effect.fail(new CommandFailed({ message: "ffmpeg exited with 1" })),
       );
 
-      yield* asApp(setErrorReports(true), data, sent);
+      yield* asApp(setReportChoices({ errorReports: true }), data, sent);
       yield* asApp(
         Effect.scoped(
           Effect.gen(function* () {
@@ -265,6 +267,66 @@ describe("sending error reports", () => {
           operation: "render.run",
         },
       });
+    }),
+  );
+});
+
+describe("usage statistics", () => {
+  it.live("are asked apart from error reports, and one choice leaves the other as it was", () =>
+    Effect.gen(function* () {
+      const data = yield* dataFolder;
+
+      yield* asApp(setReportChoices({ errorReports: true, usageStats: false }), data, []);
+      const changed = yield* asApp(setReportChoices({ usageStats: true }), data, []);
+
+      expect(changed.errorReports).toEqual(Option.some(true));
+      expect(changed.usageStats).toEqual(Option.some(true));
+    }),
+  );
+
+  it.live("count nothing until the person shares them, then only counts", () =>
+    Effect.gen(function* () {
+      const data = yield* dataFolder;
+      const sent: Sent = [];
+
+      yield* asApp(trackUsage("video_created", { template: true }), data, sent);
+      yield* asApp(setReportChoices({ errorReports: true, usageStats: false }), data, sent);
+      yield* asApp(trackUsage("video_created", { template: true }), data, sent);
+      yield* settle;
+
+      expect(sent).toEqual([]);
+
+      const settings = yield* asApp(setReportChoices({ usageStats: true }), data, sent);
+
+      yield* asApp(trackUsage("edit_requested", { versions: 3 }), data, sent);
+      yield* settle;
+
+      expect(sent).toEqual([
+        {
+          api_key: KEY,
+          event: "edit_requested",
+          distinct_id: Option.getOrThrow(settings.installId),
+          properties: {
+            versions: 3,
+            $process_person_profile: false,
+            app_version: APP_VERSION,
+            platform: process.platform,
+          },
+        },
+      ]);
+    }),
+  );
+
+  it.live("a build without the key counts nothing", () =>
+    Effect.gen(function* () {
+      const data = yield* dataFolder;
+      const sent: Sent = [];
+
+      yield* asApp(setReportChoices({ usageStats: true }), data, sent, "");
+      yield* asApp(trackUsage("take_kept"), data, sent, "");
+      yield* settle;
+
+      expect(sent).toEqual([]);
     }),
   );
 });

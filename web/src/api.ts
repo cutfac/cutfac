@@ -78,13 +78,20 @@ export interface TeamFeedback {
   logs?: boolean;
 }
 
-/** Whether this build can send error reports, what the person chose, and this install's ID. */
+/**
+ * Whether this build can send error reports and usage statistics, what the person chose for each,
+ * and this install's ID.
+ */
 export interface ErrorReports {
   available: boolean;
   /** Null until the person chooses. */
   errorReports: boolean | null;
+  usageStats: boolean | null;
   installId: string | null;
 }
+
+/** What to send the Cutfac team; a choice left out stays as it was. */
+export type ReportChoices = Partial<Pick<ErrorReports, "errorReports" | "usageStats">>;
 
 /** The `?id=` query naming an item. */
 export const q = (id: string) => `?id=${encodeURIComponent(id)}`;
@@ -815,8 +822,14 @@ export const api = {
   teamFeedbackLogs: () =>
     request<{ logs: string | null; errors: number }>("/api/team-feedback/logs"),
   errorReports: () => request<ErrorReports>("/api/error-reports"),
-  setErrorReports: (on: boolean) =>
-    send<ErrorReports, { on: boolean }>("POST", "/api/error-reports", { on }),
+  setReportChoices: (choices: ReportChoices) =>
+    send<ErrorReports, ReportChoices>("POST", "/api/error-reports", choices),
+  /** How the first launch went: counted only while the person shares usage statistics. */
+  onboardingFinished: (went: {
+    answered: boolean;
+    screen_recording: boolean;
+    accessibility: boolean;
+  }) => send<{ ok: true }, typeof went>("POST", "/api/usage/onboarding-finished", went),
   resetInstallId: () => send<ErrorReports, {}>("POST", "/api/error-reports/install-id", {}),
   learned: () => request<LearnedList>("/api/learned"),
   /** Learn a link, or a folder or file on this computer. */

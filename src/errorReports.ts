@@ -56,6 +56,8 @@ export interface ReportSettings {
   readonly available: boolean;
   /** None until the person chooses. */
   readonly errorReports: Option.Option<boolean>;
+  /** Whether usage statistics go too; none until the person chooses. */
+  readonly usageStats: Option.Option<boolean>;
   /** A random ID for this install, made with the first choice and reset on request. */
   readonly installId: Option.Option<string>;
 }
@@ -67,19 +69,26 @@ export const reportSettings = Effect.gen(function* () {
   return {
     available: Option.isSome(yield* ReportKey),
     errorReports: decodeChoice(store["errorReports"]),
+    usageStats: decodeChoice(store["usageStats"]),
     installId: decodeId(store["installId"]),
   } satisfies ReportSettings;
 });
 
 const newId = Effect.flatMap(Crypto.Crypto, (crypto) => crypto.randomUUIDv4());
 
-/** Saves the person's choice, making this install's ID with the first one. */
-export const setErrorReports = Effect.fn("errorReports.set")(function* (on: boolean) {
+/** What the person chose to send; a choice left out stays as it was. */
+export interface ReportChoices {
+  readonly errorReports?: boolean;
+  readonly usageStats?: boolean;
+}
+
+/** Saves the person's choices, making this install's ID with the first one. */
+export const setReportChoices = Effect.fn("errorReports.set")(function* (choices: ReportChoices) {
   const id = yield* newId;
 
-  yield* updateAppStore(STORE, "the error report choice", (store) => ({
+  yield* updateAppStore(STORE, "what to send the Cutfac team", (store) => ({
     ...store,
-    errorReports: on,
+    ...choices,
     installId: Option.getOrElse(decodeId(store["installId"]), () => id),
   }));
 
