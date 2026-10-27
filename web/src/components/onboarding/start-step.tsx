@@ -9,12 +9,12 @@ import type { WorkspaceInfo } from "../../api.ts";
 import { briefApi } from "../../briefApi.ts";
 import { desktop } from "../../desktop.ts";
 import { href } from "../../hooks.ts";
-import { useLocale, useMessages } from "../../i18n/index.ts";
+import { useMessages } from "../../i18n/index.ts";
 import { briefPatch, briefReady, type BriefDraft } from "../../lib/brief.ts";
 import { errorText } from "../../lib/notify.ts";
 import { skipStart } from "../../lib/onboarding.ts";
+import { type Answers, saveAnswers } from "./answers.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
-import { type Answers, startFirstTemplate } from "./first-template.ts";
 import { StepHeader } from "./frame.tsx";
 import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
 
@@ -162,9 +162,9 @@ export function BriefQuestions({
 }
 
 /**
- * What to make in a workspace that has no template yet, where the first launch didn't ask already,
- * as in a browser. Start saves the brief, learns the material, and has the agent make the first
- * template; leaving it for later keeps what the brief says and opens the board.
+ * What to make in a workspace that has nothing yet, where the first launch didn't ask already, as
+ * in a browser. Start saves the brief and learns the material, then opens the board; leaving it for
+ * later keeps what the brief says and opens the board too.
  */
 export function StartStep({
   ws,
@@ -177,16 +177,16 @@ export function StartStep({
   error?: string | undefined;
 }) {
   const { whatToMake: t } = useMessages().start;
-  const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(failed);
 
   const start = (answers: Answers) => {
     setBusy(true);
     setError(undefined);
-    startFirstTemplate(ws, answers, locale, t).then(
-      (id) => {
-        location.hash = href("start", id);
+    saveAnswers(answers, t).then(
+      () => {
+        skipStart(ws.root);
+        location.hash = href("board");
       },
       (cause: unknown) => {
         setError(errorText(cause));

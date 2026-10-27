@@ -92,7 +92,12 @@ export const ko: Messages = {
     filterByFormat: "템플릿으로 거르기",
     archived: "보관됨",
     emptyTitle: "첫 영상을 만들어 보세요. 에이전트가 제작해요",
-    emptyBody: "제목을 정하고 템플릿을 고르세요. 결과는 여기서 검토하고 수정을 요청하면 돼요.",
+    emptyBody:
+      "무엇을 만들지 말해 주세요. 에이전트가 브리프를 먼저 읽고 만들고, 결과는 여기서 검토하고 수정을 요청하면 돼요.",
+    known: (titles) =>
+      titles.length === 1
+        ? `에이전트가 ${titles[0]}에 대해 알고 있어요`
+        : `에이전트가 자료 ${titles.length}개를 알고 있어요`,
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,
     selected: "선택됨",

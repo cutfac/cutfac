@@ -6,7 +6,7 @@ import type { CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { EMPTY_BRIEF } from "../../lib/brief.ts";
 import { errorText } from "../../lib/notify.ts";
-import type { Answers } from "./first-template.ts";
+import type { Answers } from "./answers.ts";
 import { BriefQuestions } from "./start-step.tsx";
 
 /**

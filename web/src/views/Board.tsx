@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "rea
 
 import { ItemMenu } from "@/components/item-menu";
 import { NewItemTrigger } from "@/components/new-item-dialog";
+import { NotifyRow } from "@/components/notify-row";
 import { ErrorAlert, PageHeader } from "@/components/page";
 import { StackMark } from "@/components/stack-mark";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -122,6 +123,25 @@ function LearnHint() {
         </a>
       </div>
     </div>
+  );
+}
+
+/**
+ * On the empty board, what the agent already knows from the first launch: the material it learned,
+ * with a way to see all of it, so the answers given there visibly went somewhere.
+ */
+function KnownLine() {
+  const t = useMessages();
+  const { data } = useLive("learned", api.learned);
+  const titles = data?.learned.map((learned) => learned.doc.title) ?? [];
+
+  if (titles.length === 0) return null;
+
+  return (
+    <a href={href("learn")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+      <BookOpenIcon data-icon="inline-start" />
+      <span className="truncate">{t.board.known(titles)}</span>
+    </a>
   );
 }
 
@@ -268,6 +288,8 @@ export function Board() {
             </EmptyHeader>
             <EmptyContent>
               <NewItemTrigger />
+              <KnownLine />
+              <NotifyRow />
             </EmptyContent>
           </Empty>
         </div>

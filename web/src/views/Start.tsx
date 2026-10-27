@@ -1,42 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 
 import { both, saveReportChoices } from "@/components/error-reports";
-import { type Answers, startFirstTemplate } from "@/components/onboarding/first-template";
-import { FirstVideo } from "@/components/onboarding/first-video";
-import { OnboardingFrame, StepHeader } from "@/components/onboarding/frame";
+import { type Answers, saveAnswers } from "@/components/onboarding/answers";
+import { ONBOARDING_STEPS, OnboardingFrame, StepHeader } from "@/components/onboarding/frame";
 import { StartStep } from "@/components/onboarding/start-step";
 import { ListSkeleton } from "@/components/page";
 
 import { api, type WorkspaceInfo } from "../api.ts";
 import { type CutfacOnboarding, desktop, type OnboardingDraft } from "../desktop.ts";
 import { href, type Live } from "../hooks.ts";
-import { useLocale, useMessages } from "../i18n/index.ts";
+import { useMessages } from "../i18n/index.ts";
 import { EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
 import { errorText } from "../lib/notify.ts";
 import { skipStart } from "../lib/onboarding.ts";
 
 /**
- * The first template, the end of the first launch: the first video while the agent makes the
- * template for it. The desktop app asked what to make before there was a workspace, and starts
- * from those answers here; a browser asks here. Each run is its own page, so a reload keeps it.
+ * The end of the first launch: what the user said goes into the workspace, and the board opens.
+ * The desktop app asked before there was a workspace, and its answers are saved here; a browser
+ * asks here. Nothing is made yet: the agent reads the brief before every template and video.
  */
-export function Start({
-  id,
-  ws,
-  brief,
-}: {
-  id: string | undefined;
-  ws: WorkspaceInfo | undefined;
-  brief: Live<BriefView>;
-}) {
-  if (id !== undefined) {
-    return (
-      <OnboardingFrame step={5}>
-        <FirstVideo key={id} id={id} />
-      </OnboardingFrame>
-    );
-  }
-
+export function Start({ ws, brief }: { ws: WorkspaceInfo | undefined; brief: Live<BriefView> }) {
   // The form starts from the brief already there; one that can't be read starts empty.
   const loaded = ws !== undefined && (brief.data !== undefined || brief.error !== undefined);
 
@@ -46,13 +29,12 @@ export function Start({
 type Begun = { kind: "starting" } | { kind: "ask"; answers: Answers; error?: string };
 
 /**
- * Starts from what the first launch asked, if it did: the template is made from it, or the board
- * opens when the user left it for later. The answers are forgotten before the run starts, so a
- * reload meanwhile can't start a second one; if it can't start, the questions open on them.
+ * Saves what the first launch asked, if it did, and opens the board. The answers are forgotten
+ * first, so a reload meanwhile can't save them twice; if they can't be saved, the questions open
+ * on them.
  */
 function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
   const { whatToMake: t } = useMessages().start;
-  const locale = useLocale();
   const onboarding = desktop?.onboarding;
   const asked: Begun = { kind: "ask", answers: { brief: initial, sources: [] } };
 
@@ -75,18 +57,16 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
         await onboarding.clearDraft();
         await handOnSharing(onboarding, draft).catch(() => undefined);
 
-        if (draft.skipped) {
-          skipStart(ws.root);
-          location.hash = href("board");
+        try {
+          if (!draft.skipped) await saveAnswers(draft, t);
+        } catch (cause) {
+          setBegun({ kind: "ask", answers: draft, error: errorText(cause) });
 
           return;
         }
 
-        try {
-          location.hash = href("start", await startFirstTemplate(ws, draft, locale, t));
-        } catch (cause) {
-          setBegun({ kind: "ask", answers: draft, error: errorText(cause) });
-        }
+        skipStart(ws.root);
+        location.hash = href("board");
       },
       () => setBegun(asked),
     );
@@ -126,13 +106,13 @@ async function handOnSharing(onboarding: CutfacOnboarding, draft: OnboardingDraf
   });
 }
 
-/** While the workspace loads, or the agent starts on the first launch's answers. */
+/** While the workspace loads, or the first launch's answers go into it. */
 function Starting() {
-  const f = useMessages().start.firstVideo;
+  const s = useMessages().start.saving;
 
   return (
-    <OnboardingFrame step={5}>
-      <StepHeader title={f.title} body={f.starting} />
+    <OnboardingFrame step={ONBOARDING_STEPS}>
+      <StepHeader title={s.title} body={s.body} />
       <ListSkeleton rows={2} />
     </OnboardingFrame>
   );

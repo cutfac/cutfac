@@ -103,7 +103,12 @@ export const en = {
     archived: "Archived",
     emptyTitle: "Create your first video — the agent will make it",
     emptyBody:
-      "Give it a title and pick a template. You review the result here and ask for changes.",
+      "Say what to make. Your agent reads your brief first, and you review the result here and ask for changes.",
+    /** On the empty board: the material the agent learned, which opens the brief. */
+    known: (titles: ReadonlyArray<string>) =>
+      titles.length === 1
+        ? `Your agent knows ${titles[0]}`
+        : `Your agent knows ${titles.length} sources`,
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
     selected: "selected",

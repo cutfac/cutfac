@@ -71,7 +71,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
     if (location.hash === "" && startFirst) location.hash = href("start");
   }, [startFirst]);
 
-  if (view === "start") return <Start id={id} ws={ws} brief={brief} />;
+  if (view === "start") return <Start ws={ws} brief={brief} />;
 
   // Nothing to show until it is clear which page opens, so the board doesn't flash first.
   if (landing) return <div className="h-dvh bg-background" />;

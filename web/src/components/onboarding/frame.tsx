@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 import { desktop, insetTitleBar } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 
-/** The steps the dots count: agent, access, folder, what to make and the first video. */
-export const ONBOARDING_STEPS = 5;
+/** The steps the dots count: what to make, agent, access, and where the work is kept. */
+export const ONBOARDING_STEPS = 4;
 
 /** How long a step shows that it is done before the next one, so the change reads as progress. */
 export const DONE_PAUSE_MS = 900;

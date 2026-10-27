@@ -1,5 +1,4 @@
 import type { Platform, Purpose } from "../lib/brief.ts";
-import type { RunPhase } from "../lib/onboarding.ts";
 
 interface PurposeCopy {
   title: string;
@@ -94,48 +93,21 @@ export const startEn = {
     starting: "Starting…",
     skip: "Skip for now",
     learnFailed: (source: string, message: string) => `Could not read ${source}: ${message}`,
-    noAgent: "No agent is ready. Set one up in Setup, then try again.",
   },
-  firstVideo: {
-    /**
-     * Turning on notifications, asked here since it is when they help: the app tells the user when
-     * the agent waits for them. macOS asks on the first one, so Turn on puts up a sample.
-     */
-    notify: {
-      label: "Get notified when your agent needs you",
-      turnOn: "Turn on",
-      done: "Notifications on",
-      sample: { title: "Cutfac", body: "This is how Cutfac tells you your agent is waiting." },
-    },
-    title: "Your first video",
-    body: "Your agent is setting up how this kind of video gets made. Give the first one a title meanwhile.",
-    readyBody:
-      "Your agent set up how this kind of video gets made. Give the first one a title to open it.",
-    starting: "Starting your agent…",
-    phase: {
-      reading: "Reading your brief and the reference…",
-      writing: "Building the template…",
-      checking: "Checking that it renders…",
-    } satisfies Record<RunPhase, string>,
-    asking: "Your agent has a question",
-    answer: "Or answer in your own words",
-    send: "Send",
-    ready: "The template is ready",
-    settled: "Settled for you. Click one to change it.",
-    change: (item: string) => `Change “${item}” to…`,
-    /** Sent to the agent when the user changes something it settled. */
-    changeBody: (item: string, text: string) => `About "${item}": ${text}`,
-    failed: "Your agent stopped before the template was ready.",
-    noTemplate: "Your agent finished without making a template.",
-    retry: "Try again",
-    withoutReference: "Make it without a reference",
-    titleLabel: "Video title",
-    titlePlaceholder: "e.g. Launch week teaser",
-    create: "Create video",
-    creating: "Creating…",
-    waitHint: "You can create it once the template is ready.",
-    later: "Continue on the board",
-    createFailed: (message: string) => `Could not create the video: ${message}`,
+  /**
+   * Turning on notifications, offered on the empty board since that is when they help: the app tells
+   * the user when the agent waits for them. macOS asks on the first one, so Turn on puts up a sample.
+   */
+  notify: {
+    label: "Get notified when your agent needs you",
+    turnOn: "Turn on",
+    done: "Notifications on",
+    sample: { title: "Cutfac", body: "This is how Cutfac tells you your agent is waiting." },
+  },
+  /** While the first launch's answers go into the new workspace, a moment before the board. */
+  saving: {
+    title: "Setting up your workspace",
+    body: "Saving what you told your agent…",
   },
 };
 

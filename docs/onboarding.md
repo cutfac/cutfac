@@ -5,12 +5,12 @@ their first video, in a few steps inside the app's own window.
 
 ## Ready means
 
-Making a video on the board takes a title and a template, and an agent to run it. So the app is
-ready when:
+Making a video on the board takes a request and an agent to run it; a template is optional. So
+the app is ready when:
 
 1. an agent CLI (Claude Code or Codex) is installed, recent enough and signed in,
 2. a workspace folder exists, with that agent connected to it, and
-3. the workspace has at least one template that is ready to use.
+3. the workspace has the brief and the material the user gave, for the agent to read first.
 
 ## What it replaced
 
@@ -28,8 +28,7 @@ the permissions it works under, and where everything is kept. Each step checks w
 and passes on its own when it is: a second Mac, a reinstall or a workspace that already has
 templates goes straight to what is missing. Closing the window keeps the progress. Steps 1 to 5
 save the step the user is on, and the next launch opens on it. Once the workspace is made, the
-board starts the first template from the answers; each template run has its own page, so a reload
-keeps it.
+board saves the answers into it and opens: nothing is made yet, so nothing is waited on.
 
 | Step            | Shows                                                                                                                                                                         | Done when                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
@@ -37,8 +36,7 @@ keeps it.
 | 2. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace           | Next is pressed on the last part, or Skip |
 | 3. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                             | One agent is ready, and Next is pressed   |
 | 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                        | Both are on, or Skip                      |
-| 5. Ready        | Where everything is kept, as one line (`~/Documents/Cutfac`) with Change, and Start making. The folder is made, the agents from step 3 connect to it, and the template starts | The server runs on the folder             |
-| 6. First video  | The template run's progress, a title field, and Turn on for notifications. Allow shows here when the import needs it                                                          | The item exists; its detail opens         |
+| 5. Ready        | Where everything is kept, as one line (`~/Documents/Cutfac`) with Change, whether to share with the Cutfac team, and Start making. The folder is made and the agents from step 3 connect to it | The board opens on the folder             |
 
 ### Before the workspace
 
@@ -48,9 +46,8 @@ answers those steps itself over the preload bridge. Agent detection runs as a CL
 needs no workspace (`cutfac agents --json`), so the server and Electron share one implementation.
 What to make has nowhere to be saved yet, so the app keeps the answers in its settings, where they
 last through the relaunch screen recording asks for. Step 5 starts the server on the folder; the
-board then saves the brief, learns the material and starts the template, and forgets the answers
-first, so a reload can't start a second run. A browser has no steps before the workspace, so it
-asks what to make on Start.
+board then forgets the answers, saves the brief and learns the material, which takes seconds, and
+opens. A browser has no steps before the workspace, so it asks what to make on Start.
 
 ### Agent
 
@@ -110,8 +107,8 @@ agent needs either.
 
 Cutfac doesn't ask for Full Disk Access, which would let every agent read the user's mail and
 messages too: reading Desktop, Documents, Downloads and the like, macOS asks once per folder the
-first time an agent reaches one, and remembers the answer. Notifications are offered on the first
-video, while the agent works, when they help: macOS asks on the app's first notification and
+first time an agent reaches one, and remembers the answer. Notifications are offered on the empty
+board, before the first video, since they help once an agent works: macOS asks on the app's first notification and
 Electron has no other way to ask, so Turn on puts up a sample one. A dev build signs differently
 from the release, so it gets its own entry in each list.
 
@@ -137,29 +134,12 @@ writes the template from that. So step 2 asks, a part at a time and in this orde
 - **A reference**, optional: one card from a gallery of public examples (skills, starter kits,
   finished projects and collections of videos with their prompts), or another link pasted in.
 
-Start runs the agent on all of it through the import the Templates view already runs, with the same
-consent rules: a reference is read first and waits for Allow, while a run with no reference may
-write from the start, since there is nothing outside the workspace to bring in. The agent is the
-workspace's default when it is ready, and otherwise the one that is; only the request changes, from
-"make this link usable here" to "make a template for this person, starting from this reference".
-Without a reference the agent starts from what it knows. The agent may ask when a guess would likely
-make the wrong thing, such as which product on a website to promote; the question shows in step 6
-next to the title, and the import already takes replies. The request leans it toward deciding: ask
-only what it can't settle reasonably, one question at a time so each is quick to answer, keep them
-few, and otherwise pick a sensible default. That is guidance in the request, not a hard limit. What
-it settled without asking goes in the template's README, where the user can change it.
-
-The user never sees the request itself. In outline it says:
-
-- make one template for the person `brief.md` describes, reading what was learned into `about.md`;
-- start from this reference, or from what you know when there is none;
-- fit the aspect ratios and lengths to the platforms;
-- ask only what you can't settle reasonably, one question at a time, each with two or three likely
-  answers to pick from; settle the rest with sensible defaults and list them in the README;
-- finish when `check_format` passes;
-- reply and ask in the user's language.
-
-The wording is tuned against real agent runs when it is built.
+Nothing is made from it during the first launch. A template took the agent minutes, and what came
+out was a spec for the agent that the user couldn't judge yet. Instead the answers are context:
+`brief.md` and the material in `about.md`, which the agent reads before every template and video.
+The first video is asked for on the board in the user's own words, with or without a template, and
+a template can come from a video the user likes later, through Templates. A learned source marks its
+section in `about.md` as not read yet, so the first agent that works reads it and rewrites it.
 
 ### The brief
 
@@ -208,26 +188,11 @@ to search:
 The core stays domain-agnostic: the gallery and the brief are data, and nothing in the app knows a
 niche.
 
-### First video
+### The board after
 
-A template can take the agent a few minutes, so the user doesn't wait on it. Start moves straight
-to the title, with the run's progress above the field and its Allow, when it asks for one, in
-place:
-
-- **Progress** is one line that moves through the run: reading the brief and the reference,
-  building the template, checking that it renders.
-- **A question** shows as one card above the title field, with the agent's suggested answers as
-  buttons and a field for the user's own answer. Answering one brings the next or lets the run go
-  on.
-- **When it is done**, what the agent settled without asking shows as a short list ("30 seconds",
-  "large captions"), the same as the README. Clicking one opens a field, already focused, to change
-  it in words.
-- **When it fails**, one line says why, with Try again and, when a reference was picked, Make it
-  without a reference.
-
-Create is ready once the title is in and the template is; it makes the item with
-that template and opens its detail view. The agent doesn't start on its own: the first run is the
-user's to start, from the detail view, as every later one is.
+The board opens empty, on New video, with what the agent already knows: a line naming the learned
+material, which opens the Brief page with `about.md` as the agent reads it, and Turn on for
+notifications.
 
 ### Agents see the same state
 

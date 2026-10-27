@@ -73,8 +73,8 @@ export const onboardingEn = {
     },
   },
   ready: {
-    title: "Ready to make your first template",
-    body: "Your agent makes it from what you told it. Cutfac keeps your templates and videos as plain files in one folder.",
+    title: "Ready to make your first video",
+    body: "Your agent reads what you told it before every video. Cutfac keeps your videos and templates as plain files in one folder.",
     /** When the user left what to make for later. */
     skippedTitle: "Ready to start",
     skippedBody:
