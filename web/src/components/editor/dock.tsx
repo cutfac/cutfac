@@ -80,17 +80,9 @@ import {
   type Slot,
   type StripId,
 } from "../../lib/editor-layout.ts";
+import { readStored } from "../../lib/storage.ts";
 
 const STORAGE_KEY = "cutfac.editor.layout";
-
-function readStored() {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    // Storage can be blocked, as in some private windows; the editor starts from the default.
-    return null;
-  }
-}
 
 function writeStored(layout: EditorLayout) {
   try {
@@ -101,7 +93,7 @@ function writeStored(layout: EditorLayout) {
   }
 }
 
-let current = parseLayout(readStored());
+let current = parseLayout(readStored(STORAGE_KEY));
 
 const watchers = new Set<() => void>();
 
@@ -134,7 +126,7 @@ function updateLayout(change: (layout: EditorLayout) => EditorLayout) {
 window.addEventListener("storage", (event) => {
   if (event.key !== STORAGE_KEY && event.key !== null) return;
 
-  const next = parseLayout(readStored());
+  const next = parseLayout(readStored(STORAGE_KEY));
 
   if (serializeLayout(next) === serializeLayout(current)) return;
 

@@ -1,4 +1,5 @@
 import type { Locale } from "../i18n/locale.ts";
+import { readStored } from "./storage.ts";
 
 /** What an announcement says, in one language. */
 export interface AnnouncementCopy {
@@ -61,13 +62,7 @@ export function forgetNewest(
 const listeners = new Set<() => void>();
 
 /** What the board kept of the announcements seen, as stored. */
-export function storedSeen(): string | null {
-  try {
-    return localStorage.getItem(SEEN_KEY);
-  } catch {
-    return null;
-  }
-}
+export const storedSeen = () => readStored(SEEN_KEY);
 
 function saveSeen(seen: ReadonlyArray<string>): void {
   try {

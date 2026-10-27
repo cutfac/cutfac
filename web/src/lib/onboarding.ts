@@ -1,4 +1,5 @@
 import type { AgentName, AgentStatus } from "../api.ts";
+import { readStored } from "./storage.ts";
 
 /**
  * The agents a new workspace connects without asking: every one installed and recent enough that
@@ -37,13 +38,7 @@ const skipKey = (root: string) => `cutfac.start.skipped.${root}`;
  * Whether the user set aside the first template for this workspace, so the board stops opening
  * on it. Kept in this browser: it is a nudge, not part of the workspace.
  */
-export function startSkipped(root: string): boolean {
-  try {
-    return localStorage.getItem(skipKey(root)) !== null;
-  } catch {
-    return false;
-  }
-}
+export const startSkipped = (root: string) => readStored(skipKey(root)) !== null;
 
 export function skipStart(root: string): void {
   try {

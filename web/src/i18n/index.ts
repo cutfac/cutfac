@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { desktop } from "../desktop.ts";
+import { readStored } from "../lib/storage.ts";
 import { en, type Messages } from "./en.tsx";
 import { ko } from "./ko.tsx";
 import { resolveLocale, type Locale } from "./locale.ts";
@@ -13,15 +14,6 @@ const DICTIONARIES: Record<Locale, Messages> = { en, ko };
 
 const STORAGE_KEY = "cutfac.locale";
 
-function readStored(): string | null {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    // Storage can be blocked (private windows, cleared site data); follow the system language.
-    return null;
-  }
-}
-
 function writeStored(locale: Locale) {
   try {
     localStorage.setItem(STORAGE_KEY, locale);
@@ -30,7 +22,7 @@ function writeStored(locale: Locale) {
   }
 }
 
-let current = resolveLocale(readStored(), navigator.languages);
+let current = resolveLocale(readStored(STORAGE_KEY), navigator.languages);
 
 const listeners = new Set<() => void>();
 

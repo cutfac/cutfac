@@ -1,3 +1,5 @@
+import { Option, Schema } from "effect";
+
 /**
  * How the item editor's sections are arranged around the preview, which stays in the middle: the
  * media and reference strips each sit below it, left of it or right of it, and the chat panel
@@ -213,6 +215,12 @@ const VERSION = "1";
 
 const sizeParam = (key: SizeKey) => `size.${key}`;
 
+const decodeStrip = Schema.decodeUnknownOption(Schema.Literals(STRIPS));
+
+const decodeSide = Schema.decodeUnknownOption(Schema.Literals(SIDES));
+
+const decodeSize = Schema.decodeUnknownOption(Schema.FiniteFromString);
+
 /**
  * Read a stored layout, keeping what still makes sense: each strip once, in a known slot (a strip
  * it misses goes below the preview), and sizes in range. Anything unreadable is the default.
@@ -229,12 +237,12 @@ export function parseLayout(raw: string | null): EditorLayout {
 
   for (const slot of SLOTS) {
     for (const name of (stored.get(slot) ?? "").split(",")) {
-      const strip = STRIPS.find((known) => known === name);
+      const strip = decodeStrip(name);
 
-      if (strip === undefined || placed.has(strip)) continue;
+      if (Option.isNone(strip) || placed.has(strip.value)) continue;
 
-      placed.add(strip);
-      slots[slot].push(strip);
+      placed.add(strip.value);
+      slots[slot].push(strip.value);
     }
   }
 
@@ -243,16 +251,14 @@ export function parseLayout(raw: string | null): EditorLayout {
   const sizes: Partial<Record<SizeKey, number>> = {};
 
   for (const key of SIZE_KEYS) {
-    const text = stored.get(sizeParam(key));
+    const size = decodeSize(stored.get(sizeParam(key)));
 
-    if (text === null) continue;
-
-    const size = Number(text);
-
-    if (validSize(key, size)) sizes[key] = size;
+    if (Option.isSome(size) && validSize(key, size.value)) sizes[key] = size.value;
   }
 
-  return { slots, chat: stored.get("chat") === "left" ? "left" : "right", sizes };
+  const chat = Option.getOrElse(decodeSide(stored.get("chat")), () => DEFAULT_LAYOUT.chat);
+
+  return { slots, chat, sizes };
 }
 
 export function serializeLayout(layout: EditorLayout) {

@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect";
 import { ArchiveIcon, BookOpenIcon, KanbanIcon, LayoutGridIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
@@ -33,6 +34,7 @@ import { useMessages } from "../i18n/index.ts";
 import { gridColumns } from "../lib/board-keys.ts";
 import { moveItems } from "../lib/items.ts";
 import { failureSeen } from "../lib/render-seen.ts";
+import { readStored } from "../lib/storage.ts";
 import { byWork, isBusy, itemWork } from "../lib/work.ts";
 import { BoardColumns, BoardSkeleton } from "./BoardColumns.tsx";
 import { usePicks } from "./BoardPicks.tsx";
@@ -40,14 +42,7 @@ import { Tile } from "./GalleryTile.tsx";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
-function readHintDismissed(): boolean {
-  try {
-    return localStorage.getItem(LEARN_HINT_KEY) === "true";
-  } catch {
-    // Storage can be blocked; offer the hint, it is easy to wave away.
-    return false;
-  }
-}
+const readHintDismissed = () => readStored(LEARN_HINT_KEY) === "true";
 
 function writeHintDismissed() {
   try {
@@ -58,7 +53,11 @@ function writeHintDismissed() {
 }
 
 /** The videos as a gallery, newest first, or as a board of status columns. */
-type Layout = "gallery" | "board";
+const Layout = Schema.Literals(["gallery", "board"]);
+
+type Layout = typeof Layout.Type;
+
+const decodeLayout = Schema.decodeUnknownOption(Layout);
 
 /** How often the videos load again while an agent or a render works on one of them. */
 const BUSY_POLL_MS = 2000;
@@ -66,12 +65,7 @@ const BUSY_POLL_MS = 2000;
 const LAYOUT_KEY = "cutfac.videos.layout";
 
 function readLayout(): Layout {
-  try {
-    return localStorage.getItem(LAYOUT_KEY) === "board" ? "board" : "gallery";
-  } catch {
-    // Storage can be blocked; the gallery is the plainer start.
-    return "gallery";
-  }
+  return Option.getOrElse(decodeLayout(readStored(LAYOUT_KEY)), () => "gallery");
 }
 
 function writeLayout(layout: Layout) {

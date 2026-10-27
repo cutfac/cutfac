@@ -1,6 +1,8 @@
+import { Option, Schema } from "effect";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { Effort, ModelName } from "../../src/core/schema.ts";
 import {
   api,
   onWorkspaceChange,
@@ -11,6 +13,7 @@ import {
 } from "./api.ts";
 import { desktop } from "./desktop.ts";
 import type { ModelPicks } from "./lib/models.ts";
+import { readStored } from "./lib/storage.ts";
 
 interface Loaded<T> {
   key: string;
@@ -173,19 +176,19 @@ export const href = (view: string, id?: string) =>
 /** Where this browser keeps one part of an agent's pick, such as `cutfac.model.claude`. */
 const pickKey = (agent: AgentName, part: keyof ModelSettings) => `cutfac.${part}.${agent}`;
 
-function readPick(agent: AgentName): ModelSettings {
-  try {
-    const model = localStorage.getItem(pickKey(agent, "model")) || undefined;
-    const effort = localStorage.getItem(pickKey(agent, "effort")) || undefined;
+const decodeModel = Schema.decodeUnknownOption(ModelName);
 
-    return {
-      ...(model !== undefined && { model }),
-      ...(effort !== undefined && { effort }),
-    };
-  } catch {
-    // Storage can be blocked; the agent starts on its own default.
-    return {};
-  }
+const decodeEffort = Schema.decodeUnknownOption(Effort);
+
+/** What this browser kept of the agent's pick; a part that isn't a model or effort is dropped. */
+function readPick(agent: AgentName): ModelSettings {
+  const model = decodeModel(readStored(pickKey(agent, "model")));
+  const effort = decodeEffort(readStored(pickKey(agent, "effort")));
+
+  return {
+    ...(Option.isSome(model) && { model: model.value }),
+    ...(Option.isSome(effort) && { effort: effort.value }),
+  };
 }
 
 /**
@@ -218,14 +221,7 @@ export function useModelPicks() {
 
 const SIDEBAR_OPEN_KEY = "cutfac.sidebar.open";
 
-function readSidebarOpen(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_OPEN_KEY) !== "false";
-  } catch {
-    // Storage can be blocked (private windows, cleared site data); start expanded.
-    return true;
-  }
-}
+const readSidebarOpen = () => readStored(SIDEBAR_OPEN_KEY) !== "false";
 
 function writeSidebarOpen(open: boolean) {
   try {
@@ -264,14 +260,15 @@ export function clampSidebarWidth(width: number): number {
   return Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)));
 }
 
-function readSidebarWidth(): number {
-  try {
-    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+const decodeWidth = Schema.decodeUnknownOption(
+  Schema.FiniteFromString.check(Schema.isGreaterThan(0)),
+);
 
-    return saved > 0 ? clampSidebarWidth(saved) : SIDEBAR_WIDTH;
-  } catch {
-    return SIDEBAR_WIDTH;
-  }
+function readSidebarWidth(): number {
+  return Option.match(decodeWidth(readStored(SIDEBAR_WIDTH_KEY)), {
+    onNone: () => SIDEBAR_WIDTH,
+    onSome: clampSidebarWidth,
+  });
 }
 
 /** The sidebar's width: what the user dragged it to, the same on every page. */

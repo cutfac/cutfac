@@ -6,17 +6,12 @@ import { Button } from "@/components/ui/button";
 import { desktop } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 import { sendFailed } from "../lib/notify.ts";
+import { readStored } from "../lib/storage.ts";
 
 /** Asked notifications already: macOS answers once and doesn't say what, so asking is the step. */
 const NOTIFY_KEY = "cutfac.onboarding.notificationsAsked";
 
-function readAsked(): boolean {
-  try {
-    return localStorage.getItem(NOTIFY_KEY) !== null;
-  } catch {
-    return false;
-  }
-}
+const readAsked = () => readStored(NOTIFY_KEY) !== null;
 
 /**
  * Notifications, offered before the first video, when they help: the app says when the agent waits
