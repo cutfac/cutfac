@@ -61,6 +61,11 @@ Engineering:
 - Workspace files are the source of truth. Do not add a database without a demonstrated need.
 - The core must stay domain-agnostic; product- or niche-specific logic belongs in a workspace.
 - Add a focused `bun:test` for parsing, status mapping, verification, and persistence changes.
+- Use the `test-audit` skill in `.agents/skills/test-audit/` when writing, changing, reviewing or
+  sweeping tests. A test earns its place by protecting observable behavior or an independent
+  contract: name the regression that would make it fail, and test it once, at the boundary that
+  owns it. Don't transcribe source, or assert what the types or a `Schema` already guarantee. A
+  bug's regression test must fail on the code before the fix.
 - To see and drive the desktop app, use argent: `bun run desktop:dev` opens Cutfac Dev with the
   DevTools Protocol on port 9222, or the port it logs, which argent's Chromium tools reach.
 - Before finishing: `bun test`, `bun run typecheck`, `bun run lint`, `bun run format:check`, and `bun run build` for web changes.
