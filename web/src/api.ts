@@ -74,6 +74,8 @@ export interface TeamFeedback {
   locale: string;
   /** The agent the person works with; left out, the server names the workspace's default. */
   agent?: AgentName;
+  /** Send the desktop app's recent log with it, which the person agreed to. */
+  logs?: boolean;
 }
 
 /** The `?id=` query naming an item. */
@@ -798,6 +800,8 @@ export const api = {
   /** Feedback for the Cutfac team, which the server passes on to cutfac.com. */
   teamFeedback: (feedback: TeamFeedback) =>
     send<{ ok: true }, TeamFeedback>("POST", "/api/team-feedback", feedback),
+  /** The log feedback would carry, for the person to read first; null outside the desktop app. */
+  teamFeedbackLogs: () => request<{ logs: string | null }>("/api/team-feedback/logs"),
   learned: () => request<LearnedList>("/api/learned"),
   /** Learn a link, or a folder or file on this computer. */
   learn: (source: string) =>

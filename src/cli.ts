@@ -159,7 +159,7 @@ const init = Command.make(
 ).pipe(Command.withDescription("Create a workspace and connect your agents"));
 
 /** The desktop app's log for this process, `server` or `mcp`; none for the open-source CLI. */
-const processLog = (name: string) => logToFile(name).pipe(Layer.provide(logDir));
+const processLog = (name: string) => logToFile(name).pipe(Layer.provideMerge(logDir));
 
 const serve = Command.make(
   "serve",

@@ -31,6 +31,20 @@ const SLOW = Duration.seconds(1);
 /** A day's log of one process, such as `server-2026-10-28.log`. */
 const LOG_FILE = /^[a-z]+-(\d{4}-\d{2}-\d{2})\.log$/;
 
+/** The days of logs in `dir`, newest first, each with its file and the day it covers. */
+export const dayLogs = Effect.fnUntraced(function* (dir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+
+  return (yield* fs.readDirectory(dir))
+    .flatMap((name) => {
+      const day = LOG_FILE.exec(name)?.[1];
+
+      return day === undefined ? [] : [{ name, file: path.join(dir, name), day }];
+    })
+    .toSorted((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
+});
+
 /** The folder the desktop app keeps its logs in. None for the open-source CLI, which keeps none. */
 export const LogDir = Context.Reference<Option.Option<string>>("cutfac/LogDir", {
   defaultValue: () => Option.none(),
@@ -57,22 +71,13 @@ export const logDir = Layer.effect(
 /** Removes the days of logs past `KEEP`, then the oldest until what is left fits `KEEP_BYTES`. */
 const prune = Effect.fnUntraced(function* (dir: string, today: DateTime.Utc) {
   const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
 
   const oldest = DateTime.formatIsoDateUtc(
     DateTime.subtract(today, { days: Duration.toDays(KEEP) }),
   );
 
-  const logs = (yield* fs.readDirectory(dir))
-    .flatMap((name) => {
-      const day = LOG_FILE.exec(name)?.[1];
-
-      return day === undefined ? [] : [{ file: path.join(dir, name), day }];
-    })
-    .toSorted((a, b) => b.day.localeCompare(a.day));
-
   yield* Effect.reduce(
-    logs,
+    yield* dayLogs(dir),
     () => 0,
     (kept: number, { file, day }) =>
       Effect.gen(function* () {

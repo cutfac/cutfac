@@ -34,6 +34,7 @@ import {
   waitingPick,
 } from "../core/edits.ts";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
+import { recentLogs } from "../core/feedbackLogs.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
 import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
 import {
@@ -239,6 +240,7 @@ const TeamFeedbackBody = Schema.Struct({
   platform: Schema.optional(Schema.String),
   locale: Schema.optional(Schema.String),
   agent: Schema.optional(Schema.String),
+  logs: Schema.optional(Schema.Boolean),
 });
 
 const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
@@ -978,12 +980,17 @@ const apiRoutes = (options: ServerOptions) =>
       "/api/team-feedback",
       Effect.gen(function* () {
         const ws = yield* Workspace;
-        const body = yield* HttpServerRequest.schemaBodyJson(TeamFeedbackBody);
+        const { logs, ...body } = yield* HttpServerRequest.schemaBodyJson(TeamFeedbackBody);
 
-        yield* sendTeamFeedback({ ...body, agent: body.agent ?? defaultAgent(ws) });
+        yield* sendTeamFeedback({ ...body, withLogs: logs, agent: body.agent ?? defaultAgent(ws) });
 
         return { ok: true };
       }),
+    ),
+    json(
+      "GET",
+      "/api/team-feedback/logs",
+      Effect.map(recentLogs, (logs) => ({ logs: Option.getOrNull(logs) })),
     ),
     json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),
     json("GET", "/api/formats", listFormats()),

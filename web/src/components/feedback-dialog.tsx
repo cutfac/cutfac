@@ -13,18 +13,27 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 import { api, type AgentChoice, type TeamFeedback } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { currentLocale, messages, useMessages } from "../i18n/index.ts";
+import { SelectionArea } from "./selection-area.tsx";
 
 interface Extras {
   email?: string;
   agent?: AgentChoice | undefined;
+  logs?: boolean;
 }
 
 /**
@@ -44,6 +53,8 @@ function sendTeamFeedback(message: string, source: TeamFeedback["source"], extra
   if (email !== "") feedback.email = email;
 
   if (extras.agent !== undefined && extras.agent !== "queue") feedback.agent = extras.agent;
+
+  if (extras.logs === true) feedback.logs = true;
 
   return api.teamFeedback(feedback);
 }
@@ -77,6 +88,16 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // Only the desktop app keeps a log, and the person sends it unless they turn it off.
+  const [withLogs, setWithLogs] = useState(desktop !== undefined);
+  const [logs, setLogs] = useState<string | null>();
+
+  function showLogs() {
+    api
+      .teamFeedbackLogs()
+      .then((shown) => setLogs(shown.logs))
+      .catch((cause: Error) => setError(cause.message));
+  }
 
   function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -85,7 +106,7 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
 
     setBusy(true);
     setError(undefined);
-    sendTeamFeedback(message, "board", { email })
+    sendTeamFeedback(message, "board", { email, logs: withLogs })
       .then(() => {
         toast.success(t.teamFeedback.sent);
         setOpen(false);
@@ -128,6 +149,29 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
               />
               <FieldDescription>{t.teamFeedback.emailHint}</FieldDescription>
             </Field>
+            {desktop ? (
+              <Field orientation="horizontal">
+                <Switch id="team-feedback-logs" checked={withLogs} onCheckedChange={setWithLogs} />
+                <FieldContent>
+                  <FieldLabel htmlFor="team-feedback-logs">{t.teamFeedback.logsLabel}</FieldLabel>
+                  <FieldDescription>
+                    {t.teamFeedback.logsHint}{" "}
+                    <Button type="button" variant="link" size="xs" onClick={showLogs}>
+                      {t.teamFeedback.showLogs}
+                    </Button>
+                  </FieldDescription>
+                </FieldContent>
+              </Field>
+            ) : null}
+            {logs === undefined ? null : (
+              <SelectionArea
+                render={
+                  <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap" />
+                }
+              >
+                {logs ?? t.teamFeedback.noLogs}
+              </SelectionArea>
+            )}
           </FieldGroup>
           {error ? <ErrorAlert title={t.teamFeedback.failed} message={error} /> : null}
           <DialogFooter>

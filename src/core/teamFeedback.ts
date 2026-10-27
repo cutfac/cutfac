@@ -1,8 +1,9 @@
-import { Config, Effect } from "effect";
+import { Config, Effect, Option } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 
 import { APP_VERSION } from "./build.ts";
 import { FetchFailed, InvalidRequest } from "./errors.ts";
+import { recentLogs } from "./feedbackLogs.ts";
 
 /**
  * Feedback for the people who make Cutfac, as opposed to the feedback a person leaves on an item
@@ -31,6 +32,24 @@ export interface TeamFeedback {
   readonly locale?: string | undefined;
   /** The agent the person works with, such as "claude-code 2.1.0". */
   readonly agent?: string | undefined;
+  /** The person agreed to send the app's recent log with it. */
+  readonly withLogs?: boolean | undefined;
+}
+
+/** The name the log goes under, gzipped, which the site attaches to its mail. */
+const LOGS_FILE = "cutfac-logs.txt.gz";
+
+/** `fields` as a form, with `logs` as the file the site attaches. */
+function formWithLogs(fields: Readonly<Record<string, string>>, logs: string): FormData {
+  const form = new FormData();
+
+  for (const [name, value] of Object.entries(fields)) form.set(name, value);
+
+  const gzipped = Bun.gzipSync(new TextEncoder().encode(logs));
+
+  form.set("logs", new Blob([gzipped], { type: "application/gzip" }), LOGS_FILE);
+
+  return form;
 }
 
 /**
@@ -48,15 +67,23 @@ export const sendTeamFeedback = Effect.fn("teamFeedback.send")(function* (feedba
       message: `Feedback can be at most ${MAX_TEAM_FEEDBACK_CHARS} characters; this is ${message.length}.`,
     });
 
+  const fields = {
+    message,
+    email: feedback.email?.trim() ?? "",
+    source: feedback.source,
+    version: APP_VERSION,
+    platform: feedback.platform ?? "",
+    locale: feedback.locale ?? "",
+    agent: feedback.agent ?? "",
+  };
+
+  // A form with a file only when there is a log to send; without one, the request is as it was.
+  const logs = feedback.withLogs === true ? yield* recentLogs : Option.none<string>();
+
   const request = HttpClientRequest.post(url).pipe(
-    HttpClientRequest.bodyUrlParams({
-      message,
-      email: feedback.email?.trim() ?? "",
-      source: feedback.source,
-      version: APP_VERSION,
-      platform: feedback.platform ?? "",
-      locale: feedback.locale ?? "",
-      agent: feedback.agent ?? "",
+    Option.match(logs, {
+      onNone: () => HttpClientRequest.bodyUrlParams(fields),
+      onSome: (text) => HttpClientRequest.bodyFormData(formWithLogs(fields, text)),
     }),
   );
 

@@ -485,12 +485,20 @@ const SendFeedbackToCutfac = tool("send_feedback_to_cutfac", {
     "Send feedback about Cutfac itself (a bug, a confusing step, a wish) to the people who make it; they read every one. " +
     "Call it only when the user asks to send feedback, or takes you up on an offer to report a Cutfac bug. Show them the exact text first and send it once they agree. " +
     "Write it in their words; leave out file contents, paths, and other private details unless they say to include them. " +
-    "Add a reply email only if they give one.",
+    "Add a reply email only if they give one. " +
+    "Attach the app's recent log with logs: true, which helps the team find the cause; say in the text you show that the log goes with it, and leave it off if they say so.",
   parameters: Schema.Struct({
     message: Schema.String.annotate(
       describe(`what to tell the team, at most ${MAX_TEAM_FEEDBACK_CHARS} characters`),
     ),
     email: Schema.optional(Schema.String.annotate(describe("where the team can reply"))),
+    logs: Schema.optional(
+      Schema.Boolean.annotate(
+        describe(
+          "attach the app's recent log: what it did and any errors, never a video, prompt, chat or key",
+        ),
+      ),
+    ),
   }),
   success: Ok,
   network: true,
@@ -776,13 +784,14 @@ const handlers = WorkspaceToolkit.toLayer(
           }),
         ),
 
-      send_feedback_to_cutfac: ({ message, email }) =>
+      send_feedback_to_cutfac: ({ message, email, logs }) =>
         Effect.flatMap(Effect.serviceOption(McpSchema.McpRequestContext), (request) =>
           run(
             Effect.as(
               sendTeamFeedback({
                 message,
                 email,
+                withLogs: logs,
                 source: "agent",
                 platform: process.platform,
                 agent: Option.getOrUndefined(Option.map(request, clientName)),

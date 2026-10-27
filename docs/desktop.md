@@ -79,7 +79,13 @@ tool. Agents that list MCP prompts as commands also offer the `feedback` prompt,
 agent shows them the exact text and sends it only once they agree. The board posts to
 `/api/team-feedback`; the MCP tool sends from the MCP server itself. Either way
 `https://cutfac.com/api/feedback` gets the message, an optional reply address, the app's version,
-platform and language, which way it came, and the agent, if one was involved. Nothing else is sent.
+platform and language, which way it came, and the agent, if one was involved.
+
+In the desktop app, feedback can also carry the app's recent log (see Logs): the newest days, up to
+1 MB, gzipped as `cutfac-logs.txt.gz`, which cutfac.com attaches to the mail. "Send feedback" asks
+with a switch that starts on and shows what would go; the agent passes `logs: true` and says so in
+the text it shows first, leaving it off if the person says no. A `/feedback` message sends no log.
+Nothing else is sent.
 
 ## Logs
 
@@ -90,8 +96,8 @@ and each top-level operation that failed, took a second or more, or answered an 
 long it took. A tool call names the tool, never what the agent passed it, and says when it answered
 with an error. The home folder shows as `~`, and the log never holds what is in a video, a prompt,
 a chat or a key. A process that starts removes the days older than a week, then the oldest until
-the folder holds 50 MB or less. The log stays on this Mac. The open-source CLI keeps none; from
-source, `CUTFAC_LOG_DIR` names a folder to keep one in.
+the folder holds 50 MB or less. The log stays on this Mac unless the person sends it with feedback.
+The open-source CLI keeps none; from source, `CUTFAC_LOG_DIR` names a folder to keep one in.
 
 ## Running it from source
 
