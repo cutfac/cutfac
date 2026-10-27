@@ -61,6 +61,9 @@ export const ACCESS_GRANTED_CHANNEL = "cutfac:access-granted";
 /** Drag the app itself out of the helper window, into the Full Disk Access list. */
 export const START_APP_DRAG_CHANNEL = "cutfac:start-app-drag";
 
+/** Make the helper window the key one as the pointer reaches it, so it shows its cursor. */
+export const FOCUS_DRAG_HELPER_CHANNEL = "cutfac:focus-drag-helper";
+
 /** The app's icon, for the helper window to show as the thing to drag. */
 export const APP_ICON_CHANNEL = "cutfac:app-icon";
 

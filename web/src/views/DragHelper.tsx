@@ -27,6 +27,8 @@ export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
         <div
           draggable
           className="relative flex h-full animate-access-glow cursor-grab items-center gap-3 overflow-hidden rounded-2xl bg-foreground/6 pr-2 pl-3 transition-colors duration-300 hover:bg-foreground/10 active:cursor-grabbing motion-reduce:animate-none"
+          // macOS shows the grab cursor only once the panel takes the pointer.
+          onPointerEnter={() => onboarding.focusDragHelper()}
           onDragStart={(event) => {
             // The app drags its own bundle instead of the card.
             event.preventDefault();

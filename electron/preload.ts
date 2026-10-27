@@ -43,6 +43,7 @@ import {
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
   START_APP_DRAG_CHANNEL,
+  FOCUS_DRAG_HELPER_CHANNEL,
   START_DRAG_CHANNEL,
   TAKE_NEW_VIDEO_LINK_CHANNEL,
 } from "./ipc.ts";
@@ -97,6 +98,7 @@ const onboarding = {
     };
   },
   startAppDrag: () => ipcRenderer.send(START_APP_DRAG_CHANNEL),
+  focusDragHelper: () => ipcRenderer.send(FOCUS_DRAG_HELPER_CHANNEL),
   appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
   defaultFolder: () => ipcRenderer.invoke(DEFAULT_FOLDER_CHANNEL),
   chooseFolder: () => ipcRenderer.invoke(CHOOSE_FOLDER_CHANNEL),

@@ -14,7 +14,13 @@ import { AgentName } from "../src/core/schema.ts";
 import type { Folder } from "../web/src/desktop.ts";
 import { agentSetups, fixAgent } from "./agents.ts";
 import { pickWorkspace } from "./dialogs.ts";
-import { appBadge, dragApp, hasFullDiskAccess, openAccessSettings } from "./fullDiskAccess.ts";
+import {
+  appBadge,
+  dragApp,
+  focusHelper,
+  hasFullDiskAccess,
+  openAccessSettings,
+} from "./fullDiskAccess.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   AGENTS_CHANNEL,
@@ -27,6 +33,7 @@ import {
   FULL_DISK_ACCESS_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   START_APP_DRAG_CHANNEL,
+  FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
 
 const isAgentName = Schema.is(AgentName);
@@ -124,6 +131,9 @@ export function handleOnboarding(host: OnboardingHost): void {
         host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL);
       },
     });
+  });
+  ipcMain.on(FOCUS_DRAG_HELPER_CHANNEL, (event) => {
+    if (host.isFromApp(event)) focusHelper();
   });
   ipcMain.on(START_APP_DRAG_CHANNEL, (event) => {
     if (host.isFromApp(event)) dragApp(event.sender);

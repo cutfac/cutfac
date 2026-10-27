@@ -90,6 +90,15 @@ export function dragApp(sender: WebContents): void {
   if (dragIcon !== undefined) sender.startDrag({ file: appBundle(), icon: dragIcon });
 }
 
+/**
+ * Makes the helper the window that takes the pointer, as the pointer reaches it. macOS shows a page's
+ * cursor only in the key window, and System Settings is in front then, so the card wouldn't show
+ * the grab cursor. The helper is a panel, which becomes key without bringing the app to the front.
+ */
+export function focusHelper(): void {
+  if (helper !== undefined && !helper.isDestroyed() && !helper.isFocused()) helper.focus();
+}
+
 export interface AccessWatch {
   /** The board's address, where the helper window's page is. */
   boardUrl: string;
