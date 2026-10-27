@@ -50,6 +50,12 @@ export const onboardingKo: OnboardingMessages = {
     granted: "권한을 받았어요",
     skip: "나중에 하기",
     skipNote: "대신 macOS가 폴더마다 물어봐요.",
+    preview: {
+      list: "전체 디스크 접근 권한",
+      drop: "위 목록에 끌어다 놓으세요",
+      pane: "개인정보 보호 및 보안",
+      search: "검색",
+    },
   },
   folder: {
     title: "영상을 둘 폴더를 정해요",

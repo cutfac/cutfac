@@ -32,6 +32,17 @@
   --text-sm--line-height: calc(1.125 / 0.8125);
   /* Hovers and state changes settle quickly instead of easing in and out. */
   --default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  /* The Full Disk Access step's picture: the app dragged from the panel into the list, on a loop. */
+  --animate-access-drag: access-drag 5s ease-in-out infinite;
+  --animate-access-row: access-row 5s ease-out infinite;
+  --animate-access-switch: access-switch 5s ease-out infinite;
+  --animate-access-knob: access-knob 5s ease-out infinite;
+  --animate-access-pointer: access-pointer 5s ease-in-out infinite;
+  /* macOS's own colors, only for the picture of System Settings, so it reads as the real window. */
+  --color-mac-close: oklch(0.68 0.2 25);
+  --color-mac-minimize: oklch(0.83 0.16 80);
+  --color-mac-zoom: oklch(0.75 0.19 145);
+  --color-mac-accent: oklch(0.62 0.19 255);
 }
 
 @theme inline {
@@ -274,5 +285,107 @@
   from {
     opacity: 0;
     scale: 0.96;
+  }
+}
+
+:root {
+  /* How far the card in the Full Disk Access picture moves from the panel to its row in the list. */
+  --access-shift: 0.375rem;
+  --access-lift: -7.125rem;
+}
+
+/* The card lifts as the pointer presses it, rides up with it, and drops into the list. */
+@keyframes access-drag {
+  0%,
+  16% {
+    opacity: 0;
+    translate: 0 0;
+  }
+  18% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  50% {
+    opacity: 1;
+    translate: var(--access-shift) var(--access-lift);
+  }
+  56%,
+  100% {
+    opacity: 0;
+    translate: var(--access-shift) var(--access-lift);
+  }
+}
+
+/* The pointer comes in from below, presses the card, carries it up, lets go and leaves. */
+@keyframes access-pointer {
+  0% {
+    opacity: 0;
+    translate: 2.5rem 2rem;
+    scale: 1;
+  }
+  6% {
+    opacity: 1;
+  }
+  14% {
+    translate: 0 0;
+    scale: 1;
+  }
+  18% {
+    translate: 0 0;
+    scale: 0.85;
+  }
+  50% {
+    translate: var(--access-shift) var(--access-lift);
+    scale: 0.85;
+  }
+  56% {
+    translate: var(--access-shift) var(--access-lift);
+    scale: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  76%,
+  100% {
+    opacity: 0;
+    translate: calc(var(--access-shift) + 2rem) calc(var(--access-lift) + 1.5rem);
+    scale: 1;
+  }
+}
+
+@keyframes access-row {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  56%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The new row's switch turns on a moment after the row lands. */
+@keyframes access-switch {
+  0%,
+  68% {
+    opacity: 0;
+  }
+  74%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes access-knob {
+  0%,
+  68% {
+    translate: -0.625rem 0;
+  }
+  74%,
+  100% {
+    translate: 0 0;
   }
 }

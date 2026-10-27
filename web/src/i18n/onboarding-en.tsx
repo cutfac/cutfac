@@ -55,6 +55,13 @@ export const onboardingEn = {
     granted: "Access granted",
     skip: "Skip for now",
     skipNote: "macOS will ask for each folder instead.",
+    /** The picture of System Settings with the panel under it. */
+    preview: {
+      list: "Full Disk Access",
+      drop: "Drag into the list above",
+      pane: "Privacy & Security",
+      search: "Search",
+    },
   },
   folder: {
     title: "Pick a home for your videos",

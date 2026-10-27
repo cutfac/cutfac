@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import type { CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { AccessPreview } from "./access-preview.tsx";
 import { DONE_PAUSE_MS, StepActions, StepDone, StepHeader } from "./frame.tsx";
 
 /**
@@ -23,6 +24,11 @@ export function AccessStep({
   const t = useMessages().onboarding.access;
   const [granted, setGranted] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [app, setApp] = useState<{ icon: string; name: string }>();
+
+  useEffect(() => {
+    onboarding.appIcon().then(setApp, () => undefined);
+  }, [onboarding]);
 
   // Once granted it stays so: a check that started before the grant can't take it back.
   const check = useEffectEvent(() => {
@@ -64,16 +70,19 @@ export function AccessStep({
   return (
     <>
       <StepHeader title={t.title} body={t.body} />
-      <ol className="flex flex-col gap-3 rounded-2xl bg-muted p-4 text-sm">
-        {t.howTo.map((line, index) => (
-          <li key={line} className="flex gap-3">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium tabular-nums">
-              {index + 1}
-            </span>
-            {line}
-          </li>
-        ))}
-      </ol>
+      <div className="flex flex-col gap-4 rounded-2xl bg-muted p-4">
+        <AccessPreview app={app} />
+        <ol className="flex flex-col gap-3 text-sm">
+          {t.howTo.map((line, index) => (
+            <li key={line} className="flex gap-3">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium tabular-nums">
+                {index + 1}
+              </span>
+              {line}
+            </li>
+          ))}
+        </ol>
+      </div>
       {granted ? (
         <StepDone label={t.granted} />
       ) : (
