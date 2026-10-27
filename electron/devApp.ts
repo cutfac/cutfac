@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { Schema } from "effect";
 
-export const DEV_APP = { name: "Cutfac Dev", bundleId: "com.cutfac.dev" };
+export const DEV_APP = { name: "Cutfac Dev", bundleId: "com.cutfac.app.dev" };
 
 const decodePackage = Schema.decodeUnknownSync(Schema.Struct({ version: Schema.NonEmptyString }));
 

@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=node_modules/app-builder-lib/scheme.json
-appId: dev.cutfac.app
+appId: com.cutfac.app
 productName: Cutfac
 copyright: Copyright © Cutfac contributors
 directories:
