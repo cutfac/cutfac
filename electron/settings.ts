@@ -23,7 +23,6 @@ const OnboardingDraft = Schema.Struct({
     body: Schema.String,
   }),
   sources: Schema.Array(Schema.String),
-  skipped: Schema.Boolean,
   /** Whether to share error reports, and usage statistics; each left out until answered. */
   sharing: Schema.optionalKey(
     Schema.Struct({
@@ -210,7 +209,6 @@ export async function loadDraft(): Promise<Draft | undefined> {
   const copy: Draft = {
     brief: { ...draft.brief, platforms: [...draft.brief.platforms] },
     sources: [...draft.sources],
-    skipped: draft.skipped,
   };
 
   if (draft.sharing !== undefined) copy.sharing = { ...draft.sharing };

@@ -34,14 +34,13 @@ export function MakeStep({
     );
   }, [onboarding]);
 
-  const keep = (answers: Answers, skipped: boolean) => {
+  const keep = (answers: Answers) => {
     setBusy(true);
     setError(undefined);
     onboarding
       .saveDraft({
         brief: answers.brief,
         sources: answers.sources.filter((source) => source.trim() !== ""),
-        skipped,
       })
       .then(onDone, (cause: unknown) => {
         setError(errorText(cause));
@@ -57,8 +56,7 @@ export function MakeStep({
       finish={{ label: t.next, busyLabel: t.next }}
       busy={busy}
       error={error}
-      onFinish={(answers) => keep(answers, false)}
-      onSkip={(brief) => keep({ brief, sources: [] }, true)}
+      onFinish={keep}
     />
   );
 }

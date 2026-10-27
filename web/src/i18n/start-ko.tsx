@@ -80,7 +80,6 @@ export const startKo: StartMessages = {
     skipPart: "건너뛰기",
     start: "만들기 시작",
     starting: "시작하는 중…",
-    skip: "나중에 하기",
     learnFailed: (source, message) => `${withParticle(source, "을/를")} 읽지 못했어요: ${message}`,
   },
   notify: {

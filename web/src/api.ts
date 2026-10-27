@@ -825,11 +825,8 @@ export const api = {
   setReportChoices: (choices: ReportChoices) =>
     send<ErrorReports, ReportChoices>("POST", "/api/error-reports", choices),
   /** How the first launch went: counted only while the person shares usage statistics. */
-  onboardingFinished: (went: {
-    answered: boolean;
-    screen_recording: boolean;
-    accessibility: boolean;
-  }) => send<{ ok: true }, typeof went>("POST", "/api/usage/onboarding-finished", went),
+  onboardingFinished: (went: { screen_recording: boolean; accessibility: boolean }) =>
+    send<{ ok: true }, typeof went>("POST", "/api/usage/onboarding-finished", went),
   resetInstallId: () => send<ErrorReports, {}>("POST", "/api/error-reports/install-id", {}),
   learned: () => request<LearnedList>("/api/learned"),
   /** Learn a link, or a folder or file on this computer. */

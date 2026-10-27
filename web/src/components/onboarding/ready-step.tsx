@@ -21,8 +21,6 @@ import { SharingChoice } from "./sharing-choice.tsx";
 export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
   const t = useMessages().onboarding.ready;
   const [folder, setFolder] = useState<Folder>();
-  // Whether the user answered what to make, or left it for later; the button says what comes.
-  const [answered, setAnswered] = useState<boolean>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   // Asked here only in a build that can send; undefined until it is known.
@@ -30,10 +28,6 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
 
   useEffect(() => {
     onboarding.defaultFolder().then(setFolder, (cause: Error) => setError(cause.message));
-    onboarding.draft().then(
-      (draft) => setAnswered(draft !== undefined && !draft.skipped),
-      () => setAnswered(false),
-    );
     // An answer given here before wins over one from an earlier install.
     Promise.all([onboarding.sharing(), onboarding.draft()]).then(
       ([found, draft]) =>
@@ -52,7 +46,7 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
     onboarding
       .draft()
       .then((draft) => {
-        const kept = draft ?? { brief: EMPTY_BRIEF, sources: [], skipped: true };
+        const kept = draft ?? { brief: EMPTY_BRIEF, sources: [] };
 
         return onboarding.saveDraft({ ...kept, sharing: { ...kept.sharing, [purpose]: answer } });
       })
@@ -90,10 +84,7 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
 
   return (
     <>
-      <StepHeader
-        title={answered === false ? t.skippedTitle : t.title}
-        body={answered === false ? t.skippedBody : t.body}
-      />
+      <StepHeader title={t.title} body={t.body} />
       {folder === undefined ? (
         <Skeleton className="h-14 w-full" />
       ) : (
@@ -117,13 +108,13 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
       <StepActions>
         <Button
           size="lg"
-          disabled={folder === undefined || answered === undefined || sharing === undefined || busy}
+          disabled={folder === undefined || sharing === undefined || busy}
           onClick={() => {
             if (folder !== undefined) create(folder);
           }}
         >
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          {busy ? t.creating : answered === false ? t.open : t.start}
+          {busy ? t.creating : t.start}
           {busy ? null : <ArrowRightIcon data-icon="inline-end" />}
         </Button>
       </StepActions>

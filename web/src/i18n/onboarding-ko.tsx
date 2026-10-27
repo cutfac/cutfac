@@ -69,13 +69,9 @@ export const onboardingKo: OnboardingMessages = {
   ready: {
     title: "첫 영상을 만들 준비가 됐어요",
     body: "에이전트는 영상을 만들 때마다 알려 주신 내용을 먼저 읽어요. 영상과 템플릿은 한 폴더에 일반 파일로 보관돼요.",
-    skippedTitle: "시작할 준비가 됐어요",
-    skippedBody:
-      "컷팩은 템플릿과 영상을 한 폴더에 일반 파일로 보관해요. 다른 폴더는 나중에 언제든 열 수 있어요.",
     savedIn: "저장 위치",
     change: "변경…",
     start: "만들기 시작",
-    open: "컷팩 열기",
     creating: "준비하는 중…",
   },
   dragHelper: {

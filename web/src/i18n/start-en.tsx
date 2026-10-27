@@ -91,7 +91,6 @@ export const startEn = {
     skipPart: "Skip",
     start: "Start making",
     starting: "Starting…",
-    skip: "Skip for now",
     learnFailed: (source: string, message: string) => `Could not read ${source}: ${message}`,
   },
   /**

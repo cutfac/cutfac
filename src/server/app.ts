@@ -259,7 +259,6 @@ const ReportChoicesBody = Schema.Struct({
 
 /** How the desktop app's first launch went, which the board hands on once the workspace is up. */
 const OnboardingFinishedBody = Schema.Struct({
-  answered: Schema.Boolean,
   screen_recording: Schema.Boolean,
   accessibility: Schema.Boolean,
 });

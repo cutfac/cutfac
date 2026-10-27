@@ -127,8 +127,8 @@ it. Source builds and forks have no key, so they ask nothing and send nothing. T
 install ID live in `telemetry.json` in the app's data folder.
 
 Usage statistics, in `src/usageStats.ts`, count that something was done, never what it was about,
-under the same install ID and with no person profile: `onboarding_finished` (`answered`,
-`screen_recording`, `accessibility`), `video_created` (`template`), `edit_requested` (`versions`)
+under the same install ID and with no person profile: `onboarding_finished` (`screen_recording`,
+`accessibility`), `video_created` (`template`), `edit_requested` (`versions`)
 and `take_kept`, each with the app's version and platform. No session replay and no autocapture.
 
 ## Running it from source

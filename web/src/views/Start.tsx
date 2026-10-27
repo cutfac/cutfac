@@ -65,7 +65,7 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
         await handOnSharing(onboarding, draft).catch(() => undefined);
 
         try {
-          if (!draft.skipped) await saveAnswers(draft, t);
+          await saveAnswers(draft, t);
         } catch (cause) {
           setBegun({ kind: "ask", answers: draft, error: errorText(cause) });
 
@@ -113,7 +113,6 @@ async function handOnSharing(onboarding: CutfacOnboarding, draft: OnboardingDraf
   ]);
 
   await api.onboardingFinished({
-    answered: !draft.skipped,
     screen_recording: screen,
     accessibility,
   });

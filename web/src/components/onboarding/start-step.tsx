@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
 import type { WorkspaceInfo } from "../../api.ts";
-import { briefApi } from "../../briefApi.ts";
 import { desktop } from "../../desktop.ts";
 import { href } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { briefPatch, briefReady, type BriefDraft } from "../../lib/brief.ts";
+import { briefReady } from "../../lib/brief.ts";
 import { errorText } from "../../lib/notify.ts";
 import { skipStart } from "../../lib/onboarding.ts";
 import { type Answers, saveAnswers } from "./answers.ts";
@@ -30,8 +29,9 @@ const STEPS: ReadonlyArray<Part> =
  * What to make, a part at a time so each screen asks one thing: what the user does, a website and a
  * folder about it to read, where the videos go, then anything else the agent should know, in the
  * user's own words, right after a platform the list doesn't name. Picking a purpose moves on by
- * itself, and a part that can be left out says so on its button. The last part's button finishes,
- * with the link still in the field among the material; the first part's leaves it for later.
+ * itself, and a part that can be left out says so on its button. The questions themselves can't be
+ * skipped: they are what the agent reads first. The last part's button finishes, with the link
+ * still in the field among the material.
  */
 export function BriefQuestions({
   initial,
@@ -39,7 +39,6 @@ export function BriefQuestions({
   busy = false,
   error,
   onFinish,
-  onSkip,
 }: {
   initial: Answers;
   /** The last part's button, and what it says while it works. */
@@ -47,8 +46,6 @@ export function BriefQuestions({
   busy?: boolean;
   error?: string | undefined;
   onFinish: (answers: Answers) => void;
-  /** Leave the questions for later, with whatever the brief says so far. */
-  onSkip: (brief: BriefDraft) => void;
 }) {
   const { whatToMake: t, brief: b } = useMessages().start;
   const [brief, setBrief] = useState(initial.brief);
@@ -138,17 +135,9 @@ export function BriefQuestions({
       <StepHeader title={screen.title} body={screen.body} />
       {screen.field}
       {error === undefined ? null : <ErrorAlert message={error} />}
-      {/*
-        Two buttons at most, each place keeping its meaning: back at the left, on at the far right.
-        Leaving the questions for later is offered once, before anything is asked, where back goes:
-        quiet and away from the way on, so it isn't pressed in passing.
-      */}
+      {/* Each place keeps its meaning: back at the left, on at the far right. */}
       <div className="flex items-center gap-2">
-        {index === 0 ? (
-          <Button variant="quiet" onClick={() => onSkip(brief)}>
-            {t.skip}
-          </Button>
-        ) : (
+        {index === 0 ? null : (
           <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
             {t.back}
           </Button>
@@ -161,8 +150,7 @@ export function BriefQuestions({
 
 /**
  * What to make in a workspace that has nothing yet, where the first launch didn't ask already, as
- * in a browser. Start saves the brief and learns the material, then opens the board; leaving it for
- * later keeps what the brief says and opens the board too.
+ * in a browser. Start saves the brief and learns the material, then opens the board.
  */
 export function StartStep({
   ws,
@@ -193,14 +181,6 @@ export function StartStep({
     );
   };
 
-  const skip = (brief: BriefDraft) => {
-    // What the user already said is kept, for the next template to start from.
-    if (briefReady(brief)) void briefApi.updateBrief(briefPatch(brief)).catch(() => undefined);
-
-    skipStart(ws.root);
-    location.hash = href("board");
-  };
-
   return (
     <BriefQuestions
       initial={initial}
@@ -208,7 +188,6 @@ export function StartStep({
       busy={busy}
       error={error}
       onFinish={start}
-      onSkip={skip}
     />
   );
 }

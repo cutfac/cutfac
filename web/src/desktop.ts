@@ -53,7 +53,6 @@ export type Permission = "screen" | "accessibility";
 export interface OnboardingDraft {
   brief: BriefDraft;
   sources: string[];
-  skipped: boolean;
   /** What to share with the Cutfac team, each once answered. */
   sharing?: Partial<Record<SharingPurpose, boolean>>;
 }
