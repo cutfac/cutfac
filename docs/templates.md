@@ -10,10 +10,7 @@ skill ("read this link and make it usable here"), it writes the folder, installs
 you allow it, and runs `check_format` until the template is ready. The board can run your agent on
 a link for you, but Cutfac itself never downloads or installs anything.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/templates-dark.png">
-  <img alt="The Templates page: a template's skill, source and license, and the styles an item can pick, each with a preview" src="../.github/assets/templates-light.png">
-</picture>
+<img alt="The Templates page: a template's source and license, and the styles an item can pick, each with a preview" src="../.github/assets/templates.png">
 
 ## Folder
 

@@ -59,7 +59,7 @@
 
 - **Point at what to change.** Drag across the timeline to pick a part, draw a box on the video, and
   say what should change. Your agent edits the file, then you compare before and after and keep it
-  or restore the old one.
+  or restore the old one. Ask for a few versions and pick the one you like.
 - **One board for every post.** Each video moves from drafting to review to done, with timecoded
   feedback and upload checks along the way.
 - **Teach it what you make.** Paste a link to your site, your store page or a video you like, or
@@ -81,17 +81,11 @@
 - **English and Korean.**
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/board-dark.png">
-    <img alt="The board: videos in drafting, review and done columns, each with a cover and its format" src=".github/assets/board-light.png">
-  </picture>
+  <img alt="Videos: six covers with their status and template; one waits for you to pick from two versions of its title" src=".github/assets/board.png">
 </p>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/templates-dark.png">
-    <img alt="Templates: a garden scene template with its skill, source and license, and three styles to pick from, each with a preview; another template below still needs setup" src=".github/assets/templates-light.png">
-  </picture>
+  <img alt="Templates: a garden scene template with its source and license, and three styles to pick from, each with a preview" src=".github/assets/templates.png">
 </p>
 
 ## Mac app vs. open source
@@ -167,20 +161,18 @@ web build other than `dist/web`.
 
 ## Editing a video
 
-Open an item on the board. Drag across the timeline to select a part (or press `I` and `O` at the
+Open a video from Videos. Drag across the timeline to select a part (or press `I` and `O` at the
 playhead), drag on the video to mark an area, then type what should change and press Enter. A box
 you draw opens a small request box right beside it, so you can ask about it without leaving the
 frame. The server runs `claude -p` or `codex app-server` in the workspace, one session per item, and
 streams its steps into the chat. The agent gets a clip of the range, the frame with the box drawn
 on it, the timecodes, and the original file. When it is done, compare before and after, then keep
-the edit or restore the previous version. Without a connected agent, the request waits in the chat
+the edit or restore the previous version. To weigh a few takes, set how many versions to make next
+to the message box; the agent saves each one, and you compare them side by side and keep one. Without a connected agent, the request waits in the chat
 and "Copy prompt" hands it to any agent you run yourself.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/editor-dark.png">
-    <img alt="The editor: a part of the timeline and a box on the video are selected, and the agent's reply sits in the chat beside it" src=".github/assets/editor-light.png">
-  </picture>
+  <img alt="The editor: a request about the first three seconds and a box on the title, Claude's reply in the chat, and two versions ready to compare" src=".github/assets/editor.png">
 </p>
 
 Press `+` in the chat to give the agent something to read whenever it works on the video: paste a
