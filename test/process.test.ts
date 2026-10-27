@@ -1,69 +1,81 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { describe, expect } from "bun:test";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Effect, FileSystem, Layer } from "effect";
 
 import { runEdit } from "../src/core/agentRun.ts";
 import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";
 import { run } from "../src/core/process.ts";
-import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
 
 const DAEMON = "CODEX_APP_SERVER_USE_LOCAL_DAEMON";
 
-describe("a command Cutfac runs on a Mac where the Codex desktop app is set up", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
-  let seen: string;
-  const before = process.env[DAEMON];
+const it = testEffect(Layer.merge(tempWorkspace("Daemon"), fakeAgents));
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Daemon");
-    fakes = await makeFakeAgents();
-    seen = join(fakes.calls, "seen");
-    // What the desktop app hands every app the user opens.
+/** What the desktop app hands every app the user opens, until the test ends. */
+const withDaemonSetting = Effect.acquireRelease(
+  Effect.sync(() => {
+    const before = process.env[DAEMON];
+
     process.env[DAEMON] = "1";
-    // Lists no servers of its own, as `codex mcp list --json` would.
-    await fakes.bin(
-      "codex",
-      `echo "$1 \${${DAEMON}-unset}" >> "${seen}"\n[ "$1" = mcp ] && echo "[]"\nexit 0\n`,
-    );
-  });
 
-  afterEach(async () => {
-    if (before === undefined) delete process.env[DAEMON];
-    else process.env[DAEMON] = before;
-    await fakes.remove();
-    await t.remove();
-  });
+    return before;
+  }),
+  (before) =>
+    Effect.sync(() => {
+      if (before === undefined) Reflect.deleteProperty(process.env, DAEMON);
+      else process.env[DAEMON] = before;
+    }),
+);
 
-  const lines = async () => (await readFile(seen, "utf8")).trim().split("\n");
+/** A fake Codex that notes the setting it saw with each command, and lists no servers of its own. */
+const codexNotingTheSetting = Effect.gen(function* () {
+  const fakes = yield* FakeAgentDir;
+  const fs = yield* FileSystem.FileSystem;
+  const seen = join(fakes.calls, "seen");
 
-  test("doesn't pass on the desktop app's daemon setting, which stops `codex mcp`", async () => {
-    await t.runWith(fakes.layer, run(join(fakes.dir, "bin", "codex"), ["mcp"]));
+  yield* withDaemonSetting;
+  yield* fakes.bin(
+    "codex",
+    `echo "$1 \${${DAEMON}-unset}" >> "${seen}"\n[ "$1" = mcp ] && echo "[]"\nexit 0\n`,
+  );
 
-    expect(await lines()).toEqual(["mcp unset"]);
-  });
+  const lines = Effect.map(fs.readFileString(seen), (text) => text.trim().split("\n")).pipe(
+    Effect.orDie,
+  );
 
-  test("leaves it out of an edit run's Codex too", async () => {
-    await t.runWith(
-      fakes.layer,
-      Effect.gen(function* () {
-        const created = yield* createItem({ title: "Clip" });
-        const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
+  return { fakes, lines };
+});
 
-        yield* runEdit(undefined)(
-          { itemId: created.id, feedbackId: feedback.id, agent: "codex" },
-          () => Effect.void,
-          refuse,
-        );
-      }),
-    );
+describe("a command Cutfac runs on a Mac where the Codex desktop app is set up", () => {
+  it.live("doesn't pass on the desktop app's daemon setting, which stops `codex mcp`", () =>
+    Effect.gen(function* () {
+      const { fakes, lines } = yield* codexNotingTheSetting;
 
-    const calls = await lines();
+      yield* run(join(fakes.dir, "bin", "codex"), ["mcp"]);
 
-    expect(calls).toContain("app-server unset");
-    expect(calls.every((line) => line.endsWith(" unset"))).toBe(true);
-  });
+      expect(yield* lines).toEqual(["mcp unset"]);
+    }),
+  );
+
+  it.live("leaves it out of an edit run's Codex too", () =>
+    Effect.gen(function* () {
+      const { lines } = yield* codexNotingTheSetting;
+      const created = yield* createItem({ title: "Clip" });
+      const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
+
+      yield* runEdit(undefined)(
+        { itemId: created.id, feedbackId: feedback.id, agent: "codex" },
+        () => Effect.void,
+        refuse,
+      );
+
+      const calls = yield* lines;
+
+      expect(calls).toContain("app-server unset");
+      expect(calls.every((line) => line.endsWith(" unset"))).toBe(true);
+    }),
+  );
 });
