@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect, Option } from "effect";
+import { Effect, FileSystem, Layer, Option, Ref } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
 import { agentStatus } from "../src/core/agents.ts";
@@ -19,7 +18,10 @@ import {
   updateCommand,
 } from "../src/core/agentVersion.ts";
 import type { AgentName } from "../src/core/schema.ts";
-import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace("Test"), fakeAgents));
 
 describe("parseAgentVersion", () => {
   test("reads what claude and codex print", () => {
@@ -169,239 +171,272 @@ describe("unreadableOutputMessage", () => {
 const answeringVersion = (version: string, script = "") =>
   `if [ "$1" = "--version" ]; then echo "${version}"; exit 0; fi\n${script}`;
 
+/** The line that makes a fake note each turn it runs, in the folder `calls`. */
+const countRun = (calls: string) => `echo run >> "${join(calls, "runs")}"`;
+
 describe("the versions agentStatus reports", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
+  it.live("an installed agent carries its version, and a warning when it is too old", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Test");
-    fakes = await makeFakeAgents();
-  });
+      yield* fakes.bin("claude", answeringVersion("2.1.1 (Claude Code)", "exit 1\n"));
+      yield* fakes.bin("codex", answeringVersion("codex-cli 99.0.0", "exit 1\n"));
 
-  afterEach(async () => {
-    await fakes.remove();
-    await t.remove();
-  });
+      const [claude, codex] = yield* agentStatus();
 
-  test("an installed agent carries its version, and a warning when it is too old", async () => {
-    await fakes.bin("claude", answeringVersion("2.1.1 (Claude Code)", "exit 1\n"));
-    await fakes.bin("codex", answeringVersion("codex-cli 99.0.0", "exit 1\n"));
+      expect(claude?.version).toBe("2.1.1");
+      expect(claude?.outdated).toEqual({
+        minimum: MIN_AGENT_VERSION.claude,
+        update: "claude update",
+      });
+      expect(codex?.version).toBe("99.0.0");
+      expect(codex?.outdated).toBeUndefined();
+    }),
+  );
 
-    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+  it.live("the update command follows the links on PATH to where the agent was installed", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+      const fs = yield* FileSystem.FileSystem;
+      const formula = join(fakes.dir, "Cellar", "codex", "0.1.0", "bin");
 
-    expect(claude?.version).toBe("2.1.1");
-    expect(claude?.outdated).toEqual({
-      minimum: MIN_AGENT_VERSION.claude,
-      update: "claude update",
-    });
-    expect(codex?.version).toBe("99.0.0");
-    expect(codex?.outdated).toBeUndefined();
-  });
+      yield* fs.makeDirectory(formula, { recursive: true });
+      yield* fs.writeFileString(
+        join(formula, "codex"),
+        `#!/bin/sh\n${answeringVersion("codex-cli 0.1.0")}`,
+      );
+      yield* fs.chmod(join(formula, "codex"), 0o755);
+      yield* fs.symlink(join(formula, "codex"), join(fakes.dir, "bin", "codex"));
 
-  test("the update command follows the links on PATH to where the agent was installed", async () => {
-    const formula = join(fakes.dir, "Cellar", "codex", "0.1.0", "bin");
+      const [, codex] = yield* agentStatus();
 
-    await mkdir(formula, { recursive: true });
-    await writeFile(join(formula, "codex"), `#!/bin/sh\n${answeringVersion("codex-cli 0.1.0")}`);
-    await chmod(join(formula, "codex"), 0o755);
-    await symlink(join(formula, "codex"), join(fakes.dir, "bin", "codex"));
+      expect(codex?.outdated?.update).toBe("brew upgrade codex");
+    }),
+  );
 
-    const [, codex] = await t.runWith(fakes.layer, agentStatus());
+  it.live("an agent that does not say its version is still installed and not outdated", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    expect(codex?.outdated?.update).toBe("brew upgrade codex");
-  });
+      yield* fakes.bin("claude", "echo 'something else'\n");
+      yield* fakes.bin("codex", "exit 3\n");
 
-  test("an agent that does not say its version is still installed and not outdated", async () => {
-    await fakes.bin("claude", "echo 'something else'\n");
-    await fakes.bin("codex", "exit 3\n");
+      const [claude, codex] = yield* agentStatus();
 
-    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+      expect(claude?.installed).toBe(true);
+      expect(claude?.version).toBeUndefined();
+      expect(claude?.outdated).toBeUndefined();
+      expect(codex?.installed).toBe(true);
+      expect(codex?.version).toBeUndefined();
+      expect(codex?.outdated).toBeUndefined();
+    }),
+  );
 
-    expect(claude?.installed).toBe(true);
-    expect(claude?.version).toBeUndefined();
-    expect(claude?.outdated).toBeUndefined();
-    expect(codex?.installed).toBe(true);
-    expect(codex?.version).toBeUndefined();
-    expect(codex?.outdated).toBeUndefined();
-  });
+  it.live("an agent that is not installed has no version", () =>
+    Effect.gen(function* () {
+      const [claude, codex] = yield* agentStatus();
 
-  test("an agent that is not installed has no version", async () => {
-    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+      expect(claude?.installed).toBe(false);
+      expect(claude?.version).toBeUndefined();
+      expect(codex?.installed).toBe(false);
+      expect(codex?.version).toBeUndefined();
+    }),
+  );
 
-    expect(claude?.installed).toBe(false);
-    expect(claude?.version).toBeUndefined();
-    expect(codex?.installed).toBe(false);
-    expect(codex?.version).toBeUndefined();
-  });
+  it.live("the user's agent is told about each installed agent that is too old", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-  test("the user's agent is told about each installed agent that is too old", async () => {
-    await fakes.bin("claude", answeringVersion("2.1.1 (Claude Code)"));
-    await fakes.bin("codex", answeringVersion("codex-cli 0.1.0"));
+      yield* fakes.bin("claude", answeringVersion("2.1.1 (Claude Code)"));
+      yield* fakes.bin("codex", answeringVersion("codex-cli 0.1.0"));
 
-    const notices = await t.runWith(fakes.layer, agentVersionNotices());
+      const notices = yield* agentVersionNotices();
 
-    expect(notices).toHaveLength(2);
-    expect(notices.find((notice) => notice.startsWith("Claude Code 2.1.1"))).toContain(
-      "`claude update`",
-    );
+      expect(notices).toHaveLength(2);
+      expect(notices.find((notice) => notice.startsWith("Claude Code 2.1.1"))).toContain(
+        "`claude update`",
+      );
 
-    expect(notices.find((notice) => notice.startsWith("Codex 0.1.0"))).toContain(
-      MIN_AGENT_VERSION.codex,
-    );
-  });
+      expect(notices.find((notice) => notice.startsWith("Codex 0.1.0"))).toContain(
+        MIN_AGENT_VERSION.codex,
+      );
+    }),
+  );
 
-  test("current, unknown and missing agents give no notice", async () => {
-    await fakes.bin("claude", answeringVersion("99.0.0 (Claude Code)"));
-    await fakes.bin("codex", "echo 'no version here'\n");
+  it.live("current, unknown and missing agents give no notice", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    expect(await t.runWith(fakes.layer, agentVersionNotices())).toEqual([]);
-  });
+      yield* fakes.bin("claude", answeringVersion("99.0.0 (Claude Code)"));
+      yield* fakes.bin("codex", "echo 'no version here'\n");
+
+      expect(yield* agentVersionNotices()).toEqual([]);
+    }),
+  );
 });
 
 describe("a run that ends well but says nothing Cutfac can read", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
-
-  beforeEach(async () => {
-    t = await makeWorkspace("Test");
-    fakes = await makeFakeAgents();
-  });
-
-  afterEach(async () => {
-    await fakes.remove();
-    await t.remove();
-  });
-
   /** One turn through the fake `agent` at `bin`, and the sessions it was asked to save. */
-  const turn = async (agent: AgentName, bin: string, stored?: string) => {
-    const saved: Array<string | undefined> = [];
+  const turn = Effect.fnUntraced(function* (agent: AgentName, bin: string, stored?: string) {
+    const saved = yield* Ref.make<ReadonlyArray<string | undefined>>([]);
 
-    const result = await t.run(
-      converse({
-        agent,
-        stored,
-        invocation: (session) =>
-          Effect.succeed(agentInvocation(agent, { bin, prompt: "hi", ...session })),
-        save: (session) =>
-          Effect.sync(() => {
-            saved.push(session);
-          }),
-        emit: () => Effect.void,
-      }),
-    );
+    const result = yield* converse({
+      agent,
+      stored,
+      invocation: (session) =>
+        Effect.succeed(agentInvocation(agent, { bin, prompt: "hi", ...session })),
+      save: (session) => Ref.update(saved, (all) => [...all, session]),
+      emit: () => Effect.void,
+    });
 
-    return { result, saved };
-  };
+    return { result, saved: yield* Ref.get(saved) };
+  });
 
   /** How many times the fake ran a turn, not counting its `--version`. */
-  const runs = async () =>
-    (await readFile(join(fakes.calls, "runs"), "utf8").catch(() => "")).split("\n").filter(Boolean)
-      .length;
+  const runs = Effect.gen(function* () {
+    const fakes = yield* FakeAgentDir;
+    const fs = yield* FileSystem.FileSystem;
+
+    const text = yield* fs
+      .readFileString(join(fakes.calls, "runs"))
+      .pipe(Effect.orElseSucceed(() => ""));
+
+    return text.split("\n").filter(Boolean).length;
+  });
 
   /** A session from an earlier turn, made as Claude Code makes them. */
   const STORED = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
 
-  /** The line that makes the fake note each turn it runs. */
-  const countRun = () => `echo run >> "${join(fakes.calls, "runs")}"`;
+  it.live("fails, naming the agent and its version, when claude prints nothing", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-  test("fails, naming the agent and its version, when claude prints nothing", async () => {
-    const bin = await fakes.bin(
-      "claude",
-      answeringVersion("2.1.301 (Claude Code)", "head -n 1 >/dev/null\n"),
-    );
+      const bin = yield* fakes.bin(
+        "claude",
+        answeringVersion("2.1.301 (Claude Code)", "head -n 1 >/dev/null\n"),
+      );
 
-    const { result } = await turn("claude", bin);
+      const { result } = yield* turn("claude", bin);
 
-    expect(result.reply).toBe("");
-    expect(result.failure).toBe(
-      "Couldn't read claude 2.1.301's output; Cutfac may need an update.",
-    );
-  });
+      expect(result.reply).toBe("");
+      expect(result.failure).toBe(
+        "Couldn't read claude 2.1.301's output; Cutfac may need an update.",
+      );
+    }),
+  );
 
-  test("fails when codex prints only events Cutfac does not know", async () => {
-    const bin = await fakes.bin(
-      "codex",
-      answeringVersion(
-        "codex-cli 0.163.0",
-        `head -n 1 >/dev/null\necho '{"method":"turn/begun"}'\necho 'not json at all'\n`,
-      ),
-    );
+  it.live("fails when codex prints only events Cutfac does not know", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    const { result } = await turn("codex", bin);
+      const bin = yield* fakes.bin(
+        "codex",
+        answeringVersion(
+          "codex-cli 0.163.0",
+          `head -n 1 >/dev/null\necho '{"method":"turn/begun"}'\necho 'not json at all'\n`,
+        ),
+      );
 
-    expect(result.failure).toBe("Couldn't read codex 0.163.0's output; Cutfac may need an update.");
-  });
+      const { result } = yield* turn("codex", bin);
 
-  test("fails without a version when the agent does not give one", async () => {
-    const bin = await fakes.bin("claude", "head -n 1 >/dev/null\n");
-    const { result } = await turn("claude", bin);
+      expect(result.failure).toBe(
+        "Couldn't read codex 0.163.0's output; Cutfac may need an update.",
+      );
+    }),
+  );
 
-    expect(result.failure).toBe("Couldn't read claude's output; Cutfac may need an update.");
-  });
+  it.live("fails without a version when the agent does not give one", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+      const bin = yield* fakes.bin("claude", "head -n 1 >/dev/null\n");
+      const { result } = yield* turn("claude", bin);
 
-  test("tells an agent that is too old to update it", async () => {
-    const bin = await fakes.bin(
-      "claude",
-      answeringVersion("2.1.1 (Claude Code)", "head -n 1 >/dev/null\n"),
-    );
+      expect(result.failure).toBe("Couldn't read claude's output; Cutfac may need an update.");
+    }),
+  );
 
-    const { result } = await turn("claude", bin);
+  it.live("tells an agent that is too old to update it", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    expect(result.failure).toContain("Couldn't read claude 2.1.1's output");
-    expect(result.failure).toContain("`claude update`");
-  });
+      const bin = yield* fakes.bin(
+        "claude",
+        answeringVersion("2.1.1 (Claude Code)", "head -n 1 >/dev/null\n"),
+      );
 
-  test("an empty reply that was read is not a failure", async () => {
-    const bin = await fakes.bin(
-      "claude",
-      answeringVersion(
-        "99.0.0 (Claude Code)",
-        `head -n 1 >/dev/null
+      const { result } = yield* turn("claude", bin);
+
+      expect(result.failure).toContain("Couldn't read claude 2.1.1's output");
+      expect(result.failure).toContain("`claude update`");
+    }),
+  );
+
+  it.live("an empty reply that was read is not a failure", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+
+      const bin = yield* fakes.bin(
+        "claude",
+        answeringVersion(
+          "99.0.0 (Claude Code)",
+          `head -n 1 >/dev/null
 echo '{"type":"system","subtype":"init","session_id":"s1"}'
 echo '{"type":"result","subtype":"success","session_id":"s1","result":""}'
 `,
-      ),
-    );
+        ),
+      );
 
-    const { result, saved } = await turn("claude", bin);
+      const { result, saved } = yield* turn("claude", bin);
 
-    expect(result).toEqual({ reply: "", failure: undefined });
-    expect(saved).toEqual(["s1"]);
-  });
+      expect(result).toEqual({ reply: "", failure: undefined });
+      expect(saved).toEqual(["s1"]);
+    }),
+  );
 
-  test("keeps the stored session instead of starting over in a new conversation", async () => {
-    const bin = await fakes.bin(
-      "claude",
-      answeringVersion("99.0.0 (Claude Code)", `head -n 1 >/dev/null\n${countRun()}\n`),
-    );
+  it.live("keeps the stored session instead of starting over in a new conversation", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    const { result, saved } = await turn("claude", bin, STORED);
+      const bin = yield* fakes.bin(
+        "claude",
+        answeringVersion(
+          "99.0.0 (Claude Code)",
+          `head -n 1 >/dev/null\n${countRun(fakes.calls)}\n`,
+        ),
+      );
 
-    expect(result.failure).toContain("Couldn't read claude 99.0.0's output");
-    expect(saved).toEqual([]);
-    expect(await runs()).toBe(1);
-  });
+      const { result, saved } = yield* turn("claude", bin, STORED);
 
-  test("a stored session the agent no longer has is still replaced by a new one", async () => {
-    const bin = await fakes.bin(
-      "claude",
-      answeringVersion(
-        "99.0.0 (Claude Code)",
-        `head -n 1 >/dev/null
-${countRun()}
+      expect(result.failure).toContain("Couldn't read claude 99.0.0's output");
+      expect(saved).toEqual([]);
+      expect(yield* runs).toBe(1);
+    }),
+  );
+
+  it.live("a stored session the agent no longer has is still replaced by a new one", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+
+      const bin = yield* fakes.bin(
+        "claude",
+        answeringVersion(
+          "99.0.0 (Claude Code)",
+          `head -n 1 >/dev/null
+${countRun(fakes.calls)}
 case "$*" in
   *--resume*) echo "No conversation found" >&2; exit 1 ;;
 esac
 echo '{"type":"system","subtype":"init","session_id":"fresh"}'
 echo '{"type":"result","subtype":"success","session_id":"fresh","result":"ok"}'
 `,
-      ),
-    );
+        ),
+      );
 
-    const { result, saved } = await turn("claude", bin, STORED);
+      const { result, saved } = yield* turn("claude", bin, STORED);
 
-    expect(result).toEqual({ reply: "ok", failure: undefined });
-    expect(saved).toEqual([undefined, "fresh"]);
-    expect(await runs()).toBe(2);
-  });
+      expect(result).toEqual({ reply: "ok", failure: undefined });
+      expect(saved).toEqual([undefined, "fresh"]);
+      expect(yield* runs).toBe(2);
+    }),
+  );
 });
