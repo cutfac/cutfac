@@ -3,7 +3,7 @@ import { Toolkit } from "effect/ai";
 
 import { BRIEF_FILE, BriefPatch, PLATFORMS, PURPOSES, updateBrief } from "../core/brief.ts";
 import { Workspace } from "../core/workspace.ts";
-import { asJson, describe, logFailure, tool } from "./tool.ts";
+import { describe, logFailure, tool } from "./tool.ts";
 
 const UpdateBrief = tool("update_brief", {
   description:
@@ -33,7 +33,7 @@ export const briefHandlers = BriefToolkit.toLayer(
         Effect.gen(function* () {
           const brief = yield* updateBrief(patch);
 
-          return asJson({ path: yield* ws.abs(BRIEF_FILE), ...brief });
+          return { path: yield* ws.abs(BRIEF_FILE), ...brief };
         }).pipe(Effect.provideService(Workspace, ws), logFailure),
     });
   }),

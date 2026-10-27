@@ -4,7 +4,7 @@ import { Toolkit } from "effect/ai";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { RENDER_STATUSES, Renders, type RenderState } from "../core/render.ts";
 import { RENDER_STAGES, RENDER_UNITS } from "../core/renderProgress.ts";
-import { asJson, describe, logFailure, tool } from "./tool.ts";
+import { describe, logFailure, tool } from "./tool.ts";
 
 /**
  * How long one call waits for the render to end. Under the minute Codex gives a tool call, so a
@@ -71,7 +71,7 @@ const NEXT: Record<RenderState["status"], string> = {
 const report = (state: RenderState, now: number) => {
   const { progress } = state;
 
-  return asJson({
+  return {
     status: state.status,
     stage: progress.stage,
     percent: progress.percent === undefined ? undefined : Math.round(progress.percent * 100),
@@ -83,7 +83,7 @@ const report = (state: RenderState, now: number) => {
     output: state.output,
     log: state.status === "failed" ? state.log : state.log.slice(-SHOWN_LINES),
     next: NEXT[state.status],
-  });
+  };
 };
 
 /** The render tool, kept apart from the rest so each module stays one concern. */

@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Predicate, Schema, SchemaGetter } from "effect";
 import { Tool } from "effect/ai";
 
 import {
@@ -25,6 +25,33 @@ const CutfacFailure = Schema.Union([
   FreeLimitReached,
 ]);
 
+/** `value` without the fields it leaves undefined, at any depth, as JSON carries it. */
+const withoutUndefined = <A>(value: A): A => {
+  if (Array.isArray(value)) {
+    // SAFETY: each element keeps its own type, its undefined fields left out.
+    return value.map(withoutUndefined) as A;
+  }
+
+  if (!Predicate.isObject(value)) return value;
+
+  // SAFETY: a field left out reads as the undefined it held, so the object still fits `A`.
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, field]) =>
+      field === undefined ? [] : [[key, withoutUndefined(field)]],
+    ),
+  ) as A;
+};
+
+/**
+ * `success` sent without the fields left undefined, such as the README of a format that has none
+ * yet. The MCP result check rejects undefined, and the agent would see only an internal error.
+ */
+const asJson = <S extends Schema.Constraint>(success: S) =>
+  Schema.encode<S>({
+    decode: SchemaGetter.passthrough(),
+    encode: SchemaGetter.transform(withoutUndefined),
+  })(success);
+
 /** A Cutfac MCP tool, with the hints a client shows the user before it runs. */
 export const tool = <
   const Name extends string,
@@ -49,19 +76,13 @@ export const tool = <
   Tool.make(name, {
     description: options.description,
     parameters: options.parameters,
-    success: options.success,
+    success: asJson(options.success),
     failure: CutfacFailure,
   })
     .annotate(Tool.Readonly, options.readonly === true)
     .annotate(Tool.Destructive, options.overwrites === true)
     .annotate(Tool.Idempotent, options.readonly === true || options.idempotent === true)
     .annotate(Tool.OpenWorld, options.network === true);
-
-/**
- * The result as JSON carries it, without fields left undefined (a format with no README yet). The
- * MCP result check rejects undefined, and the agent would see only an internal error.
- */
-export const asJson = <A>(value: A): A => JSON.parse(JSON.stringify(value));
 
 /**
  * Marks a tool call that fails in the app's log, with the message the agent sees. The call itself
