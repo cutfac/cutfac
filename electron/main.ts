@@ -90,8 +90,8 @@ const devTools = app.isPackaged
       boardUrl,
       preload: preloadPath,
       window: boardWindow,
-      showOnboarding: (step) => runInMain(showOnboarding(step)),
-      activate: (workspace) => runInMain(activate(workspace)),
+      showOnboarding: (step) => showOnboarding(step),
+      activate: (workspace) => activate(workspace),
     });
 
 // The name picks the userData folder, and with it the single-instance lock. The dev build keeps

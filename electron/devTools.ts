@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Duration, Effect, Option, Schema } from "effect";
+import { Clock, Duration, Effect, Option, Ref, Schema } from "effect";
 import { BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
 
 import type { AgentName } from "../src/core/schema.ts";
@@ -33,7 +33,7 @@ import { WORKSPACES } from "./library.ts";
 import { lockNavigation } from "./navigation.ts";
 import { macChecks, type OnboardingChecks } from "./onboarding.ts";
 import { sandboxed } from "./permissions.ts";
-import { runInMain } from "./runtime.ts";
+import { runInMain, type AppServices } from "./runtime.ts";
 import {
   loadLibrary,
   loadOnboarding,
@@ -71,9 +71,11 @@ export interface DevToolsHost {
   preload: string;
   window: () => BrowserWindow | undefined;
   /** Closes the workspace and shows the first launch on `step`. */
-  showOnboarding: (step: OnboardingStep) => Promise<void>;
-  /** Opens a workspace, or says why it couldn't. Resolves false if it didn't open. */
-  activate: (workspace: string) => Promise<boolean>;
+  showOnboarding: (
+    step: OnboardingStep,
+  ) => Effect.Effect<void, { readonly message: string }, AppServices>;
+  /** Opens a workspace, or says why it couldn't. False if it didn't open. */
+  activate: (workspace: string) => Effect.Effect<boolean, never, AppServices>;
 }
 
 export interface DevTools {
@@ -91,14 +93,16 @@ export interface DevTools {
  * The fakes last until the app quits.
  */
 export function handleDevTools(host: DevToolsHost): DevTools {
-  let panel: BrowserWindow | undefined;
-  let fakes = NO_FAKES;
-  let freshName: string | undefined;
+  const panel = Ref.makeUnsafe(Option.none<BrowserWindow>());
+  const fakes = Ref.makeUnsafe(NO_FAKES);
+  /** The name a fresh folder gets in this run, so each start uses the same one. */
+  const freshName = Ref.makeUnsafe(Option.none<string>());
+  const forgetFreshName = Ref.set(freshName, Option.none());
 
   /** A faked agent's fix prints a few lines, then fails or leaves the agent ready. */
   const fix = (agent: AgentName, onLine: (line: string) => Effect.Effect<void>) =>
     Effect.gen(function* () {
-      const fake = fakes.agents[agent];
+      const fake = (yield* Ref.get(fakes)).agents[agent];
 
       if (fake === "real") return yield* macChecks.fixAgent(agent, onLine);
 
@@ -112,71 +116,86 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
       const command = fakeFix(agent, fake);
 
-      if (fakes.fixesFail) return { ok: false, command } satisfies AgentFix;
+      if ((yield* Ref.get(fakes)).fixesFail) return { ok: false, command } satisfies AgentFix;
 
-      fakes = { ...fakes, agents: { ...fakes.agents, [agent]: "ready" } };
-      sendState();
+      yield* Ref.update(fakes, (now) => ({ ...now, agents: { ...now.agents, [agent]: "ready" } }));
+      yield* sendState;
 
       return { ok: true, command } satisfies AgentFix;
     });
 
   const checks: OnboardingChecks = {
-    agentSetups: Effect.suspend(() =>
-      checksAgents(fakes) ? macChecks.agentSetups : Effect.succeed([]),
-    ).pipe(Effect.map((setups) => withFakes(setups, fakes.agents))),
+    agentSetups: Effect.gen(function* () {
+      const now = yield* Ref.get(fakes);
+      const setups = checksAgents(now) ? yield* macChecks.agentSetups : [];
+
+      return withFakes(setups, now.agents);
+    }),
     fixAgent: fix,
     hasPermission: (permission) =>
-      fakes.access === "real"
-        ? hasPermission(permission)
-        : Effect.succeed(fakes.access === "granted"),
-    suggestion: Effect.suspend(() => {
-      if (!fakes.freshFolder) return macChecks.suggestion;
+      Effect.flatMap(Ref.get(fakes), ({ access }) =>
+        access === "real" ? hasPermission(permission) : Effect.succeed(access === "granted"),
+      ),
+    suggestion: Effect.gen(function* () {
+      if (!(yield* Ref.get(fakes)).freshFolder) return yield* macChecks.suggestion;
 
       // A new workspace each run, named for when it was made, in the dev build's own folder.
-      freshName ??= freshFolderName(new Date());
+      const made = new Date(yield* Clock.currentTimeMillis);
 
-      const name = freshName;
+      const name = yield* Ref.updateAndGet(freshName, (given) =>
+        Option.orElse(given, () => Option.some(freshFolderName(made))),
+      );
 
-      return Effect.map(loadLibrary, (library) => ({ library, name: Option.some(name) }));
+      return { library: yield* loadLibrary, name };
     }),
   };
 
   /** Where the first workspace would go now, for the panel to show. */
-  const suggestedFolder = async () => {
-    const { library, name } = await runInMain(checks.suggestion);
-
-    return Option.match(name, {
+  const suggestedFolder = Effect.map(checks.suggestion, ({ library, name }) =>
+    Option.match(name, {
       onNone: () => library,
       onSome: (one) => path.join(library, WORKSPACES, one),
-    });
-  };
+    }),
+  );
 
-  const state = async (): Promise<DevState> => ({
-    fakes,
-    settingsFile: await runInMain(settingsFile),
-    setAside: await runInMain(settingsSetAside),
-    workspace: Option.getOrUndefined(await runInMain(loadWorkspace)),
-    defaultFolder: await suggestedFolder(),
-    // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps its permissions
-    // by it.
-    bundleId: process.env.CUTFAC_DEV_URL ? DEV_APP.bundleId : "com.github.Electron",
+  const state = Effect.gen(function* () {
+    const now: DevState = {
+      fakes: yield* Ref.get(fakes),
+      settingsFile: yield* settingsFile,
+      setAside: yield* settingsSetAside,
+      workspace: Option.getOrUndefined(yield* loadWorkspace),
+      defaultFolder: yield* suggestedFolder,
+      // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps its
+      // permissions by it.
+      bundleId: process.env.CUTFAC_DEV_URL ? DEV_APP.bundleId : "com.github.Electron",
+    };
+
+    return now;
   });
 
   /** The panel shows what the app found meanwhile, such as a fix that made an agent ready. */
-  const sendState = () => {
-    if (panel && !panel.isDestroyed()) panel.webContents.send(DEV_STATE_CHANGED_CHANNEL);
-  };
+  const sendState = Effect.flatMap(Ref.get(panel), (shown) =>
+    Effect.sync(() => {
+      if (Option.isSome(shown) && !shown.value.isDestroyed()) {
+        shown.value.webContents.send(DEV_STATE_CHANGED_CHANNEL);
+      }
+    }),
+  );
 
   const fromPanel = (event: IpcMainInvokeEvent) => {
-    if (panel === undefined || event.sender !== panel.webContents) {
+    const shown = Effect.runSync(Ref.get(panel));
+
+    if (Option.isNone(shown) || event.sender !== shown.value.webContents) {
       throw new Error("Untrusted IPC sender");
     }
   };
 
+  const stopAgentFixes = Effect.sync(stopFixes);
+
   ipcMain.handle(DEV_STATE_CHANNEL, (event) => {
     fromPanel(event);
 
-    return state();
+    return runInMain(state);
   });
   ipcMain.handle(DEV_SET_FAKES_CHANNEL, (event, next) => {
     fromPanel(event);
@@ -185,60 +204,72 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
     if (decoded === undefined) throw new Error("Unknown fakes");
 
-    const granted = fakes.access !== "granted" && decoded.access === "granted";
+    return runInMain(
+      Effect.gen(function* () {
+        const before = yield* Ref.getAndSet(fakes, decoded);
 
-    fakes = decoded;
+        if (!decoded.freshFolder) yield* forgetFreshName;
 
-    if (!fakes.freshFolder) freshName = undefined;
+        // As if the user turned both on in System Settings: the access step moves on by itself.
+        if (before.access !== "granted" && decoded.access === "granted") {
+          for (const permission of ["screen", "accessibility"] as const) {
+            host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
+          }
+        }
 
-    // As if the user turned both on in System Settings: the access step moves on by itself.
-    if (granted) {
-      for (const permission of ["screen", "accessibility"] as const) {
-        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
-      }
-    }
-
-    return state();
+        return yield* state;
+      }),
+    );
   });
-  ipcMain.handle(DEV_START_OVER_CHANNEL, async (event) => {
+  ipcMain.handle(DEV_START_OVER_CHANNEL, (event) => {
     fromPanel(event);
-    stopFixes();
-    await runInMain(setSettingsAside);
-    freshName = undefined;
 
-    const shown = originOf(host.window()?.webContents.getURL() ?? "");
-    const board = originOf(host.boardUrl);
+    return runInMain(
+      Effect.gen(function* () {
+        yield* stopAgentFixes;
+        yield* setSettingsAside;
+        yield* forgetFreshName;
 
-    await host.showOnboarding("welcome");
+        const shown = originOf(host.window()?.webContents.getURL() ?? "");
+        const board = originOf(host.boardUrl);
 
-    // The board keeps what it has shown in storage by its origin: whether the Learn hint was
-    // seen, the layout, the language. A new user has none of it.
-    const origins = new Set([...Option.toArray(board), ...Option.toArray(shown)]);
+        yield* host.showOnboarding("welcome");
 
-    for (const origin of origins) await session.defaultSession.clearStorageData({ origin });
+        // The board keeps what it has shown in storage by its origin: whether the Learn hint was
+        // seen, the layout, the language. A new user has none of it.
+        const origins = new Set([...Option.toArray(board), ...Option.toArray(shown)]);
 
-    host.window()?.webContents.reload();
+        yield* Effect.forEach(origins, (origin) =>
+          Effect.promise(() => session.defaultSession.clearStorageData({ origin })),
+        );
+
+        host.window()?.webContents.reload();
+      }),
+    );
   });
-  ipcMain.handle(DEV_RESTORE_CHANNEL, async (event) => {
+  ipcMain.handle(DEV_RESTORE_CHANNEL, (event) => {
     fromPanel(event);
-    stopFixes();
-    await runInMain(restoreSettings);
-    freshName = undefined;
 
-    const saved = Option.getOrUndefined(await runInMain(loadWorkspace));
+    return runInMain(
+      Effect.gen(function* () {
+        yield* stopAgentFixes;
+        yield* restoreSettings;
+        yield* forgetFreshName;
 
-    if (saved !== undefined && (await host.activate(saved))) return;
+        const saved = yield* loadWorkspace;
 
-    await host.showOnboarding(Option.getOrElse(await runInMain(loadOnboarding), () => "welcome"));
+        if (Option.isSome(saved) && (yield* host.activate(saved.value))) return;
+
+        yield* host.showOnboarding(Option.getOrElse(yield* loadOnboarding, () => "welcome"));
+      }),
+    );
   });
   ipcMain.handle(DEV_OPEN_STEP_CHANNEL, (event, step) => {
     fromPanel(event);
 
     if (!isStep(step)) throw new Error("Unknown step");
 
-    freshName = undefined;
-
-    return host.showOnboarding(step);
+    return runInMain(Effect.andThen(forgetFreshName, host.showOnboarding(step)));
   });
   ipcMain.handle(DEV_REVEAL_CHANNEL, (event, target) => {
     fromPanel(event);
@@ -247,9 +278,11 @@ export function handleDevTools(host: DevToolsHost): DevTools {
   });
 
   const open = () => {
-    if (panel) {
-      panel.show();
-      panel.focus();
+    const shown = Effect.runSync(Ref.get(panel));
+
+    if (Option.isSome(shown)) {
+      shown.value.show();
+      shown.value.focus();
 
       return;
     }
@@ -266,12 +299,14 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     });
 
     created.on("closed", () => {
-      if (panel === created) panel = undefined;
+      Effect.runSync(
+        Ref.update(panel, (now) => (Option.contains(now, created) ? Option.none() : now)),
+      );
     });
     created.on("page-title-updated", (event) => event.preventDefault());
     lockNavigation(created.webContents);
     void created.loadURL(new URL("#/dev", host.boardUrl).href);
-    panel = created;
+    Effect.runSync(Ref.set(panel, Option.some(created)));
   };
 
   // The board's sidebar has a row for it too, to open it in a click.
