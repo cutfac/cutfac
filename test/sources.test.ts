@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 import { ConfigProvider, Effect } from "effect";
@@ -9,105 +8,109 @@ import { buildEditPrompt, requestEdit } from "../src/core/edits.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
 import { createItem, getItem, updateItem } from "../src/core/items.ts";
 import { MAX_SOURCES, cleanSources, sourceHosts } from "../src/core/sources.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
 
-const home = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { HOME: "/home/me" } }));
+const it = testEffect(tempWorkspace());
+
+const home = Effect.provideService(
+  ConfigProvider.ConfigProvider,
+  ConfigProvider.fromEnv({ env: { HOME: "/home/me" } }),
+);
 
 describe("item sources", () => {
-  let t: TestWorkspace;
+  it.live("keeps paths absolute outside the workspace and relative inside it", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-  });
+      const cleaned = yield* home(
+        cleanSources([
+          { path: " /Volumes/Footage/plants/ " },
+          { path: "~/Movies/b-roll" },
+          { path: join(ws.root, "items/first-short") },
+          { path: "references/intro" },
+          { path: "../elsewhere" },
+          { url: "https://Example.org/guide/abc" },
+          { path: "/Volumes/Footage/plants" },
+          { url: "https://example.org/guide/abc" },
+        ]),
+      );
 
-  afterEach(() => t.remove());
-
-  test("keeps paths absolute outside the workspace and relative inside it", async () => {
-    const cleaned = await t.runWith(
-      home,
-      cleanSources([
-        { path: " /Volumes/Footage/plants/ " },
-        { path: "~/Movies/b-roll" },
-        { path: join(t.root, "items/first-short") },
-        { path: "references/intro" },
-        { path: "../elsewhere" },
-        { url: "https://Example.org/guide/abc" },
+      expect(cleaned).toEqual([
         { path: "/Volumes/Footage/plants" },
+        { path: "/home/me/Movies/b-roll" },
+        { path: "items/first-short" },
+        { path: "references/intro" },
+        { path: join(ws.root, "../elsewhere") },
         { url: "https://example.org/guide/abc" },
-      ]),
-    );
+      ]);
+    }),
+  );
 
-    expect(cleaned).toEqual([
-      { path: "/Volumes/Footage/plants" },
-      { path: "/home/me/Movies/b-roll" },
-      { path: "items/first-short" },
-      { path: "references/intro" },
-      { path: join(t.root, "../elsewhere") },
-      { url: "https://example.org/guide/abc" },
-    ]);
-  });
+  it.live("refuses empty paths, other schemes, links with a login or token, and too many", () =>
+    Effect.gen(function* () {
+      const token = `${["ghp", "_"].join("")}${"a".repeat(36)}`;
 
-  test("refuses empty paths, other schemes, links with a login or token, and too many", async () => {
-    const token = `${["ghp", "_"].join("")}${"a".repeat(36)}`;
+      const refused = [
+        [{ path: "  " }],
+        [{ url: "ftp://example.com/file" }],
+        [{ url: "https://user:pass@example.com/" }],
+        [{ url: `https://example.com/?t=${token}` }],
+        Array.from({ length: MAX_SOURCES + 1 }, (_, n) => ({ url: `https://example.com/${n}` })),
+      ];
 
-    const refused = [
-      [{ path: "  " }],
-      [{ url: "ftp://example.com/file" }],
-      [{ url: "https://user:pass@example.com/" }],
-      [{ url: `https://example.com/?t=${token}` }],
-      Array.from({ length: MAX_SOURCES + 1 }, (_, n) => ({ url: `https://example.com/${n}` })),
-    ];
+      for (const sources of refused) {
+        expect(yield* Effect.flip(cleanSources(sources))).toBeInstanceOf(InvalidRequest);
+      }
+    }),
+  );
 
-    for (const sources of refused) {
-      expect(await t.fail(cleanSources(sources))).toBeInstanceOf(InvalidRequest);
-    }
-  });
+  it.live("an update replaces the list, and a refused one leaves the item as it was", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const { id } = yield* createItem({ title: "Repotting" });
+      const file = `items/${id}/item.yaml`;
 
-  test("an update replaces the list, and a refused one leaves the item as it was", async () => {
-    const id = await t.run(Effect.map(createItem({ title: "Repotting" }), (item) => item.id));
-    const file = join(t.root, "items", id, "item.yaml");
+      yield* updateItem(id, { sources: [{ path: "/a" }, { url: "https://example.com/" }] });
+      yield* updateItem(id, { sources: [{ path: "/b" }] });
+      const before = yield* ws.readText(file);
 
-    await t.run(updateItem(id, { sources: [{ path: "/a" }, { url: "https://example.com/" }] }));
-    await t.run(updateItem(id, { sources: [{ path: "/b" }] }));
-    const before = await readFile(file, "utf8");
+      expect(
+        yield* Effect.flip(updateItem(id, { sources: [{ url: "mailto:x@example.com" }] })),
+      ).toBeInstanceOf(InvalidRequest);
+      expect(yield* ws.readText(file)).toBe(before);
+      expect((yield* getItem(id)).doc.sources).toEqual([{ path: "/b" }]);
+    }),
+  );
 
-    expect(
-      await t.fail(updateItem(id, { sources: [{ url: "mailto:x@example.com" }] })),
-    ).toBeInstanceOf(InvalidRequest);
-    expect(await readFile(file, "utf8")).toBe(before);
-    expect((await t.run(getItem(id))).doc.sources).toEqual([{ path: "/b" }]);
-  });
+  it.live("the edit prompt lists the sources, local ones as absolute paths", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const item = yield* createItem({ title: "Repotting" });
 
-  test("the edit prompt lists the sources, local ones as absolute paths", async () => {
-    const prompt = await t.run(
-      Effect.gen(function* () {
-        const item = yield* createItem({ title: "Repotting" });
-        yield* updateItem(item.id, {
-          sources: [{ path: "items/old-explainer" }, { url: "https://example.org/care-guide" }],
-        });
-        const requested = yield* requestEdit(item.id, { body: "Like the old one" });
+      yield* updateItem(item.id, {
+        sources: [{ path: "items/old-explainer" }, { url: "https://example.org/care-guide" }],
+      });
 
-        return yield* buildEditPrompt(requested.item, requested.feedback);
-      }),
-    );
+      const requested = yield* requestEdit(item.id, { body: "Like the old one" });
+      const prompt = yield* buildEditPrompt(requested.item, requested.feedback);
 
-    expect(prompt).toContain("Sources the user pointed this item at.");
-    expect(prompt).toContain(`- ${join(t.root, "items/old-explainer")} (on this computer)`);
-    expect(prompt).toContain("- https://example.org/care-guide (a web page)");
-  });
+      expect(prompt).toContain("Sources the user pointed this item at.");
+      expect(prompt).toContain(`- ${join(ws.root, "items/old-explainer")} (on this computer)`);
+      expect(prompt).toContain("- https://example.org/care-guide (a web page)");
+    }),
+  );
 
-  test("an item without sources adds no section", async () => {
-    const prompt = await t.run(
-      Effect.gen(function* () {
-        const item = yield* createItem({ title: "Plain" });
-        const requested = yield* requestEdit(item.id, { body: "Make it" });
+  it.live("an item without sources adds no section", () =>
+    Effect.gen(function* () {
+      const item = yield* createItem({ title: "Plain" });
+      const requested = yield* requestEdit(item.id, { body: "Make it" });
+      const prompt = yield* buildEditPrompt(requested.item, requested.feedback);
 
-        return yield* buildEditPrompt(requested.item, requested.feedback);
-      }),
-    );
-
-    expect(prompt).not.toContain("Sources the user pointed");
-  });
+      expect(prompt).not.toContain("Sources the user pointed");
+    }),
+  );
 });
 
 describe("reading the web for sources", () => {
