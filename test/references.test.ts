@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { expect } from "bun:test";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import { editImages } from "../src/core/edits.ts";
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
@@ -14,29 +12,22 @@ import {
   listReferences,
   removeReference,
 } from "../src/core/references.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
 
-let t: TestWorkspace;
-
-let outside: string;
-
-beforeEach(async () => {
-  t = await makeWorkspace("references");
-  outside = await mkdtemp(join(tmpdir(), "cutfac-upload-"));
-});
-
-afterEach(async () => {
-  await t.remove();
-  await rm(outside, { recursive: true, force: true });
-});
+const it = testEffect(tempWorkspace("references"));
 
 /** A file outside the workspace, standing in for an upload's temporary copy. */
-async function upload(name: string, text = name) {
-  const source = join(outside, `${crypto.randomUUID()}-${name}`);
-  await writeFile(source, text);
+const upload = Effect.fnUntraced(function* (name: string, text = name) {
+  const fs = yield* FileSystem.FileSystem;
+  const folder = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-upload-" });
+  const source = join(folder, name);
+
+  yield* fs.writeFileString(source, text);
 
   return source;
-}
+});
 
 const add = (id: string, files: ReadonlyArray<{ source: string; path: string }>) =>
   Effect.flatMap(getItem(id), (item) => addReferences(itemReferences(item), files));
@@ -44,166 +35,172 @@ const add = (id: string, files: ReadonlyArray<{ source: string; path: string }>)
 const list = (id: string) =>
   Effect.flatMap(getItem(id), (item) => listReferences(itemReferences(item)));
 
-test("keeps dropped files and folders, with a folder's structure, and lists them", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
+const remove = (id: string, path: string) =>
+  Effect.flatMap(getItem(id), (item) => removeReference(item, path));
 
-  const added = await t.run(
-    add(item.id, [
-      { source: await upload("logo.png"), path: "/logo.png" },
-      { source: await upload("a.jpg"), path: "/photos/a.jpg" },
-      { source: await upload("b.jpg"), path: "/photos/2024/b.jpg" },
-      { source: await upload("DS_Store"), path: "/photos/.DS_Store" },
-      { source: await upload("brief.md"), path: "./brief.md" },
-    ]),
-  );
+it.live("keeps dropped files and folders, with a folder's structure, and lists them", () =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+    const item = yield* createItem({ title: "Launch" });
 
-  expect(added).toEqual(["references/logo.png", "references/photos", "references/brief.md"]);
-  expect(await readFile(join(t.root, item.dir, "references/photos/2024/b.jpg"), "utf8")).toBe(
-    "b.jpg",
-  );
+    const added = yield* add(item.id, [
+      { source: yield* upload("logo.png"), path: "/logo.png" },
+      { source: yield* upload("a.jpg"), path: "/photos/a.jpg" },
+      { source: yield* upload("b.jpg"), path: "/photos/2024/b.jpg" },
+      { source: yield* upload("DS_Store"), path: "/photos/.DS_Store" },
+      { source: yield* upload("brief.md"), path: "./brief.md" },
+    ]);
 
-  const references = await t.run(list(item.id));
+    expect(added).toEqual(["references/logo.png", "references/photos", "references/brief.md"]);
+    expect(yield* ws.readText(`${item.dir}/references/photos/2024/b.jpg`)).toBe("b.jpg");
 
-  expect(references.map(({ path, dir, files, kind }) => ({ path, dir, files, kind }))).toEqual([
-    { path: "references/brief.md", dir: false, files: undefined, kind: undefined },
-    { path: "references/logo.png", dir: false, files: undefined, kind: "image" },
-    { path: "references/photos", dir: true, files: 2, kind: undefined },
-  ]);
+    const references = yield* list(item.id);
 
-  // The folder is not the item's media.
-  expect((await t.run(getItem(item.id))).media).toEqual([]);
-});
+    expect(references.map(({ path, dir, files, kind }) => ({ path, dir, files, kind }))).toEqual([
+      { path: "references/brief.md", dir: false, files: undefined, kind: undefined },
+      { path: "references/logo.png", dir: false, files: undefined, kind: "image" },
+      { path: "references/photos", dir: true, files: 2, kind: undefined },
+    ]);
 
-test("gives a name already taken a number, also within one drop", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
+    // The folder is not the item's media.
+    expect((yield* getItem(item.id)).media).toEqual([]);
+  }),
+);
 
-  await t.run(
-    add(item.id, [
-      { source: await upload("logo.png"), path: "logo.png" },
-      { source: await upload("a.jpg"), path: "photos/a.jpg" },
-    ]),
-  );
+it.live("gives a name already taken a number, also within one drop", () =>
+  Effect.gen(function* () {
+    const item = yield* createItem({ title: "Launch" });
 
-  const added = await t.run(
-    add(item.id, [
-      { source: await upload("logo.png"), path: "logo.png" },
-      { source: await upload("logo.png"), path: "logo.png" },
-      { source: await upload("a.jpg"), path: "photos/a.jpg" },
-      { source: await upload("README"), path: "README" },
-    ]),
-  );
+    yield* add(item.id, [
+      { source: yield* upload("logo.png"), path: "logo.png" },
+      { source: yield* upload("a.jpg"), path: "photos/a.jpg" },
+    ]);
 
-  expect(added).toEqual([
-    "references/logo-2.png",
-    "references/logo-3.png",
-    "references/photos-2",
-    "references/README",
-  ]);
-});
+    const added = yield* add(item.id, [
+      { source: yield* upload("logo.png"), path: "logo.png" },
+      { source: yield* upload("logo.png"), path: "logo.png" },
+      { source: yield* upload("a.jpg"), path: "photos/a.jpg" },
+      { source: yield* upload("README"), path: "README" },
+    ]);
 
-test("a name that differs only in case is taken too, so the first file stays", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
+    expect(added).toEqual([
+      "references/logo-2.png",
+      "references/logo-3.png",
+      "references/photos-2",
+      "references/README",
+    ]);
+  }),
+);
 
-  await t.run(add(item.id, [{ source: await upload("logo.png", "first"), path: "logo.png" }]));
+it.live("a name that differs only in case is taken too, so the first file stays", () =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+    const item = yield* createItem({ title: "Launch" });
 
-  const added = await t.run(
-    add(item.id, [{ source: await upload("Logo.PNG", "second"), path: "Logo.PNG" }]),
-  );
+    yield* add(item.id, [{ source: yield* upload("logo.png", "first"), path: "logo.png" }]);
 
-  expect(added).toEqual(["references/Logo-2.PNG"]);
-  expect(await readFile(join(t.root, item.dir, "references/logo.png"), "utf8")).toBe("first");
-});
+    const added = yield* add(item.id, [
+      { source: yield* upload("Logo.PNG", "second"), path: "Logo.PNG" },
+    ]);
 
-test("refuses a path that climbs out of the drop", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
-  const source = await upload("x.txt");
+    expect(added).toEqual(["references/Logo-2.PNG"]);
+    expect(yield* ws.readText(`${item.dir}/references/logo.png`)).toBe("first");
+  }),
+);
 
-  const error = await t.fail(add(item.id, [{ source, path: "photos/../../x.txt" }]));
+it.live("refuses a path that climbs out of the drop", () =>
+  Effect.gen(function* () {
+    const item = yield* createItem({ title: "Launch" });
+    const source = yield* upload("x.txt");
 
-  expect(error).toBeInstanceOf(InvalidRequest);
-});
-
-test("removes one file or folder, and nothing outside the references", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
-
-  await t.run(add(item.id, [{ source: await upload("a.jpg"), path: "photos/a.jpg" }]));
-  await t.run(Effect.flatMap(getItem(item.id), (it) => removeReference(it, "references/photos")));
-
-  expect(await t.run(list(item.id))).toEqual([]);
-
-  const outside = [
-    "references/../item.yaml",
-    "item.yaml",
-    "edits/frame.png",
-    "references/photos/a.jpg",
-  ];
-
-  for (const path of outside) {
-    const error = await t.fail(Effect.flatMap(getItem(item.id), (it) => removeReference(it, path)));
+    const error = yield* Effect.flip(add(item.id, [{ source, path: "photos/../../x.txt" }]));
 
     expect(error).toBeInstanceOf(InvalidRequest);
-  }
+  }),
+);
 
-  const missing = await t.fail(
-    Effect.flatMap(getItem(item.id), (it) => removeReference(it, "references/gone.png")),
-  );
+it.live("removes one file or folder, and nothing outside the references", () =>
+  Effect.gen(function* () {
+    const item = yield* createItem({ title: "Launch" });
 
-  expect(missing).toBeInstanceOf(NotFound);
-});
+    yield* add(item.id, [{ source: yield* upload("a.jpg"), path: "photos/a.jpg" }]);
+    yield* remove(item.id, "references/photos");
 
-test("a request keeps the files attached to it, which must be references of the item", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
-  await t.run(add(item.id, [{ source: await upload("logo.png"), path: "logo.png" }]));
+    expect(yield* list(item.id)).toEqual([]);
 
-  const { feedback } = await t.run(
-    addFeedback(item.id, { body: "Put the logo in", attachments: ["references/./logo.png"] }),
-  );
+    const escapes = [
+      "references/../item.yaml",
+      "item.yaml",
+      "edits/frame.png",
+      "references/photos/a.jpg",
+    ];
 
-  expect(feedback.attachments).toEqual(["references/logo.png"]);
-  expect((await t.run(getItem(item.id))).doc.feedback[0]?.attachments).toEqual([
-    "references/logo.png",
-  ]);
+    for (const path of escapes) {
+      expect(yield* Effect.flip(remove(item.id, path))).toBeInstanceOf(InvalidRequest);
+    }
 
-  for (const outside of ["item.yaml", "edits/frame.png"]) {
-    const error = await t.fail(addFeedback(item.id, { body: "Use this", attachments: [outside] }));
+    expect(yield* Effect.flip(remove(item.id, "references/gone.png"))).toBeInstanceOf(NotFound);
+  }),
+);
 
-    expect(error).toBeInstanceOf(InvalidRequest);
-  }
+it.live("a request keeps the files attached to it, which must be references of the item", () =>
+  Effect.gen(function* () {
+    const item = yield* createItem({ title: "Launch" });
 
-  const missing = await t.fail(
-    addFeedback(item.id, { body: "Use this", attachments: ["references/gone.png"] }),
-  );
+    yield* add(item.id, [{ source: yield* upload("logo.png"), path: "logo.png" }]);
 
-  expect(missing).toBeInstanceOf(NotFound);
-});
+    const { feedback } = yield* addFeedback(item.id, {
+      body: "Put the logo in",
+      attachments: ["references/./logo.png"],
+    });
 
-test("the agent sees the marked frame and the attached pictures that are still there", async () => {
-  const item = await t.run(createItem({ title: "Launch" }));
+    expect(feedback.attachments).toEqual(["references/logo.png"]);
+    expect((yield* getItem(item.id)).doc.feedback[0]?.attachments).toEqual(["references/logo.png"]);
 
-  await t.run(
-    add(item.id, [
-      { source: await upload("logo.png"), path: "logo.png" },
-      { source: await upload("gone.png"), path: "gone.png" },
-      { source: await upload("brief.md"), path: "brief.md" },
-    ]),
-  );
+    for (const escape of ["item.yaml", "edits/frame.png"]) {
+      const error = yield* Effect.flip(
+        addFeedback(item.id, { body: "Use this", attachments: [escape] }),
+      );
 
-  const { feedback } = await t.run(
-    addFeedback(item.id, {
+      expect(error).toBeInstanceOf(InvalidRequest);
+    }
+
+    const missing = yield* Effect.flip(
+      addFeedback(item.id, { body: "Use this", attachments: ["references/gone.png"] }),
+    );
+
+    expect(missing).toBeInstanceOf(NotFound);
+  }),
+);
+
+it.live("the agent sees the marked frame and the attached pictures that are still there", () =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+    const item = yield* createItem({ title: "Launch" });
+
+    yield* add(item.id, [
+      { source: yield* upload("logo.png"), path: "logo.png" },
+      { source: yield* upload("gone.png"), path: "gone.png" },
+      { source: yield* upload("brief.md"), path: "brief.md" },
+    ]);
+
+    const { feedback } = yield* addFeedback(item.id, {
       body: "Put the logo in",
       attachments: ["references/logo.png", "references/gone.png", "references/brief.md"],
-    }),
-  );
+    });
 
-  await mkdir(join(t.root, item.dir, "edits"));
-  await writeFile(join(t.root, item.dir, "edits/frame.png"), "frame");
-  await t.run(Effect.flatMap(getItem(item.id), (it) => removeReference(it, "references/gone.png")));
+    yield* ws.writeText(`${item.dir}/edits/frame.png`, "frame");
+    yield* remove(item.id, "references/gone.png");
 
-  const marked = { ...feedback, context: { frame: "edits/frame.png" } };
-  const images = await t.run(Effect.flatMap(getItem(item.id), (it) => editImages(it, marked)));
+    const marked = { ...feedback, context: { frame: "edits/frame.png" } };
 
-  expect(images).toEqual([
-    join(t.root, item.dir, "edits/frame.png"),
-    join(t.root, item.dir, "references/logo.png"),
-  ]);
-});
+    const images = yield* Effect.flatMap(getItem(item.id), (current) =>
+      editImages(current, marked),
+    );
+
+    expect(images).toEqual([
+      join(ws.root, item.dir, "edits/frame.png"),
+      join(ws.root, item.dir, "references/logo.png"),
+    ]);
+  }),
+);
