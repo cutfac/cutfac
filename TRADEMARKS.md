@@ -19,7 +19,7 @@ tell the official app from a build someone else made.
   domain or account.
 - Anything that suggests Wyverse Labs made, checked or endorses your work.
 
-Ask through [cutfac.com](https://cutfac.com) before you do any of these.
+Ask at [legal@cutfac.com](mailto:legal@cutfac.com) before you do any of these.
 
 ## Distributing a fork
 

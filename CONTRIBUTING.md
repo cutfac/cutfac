@@ -79,8 +79,8 @@ Software Foundation's:
   comments with a link; sign there with your GitHub account. It records the version you signed and
   when, and covers every pull request after it.
 - If you contribute as part of your job, your employer also signs the [Corporate CLA](CCLA.md) and
-  names you in its Schedule A. Ask us in an issue or through [cutfac.com](https://cutfac.com), and
-  we'll send it to sign.
+  names you in its Schedule A. Write to [legal@cutfac.com](mailto:legal@cutfac.com), and we'll send
+  it to sign.
 
 [ICLA.ko.md](ICLA.ko.md) and [CCLA.ko.md](CCLA.ko.md) are Korean translations for reference; the
 English text is the agreement. You keep the copyright to your work; the agreement lets Wyverse Labs
