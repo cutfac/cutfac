@@ -60,7 +60,12 @@ export const onboardingKo: OnboardingMessages = {
     creating: "준비하는 중…",
   },
   dragHelper: {
-    title: "컷팩을 목록으로 끌어다 놓으세요",
-    body: "이 창 옆의 전체 디스크 접근 권한 목록에 놓으면 돼요.",
+    title: (app) => (
+      <>
+        <strong>{app}</strong> 앱을 위 목록에 끌어다 놓으면 <strong>전체 디스크 접근 권한</strong>이
+        켜져요.
+      </>
+    ),
+    drag: "끌기",
   },
 };

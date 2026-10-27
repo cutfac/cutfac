@@ -1,4 +1,4 @@
-import { XIcon } from "lucide-react";
+import { ArrowUpIcon, HandIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -7,50 +7,54 @@ import type { CutfacOnboarding } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 
 /**
- * The small window that floats beside System Settings: the app's icon to drag into the Full Disk
- * Access list, which drags the app itself. The window moves by its background, and goes away by
- * itself once the access is granted.
+ * The panel that sits under System Settings, after PermissionFlow's: a sentence pointing up at the
+ * Full Disk Access list, and the app as a card to drag into it, which drags the app itself. The
+ * panel moves by its background, and goes away by itself once the access is granted.
  */
 export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
   const t = useMessages();
-  const [icon, setIcon] = useState<string>();
+  const [app, setApp] = useState<{ icon: string; name: string }>();
 
   useEffect(() => {
-    onboarding.appIcon().then(setIcon, () => undefined);
+    onboarding.appIcon().then(setApp, () => undefined);
   }, [onboarding]);
 
   return (
-    <div className="relative flex h-dvh flex-col items-center justify-center gap-3 px-5 text-center [-webkit-app-region:drag]">
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label={t.common.close}
-        className="absolute top-2 left-2 [-webkit-app-region:no-drag]"
-        onClick={() => window.close()}
-      >
-        <XIcon />
-      </Button>
-      <div className="size-16">
-        {icon === undefined ? null : (
-          // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- dragged with the mouse, as in Finder; the text under it says so
-          <img
-            src={icon}
-            alt=""
-            className="size-16 animate-in duration-500 zoom-in-90 [-webkit-app-region:no-drag] fade-in"
-            onDragStart={(event) => {
-              // The app drags its own bundle instead of the picture.
-              event.preventDefault();
-              onboarding.startAppDrag();
-            }}
-          />
-        )}
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-balance">{t.onboarding.dragHelper.title}</p>
-        <p className="text-xs/relaxed text-pretty text-muted-foreground">
-          {t.onboarding.dragHelper.body}
+    <div className="flex h-dvh flex-col gap-2.5 p-3 [-webkit-app-region:drag]">
+      <div className="flex items-start gap-2">
+        <ArrowUpIcon className="mt-0.5 size-4 shrink-0 animate-bounce text-brand" />
+        <p className="flex-1 text-sm/snug text-pretty">
+          {t.onboarding.dragHelper.title(app?.name ?? "Cutfac")}
         </p>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t.common.close}
+          className="-mt-0.5 [-webkit-app-region:no-drag]"
+          onClick={() => window.close()}
+        >
+          <XIcon />
+        </Button>
       </div>
+      {app === undefined ? null : (
+        // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- dragged with the mouse, as in Finder; the sentence above says so
+        <div
+          draggable
+          className="flex animate-in cursor-grab items-center gap-3 rounded-2xl bg-foreground/6 py-2 pr-3 pl-2 transition-colors duration-300 [-webkit-app-region:no-drag] fade-in hover:bg-foreground/10 active:cursor-grabbing"
+          onDragStart={(event) => {
+            // The app drags its own bundle instead of the card.
+            event.preventDefault();
+            onboarding.startAppDrag();
+          }}
+        >
+          <img src={app.icon} alt="" draggable={false} className="size-8" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
+          <span className="flex shrink-0 flex-col items-center text-muted-foreground">
+            <HandIcon className="size-4" />
+            <span className="text-xs">{t.onboarding.dragHelper.drag}</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

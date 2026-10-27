@@ -14,7 +14,7 @@ import { AgentName } from "../src/core/schema.ts";
 import type { Folder } from "../web/src/desktop.ts";
 import { agentSetups, fixAgent } from "./agents.ts";
 import { pickWorkspace } from "./dialogs.ts";
-import { appIconUrl, dragApp, hasFullDiskAccess, openAccessSettings } from "./fullDiskAccess.ts";
+import { appBadge, dragApp, hasFullDiskAccess, openAccessSettings } from "./fullDiskAccess.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   AGENTS_CHANNEL,
@@ -126,12 +126,12 @@ export function handleOnboarding(host: OnboardingHost): void {
     });
   });
   ipcMain.on(START_APP_DRAG_CHANNEL, (event) => {
-    if (host.isFromApp(event)) dragApp(event.sender).catch(() => undefined);
+    if (host.isFromApp(event)) dragApp(event.sender);
   });
   ipcMain.handle(APP_ICON_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return appIconUrl();
+    return appBadge();
   });
   ipcMain.handle(DEFAULT_FOLDER_CHANNEL, (event) => {
     assertFromApp(event);

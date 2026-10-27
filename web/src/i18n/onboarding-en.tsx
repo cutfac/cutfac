@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { AgentSetup } from "../desktop.ts";
 
 type FixState = Exclude<AgentSetup["state"], "ready">;
@@ -63,8 +65,13 @@ export const onboardingEn = {
     creating: "Setting up…",
   },
   dragHelper: {
-    title: "Drag Cutfac into the list",
-    body: "Drop it on the Full Disk Access list beside this window.",
+    /** Says what to drag where, with the app's name and the list's set apart. */
+    title: (app: ReactNode) => (
+      <>
+        Drag <strong>{app}</strong> into the list above to allow <strong>Full Disk Access</strong>.
+      </>
+    ),
+    drag: "Drag",
   },
 };
 

@@ -69,8 +69,8 @@ export interface CutfacOnboarding {
   onAccessGranted: (listener: () => void) => () => void;
   /** Drag the app itself into the Full Disk Access list, from the helper window. */
   startAppDrag: () => void;
-  /** The app's icon as a data URL, for the helper window to show as the thing to drag. */
-  appIcon: () => Promise<string>;
+  /** The app as the Full Disk Access list shows it, for the helper window to show as the thing to drag. */
+  appIcon: () => Promise<{ icon: string; name: string }>;
   /** The folder the workspace step suggests. */
   defaultFolder: () => Promise<Folder>;
   /** Ask for another folder. Resolves it, or undefined if cancelled. */

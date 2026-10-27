@@ -70,7 +70,10 @@ function Greeting({ onboarding, onStart }: { onboarding: CutfacOnboarding; onSta
   const [icon, setIcon] = useState<string>();
 
   useEffect(() => {
-    onboarding.appIcon().then(setIcon, () => undefined);
+    onboarding.appIcon().then(
+      (app) => setIcon(app.icon),
+      () => undefined,
+    );
   }, [onboarding]);
 
   return (
