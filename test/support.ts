@@ -7,7 +7,7 @@ import { join } from "node:path";
 // Each helper runs a test's effect to completion, so it is the entry point that provides layers.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
-import { ConfigProvider, Effect, FileSystem, Layer, Option, type Schema } from "effect";
+import { ConfigProvider, Context, Effect, FileSystem, Layer, Option, type Schema } from "effect";
 
 import { which } from "../src/core/process.ts";
 import { Workspace } from "../src/core/workspace.ts";
@@ -106,6 +106,54 @@ export async function makeFakeAgents(): Promise<FakeAgents> {
   return { dir, calls, layer, bin, remove };
 }
 
+/** The folder of fake agent CLIs `fakeAgents` made, for a test to put programs in. */
+export class FakeAgentDir extends Context.Service<
+  FakeAgentDir,
+  {
+    readonly dir: string;
+    /** Where a fake can record what it was given: `calls` in `dir`. */
+    readonly calls: string;
+    /** Put an executable `name` on the fakes' PATH that runs `script` with sh. */
+    readonly bin: (name: string, script: string) => Effect.Effect<string>;
+  }
+>()("test/FakeAgentDir") {}
+
+/**
+ * Fake agent CLIs and a PATH of only them, removed when the test ends, so a real `claude` or
+ * `codex` on this machine is never found or run. Dies if one still is.
+ */
+export const fakeAgents = Layer.unwrap(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-fake-agent-" });
+    const calls = join(dir, "calls");
+
+    yield* fs.makeDirectory(join(dir, "bin"));
+    yield* fs.makeDirectory(calls);
+
+    const path = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { PATH: join(dir, "bin") } }));
+    const found = yield* Effect.forEach(["claude", "codex"], which).pipe(Effect.provide(path));
+
+    if (found.some(Option.isSome)) {
+      return yield* Effect.die(
+        new Error("A real agent CLI is still on PATH; the tests must only run fakes"),
+      );
+    }
+
+    const bin = (name: string, script: string) =>
+      Effect.gen(function* () {
+        const file = join(dir, "bin", name);
+
+        yield* fs.writeFileString(file, `#!/bin/sh\nPATH=/bin:/usr/bin\n${script}`);
+        yield* fs.chmod(file, 0o755);
+
+        return file;
+      }).pipe(Effect.orDie);
+
+    return Layer.merge(Layer.succeed(FakeAgentDir, FakeAgentDir.of({ dir, calls, bin })), path);
+  }),
+).pipe(Layer.provide(BunServices.layer), Layer.orDie);
+
 /** Listens on `port` on loopback until the scope closes, as another program holding it would. */
 export const holdPort = (port: number) =>
   Effect.acquireRelease(
@@ -196,6 +244,18 @@ export const codexReceived = async (calls: string): Promise<ReadonlyArray<CodexR
     .split("\n")
     .filter((line) => line !== "")
     .map((line) => JSON.parse(line));
+
+/** The messages a fake `codex app-server` read, in order, read as an Effect. */
+export const codexReceivedNow = (calls: string) =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) => fs.readFileString(join(calls, "stdin"))).pipe(
+    Effect.map((text): ReadonlyArray<CodexReceived> =>
+      text
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line) => JSON.parse(line)),
+    ),
+    Effect.orDie,
+  );
 
 /** The params of the first message with `method` that a fake Codex read. */
 export const codexParams = (received: ReadonlyArray<CodexReceived> = [], method: string) =>

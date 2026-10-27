@@ -1,13 +1,16 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { describe, expect } from "bun:test";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Effect, FileSystem, Layer } from "effect";
 
 import { CommandFailed } from "../src/core/errors.ts";
 import { addLinkedVideo } from "../src/core/linkedVideos.ts";
 import type { ReferenceFolder } from "../src/core/references.ts";
-import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace(), fakeAgents));
 
 const folder: ReferenceFolder = {
   owner: "items/rice",
@@ -15,46 +18,46 @@ const folder: ReferenceFolder = {
   lock: "references:rice",
 };
 
+/** What the rice item's folder holds at `path`, from inside it. */
+const listed = (...path: string[]) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const ws = yield* Workspace;
+
+    return yield* fs.readDirectory(join(ws.root, "items", "rice", ...path));
+  });
+
 describe("a linked video", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
+  it.live("is kept as a reference named after its title, with nothing left of the download", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+      const ws = yield* Workspace;
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-    fakes = await makeFakeAgents();
-  });
+      yield* fakes.bin("yt-dlp", `printf 'clip' > source.mp4\necho "How to Cook Rice!"\n`);
 
-  afterEach(async () => {
-    await t.remove();
-    await fakes.remove();
-  });
+      const first = yield* addLinkedVideo(folder, "https://youtu.be/abc");
+      const second = yield* addLinkedVideo(folder, "https://youtu.be/abc");
 
-  const item = (...path: string[]) => join(t.root, "items", "rice", ...path);
+      expect([first, second]).toEqual([
+        "references/how-to-cook-rice.mp4",
+        "references/how-to-cook-rice-2.mp4",
+      ]);
+      expect(yield* ws.readText("items/rice/references/how-to-cook-rice.mp4")).toBe("clip");
+      expect(yield* listed(".downloads")).toEqual([]);
+    }),
+  );
 
-  test("is kept as a reference named after its title, with nothing left of the download", async () => {
-    await fakes.bin("yt-dlp", `printf 'clip' > source.mp4\necho "How to Cook Rice!"\n`);
+  it.live("that yt-dlp could not download leaves nothing behind", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    const first = await t.runWith(fakes.layer, addLinkedVideo(folder, "https://youtu.be/abc"));
-    const second = await t.runWith(fakes.layer, addLinkedVideo(folder, "https://youtu.be/abc"));
+      yield* fakes.bin("yt-dlp", `echo "ERROR: Video unavailable" >&2\nexit 1\n`);
 
-    expect([first, second]).toEqual([
-      "references/how-to-cook-rice.mp4",
-      "references/how-to-cook-rice-2.mp4",
-    ]);
-    expect(await readFile(item("references", "how-to-cook-rice.mp4"), "utf8")).toBe("clip");
-    expect(await readdir(item(".downloads"))).toEqual([]);
-  });
+      const error = yield* Effect.flip(addLinkedVideo(folder, "https://youtu.be/gone"));
 
-  test("that yt-dlp could not download leaves nothing behind", async () => {
-    await fakes.bin("yt-dlp", `echo "ERROR: Video unavailable" >&2\nexit 1\n`);
-
-    const error = await t.runWith(
-      fakes.layer,
-      Effect.flip(addLinkedVideo(folder, "https://youtu.be/gone")),
-    );
-
-    expect(error).toBeInstanceOf(CommandFailed);
-    expect(await readdir(item())).toEqual([".downloads"]);
-    expect(await readdir(item(".downloads"))).toEqual([]);
-  });
+      expect(error).toBeInstanceOf(CommandFailed);
+      expect(yield* listed()).toEqual([".downloads"]);
+      expect(yield* listed(".downloads")).toEqual([]);
+    }),
+  );
 });
