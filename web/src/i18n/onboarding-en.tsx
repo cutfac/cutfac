@@ -1,13 +1,6 @@
-import type { AgentSetup, Permission } from "../desktop.ts";
+import type { AgentSetup } from "../desktop.ts";
 
 type FixState = Exclude<AgentSetup["state"], "ready">;
-
-interface PermissionCopy {
-  name: string;
-  why: string;
-  waiting: string;
-  list: string;
-}
 
 /** The first launch's copy, kept apart from the board's so neither file grows past reading. */
 export const onboardingEn = {
@@ -49,30 +42,26 @@ export const onboardingEn = {
     next: "Next",
   },
   access: {
-    title: "Let your agent see and use your screen",
-    body: "Your agent records your apps for your videos, and clicks through them when it needs to. It works under Cutfac's permissions, so turn these two on for Cutfac.",
+    title: "Turn on notifications and screen recording",
+    body: "Cutfac tells you when a render finishes or your agent waits for you. Screen recording lets your agent record your screen and apps to use in videos.",
     turnOn: "Turn on",
     on: "On",
-    granted: "Both are on",
+    asked: "Asked",
+    granted: "All set",
     skip: "Skip for now",
-    /**
-     * Each permission: its name, what it lets the agent do, what to do while its list is open, and
-     * the list's title in System Settings, for the picture.
-     */
-    permissions: {
-      screen: {
-        name: "Screen Recording",
-        why: "Record your screen and apps to use in videos.",
-        waiting: "Turn on Cutfac in the list. When macOS offers to reopen it, go ahead.",
-        list: "Screen & System Audio Recording",
-      },
-      accessibility: {
-        name: "Accessibility",
-        why: "Let your agent click and type in other apps.",
-        waiting: "Turn on Cutfac in the list…",
-        list: "Accessibility",
-      },
-    } satisfies Record<Permission, PermissionCopy>,
+    notifications: {
+      name: "Notifications",
+      why: "Hear when a render finishes or your agent waits.",
+      /** The notification Turn on puts up, which has macOS ask. */
+      sample: { title: "Cutfac", body: "This is how Cutfac tells you something is ready." },
+    },
+    screen: {
+      name: "Screen Recording",
+      why: "Record your screen and apps to use in videos.",
+      waiting: "Turn on Cutfac in the list. When macOS offers to reopen it, go ahead.",
+      /** The list's title in System Settings, for the picture. */
+      list: "Screen & System Audio Recording",
+    },
     /** The picture of System Settings with the panel under it. */
     preview: {
       pane: "Privacy & Security",

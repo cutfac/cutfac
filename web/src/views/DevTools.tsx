@@ -176,11 +176,10 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
             </Section>
             <Separator />
             <Section
-              title="Screen Recording and Accessibility"
-              description="To have the access step ask for real, take them back from this build in a terminal. Screen recording shows as taken back only once the app reopens."
+              title="Screen Recording"
+              description="To have the access step ask for real, take it back from this build in a terminal. It shows as taken back only once the app reopens."
             >
               <Command command={`tccutil reset ScreenCapture ${state.bundleId}`} />
-              <Command command={`tccutil reset Accessibility ${state.bundleId}`} />
             </Section>
             <Separator />
             <Section
@@ -233,8 +232,8 @@ function Fakes({ fakes, onChange }: { fakes: DevFakes; onChange: (fakes: DevFake
         onChange={(fixes) => onChange({ ...fakes, fixesFail: fixes === "fail" })}
       />
       <Choice
-        label="Screen Recording and Accessibility"
-        hint="Granted moves the access step on, as turning both on in System Settings does."
+        label="Screen Recording"
+        hint="Granted moves the access step on, as turning it on in System Settings does."
         options={ACCESS}
         value={fakes.access}
         onChange={(access) => onChange({ ...fakes, access })}

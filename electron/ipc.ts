@@ -49,8 +49,11 @@ export const FIX_AGENT_CHANNEL = "cutfac:fix-agent";
 /** A line a running fix printed, for the agent step to show. */
 export const FIX_OUTPUT_CHANNEL = "cutfac:fix-output";
 
-/** Whether macOS grants the app a permission: screen recording, or accessibility. */
+/** Whether macOS grants the app a permission: screen recording. */
 export const PERMISSION_CHANNEL = "cutfac:permission";
+
+/** Put up a sample notification, which has macOS ask whether the app may notify. */
+export const ASK_NOTIFICATIONS_CHANNEL = "cutfac:ask-notifications";
 
 /** Open a permission's list in System Settings, with the helper window beside it. */
 export const OPEN_ACCESS_SETTINGS_CHANNEL = "cutfac:open-access-settings";

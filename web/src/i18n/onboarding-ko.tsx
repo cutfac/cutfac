@@ -39,25 +39,23 @@ export const onboardingKo: OnboardingMessages = {
     next: "다음",
   },
   access: {
-    title: "에이전트가 화면을 보고 쓸 수 있게 해 주세요",
-    body: "에이전트는 영상에 쓸 앱 화면을 녹화하고, 필요하면 앱을 직접 눌러 보기도 해요. 에이전트는 컷팩의 권한으로 움직이니, 컷팩에 이 두 가지를 켜 주세요.",
+    title: "알림과 화면 기록을 켜 주세요",
+    body: "렌더링이 끝나거나 에이전트가 기다리면 컷팩이 알려 줘요. 화면 기록이 있으면 에이전트가 화면과 앱을 녹화해서 영상에 써요.",
     turnOn: "켜기",
     on: "켜짐",
-    granted: "둘 다 켰어요",
+    asked: "요청함",
+    granted: "다 됐어요",
     skip: "나중에 하기",
-    permissions: {
-      screen: {
-        name: "화면 기록",
-        why: "화면과 앱을 녹화해서 영상에 써요.",
-        waiting: "목록에서 컷팩을 켜 주세요. macOS가 앱을 다시 열자고 하면 그대로 따라 주세요.",
-        list: "화면 및 시스템 오디오 기록",
-      },
-      accessibility: {
-        name: "손쉬운 사용",
-        why: "에이전트가 다른 앱을 누르고 입력할 수 있어요.",
-        waiting: "목록에서 컷팩을 켜 주세요…",
-        list: "손쉬운 사용",
-      },
+    notifications: {
+      name: "알림",
+      why: "렌더링이 끝나거나 에이전트가 기다리면 알려 줘요.",
+      sample: { title: "컷팩", body: "준비되면 이렇게 알려 드릴게요." },
+    },
+    screen: {
+      name: "화면 기록",
+      why: "화면과 앱을 녹화해서 영상에 써요.",
+      waiting: "목록에서 컷팩을 켜 주세요. macOS가 앱을 다시 열자고 하면 그대로 따라 주세요.",
+      list: "화면 및 시스템 오디오 기록",
     },
     preview: {
       pane: "개인정보 보호 및 보안",

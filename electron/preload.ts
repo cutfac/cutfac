@@ -31,6 +31,7 @@ import {
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
   PERMISSION_CHANNEL,
+  ASK_NOTIFICATIONS_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
   NEW_VIDEO_LINK_CHANNEL,
@@ -88,6 +89,7 @@ const onboarding = {
     };
   },
   permission: (permission) => ipcRenderer.invoke(PERMISSION_CHANNEL, permission),
+  askNotifications: (sample) => ipcRenderer.invoke(ASK_NOTIFICATIONS_CHANNEL, sample),
   openAccessSettings: (permission) => ipcRenderer.invoke(OPEN_ACCESS_SETTINGS_CHANNEL, permission),
   onAccessGranted: (listener) => {
     const forward = (_event: IpcRendererEvent, permission: Permission) => listener(permission);

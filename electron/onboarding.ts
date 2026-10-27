@@ -5,6 +5,7 @@ import { Schema } from "effect";
 import {
   app,
   ipcMain,
+  Notification,
   type BrowserWindow,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -24,6 +25,7 @@ import {
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
   PERMISSION_CHANNEL,
+  ASK_NOTIFICATIONS_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
@@ -40,6 +42,8 @@ import {
 const isAgentName = Schema.is(AgentName);
 
 const isText = Schema.is(Schema.String);
+
+const isSample = Schema.is(Schema.Struct({ title: Schema.String, body: Schema.String }));
 
 /** A folder as the workspace step shows it, from the home folder when it is inside it. */
 function folder(target: string): Folder {
@@ -117,6 +121,13 @@ export function handleOnboarding(host: OnboardingHost): void {
     if (!isPermission(permission)) throw new Error("Unknown permission");
 
     return checks.hasPermission(permission);
+  });
+  ipcMain.handle(ASK_NOTIFICATIONS_CHANNEL, (event, sample) => {
+    assertFromApp(event);
+
+    if (!isSample(sample)) throw new Error("Unknown notification");
+
+    if (Notification.isSupported()) new Notification(sample).show();
   });
   ipcMain.handle(OPEN_ACCESS_SETTINGS_CHANNEL, (event, permission) => {
     assertFromApp(event);

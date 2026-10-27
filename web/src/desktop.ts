@@ -38,11 +38,8 @@ export interface AgentFix {
   command: string;
 }
 
-/**
- * What the app asks macOS for: recording the screen, and using other apps (accessibility). The
- * agents it runs act under them too.
- */
-export type Permission = "screen" | "accessibility";
+/** What the app asks macOS for on a list in System Settings: recording the screen, for footage. */
+export type Permission = "screen";
 
 /** The first-launch steps that come before there is a workspace. */
 export type OnboardingStep = "welcome" | "agent" | "access" | "folder";
@@ -73,6 +70,11 @@ export interface CutfacOnboarding {
   openAccessSettings: (permission: Permission) => Promise<void>;
   /** A permission was granted while System Settings was open. Returns an unsubscribe. */
   onAccessGranted: (listener: (permission: Permission) => void) => () => void;
+  /**
+   * Put up a sample notification. The first one has macOS ask whether the app may notify, which
+   * Electron has no other way to ask.
+   */
+  askNotifications: (sample: { title: string; body: string }) => Promise<void>;
   /** Drag the app itself into a list in System Settings, from the helper window. */
   startAppDrag: () => void;
   /** Makes the helper window the one that shows the cursor, as the pointer reaches it. */

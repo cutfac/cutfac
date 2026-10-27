@@ -17,7 +17,7 @@ import { sandboxed } from "./permissions.ts";
 import { type Frame, followSettingsWindow } from "./settingsWindow.ts";
 
 /** The permissions the app asks for, which System Settings grants on a list the app is dragged into. */
-const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
+const PERMISSIONS: ReadonlyArray<Permission> = ["screen"];
 
 export const isPermission = (value: unknown): value is Permission =>
   PERMISSIONS.some((permission) => permission === value);
@@ -25,7 +25,6 @@ export const isPermission = (value: unknown): value is Permission =>
 /** System Settings, on each permission's list. */
 const SETTINGS_URL: Record<Permission, string> = {
   screen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
-  accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
 };
 
 const limits = {
@@ -56,17 +55,13 @@ let unfollow: (() => void) | undefined;
 let dragIcon: NativeImage | undefined;
 
 /**
- * Whether the app holds a permission; only macOS asks. The agents the app runs act under it too, so
- * this is what they may do: record the screen, and use other apps. macOS reads screen recording once
- * per process, so a grant shows after the app reopens, which macOS offers itself once it is on.
- * Accessibility shows at once.
+ * Whether the app holds a permission; only macOS asks. macOS reads screen recording once per process,
+ * so a grant shows after the app reopens, which macOS offers itself once it is on.
  */
 export function hasPermission(permission: Permission): boolean {
   if (process.platform !== "darwin") return true;
 
-  return permission === "screen"
-    ? systemPreferences.getMediaAccessStatus("screen") === "granted"
-    : systemPreferences.isTrustedAccessibilityClient(false);
+  return systemPreferences.getMediaAccessStatus(permission) === "granted";
 }
 
 /** The app bundle itself, which is what the lists in System Settings take. */

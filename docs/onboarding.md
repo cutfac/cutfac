@@ -34,7 +34,7 @@ keeps it.
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | 1. Welcome      | What Cutfac does in one sentence, and Start                                                                                                                                                                             | Start is pressed                        |
 | 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                       | One agent is ready, and Next is pressed |
-| 3. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                  | macOS reports both on, or Skip          |
+| 3. Permissions  | Notifications and Screen Recording, what each is for, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                              | Both are done, or Skip                  |
 | 4. Workspace    | A folder already filled in (`~/Documents/Cutfac`) with Create, and Choose another folder. The agents from step 2 connect to it without a separate button                                                                | The server runs on the folder           |
 | 5. What to make | What the videos are for and where they go, the user's own material (a website, a local folder), and a gallery of references to start from. Start has the agent make a template from them and moves on to step 6 at once | Start is pressed                        |
 | 6. First video  | The template run's progress, and a title field. Allow shows here when the import needs it                                                                                                                               | The item exists; its detail opens       |
@@ -77,36 +77,38 @@ as the Connect button does today.
 
 ### Permissions
 
-The agents Cutfac runs act under Cutfac's permissions: macOS holds whatever they do to the app that
-started them. Two of those the agents need for their work, and macOS doesn't let an app ask for
-either in a dialog; each is granted only by adding the app to a list in System Settings:
+The step asks for two things, each with Turn on:
 
-- **Screen Recording**, to record the user's screen and apps as footage for a video.
-- **Accessibility**, to click and type in other apps, as Claude Code's and Codex's computer use do.
+- **Notifications**, so Cutfac can say when a render finishes or an agent waits for the user while
+  they are elsewhere. macOS asks on the app's first notification, and Electron has no other way to
+  ask, so Turn on puts up a sample one. macOS doesn't tell the app the answer, so asking is what the
+  step counts.
+- **Screen Recording**, so the agents can record the user's screen and apps as footage. The agents
+  Cutfac runs act under its permissions: macOS holds what they do to the app that started them.
 
-Apps like Codex make adding the app one motion, after
+Screen recording, like Full Disk Access and Accessibility, is granted only by adding the app to a
+list in System Settings. Apps like Codex make that one motion, after
 [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow):
 
-1. The step says, in a sentence, what the two are for, with a picture of System Settings and the
-   panel under it, and a pointer dragging the app into the list.
-2. Each permission's Turn on opens its pane (`x-apple.systempreferences:` with
-   `Privacy_ScreenCapture` or `Privacy_Accessibility`).
+1. The step shows a picture of System Settings with the panel under it, and a pointer dragging the
+   app into the list.
+2. Turn on opens the pane (`x-apple.systempreferences:` with `Privacy_ScreenCapture`).
 3. A small panel sits under the Settings window, lined up with the list, and follows the window as
    it moves. It is one card with Cutfac's icon and name; dragging it drags the app bundle itself
    (`webContents.startDrag` with the `.app` path), which is what the list accepts. The user never
    hunts for the app with +.
-4. Accessibility shows as soon as it is on (`isTrustedAccessibilityClient`): the panel closes,
-   Cutfac comes back to the front, and the row shows it on. Screen recording is read once per
-   process (`getMediaAccessStatus`), so it shows only after the app reopens. macOS offers that
-   itself once it is on; the app opens again on this step, which finds it then.
+4. macOS reads screen recording once per process (`getMediaAccessStatus`), so the grant shows only
+   after the app reopens. macOS offers that itself once it is on, and the app opens again on this
+   step, which finds it then.
 
-Once both are on, the step moves on by itself. It can be skipped; macOS then asks the first time an
-agent needs either.
+Once both are done, the step moves on by itself. It can be skipped; macOS then asks the first time
+either is needed.
 
-Files need no permission up front. Cutfac doesn't ask for Full Disk Access: that would let every
-agent read the user's mail and messages too. Reading Desktop, Documents, Downloads and the like,
-macOS asks once per folder the first time an agent reaches one, and remembers the answer. A dev
-build signs differently from the release, so it gets its own entry in each list.
+Nothing else is asked up front. Cutfac doesn't ask for Full Disk Access, which would let every agent
+read the user's mail and messages too: reading Desktop, Documents, Downloads and the like, macOS asks
+once per folder the first time an agent reaches one, and remembers the answer. Nor for
+Accessibility, which macOS 27 widens into Device Control and Data Access. A dev build signs
+differently from the release, so it gets its own entry in each list.
 
 ### What to make
 
