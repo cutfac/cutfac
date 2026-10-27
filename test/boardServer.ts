@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 // The web handler is the test's entry point, so it provides every layer the routes need.
 // @effect-diagnostics strictEffectProvide:off
-import { BunHttpPlatform } from "@effect/platform-bun";
-import { ConfigProvider, Layer, ManagedRuntime, Option } from "effect";
+import { BunHttpPlatform, BunServices } from "@effect/platform-bun";
+import { ConfigProvider, Effect, Layer, ManagedRuntime, Option } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { RunRegistry } from "../src/core/agentRun.ts";
@@ -225,17 +225,21 @@ export async function startBoardServer(t: TestWorkspace, fakes: FakeAgents): Pro
   await writeFile(join(t.root, ".claude/settings.json"), JSON.stringify({ env: { A: "1" } }));
   await writeFile(join(t.root, ".claude/settings.local.json"), "not json");
 
-  await setUpClaudePlugins(
-    config,
-    {
-      "docs@market": {
-        files: {
-          ".claude-plugin/plugin.json": { name: "docs", description: "Search the docs" },
-          ".mcp.json": { mcpServers: { search: { command: "${CLAUDE_PLUGIN_ROOT}/bin/search" } } },
+  await Effect.runPromise(
+    setUpClaudePlugins(
+      config,
+      {
+        "docs@market": {
+          files: {
+            ".claude-plugin/plugin.json": { name: "docs", description: "Search the docs" },
+            ".mcp.json": {
+              mcpServers: { search: { command: "${CLAUDE_PLUGIN_ROOT}/bin/search" } },
+            },
+          },
         },
       },
-    },
-    { "docs@market": true },
+      { "docs@market": true },
+    ).pipe(Effect.provide(BunServices.layer)),
   );
 
   await writeFile(

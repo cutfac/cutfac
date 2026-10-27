@@ -359,8 +359,10 @@ const docsPlugin = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
 
   yield* fakes.bin("claude", "");
-  yield* Effect.promise(() =>
-    setUpClaudePlugins(config, { "docs@market": { files: DOCS_PLUGIN } }, { "docs@market": true }),
+  yield* setUpClaudePlugins(
+    config,
+    { "docs@market": { files: DOCS_PLUGIN } },
+    { "docs@market": true },
   );
 });
 
@@ -428,11 +430,9 @@ describe("a plugin with MCP servers", () => {
       const [seen] = (yield* mcpServersStatus()).plugins;
 
       yield* decidePlugin("claude", "docs@market", true);
-      yield* Effect.promise(() =>
-        writeFiles(pluginFolder(config, "docs@market"), {
-          ".mcp.json": { mcpServers: { search: { command: "other" } } },
-        }),
-      );
+      yield* writeFiles(pluginFolder(config, "docs@market"), {
+        ".mcp.json": { mcpServers: { search: { command: "other" } } },
+      });
 
       expect((yield* mcpServersStatus()).plugins[0]?.state).toBe("changed");
       expect((yield* approvedClaudeServers()).servers).toEqual({});
@@ -463,17 +463,13 @@ it.live("Codex's runs keep the servers of a plugin the user turned on, offered a
       { name: "web", enabled: true, transport: { type: "streamable_http", url: "https://x" } },
     ]);
 
-    yield* Effect.promise(() =>
-      writeFiles(config, {
-        "config.toml":
-          '[mcp_servers.web]\nurl = "https://x"\n\n[plugins."notes@local"]\nenabled = true\n',
-      }),
-    );
-    yield* Effect.promise(() =>
-      writeFiles(pluginFolder(config, "notes@local"), {
-        ".mcp.json": { mcpServers: { notes: { command: "notes-mcp" } } },
-      }),
-    );
+    yield* writeFiles(config, {
+      "config.toml":
+        '[mcp_servers.web]\nurl = "https://x"\n\n[plugins."notes@local"]\nenabled = true\n',
+    });
+    yield* writeFiles(pluginFolder(config, "notes@local"), {
+      ".mcp.json": { mcpServers: { notes: { command: "notes-mcp" } } },
+    });
 
     const status = yield* mcpServersStatus();
 

@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -239,14 +239,7 @@ export interface CodexReceived {
 }
 
 /** The messages a fake `codex app-server` read, in order. */
-export const codexReceived = async (calls: string): Promise<ReadonlyArray<CodexReceived>> =>
-  (await readFile(join(calls, "stdin"), "utf8"))
-    .split("\n")
-    .filter((line) => line !== "")
-    .map((line) => JSON.parse(line));
-
-/** The messages a fake `codex app-server` read, in order, read as an Effect. */
-export const codexReceivedNow = (calls: string) =>
+export const codexReceived = (calls: string) =>
   Effect.flatMap(FileSystem.FileSystem, (fs) => fs.readFileString(join(calls, "stdin"))).pipe(
     Effect.map((text): ReadonlyArray<CodexReceived> =>
       text

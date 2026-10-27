@@ -22,7 +22,7 @@ import { testEffect } from "./effect.ts";
 import {
   codexAppServer,
   codexParams,
-  codexReceivedNow,
+  codexReceived,
   FakeAgentDir,
   fakeAgents,
   tempWorkspace,
@@ -255,7 +255,7 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
     );
 
   /** What the fake Codex was asked to start the thread with. */
-  const threadParams = Effect.map(codexReceivedNow(fakes.calls), (received) =>
+  const threadParams = Effect.map(codexReceived(fakes.calls), (received) =>
     codexParams(received, "thread/start"),
   );
 

@@ -13,17 +13,10 @@ import {
 } from "../src/core/mcpPlugins.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
-import {
-  type Files,
-  pluginFolder,
-  setUpClaudePlugins,
-  writeFiles as writeFixtures,
-} from "./pluginFixtures.ts";
+import { pluginFolder, setUpClaudePlugins, writeFiles } from "./pluginFixtures.ts";
 import { tempWorkspace } from "./support.ts";
 
 const it = testEffect(tempWorkspace("Plugins"));
-
-const writeFiles = (root: string, files: Files) => Effect.promise(() => writeFixtures(root, files));
 
 /**
  * The test's workspace and a folder that is Claude Code's and Codex's config at once, as
@@ -54,46 +47,44 @@ const claudeSetup = Effect.gen(function* () {
   const setup = yield* pluginsSetup;
   const { ws, config } = setup;
 
-  yield* Effect.promise(() =>
-    setUpClaudePlugins(
-      config,
-      {
-        "docs@market": {
-          files: {
-            ".claude-plugin/plugin.json": { name: "Docs", description: "Search the docs" },
-            ".mcp.json": {
-              mcpServers: {
-                search: SEARCH,
-                ask: { command: "ask", env: { KEY: "${user_config.key}" } },
-              },
+  yield* setUpClaudePlugins(
+    config,
+    {
+      "docs@market": {
+        files: {
+          ".claude-plugin/plugin.json": { name: "Docs", description: "Search the docs" },
+          ".mcp.json": {
+            mcpServers: {
+              search: SEARCH,
+              ask: { command: "ask", env: { KEY: "${user_config.key}" } },
             },
           },
         },
-        "mine@market": {
-          projectPath: ws.root,
-          files: {
-            ".claude-plugin/plugin.json": {
-              mcpServers: ["../../escape.json", { inline: { url: "https://mine.example/mcp" } }],
-            },
+      },
+      "mine@market": {
+        projectPath: ws.root,
+        files: {
+          ".claude-plugin/plugin.json": {
+            mcpServers: ["../../escape.json", { inline: { url: "https://mine.example/mcp" } }],
           },
         },
-        "theirs@market": {
-          projectPath: "/elsewhere",
-          files: { ".mcp.json": { mcpServers: { theirs: { command: "theirs" } } } },
-        },
-        "quiet@market": {
-          files: { ".mcp.json": { mcpServers: { quiet: { command: "quiet" } } } },
-        },
-        "skills@market": { files: { "skills/clip/SKILL.md": "# Clip\n" } },
       },
-      {
-        "docs@market": true,
-        "mine@market": true,
-        "theirs@market": true,
-        "quiet@market": true,
-        "skills@market": true,
+      "theirs@market": {
+        projectPath: "/elsewhere",
+        files: { ".mcp.json": { mcpServers: { theirs: { command: "theirs" } } } },
       },
-    ),
+      "quiet@market": {
+        files: { ".mcp.json": { mcpServers: { quiet: { command: "quiet" } } } },
+      },
+      "skills@market": { files: { "skills/clip/SKILL.md": "# Clip\n" } },
+    },
+    {
+      "docs@market": true,
+      "mine@market": true,
+      "theirs@market": true,
+      "quiet@market": true,
+      "skills@market": true,
+    },
   );
 
   yield* writeFiles(ws.root, {

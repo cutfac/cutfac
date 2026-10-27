@@ -19,7 +19,7 @@ import {
   codexAppServer,
   codexItem,
   codexParams,
-  codexReceivedNow,
+  codexReceived,
   fakeAgents,
   tempWorkspace,
 } from "./support.ts";
@@ -121,9 +121,7 @@ const codexRuns = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const names = (yield* fs.readDirectory(fakes.calls)).filter((name) => name.startsWith("codex-"));
 
-  return yield* Effect.forEach(names.toSorted(), (name) =>
-    codexReceivedNow(join(fakes.calls, name)),
-  );
+  return yield* Effect.forEach(names.toSorted(), (name) => codexReceived(join(fakes.calls, name)));
 }).pipe(Effect.orDie);
 
 /** A file outside the workspace, standing in for an upload's temporary copy. */

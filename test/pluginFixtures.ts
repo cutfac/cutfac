@@ -1,18 +1,24 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { Predicate, type Schema } from "effect";
+import { Effect, FileSystem, Predicate, type Schema } from "effect";
 
 /** Files by their path in a folder: text as it is, anything else as JSON. */
 export type Files = Readonly<Record<string, Schema.Json>>;
 
-export async function writeFiles(root: string, files: Files) {
-  for (const [file, content] of Object.entries(files)) {
-    const full = join(root, file);
-    await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, Predicate.isString(content) ? content : JSON.stringify(content));
-  }
-}
+export const writeFiles = (root: string, files: Files) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+
+    for (const [file, content] of Object.entries(files)) {
+      const full = join(root, file);
+
+      yield* fs.makeDirectory(dirname(full), { recursive: true });
+      yield* fs.writeFileString(
+        full,
+        Predicate.isString(content) ? content : JSON.stringify(content),
+      );
+    }
+  }).pipe(Effect.orDie);
 
 /** Where an agent keeps version `version` of the plugin `id`, under its config folder `config`. */
 export function pluginFolder(config: string, id: string, version = "1.0.0") {
@@ -31,7 +37,7 @@ export interface ClaudePluginSetup {
  * Claude Code's plugins installed as `plugins` says and turned on or off in the user's settings as
  * `enabled` says, in Claude Code's config folder `config`.
  */
-export async function setUpClaudePlugins(
+export const setUpClaudePlugins = Effect.fnUntraced(function* (
   config: string,
   plugins: Readonly<Record<string, ClaudePluginSetup>>,
   enabled: Readonly<Record<string, boolean>>,
@@ -51,12 +57,12 @@ export async function setUpClaudePlugins(
     }),
   );
 
-  await writeFiles(config, {
+  yield* writeFiles(config, {
     "settings.json": { enabledPlugins: enabled },
     "plugins/installed_plugins.json": { version: 2, plugins: installed },
   });
 
   for (const [id, { files }] of Object.entries(plugins)) {
-    await writeFiles(pluginFolder(config, id), files);
+    yield* writeFiles(pluginFolder(config, id), files);
   }
-}
+});

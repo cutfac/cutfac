@@ -16,7 +16,7 @@ import {
   type CodexReceived,
   codexAppServer,
   codexItem,
-  codexReceivedNow,
+  codexReceived,
   fakeAgents,
   tempWorkspace,
 } from "./support.ts";
@@ -273,7 +273,7 @@ const request = (id: number, method: string, params: Schema.JsonObject) =>
 /** The line the fake read back for its request `id`. */
 const answer = (id: number) =>
   Effect.flatMap(FakeAgentDir, ({ calls }) =>
-    Effect.map(codexReceivedNow(calls), (received) =>
+    Effect.map(codexReceived(calls), (received) =>
       received.find((message) => message["id"] === id),
     ),
   );
