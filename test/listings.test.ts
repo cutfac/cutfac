@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-import { Effect, Layer, Option } from "effect";
+import { Effect, Option } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import { InvalidRequest } from "../src/core/errors.ts";
@@ -12,7 +12,7 @@ import {
   parseWebHtml,
   shortName,
 } from "../src/core/listings.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { it } from "./effect.ts";
 
 const LANDING = `<html><head>
 <title>Fernly | Plant care reminders</title>
@@ -58,16 +58,17 @@ function storeResponse(url: string): Response {
 
 /** An HttpClient that answers from `storeResponse` and records each requested URL in `requested`. */
 const fakeHttp = (requested: string[]) =>
-  Layer.succeed(
-    HttpClient.HttpClient,
-    HttpClient.make((request, url) =>
-      Effect.sync(() => {
-        requested.push(url.href);
+  HttpClient.make((request, url) =>
+    Effect.sync(() => {
+      requested.push(url.href);
 
-        return HttpClientResponse.fromWeb(request, storeResponse(url.href));
-      }),
-    ),
+      return HttpClientResponse.fromWeb(request, storeResponse(url.href));
+    }),
   );
+
+/** `effect` reading the stores through `fakeHttp`. */
+const offline = <A, E, R>(requested: string[], effect: Effect.Effect<A, E, R>) =>
+  Effect.provideService(effect, HttpClient.HttpClient, fakeHttp(requested));
 
 describe("listing parsers", () => {
   test("detects the source from the URL host", () => {
@@ -121,36 +122,33 @@ describe("listing parsers", () => {
 });
 
 describe("fetchListing", () => {
-  let t: TestWorkspace;
-  const requested: string[] = [];
+  it.effect("an App Store link is read through the lookup API", () =>
+    Effect.gen(function* () {
+      const requested: string[] = [];
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Test");
-    requested.length = 0;
-  });
+      const listing = yield* offline(
+        requested,
+        fetchListing("https://apps.apple.com/us/app/fernly/id123456"),
+      );
 
-  afterEach(() => t.remove());
+      expect(requested).toHaveLength(1);
+      expect(requested[0]).toContain("lookup?id=123456&country=us");
+      expect(listing.name).toBe("Fernly: Plant Care");
+      expect(listing.developer).toBe("Fernly Labs");
+    }),
+  );
 
-  test("an App Store link is read through the lookup API", async () => {
-    const listing = await t.runWith(
-      fakeHttp(requested),
-      fetchListing("https://apps.apple.com/us/app/fernly/id123456"),
-    );
+  it.effect("rejects input that is not a store or page URL", () =>
+    Effect.gen(function* () {
+      const requested: string[] = [];
+      const reject = (url: string) => offline(requested, Effect.flip(fetchListing(url)));
 
-    expect(requested).toHaveLength(1);
-    expect(requested[0]).toContain("lookup?id=123456&country=us");
-    expect(listing.name).toBe("Fernly: Plant Care");
-    expect(listing.developer).toBe("Fernly Labs");
-  });
-
-  test("rejects input that is not a store or page URL", async () => {
-    const reject = (url: string) => t.runWith(fakeHttp(requested), Effect.flip(fetchListing(url)));
-
-    expect(await reject("fernly")).toBeInstanceOf(InvalidRequest);
-    expect(await reject("https://apps.apple.com/us/app/fernly")).toBeInstanceOf(InvalidRequest);
-    expect(await reject("https://play.google.com/store/apps/details")).toBeInstanceOf(
-      InvalidRequest,
-    );
-    expect(requested).toEqual([]);
-  });
+      expect(yield* reject("fernly")).toBeInstanceOf(InvalidRequest);
+      expect(yield* reject("https://apps.apple.com/us/app/fernly")).toBeInstanceOf(InvalidRequest);
+      expect(yield* reject("https://play.google.com/store/apps/details")).toBeInstanceOf(
+        InvalidRequest,
+      );
+      expect(requested).toEqual([]);
+    }),
+  );
 });
