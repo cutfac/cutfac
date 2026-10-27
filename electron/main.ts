@@ -58,19 +58,23 @@ import {
   saveWorkspace,
   settingsWritten,
 } from "./settings.ts";
-import { boardDir } from "./sidecarRuntime.ts";
+import {
+  boardDir,
+  killWorkspaceServer,
+  markQuitting,
+  serveWorkspace,
+  stopWorkspaceServer,
+  watchServerCrashes,
+} from "./sidecarRuntime.ts";
 import { stopWatching } from "./systemAccess.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 import { handleWorkspaces } from "./workspaces.ts";
-import { workspaceServer } from "./workspaceServer.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
 // packaged app ignores it, so another program can't open the app on a page of its choosing.
 const devUrl = app.isPackaged ? undefined : process.env.CUTFAC_DEV_URL || undefined;
-
-const devPort = Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10);
 
 // The dev runner restarted the app for a change: it comes back behind what the developer works in.
 const devRestart = devUrl !== undefined && process.env.CUTFAC_DEV_RESTART === "1";
@@ -81,12 +85,6 @@ const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 const boardUrl = devUrl ?? BOARD_URL;
 
 let window: BrowserWindow | undefined;
-
-const server = workspaceServer({
-  devPort: devUrl ? devPort : undefined,
-  quitting: () => quitting,
-  onCrash: handleCrash,
-});
 
 let updates: Updates | undefined;
 
@@ -140,6 +138,7 @@ if (!app.requestSingleInstanceLock()) {
     if (quitReady || event.defaultPrevented) return;
 
     quitting = true;
+    markQuitting();
 
     // The window closes only after this, too late for its place to reach the disk.
     if (window) rememberPlace(window);
@@ -147,7 +146,7 @@ if (!app.requestSingleInstanceLock()) {
     // Hold the quit until the server is gone and the settings saved, the first launch's step too,
     // then quit again with nothing left to stop.
     event.preventDefault();
-    void Promise.allSettled([server.stop(), runInMain(settingsWritten)]).then(() => {
+    void Promise.allSettled([stopWorkspaceServer(), runInMain(settingsWritten)]).then(() => {
       quitReady = true;
       app.quit();
     });
@@ -155,7 +154,7 @@ if (!app.requestSingleInstanceLock()) {
 
   // Last resort so a crash in this process never leaves the server behind.
   process.on("exit", () => {
-    server.kill();
+    killWorkspaceServer();
     stopFixes();
   });
   process.on("SIGTERM", () => app.quit());
@@ -212,11 +211,11 @@ if (!app.requestSingleInstanceLock()) {
     window: () => window,
     bringToFront,
     serve: async (folder) => {
-      const started = await server.serve(folder);
+      const url = await serveWorkspace(folder);
 
-      if (started === undefined) throw new Error(MESSAGES[locale].couldNotStart);
+      if (url === undefined) throw new Error(MESSAGES[locale].couldNotStart);
 
-      return started.url;
+      return url;
     },
     openWorkspace: async (folder) => {
       if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
@@ -242,6 +241,7 @@ function assertFromApp(event: IpcMainInvokeEvent): void {
 }
 
 async function boot(): Promise<void> {
+  watchServerCrashes(handleCrash);
   limitPermissions(isAppUrl);
   // The board is dark only; this keeps the title bar, menus and dialogs dark with it.
   nativeTheme.themeSource = "dark";
@@ -338,16 +338,16 @@ async function open(workspace: string): Promise<boolean> {
   switching = true;
 
   try {
-    const started = await server.serve(workspace);
+    const url = await serveWorkspace(workspace);
 
-    if (started === undefined) return false;
+    if (url === undefined) return false;
 
     workspaceRoot = workspace;
     await runInMain(saveWorkspace(workspace));
 
     const page = Option.getOrElse(await runInMain(loadPage(workspace)), () => "");
 
-    await show(new URL(page, devUrl ?? started.url).href, path.basename(workspace));
+    await show(new URL(page, devUrl ?? url).href, path.basename(workspace));
 
     return true;
   } finally {
@@ -357,7 +357,7 @@ async function open(workspace: string): Promise<boolean> {
 
 /** Closes the workspace, if one is open, and shows the first launch on `step`. */
 async function showOnboarding(step: OnboardingStep): Promise<void> {
-  await server.stop();
+  await stopWorkspaceServer();
   workspaceRoot = undefined;
   await show(new URL(onboardingPage(step), boardUrl).href, "Cutfac");
 }

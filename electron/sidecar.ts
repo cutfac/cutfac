@@ -58,6 +58,8 @@ export interface InstallInfo {
   readonly homePath: string;
   /** The environment the app was started with. */
   readonly launchEnv: Env;
+  /** The dev runner's fixed port, which Vite proxies to; the packaged app picks a free one. */
+  readonly devPort: Option.Option<number>;
 }
 
 export class Install extends Context.Service<Install, InstallInfo>()("cutfac/desktop/Install") {}

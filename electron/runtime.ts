@@ -8,9 +8,11 @@ import { app } from "electron";
 import { AppData } from "../src/core/appData.ts";
 import { LogDir, logToFile } from "../src/core/logFile.ts";
 import { errorReports } from "../src/errorReports.ts";
+import { AppState } from "./appState.ts";
 import { platform } from "./platform.ts";
 import { Settings } from "./settings.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
+import { WorkspaceServer } from "./workspaceServer.ts";
 
 export const installInfo = (): InstallInfo => ({
   packaged: app.isPackaged,
@@ -19,6 +21,10 @@ export const installInfo = (): InstallInfo => ({
   logsPath: app.getPath("logs"),
   homePath: app.getPath("home"),
   launchEnv: process.env,
+  devPort:
+    !app.isPackaged && process.env.CUTFAC_DEV_URL
+      ? Option.some(Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10))
+      : Option.none(),
 });
 
 const appData = Layer.sync(AppData, () => Option.some(app.getPath("userData")));
@@ -42,14 +48,13 @@ const settings = Layer.unwrap(
   ),
 );
 
-const base = Layer.mergeAll(platform, Layer.sync(Install, installInfo), appData);
+const base = Layer.mergeAll(platform, Layer.sync(Install, installInfo), appData, AppState.layer);
 
-export const appServices = Layer.mergeAll(
-  settings,
-  ServerEnv.layer,
-  FetchHttpClient.layer,
-  appLog,
-).pipe(Layer.provideMerge(base));
+const services = Layer.mergeAll(settings, ServerEnv.layer, FetchHttpClient.layer, appLog).pipe(
+  Layer.provideMerge(base),
+);
+
+export const appServices = WorkspaceServer.layer.pipe(Layer.provideMerge(services));
 
 export type AppServices = Layer.Success<typeof appServices>;
 
@@ -76,5 +81,10 @@ export const runInMain = <A, E extends PlatformError | { readonly message: strin
 export const forkInMain = <A, E>(effect: Effect.Effect<A, E, AppServices>) =>
   void runtime.runFork(effect);
 
-/** Runs `effect` at once, for Electron's process-exit hook, which can't wait. */
-export const runNow = <A>(effect: Effect.Effect<A, never, AppServices>) => runtime.runSync(effect);
+/**
+ * Runs `effect` at once, for Electron's process-exit hook, which can't wait; nothing before the
+ * app's services exist, as there is nothing of theirs to clean up.
+ */
+export const runNow = (effect: Effect.Effect<void, never, AppServices>) => {
+  if (runtime.cachedContext !== undefined) runtime.runSync(effect);
+};

@@ -5,100 +5,16 @@ import path from "node:path";
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import { Deferred, Effect, Fiber, FileSystem, Layer, Option } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/http";
+import { FetchHttpClient } from "effect/http";
 import { TestClock, TestConsole } from "effect/testing";
 
 import { bindPort } from "../electron/ports.ts";
-import {
-  Install,
-  runCli,
-  ServerEnv,
-  startSidecar,
-  type SidecarOptions,
-} from "../electron/sidecar.ts";
+import { runCli, startSidecar, type SidecarOptions } from "../electron/sidecar.ts";
 import { testEffect } from "./effect.ts";
+import { answers, fakeSidecar, printed } from "./fakeSidecar.ts";
 import { holdPort } from "./support.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
-
-/**
- * The server's CLI as far as the app uses it, run by Bun: `init`, `serve`, and two commands for
- * `runCli`. FAKE_SIDECAR in its environment picks how `serve` and `init` misbehave.
- */
-const FAKE = `
-const [command, ...args] = process.argv.slice(2);
-const mode = process.env.FAKE_SIDECAR;
-const flag = (name) => args[args.indexOf(name) + 1];
-
-if (command === "init") {
-  await Bun.write(args[0] + "/init-ran", "");
-  if (mode === "setup-fails") {
-    console.error("no room");
-    process.exit(1);
-  }
-  await Bun.write(args[0] + "/cutfac.yaml", "");
-} else if (command === "env") {
-  console.log(JSON.stringify({ cwd: process.cwd(), env: process.env }));
-} else if (command === "hang") {
-  console.log("partial");
-  console.error("waiting");
-  setInterval(() => {}, 60_000);
-} else if (command === "serve") {
-  if (mode === "dies") {
-    console.error("boom");
-    process.exit(3);
-  }
-  if (mode === "stubborn") process.on("SIGTERM", () => {});
-  if (mode === "silent") setInterval(() => {}, 60_000);
-  else Bun.serve({ hostname: flag("--host"), port: Number(flag("--port")), fetch: () => new Response("ok") });
-  console.log("starting");
-}
-`;
-
-/** A folder for the test, with the fake as an executable in it. */
-const fakeSidecar = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-sidecar-" });
-  const fake = path.join(dir, "fake-sidecar");
-
-  yield* fs.writeFileString(fake, `#!${process.execPath}\n${FAKE}`);
-  yield* fs.chmod(fake, 0o755);
-
-  /** A folder in `dir` holding `files`, to serve as a workspace. */
-  const folder = Effect.fnUntraced(function* (name: string, files: ReadonlyArray<string> = []) {
-    const at = path.join(dir, name);
-
-    yield* fs.makeDirectory(at);
-    yield* Effect.forEach(files, (file) => fs.writeFileString(path.join(at, file), ""));
-
-    return at;
-  });
-
-  /**
-   * Runs `effect` as the app does from a checkout, with CUTFAC_SIDECAR pointing at the fake, and
-   * the server's environment telling the fake how to behave.
-   */
-  const asApp =
-    (mode = "") =>
-    <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-      effect.pipe(
-        Effect.provideService(Install, {
-          packaged: false,
-          appPath: dir,
-          resourcesPath: dir,
-          logsPath: dir,
-          homePath: dir,
-          launchEnv: { CUTFAC_SIDECAR: fake },
-        }),
-        Effect.provideService(ServerEnv, { FAKE_SIDECAR: mode, SERVER_ONLY: "kept" }),
-      );
-
-  /** A server started as the app starts one, stopped when the test ends, whatever happened. */
-  const start = (options: SidecarOptions, mode = "") =>
-    Effect.acquireRelease(startSidecar(options).pipe(asApp(mode)), (server) => server.stop);
-
-  return { dir, folder, asApp, start };
-});
 
 /** Options for a server on `workspace` that ignores a crash, unless the test asks. */
 const on = (workspace: string, more: Partial<SidecarOptions> = {}): SidecarOptions => ({
@@ -108,19 +24,6 @@ const on = (workspace: string, more: Partial<SidecarOptions> = {}): SidecarOptio
   onCrash: () => Effect.void,
   ...more,
 });
-
-/** Whether the server at `url` answers at all. */
-const answers = (url: string) =>
-  HttpClient.get(url).pipe(
-    Effect.map((response) => response.status === 200),
-    Effect.orElseSucceed(() => false),
-  );
-
-/** Waits until the fake has printed `line`, as the app's own output. */
-const printed = (lines: Effect.Effect<ReadonlyArray<unknown>>, line: string) =>
-  Effect.gen(function* () {
-    while (!(yield* lines).includes(`[sidecar] ${line}`)) yield* Effect.promise(() => Bun.sleep(5));
-  });
 
 describe("starting the local server", () => {
   it.live("sets a new folder up before serving it, and leaves a workspace by either name", () =>
