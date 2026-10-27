@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { Option, Schema } from "effect";
+
 import type { OnboardingStep } from "../web/src/desktop.ts";
 
 export const SCHEME = "cutfac";
@@ -14,35 +16,30 @@ export const BOARD_URL = `${SCHEME}://app/`;
  * A URL's origin as the board's own checks compare it. Node calls the origin of a custom scheme
  * "null", which would match any other; this spells it out for every scheme.
  */
-export function originOf(url: string): string | undefined {
-  const parsed = URL.parse(url);
+export const originOf = (url: string) =>
+  Option.map(Option.fromNullishOr(URL.parse(url)), ({ protocol, host }) => `${protocol}//${host}`);
 
-  return parsed === null ? undefined : `${parsed.protocol}//${parsed.host}`;
-}
+const pathnameOf = Option.liftThrowable((url: string) => decodeURIComponent(new URL(url).pathname));
 
 /**
- * The file a request names inside `root`, or undefined when it would leave it. A folder names its
- * index.html; the board routes by the hash, so nothing else needs to fall back to it.
+ * The file a request names inside `root`, while it stays inside. A folder names its index.html;
+ * the board routes by the hash, so nothing else needs to fall back to it.
  */
-export function boardFile(root: string, url: string): string | undefined {
-  let file: string;
+export const boardFile = (root: string, url: string) =>
+  pathnameOf(url).pipe(
+    Option.map((pathname) =>
+      path.resolve(root, `.${pathname.endsWith("/") ? `${pathname}index.html` : pathname}`),
+    ),
+    Option.filter((file) => {
+      const relative = path.relative(root, file);
 
-  try {
-    const pathname = decodeURIComponent(new URL(url).pathname);
-
-    file = path.resolve(root, `.${pathname.endsWith("/") ? `${pathname}index.html` : pathname}`);
-  } catch {
-    return undefined;
-  }
-
-  const relative = path.relative(root, file);
-
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    return undefined;
-  }
-
-  return file;
-}
+      return !(
+        relative === ".." ||
+        relative.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relative)
+      );
+    }),
+  );
 
 export const ONBOARDING_STEPS = [
   "welcome",
@@ -54,15 +51,13 @@ export const ONBOARDING_STEPS = [
 
 const ONBOARDING_HASH = /^#\/welcome(?:\/(make|agent|access|folder))?$/;
 
-/** The first-launch step a board page shows, from its hash, or undefined for any other page. */
-export function onboardingStep(hash: string): OnboardingStep | undefined {
-  const match = ONBOARDING_HASH.exec(hash);
+const decodeStep = Schema.decodeUnknownOption(Schema.Literals(ONBOARDING_STEPS));
 
-  if (match === null) return undefined;
-
-  // SAFETY: the pattern only captures the steps after the first.
-  return (match[1] as OnboardingStep | undefined) ?? "welcome";
-}
+/** The first-launch step a board page shows, from its hash; none for any other page. */
+export const onboardingStep = (hash: string) =>
+  Option.flatMap(Option.fromNullishOr(ONBOARDING_HASH.exec(hash)), (match) =>
+    decodeStep(match[1] ?? "welcome"),
+  );
 
 /** The board page a first-launch step is on. */
 export const onboardingPage = (step: OnboardingStep): string =>

@@ -1,3 +1,4 @@
+import { Effect, Option, Ref } from "effect";
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 
 import type { NewVideoLink } from "../web/src/desktop.ts";
@@ -28,36 +29,32 @@ export interface Links {
  * as it can.
  */
 export function handleLinks(host: LinksHost): Links {
-  let waiting: NewVideoLink | undefined;
+  const waiting = Ref.makeUnsafe(Option.none<NewVideoLink>());
 
-  const open = (url: string) => {
-    const link = parseAppLink(url);
-
-    if (link === undefined) return;
-
-    waiting = link;
-    host.bringToFront();
-    host.window()?.webContents.send(NEW_VIDEO_LINK_CHANNEL);
-  };
+  const open = (url: string) =>
+    Option.match(parseAppLink(url), {
+      onNone: () => undefined,
+      onSome: (link) => {
+        Effect.runSync(Ref.set(waiting, Option.some(link)));
+        host.bringToFront();
+        host.window()?.webContents.send(NEW_VIDEO_LINK_CHANNEL);
+      },
+    });
 
   app.on("open-url", (event, url) => {
     event.preventDefault();
     open(url);
   });
 
-  ipcMain.handle(TAKE_NEW_VIDEO_LINK_CHANNEL, (event) => {
-    if (!host.isFromApp(event)) return undefined;
-
-    const link = waiting;
-
-    waiting = undefined;
-
-    return link;
-  });
+  ipcMain.handle(TAKE_NEW_VIDEO_LINK_CHANNEL, (event) =>
+    host.isFromApp(event)
+      ? Option.getOrUndefined(Effect.runSync(Ref.getAndSet(waiting, Option.none())))
+      : undefined,
+  );
 
   ipcMain.handle(
     NEW_VIDEO_LINK_WAITING_CHANNEL,
-    (event) => host.isFromApp(event) && waiting !== undefined,
+    (event) => host.isFromApp(event) && Option.isSome(Effect.runSync(Ref.get(waiting))),
   );
 
   // The packaged app's Info.plist claims the scheme; a dev build would claim it for bare Electron.

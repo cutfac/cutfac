@@ -1,9 +1,10 @@
-import { stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
+import { Effect, FileSystem, Option } from "effect";
 import { net, protocol } from "electron";
 
 import { boardFile, SCHEME } from "./boardPages.ts";
+import { runInMain } from "./runtime.ts";
 
 /** Before the app is ready: lets the board's scheme keep storage and fetch like a web origin. */
 export function registerBoardScheme(): void {
@@ -12,24 +13,24 @@ export function registerBoardScheme(): void {
   ]);
 }
 
-async function isFile(file: string): Promise<boolean> {
-  try {
-    return (await stat(file)).isFile();
-  } catch {
-    return false;
-  }
-}
+const notFound = () => new Response(null, { status: 404 });
 
-/**
- * Serves the built board from `root`. Anything else is missing, such as the API, which only a
- * workspace's server answers.
- */
-export function serveBoard(root: string): void {
-  protocol.handle(SCHEME, async (request) => {
-    const file = boardFile(root, request.url);
+/** The built board's file for `url` under `root`, or 404 for anything else, such as the API. */
+const respond = (root: string, url: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const file = boardFile(root, url);
 
-    if (file === undefined || !(await isFile(file))) return new Response(null, { status: 404 });
+    if (Option.isNone(file)) return notFound();
 
-    return net.fetch(pathToFileURL(file).href);
+    const info = yield* Effect.option(fs.stat(file.value));
+
+    if (Option.isNone(info) || info.value.type !== "File") return notFound();
+
+    return yield* Effect.promise(() => net.fetch(pathToFileURL(file.value).href));
   });
+
+/** Serves the built board from `root`; only a workspace's server answers the API. */
+export function serveBoard(root: string): void {
+  protocol.handle(SCHEME, (request) => runInMain(respond(root, request.url)));
 }

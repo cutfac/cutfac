@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Option, Ref, Schema } from "effect";
 import {
   app,
   BrowserWindow,
@@ -10,10 +10,12 @@ import {
 
 import type { AppCommand } from "../web/src/desktop.ts";
 import type { Locale } from "../web/src/i18n/locale.ts";
+import { askingChanges, askingKey, type Asking } from "./asking.ts";
 import { ATTENTION_CHANNEL } from "./ipc.ts";
 import { MESSAGES } from "./messages.ts";
+import { busyWork } from "./quitQuestion.ts";
 
-const isAttention = Schema.is(
+const decodeAttention = Schema.decodeUnknownOption(
   Schema.Struct({
     waiting: Schema.Finite,
     busy: Schema.Finite,
@@ -26,11 +28,6 @@ const isAttention = Schema.is(
     ),
   }),
 );
-
-/** How many videos have an agent or a render at work, as the board last said. */
-let busy = 0;
-
-export const busyCount = () => busy;
 
 export interface AttentionHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
@@ -45,49 +42,59 @@ export interface AttentionHost {
  * on until they answer.
  */
 export function handleAttention(host: AttentionHost): void {
-  // What each notification is about, the video and what it asks. A notification nothing holds on
-  // to is collected, and a click on it goes nowhere.
-  const shown = new Map<Notification, string>();
-  let asking = new Set<string>();
+  // What each notification is about. A notification nothing holds on to is collected, and a click
+  // on it goes nowhere.
+  const shown = Ref.makeUnsafe<ReadonlyMap<Notification, string>>(new Map());
+  const asking = Ref.makeUnsafe<ReadonlySet<string>>(new Set());
 
-  const notify = (key: string, title: string, about: "approval" | "question") => {
-    const messages = MESSAGES[host.locale()];
+  const forget = (notice: Notification) =>
+    Ref.update(shown, (all) => new Map([...all].filter(([one]) => one !== notice)));
 
-    const notice = new Notification({
-      title: about === "approval" ? messages.asking : messages.question,
-      body: title,
+  const notify = (ask: Asking) =>
+    Effect.gen(function* () {
+      const runSync = Effect.runSyncWith(yield* Effect.context<never>());
+      const messages = MESSAGES[host.locale()];
+
+      const notice = new Notification({
+        title: ask.about === "approval" ? messages.asking : messages.question,
+        body: ask.title,
+      });
+
+      yield* Ref.update(shown, (all) => new Map([...all, [notice, askingKey(ask)]]));
+
+      notice.on("close", () => runSync(forget(notice)));
+      notice.on("click", () => {
+        runSync(forget(notice));
+        host.bringToFront();
+        // The gallery puts the videos whose agent asks first.
+        host.sendAppCommand("board");
+      });
+      notice.show();
     });
 
-    shown.set(notice, key);
-    notice.on("close", () => shown.delete(notice));
-    notice.on("click", () => {
-      shown.delete(notice);
-      host.bringToFront();
-      // The gallery puts the videos whose agent asks first.
-      host.sendAppCommand("board");
+  const update = (next: unknown) =>
+    Option.match(decodeAttention(next), {
+      onNone: () => Effect.void,
+      onSome: (attention) =>
+        Effect.gen(function* () {
+          app.setBadgeCount(attention.waiting);
+          yield* Ref.set(busyWork, attention.busy);
+
+          const away = BrowserWindow.getFocusedWindow() === null && Notification.isSupported();
+          const changes = askingChanges(yield* Ref.get(asking), attention.asking, away);
+
+          yield* Effect.forEach(changes.notify, notify, { discard: true });
+
+          // What was answered, wherever, no longer waits in Notification Center.
+          for (const [notice, key] of yield* Ref.get(shown)) {
+            if (!changes.now.has(key)) notice.close();
+          }
+
+          yield* Ref.set(asking, changes.now);
+        }),
     });
-    notice.show();
-  };
 
   ipcMain.on(ATTENTION_CHANNEL, (event, next) => {
-    if (!host.isFromApp(event) || !isAttention(next)) return;
-
-    app.setBadgeCount(next.waiting);
-    busy = next.busy;
-
-    const away = BrowserWindow.getFocusedWindow() === null && Notification.isSupported();
-    const now = new Set<string>();
-
-    for (const video of next.asking) {
-      const key = `${video.about} ${video.id}`;
-
-      if (away && !asking.has(key)) notify(key, video.title, video.about);
-      now.add(key);
-    }
-
-    // What was answered, wherever, no longer waits in Notification Center.
-    for (const [notice, key] of shown) if (!now.has(key)) notice.close();
-
-    asking = now;
+    if (host.isFromApp(event)) Effect.runSync(update(next));
   });
 }

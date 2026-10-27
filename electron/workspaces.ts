@@ -58,9 +58,11 @@ export function handleWorkspaces(host: WorkspacesHost) {
   const choose = async () => {
     if (host.switching()) return false;
 
-    const workspace = await pickWorkspace(host.window(), host.chooseMessage(), host.current());
+    const workspace = await runInMain(
+      pickWorkspace(host.window(), host.chooseMessage(), Option.fromNullishOr(host.current())),
+    );
 
-    return workspace ? switchTo(workspace) : false;
+    return Option.isSome(workspace) ? switchTo(workspace.value) : false;
   };
 
   ipcMain.handle(OPEN_WORKSPACE_CHANNEL, (event) => {

@@ -186,7 +186,9 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle(PICK_PATH_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return pickSource(window, MESSAGES[locale].chooseSource);
+    return runInMain(
+      Effect.map(pickSource(window, MESSAGES[locale].chooseSource), Option.getOrUndefined),
+    );
   });
   ipcMain.handle(SET_LICENSE_KEY_CHANNEL, (event, input: string) => {
     assertFromApp(event);
@@ -229,7 +231,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 /** Whether `url` is on the board shown now, as opposed to a page it linked to. */
-const isAppUrl = (url: string) => originOf(url) === appOrigin;
+const isAppUrl = (url: string) => Option.contains(originOf(url), appOrigin);
 
 function isFromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   const sender = event.senderFrame?.url;
@@ -280,7 +282,7 @@ async function boot(): Promise<void> {
   try {
     await showOnboarding(step);
   } catch (error) {
-    await showStartFailure(MESSAGES[locale].couldNotStart, describeError(error));
+    await runInMain(showStartFailure(MESSAGES[locale].couldNotStart, describeError(error)));
     app.quit();
   }
 }
@@ -334,7 +336,7 @@ async function activate(workspace: string): Promise<boolean> {
   try {
     return await open(workspace);
   } catch (error) {
-    await showStartFailure(MESSAGES[locale].couldNotStart, describeError(error));
+    await runInMain(showStartFailure(MESSAGES[locale].couldNotStart, describeError(error)));
 
     return false;
   }
@@ -373,7 +375,7 @@ async function showOnboarding(step: OnboardingStep): Promise<void> {
 }
 
 async function show(url: string, title: string): Promise<void> {
-  appOrigin = originOf(url) ?? "";
+  appOrigin = Option.getOrElse(originOf(url), () => "");
   window ??= createWindow(Option.getOrUndefined(await runInMain(loadWindowPlace)));
   window.setTitle(title);
 
@@ -484,9 +486,7 @@ function rememberPage(url: string): void {
     return;
   }
 
-  const step = onboardingStep(hash);
-
-  if (step) forkInMain(Effect.ignore(saveOnboarding(step)));
+  Option.map(onboardingStep(hash), (step) => forkInMain(Effect.ignore(saveOnboarding(step))));
 }
 
 function handleCrash(message: string): void {

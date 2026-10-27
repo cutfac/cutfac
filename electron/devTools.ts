@@ -199,16 +199,15 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     freshName = undefined;
 
     const shown = originOf(host.window()?.webContents.getURL() ?? "");
+    const board = originOf(host.boardUrl);
 
     await host.showOnboarding("welcome");
 
     // The board keeps what it has shown in storage by its origin: whether the Learn hint was
     // seen, the layout, the language. A new user has none of it.
-    const origins = new Set([originOf(host.boardUrl), shown]);
+    const origins = new Set([...Option.toArray(board), ...Option.toArray(shown)]);
 
-    for (const origin of origins) {
-      if (origin !== undefined) await session.defaultSession.clearStorageData({ origin });
-    }
+    for (const origin of origins) await session.defaultSession.clearStorageData({ origin });
 
     host.window()?.webContents.reload();
   });
