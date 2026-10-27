@@ -140,22 +140,20 @@ export function BriefQuestions({
       {error === undefined ? null : <ErrorAlert message={error} />}
       {/*
         Two buttons at most, each place keeping its meaning: back at the left, on at the far right.
-        Leaving the questions for later is offered once, beside the way on, before anything is asked.
+        Leaving the questions for later is offered once, before anything is asked, where back goes:
+        quiet and away from the way on, so it isn't pressed in passing.
       */}
       <div className="flex items-center gap-2">
-        {index === 0 ? null : (
+        {index === 0 ? (
+          <Button variant="quiet" onClick={() => onSkip(brief)}>
+            {t.skip}
+          </Button>
+        ) : (
           <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
             {t.back}
           </Button>
         )}
-        <div className="ms-auto flex items-center gap-2">
-          {index === 0 ? (
-            <Button size="lg" variant="ghost" onClick={() => onSkip(brief)}>
-              {t.skip}
-            </Button>
-          ) : null}
-          {screen.primary}
-        </div>
+        <div className="ms-auto">{screen.primary}</div>
       </div>
     </div>
   );

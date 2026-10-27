@@ -66,7 +66,7 @@ export const startEn = {
   },
   whatToMake: {
     title: "What do you do?",
-    body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later under Brief in the sidebar.",
+    body: "Your agent reads it before every video. You can change it all later under Brief in the sidebar.",
     details: {
       title: "Anything else your agent should know?",
       body: "Write down whatever comes to mind. Long and detailed is fine, or leave it empty.",
