@@ -1,7 +1,7 @@
 import { ArrowRightIcon, MessageSquareIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { StatusDot } from "@/components/app-sidebar";
+import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";

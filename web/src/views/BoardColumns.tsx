@@ -13,6 +13,7 @@ import {
 import { MessageSquareIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { ItemMenu } from "@/components/item-menu";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -26,7 +27,7 @@ import { QUIET_DRAG } from "../lib/drag.ts";
 import { modHeld } from "../lib/edit-commands.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { byWork, isBusy, itemWork, needsYou, type ItemWork } from "../lib/work.ts";
-import { ItemMenu, usePicks } from "./BoardPicks.tsx";
+import { usePicks } from "./BoardPicks.tsx";
 import { Thumbnail } from "./Thumbnail.tsx";
 
 /**

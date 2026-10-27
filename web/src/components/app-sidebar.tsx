@@ -16,9 +16,12 @@ import { useEffect, useId, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { ItemMenu } from "@/components/item-menu";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
 import { SidebarResizer } from "@/components/sidebar-resizer";
+import { StatusDot } from "@/components/status-dot";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +47,7 @@ import {
 } from "@/components/ui/sidebar";
 import { workDot, workText } from "@/components/work-state";
 
-import { api, type Plan, type Status, type WorkspaceInfo } from "../api.ts";
+import { api, type Plan, type WorkspaceInfo } from "../api.ts";
 import { desktop, insetTitleBar } from "../desktop.ts";
 import { href, useLive, type Live } from "../hooks.ts";
 import {
@@ -56,6 +59,7 @@ import {
   useMessages,
 } from "../i18n/index.ts";
 import { APP_KEYS } from "../lib/app-commands.ts";
+import { archiveItems, moveItems } from "../lib/items.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { attention, inProgress } from "../lib/work.ts";
 
@@ -73,29 +77,6 @@ export const MAIN_NAV: ReadonlyArray<MainNavItem> = [
 /** How many videos the sidebar lists before pointing at the board. */
 const MAX_VIDEOS = 8;
 
-/** Fill and stroke for each status. The board's one color, gold, is kept for review. */
-function statusDot(status: Status): string {
-  switch (status) {
-    case "drafting":
-      return "fill-muted-foreground";
-    case "review":
-      return "fill-selection";
-    case "done":
-      return "fill-primary";
-    case "archived":
-      return "fill-none stroke-muted-foreground/50";
-  }
-}
-
-/** An svg so the menu button spaces it exactly like the nav icons. */
-export function StatusDot({ status }: { status: Status }) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <circle cx="8" cy="8" r="4" strokeWidth="1.5" className={statusDot(status)} />
-    </svg>
-  );
-}
-
 export function openWorkspace() {
   // The desktop shell reloads the window itself once the new workspace is serving.
   desktop?.openWorkspace().catch((cause: Error) => toast.error(cause.message));
@@ -112,6 +93,8 @@ interface LinkRowProps {
   dot?: string | undefined;
   /** The dot's color; the sidebar's text color unless said. */
   dotTone?: string | undefined;
+  /** What a right click on the row offers, as a context menu's content. */
+  menu?: ReactNode;
   children: ReactNode;
 }
 
@@ -124,13 +107,14 @@ function LinkRow({
   badge,
   dot,
   dotTone = "bg-sidebar-foreground",
+  menu,
   children,
 }: LinkRowProps) {
   const t = useMessages();
   const { setOpenMobile } = useSidebar();
 
-  return (
-    <SidebarMenuItem>
+  const row = (
+    <>
       <SidebarMenuButton
         isActive={active}
         tooltip={tooltip}
@@ -157,7 +141,17 @@ function LinkRow({
           <span className="sr-only">{dot}</span>
         </span>
       )}
-    </SidebarMenuItem>
+    </>
+  );
+
+  if (menu === undefined) return <SidebarMenuItem>{row}</SidebarMenuItem>;
+
+  return (
+    <ContextMenu>
+      {/* The menu button lights while the row's menu is open, as on hover. */}
+      <ContextMenuTrigger render={<SidebarMenuItem />}>{row}</ContextMenuTrigger>
+      {menu}
+    </ContextMenu>
   );
 }
 
@@ -311,7 +305,8 @@ interface AppSidebarProps {
 
 export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarProps) {
   const t = useMessages();
-  const items = useLive("items", api.items).data ?? [];
+  const live = useLive("items", api.items);
+  const items = live.data ?? [];
   const videos = inProgress(items, failureSeen).slice(0, MAX_VIDEOS);
   const editing = view === "item" && id ? id : undefined;
   const notice = attention(items, failureSeen);
@@ -383,6 +378,13 @@ export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarPro
                       title={t.nav.videoTitle(video.title, t.status[video.status], state)}
                       dot={state}
                       dotTone={workDot(work)}
+                      menu={
+                        <ItemMenu
+                          items={[video]}
+                          onMove={(moving, status) => moveItems(live, moving, status)}
+                          onArchive={(archiving) => void archiveItems(archiving, t)}
+                        />
+                      }
                     >
                       <StatusDot status={video.status} />
                       <span className="sr-only">{t.status[video.status]}</span>

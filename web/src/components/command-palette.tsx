@@ -1,8 +1,9 @@
 import { ArchiveIcon, FolderOpenIcon, PanelLeftIcon, PlugZapIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { MAIN_NAV, openWorkspace, StatusDot } from "@/components/app-sidebar";
+import { MAIN_NAV, openWorkspace } from "@/components/app-sidebar";
 import { openNewItem } from "@/components/new-item-dialog";
+import { StatusDot } from "@/components/status-dot";
 import {
   Command,
   CommandDialog,

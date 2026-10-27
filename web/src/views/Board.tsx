@@ -1,6 +1,7 @@
 import { ArchiveIcon, BookOpenIcon, KanbanIcon, LayoutGridIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
+import { ItemMenu } from "@/components/item-menu";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
 import { StackMark } from "@/components/stack-mark";
@@ -28,11 +29,11 @@ import { api, STATUSES, type ItemSummary, type Status } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { gridColumns } from "../lib/board-keys.ts";
-import { moveItem } from "../lib/items.ts";
+import { moveItems } from "../lib/items.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { byWork, isBusy, itemWork } from "../lib/work.ts";
 import { BoardColumns, BoardSkeleton } from "./BoardColumns.tsx";
-import { ItemMenu, usePicks } from "./BoardPicks.tsx";
+import { usePicks } from "./BoardPicks.tsx";
 import { Tile } from "./GalleryTile.tsx";
 
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
@@ -177,16 +178,8 @@ export function Board() {
   }
 
   /** Videos go on top of their new column at once; the board loads them again once their files have changed. */
-  function move(moving: readonly ItemSummary[], status: Status) {
-    const ids = new Set(moving.flatMap((i) => (i.status === status ? [] : [i.id])));
-
-    if (items === undefined || ids.size === 0) return;
-
-    setData(items.map((i) => (ids.has(i.id) ? { ...i, status, updatedAt: Date.now() } : i)));
-    void Promise.all([...ids].map((id) => moveItem(id, status))).then((moved) => {
-      if (moved.includes(false)) reload();
-    });
-  }
+  const move = (moving: readonly ItemSummary[], status: Status) =>
+    moveItems({ data: items, setData, reload }, moving, status);
 
   return (
     <div className="@container/board flex min-h-0 flex-1 flex-col gap-4 px-6 pt-2">
