@@ -89,10 +89,17 @@ make next to the message box to compare several takes.
 Requests made while the agent works line up and run in turn. Every change can be undone, and the
 History tab keeps each saved version. Press `?` for shortcuts.
 
-## Mac app
+## Mac app or from source
 
-A signed Mac app built from this repository is at [cutfac.com](https://cutfac.com). It has the same
-features and updates itself; this repository is free under the AGPL-3.0.
+The signed Mac app at [cutfac.com](https://cutfac.com) is built from this repository, so both have
+every feature; nothing is held back from the source. The app saves you the build and keeps itself up
+to date.
+
+|         | Signed Mac app                        | Built from source                  |
+| ------- | ------------------------------------- | ---------------------------------- |
+| Cost    | First 3 videos free, then a paid plan | Free under the AGPL-3.0, no limit  |
+| Setup   | Download it and open it               | Install Bun and ffmpeg, then build |
+| Updates | Install themselves                    | Pull and rebuild                   |
 
 ## Privacy
 
