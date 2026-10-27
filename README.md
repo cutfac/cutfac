@@ -104,8 +104,9 @@ to date.
 ## Privacy
 
 - Your videos and files stay on your disk. No account, no telemetry.
-- The Mac app keeps a log in `~/Library/Logs/Cutfac` to help trace problems. It stays on your Mac,
-  and entries older than 7 days are deleted ([details](docs/desktop.md#logs)).
+- The Mac app keeps a log in `~/Library/Logs/Cutfac` to help trace problems. It stays on your Mac
+  unless you send it with feedback, and entries older than 7 days are deleted
+  ([details](docs/desktop.md#logs)).
 - Agents run with your own Claude Code or Codex login. Cutfac never sees your API keys.
 - The server listens on `127.0.0.1` unless you pass `--host`, and refuses requests from other
   websites.
