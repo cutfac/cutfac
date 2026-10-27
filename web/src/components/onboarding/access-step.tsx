@@ -1,40 +1,35 @@
-import { BellIcon, CheckIcon, MonitorIcon } from "lucide-react";
-import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
+import { CheckIcon, MonitorIcon, PointerIcon } from "lucide-react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
-import type { CutfacOnboarding } from "../../desktop.ts";
+import type { CutfacOnboarding, Permission } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { AccessPreview } from "./access-preview.tsx";
 import { DONE_PAUSE_MS, StepActions, StepDone, StepHeader } from "./frame.tsx";
 
-/** Asked notifications already: macOS answers once and doesn't say what, so asking is the step. */
-const NOTIFICATIONS_KEY = "cutfac.onboarding.notificationsAsked";
+const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
 
-function readAsked(): boolean {
-  try {
-    return localStorage.getItem(NOTIFICATIONS_KEY) !== null;
-  } catch {
-    return false;
-  }
+/** A permission as its row and the picture name it. */
+interface Copy {
+  name: string;
+  why: string;
+  waiting: string;
+  list: string;
 }
 
-function writeAsked() {
-  try {
-    localStorage.setItem(NOTIFICATIONS_KEY, "1");
-  } catch {
-    // The step just asks again after a reload.
-  }
-}
+/** From this macOS on, accessibility is Device Control and Data Access, wider than before. */
+const DEVICE_CONTROL_FROM = 27;
 
 /**
- * Notifications and screen recording. Notifications let the app say when a render finishes or an
- * agent waits; macOS asks on the first one, so Turn on puts up a sample. Screen recording lets the
- * agents record the user's screen and apps as footage, and is granted on a list in System Settings,
- * opened with the app ready to drag into it. It shows once the app reopens, which macOS offers
- * itself, and the step picks up again then. It moves on once both are done, and can be skipped.
+ * Screen recording and accessibility, which the agents act under: recording the user's screen and
+ * apps as footage, and using other apps when asked, so they can do either from the first video on.
+ * Each opens its list in System Settings with the app ready to drag into it. Accessibility shows as
+ * soon as it is on; screen recording shows once the app reopens, which macOS offers itself, and the
+ * step picks up again then, with the answers kept. It moves on once both are on, and can be
+ * skipped; macOS then asks when an agent first needs either.
  */
 export function AccessStep({
   onboarding,
@@ -44,23 +39,29 @@ export function AccessStep({
   onDone: () => void;
 }) {
   const t = useMessages().onboarding.access;
-  const [asked, setAsked] = useState(readAsked);
-  const [screen, setScreen] = useState(false);
-  const [waiting, setWaiting] = useState(false);
+  const [granted, setGranted] = useState<Partial<Record<Permission, true>>>({});
+  const [waiting, setWaiting] = useState<Permission>();
   const [app, setApp] = useState<{ icon: string; name: string }>();
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     onboarding.appIcon().then(setApp, () => undefined);
+    onboarding.systemVersion().then(setVersion, () => undefined);
   }, [onboarding]);
 
   // Once granted it stays so: a check that started before the grant can't take it back.
+  const grant = (permission: Permission) =>
+    setGranted((current) => ({ ...current, [permission]: true }));
+
   const check = useEffectEvent(() => {
-    onboarding.permission("screen").then(
-      (ok) => {
-        if (ok) setScreen(true);
-      },
-      () => undefined,
-    );
+    for (const permission of PERMISSIONS) {
+      onboarding.permission(permission).then(
+        (ok) => {
+          if (ok) grant(permission);
+        },
+        () => undefined,
+      );
+    }
   });
 
   useEffect(() => {
@@ -70,63 +71,77 @@ export function AccessStep({
     return () => removeEventListener("focus", check);
   }, []);
 
-  useEffect(() => onboarding.onAccessGranted(() => setScreen(true)), [onboarding]);
+  useEffect(
+    () =>
+      onboarding.onAccessGranted((permission) =>
+        setGranted((current) => ({ ...current, [permission]: true })),
+      ),
+    [onboarding],
+  );
 
   const done = useEffectEvent(onDone);
-  const allDone = asked && screen;
+  const allGranted = PERMISSIONS.every((permission) => granted[permission]);
 
   useEffect(() => {
-    if (!allDone) return;
+    if (!allGranted) return;
 
     const timer = setTimeout(done, DONE_PAUSE_MS);
 
     return () => clearTimeout(timer);
-  }, [allDone]);
+  }, [allGranted]);
 
-  const askNotifications = () => {
-    writeAsked();
-    setAsked(true);
-    onboarding.askNotifications(t.notifications.sample).catch((cause: Error) => {
+  const open = (permission: Permission) => {
+    setWaiting(permission);
+    onboarding.openAccessSettings(permission).catch((cause: Error) => {
+      setWaiting(undefined);
       toast.error(cause.message);
     });
   };
 
-  const openScreen = () => {
-    setWaiting(true);
-    onboarding.openAccessSettings("screen").catch((cause: Error) => {
-      setWaiting(false);
-      toast.error(cause.message);
-    });
+  const deviceControl = version >= DEVICE_CONTROL_FROM;
+
+  const copy: Record<Permission, Copy> = {
+    screen: t.screen,
+    accessibility: deviceControl
+      ? { ...t.accessibility, name: t.deviceControl, list: t.deviceControl }
+      : t.accessibility,
   };
+
+  const icons = {
+    screen: <MonitorIcon className="size-4" />,
+    accessibility: <PointerIcon className="size-4" />,
+  } satisfies Record<Permission, ReactNode>;
+
+  // The picture shows the list the user is on, or the next one to turn on.
+  const next = PERMISSIONS.find((permission) => !granted[permission]);
+  const shown = waiting ?? next ?? "screen";
 
   return (
     <>
       <StepHeader title={t.title} body={t.body} />
       <div className="flex flex-col gap-4 rounded-2xl bg-muted p-4">
-        <AccessPreview app={app} list={t.screen.list} />
+        <AccessPreview app={app} list={copy[shown].list} />
         <ul className="flex flex-col gap-3">
-          <Row
-            icon={<BellIcon className="size-4" />}
-            name={t.notifications.name}
-            why={t.notifications.why}
-            done={asked}
-            doneLabel={t.asked}
-            primary={!asked}
-            onTurnOn={askNotifications}
-          />
-          <Row
-            icon={<MonitorIcon className="size-4" />}
-            name={t.screen.name}
-            why={waiting && !screen ? t.screen.waiting : t.screen.why}
-            waiting={waiting && !screen}
-            done={screen}
-            doneLabel={t.on}
-            primary={asked && !screen && !waiting}
-            onTurnOn={openScreen}
-          />
+          {PERMISSIONS.map((permission) => {
+            const on = granted[permission] === true;
+            const opened = waiting === permission && !on;
+
+            return (
+              <Row
+                key={permission}
+                icon={icons[permission]}
+                name={copy[permission].name}
+                why={opened ? copy[permission].waiting : copy[permission].why}
+                waiting={opened}
+                done={on}
+                primary={permission === next && !opened}
+                onTurnOn={() => open(permission)}
+              />
+            );
+          })}
         </ul>
       </div>
-      {allDone ? (
+      {allGranted ? (
         <StepDone label={t.granted} />
       ) : (
         <StepActions>
@@ -139,23 +154,21 @@ export function AccessStep({
   );
 }
 
-/** One thing to turn on: what it is, what it lets the app do, and its button, or that it is done. */
+/** One permission: what it is, what it lets the agent do, and its button, or that it is on. */
 function Row({
   icon,
   name,
   why,
-  waiting = false,
+  waiting,
   done,
-  doneLabel,
   primary,
   onTurnOn,
 }: {
   icon: ReactNode;
   name: string;
   why: string;
-  waiting?: boolean;
+  waiting: boolean;
   done: boolean;
-  doneLabel: string;
   primary: boolean;
   onTurnOn: () => void;
 }) {
@@ -176,7 +189,7 @@ function Row({
       {done ? (
         <span className="flex shrink-0 items-center gap-1 text-xs font-medium">
           <CheckIcon className="size-3.5" />
-          {doneLabel}
+          {t.on}
         </span>
       ) : (
         <Button

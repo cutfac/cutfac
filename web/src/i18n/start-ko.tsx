@@ -85,6 +85,12 @@ export const startKo: StartMessages = {
     noAgent: "준비된 에이전트가 없어요. 설정에서 준비한 뒤 다시 시도해 주세요.",
   },
   firstVideo: {
+    notify: {
+      label: "에이전트가 기다리면 알림 받기",
+      turnOn: "켜기",
+      done: "알림을 켰어요",
+      sample: { title: "컷팩", body: "에이전트가 기다리면 이렇게 알려 드릴게요." },
+    },
     title: "첫 영상",
     body: "에이전트가 이런 영상을 만드는 방식을 준비하고 있어요. 그동안 첫 영상의 제목을 정해 주세요.",
     readyBody:

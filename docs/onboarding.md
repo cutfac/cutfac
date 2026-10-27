@@ -23,30 +23,34 @@ ready when:
 
 ## Steps
 
-Each step checks what is already true and passes on its own when it is: a second Mac, a reinstall
-or a workspace that already has templates goes straight to what is missing. Closing the window
-keeps the progress. Steps 1 to 4 save the step the user is on, and the next launch opens on it.
-From step 5 on the board opens on Start while the workspace has neither a template nor a brief,
-unless the user chose to continue on the board; each template run has its own page, so a reload
+The user says what they want to make first, and the setup after it is for making that: the agent,
+the permissions it works under, and where everything is kept. Each step checks what is already true
+and passes on its own when it is: a second Mac, a reinstall or a workspace that already has
+templates goes straight to what is missing. Closing the window keeps the progress. Steps 1 to 5
+save the step the user is on, and the next launch opens on it. Once the workspace is made, the
+board starts the first template from the answers; each template run has its own page, so a reload
 keeps it.
 
-| Step            | Shows                                                                                                                                                                                                                   | Done when                               |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| 1. Welcome      | What Cutfac does in one sentence, and Start                                                                                                                                                                             | Start is pressed                        |
-| 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                       | One agent is ready, and Next is pressed |
-| 3. Permissions  | Notifications and Screen Recording, what each is for, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                              | Both are done, or Skip                  |
-| 4. Workspace    | A folder already filled in (`~/Documents/Cutfac`) with Create, and Choose another folder. The agents from step 2 connect to it without a separate button                                                                | The server runs on the folder           |
-| 5. What to make | What the videos are for and where they go, the user's own material (a website, a local folder), and a gallery of references to start from. Start has the agent make a template from them and moves on to step 6 at once | Start is pressed                        |
-| 6. First video  | The template run's progress, and a title field. Allow shows here when the import needs it                                                                                                                               | The item exists; its detail opens       |
+| Step            | Shows                                                                                                                                                                         | Done when                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                     | Start is pressed                          |
+| 2. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace           | Next is pressed on the last part, or Skip |
+| 3. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                             | One agent is ready, and Next is pressed   |
+| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                        | Both are on, or Skip                      |
+| 5. Ready        | Where everything is kept, as one line (`~/Documents/Cutfac`) with Change, and Start making. The folder is made, the agents from step 3 connect to it, and the template starts | The server runs on the folder             |
+| 6. First video  | The template run's progress, a title field, and Turn on for notifications. Allow shows here when the import needs it                                                          | The item exists; its detail opens         |
 
 ### Before the workspace
 
-Steps 1 to 3 run before there is a workspace, so before there is a server. Electron serves the
+Steps 1 to 5 run before there is a workspace, so before there is a server. Electron serves the
 built board on its own `cutfac://` scheme, which keeps storage and fetch as a web origin does, and
-answers those steps itself over the preload bridge. Agent detection runs as a
-CLI command that needs no workspace (`cutfac agents --json`), so the server and Electron share one
-implementation. From step 4 on the app works as it does today: the server starts on the folder and
-the board talks to it.
+answers those steps itself over the preload bridge. Agent detection runs as a CLI command that
+needs no workspace (`cutfac agents --json`), so the server and Electron share one implementation.
+What to make has nowhere to be saved yet, so the app keeps the answers in its settings, where they
+last through the relaunch screen recording asks for. Step 5 starts the server on the folder; the
+board then saves the brief, learns the material and starts the template, and forgets the answers
+first, so a reload can't start a second run. A browser has no steps before the workspace, so it
+asks what to make on Start.
 
 ### Agent
 
@@ -72,50 +76,51 @@ alternative. One line says that either needs its own subscription, and to pick t
 already pays for.
 
 Connecting needs the workspace: Claude Code reads the workspace's `.mcp.json`, and Codex gets a
-server entry per workspace. So step 2 only checks, and step 4 connects every agent that is ready,
+server entry per workspace. So step 3 only checks, and step 5 connects every agent that is ready,
 as the Connect button does today.
 
 ### Permissions
 
-The step asks for two things, each with Turn on:
+The agents Cutfac runs act under its permissions: macOS holds what they do to the app that started
+them. The step asks for the two they use from the first video on, each with Turn on:
 
-- **Notifications**, so Cutfac can say when a render finishes or an agent waits for the user while
-  they are elsewhere. macOS asks on the app's first notification, and Electron has no other way to
-  ask, so Turn on puts up a sample one. macOS doesn't tell the app the answer, so asking is what the
-  step counts.
-- **Screen Recording**, so the agents can record the user's screen and apps as footage. The agents
-  Cutfac runs act under its permissions: macOS holds what they do to the app that started them.
+- **Screen Recording**, so they can record the user's screen and apps as footage.
+- **Accessibility**, so they can click and type in other apps when the user asks, as Claude Code's
+  and Codex's computer use do. macOS 27 calls it Device Control and Data Access and widens it, and
+  the step names it so there.
 
-Screen recording, like Full Disk Access and Accessibility, is granted only by adding the app to a
-list in System Settings. Apps like Codex make that one motion, after
-[PermissionFlow](https://github.com/jaywcjlove/PermissionFlow):
+Both are granted only by adding the app to a list in System Settings. Apps like Codex make that one
+motion, after [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow):
 
 1. The step shows a picture of System Settings with the panel under it, and a pointer dragging the
-   app into the list.
-2. Turn on opens the pane (`x-apple.systempreferences:` with `Privacy_ScreenCapture`).
+   app into the list the user is on, or the next one to turn on.
+2. Turn on opens the pane (`x-apple.systempreferences:` with `Privacy_ScreenCapture` or
+   `Privacy_Accessibility`).
 3. A small panel sits under the Settings window, lined up with the list, and follows the window as
    it moves. It is one card with Cutfac's icon and name; dragging it drags the app bundle itself
    (`webContents.startDrag` with the `.app` path), which is what the list accepts. The user never
    hunts for the app with +.
-4. macOS reads screen recording once per process (`getMediaAccessStatus`), so the grant shows only
-   after the app reopens. macOS offers that itself once it is on, and the app opens again on this
-   step, which finds it then.
+4. Accessibility shows as soon as it is on (`isTrustedAccessibilityClient`). macOS reads screen
+   recording once per process (`getMediaAccessStatus`), so that grant shows only after the app
+   reopens. macOS offers that itself once it is on, and the app opens again on this step, with the
+   answers from step 2 kept, and finds it then.
 
-Once both are done, the step moves on by itself. It can be skipped; macOS then asks the first time
-either is needed.
+Once both are on, the step moves on by itself. It can be skipped; macOS then asks the first time an
+agent needs either.
 
-Nothing else is asked up front. Cutfac doesn't ask for Full Disk Access, which would let every agent
-read the user's mail and messages too: reading Desktop, Documents, Downloads and the like, macOS asks
-once per folder the first time an agent reaches one, and remembers the answer. Nor for
-Accessibility, which macOS 27 widens into Device Control and Data Access. A dev build signs
-differently from the release, so it gets its own entry in each list.
+Cutfac doesn't ask for Full Disk Access, which would let every agent read the user's mail and
+messages too: reading Desktop, Documents, Downloads and the like, macOS asks once per folder the
+first time an agent reaches one, and remembers the answer. Notifications are offered on the first
+video, while the agent works, when they help: macOS asks on the app's first notification and
+Electron has no other way to ask, so Turn on puts up a sample one. A dev build signs differently
+from the release, so it gets its own entry in each list.
 
 ### What to make
 
 A template is the folder that lets an agent make one kind of video the same way every time: the
 spec, the skills, the render code and the choices (see `templates.md`). People don't write one, and
 don't need the word. They say what they want to make and point at what they like, and the agent
-writes the template from that. So step 5 asks, a part at a time and in this order, for:
+writes the template from that. So step 2 asks, a part at a time and in this order, for:
 
 - **Purpose**: promoting the user's own product or service, information and tips, a personal
   brand, or their own words.
@@ -161,7 +166,7 @@ The wording is tuned against real agent runs when it is built.
 The purpose, platforms and the user's own words are saved as `brief.md` at the workspace root, so
 each workspace has its own: one for promoting an app and one for a personal brand keep separate
 briefs, as they keep separate templates. A new workspace asks for its brief with the same form as
-step 5. Every later agent run and the MCP tools read it, so the next template and every video start
+step 2. Every later agent run and the MCP tools read it, so the next template and every video start
 from the same context. The front matter holds what the app reads, the body is the user's own words:
 
 ```markdown
@@ -176,7 +181,7 @@ Short videos that promote my app. Light and friendly.
 The person and the agent edit the same file:
 
 - **On the board**, the top of the sidebar, under the workspace name, sums the brief up in a line
-  ("Promote my app · TikTok, Shorts"). Clicking it opens a sheet with the step 5 form: purpose and
+  ("Promote my app · TikTok, Shorts"). Clicking it opens a sheet with the step 2 form: purpose and
   platforms to pick, and the body as free text. Saving writes `brief.md`. No menu item or settings
   page of its own. Material isn't part of it; it lives in `about.md`, as anything learned does.
 - **In words**, the user tells the agent while working ("I'm doing Reels now too"), and the agent

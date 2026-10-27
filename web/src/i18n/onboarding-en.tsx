@@ -42,38 +42,47 @@ export const onboardingEn = {
     next: "Next",
   },
   access: {
-    title: "Turn on notifications and screen recording",
-    body: "Cutfac tells you when a render finishes or your agent waits for you. Screen recording lets your agent record your screen and apps to use in videos.",
+    title: "Let your agent see and use your screen",
+    body: "Your agent records your apps for your videos, and uses them when you ask. It works under Cutfac's permissions, so turn these on for Cutfac.",
     turnOn: "Turn on",
     on: "On",
-    asked: "Asked",
-    granted: "All set",
+    granted: "Both are on",
     skip: "Skip for now",
-    notifications: {
-      name: "Notifications",
-      why: "Hear when a render finishes or your agent waits.",
-      /** The notification Turn on puts up, which has macOS ask. */
-      sample: { title: "Cutfac", body: "This is how Cutfac tells you something is ready." },
-    },
+    /**
+     * Each permission: its name, what it lets the agent do, what to do while its list is open, and
+     * the list's title in System Settings, for the picture.
+     */
     screen: {
       name: "Screen Recording",
       why: "Record your screen and apps to use in videos.",
       waiting: "Turn on Cutfac in the list. When macOS offers to reopen it, go ahead.",
-      /** The list's title in System Settings, for the picture. */
       list: "Screen & System Audio Recording",
     },
+    accessibility: {
+      name: "Accessibility",
+      why: "Let your agent click and type in other apps.",
+      waiting: "Turn on Cutfac in the list…",
+      list: "Accessibility",
+    },
+    /** What macOS 27 and later call accessibility, which they widened. */
+    deviceControl: "Device Control and Data Access",
     /** The picture of System Settings with the panel under it. */
     preview: {
       pane: "Privacy & Security",
       search: "Search",
     },
   },
-  folder: {
-    title: "Pick a home for your videos",
-    body: "Cutfac keeps your templates and videos as plain files in one folder. You can open another one later.",
+  ready: {
+    title: "Ready to make your first template",
+    body: "Your agent makes it from what you told it. Cutfac keeps your templates and videos as plain files in one folder.",
+    /** When the user left what to make for later. */
+    skippedTitle: "Ready to start",
+    skippedBody:
+      "Cutfac keeps your templates and videos as plain files in one folder. You can open another one later.",
+    savedIn: "Saved in",
     change: "Change…",
-    create: "Create",
-    use: "Use this folder",
+    start: "Start making",
+    open: "Open Cutfac",
     creating: "Setting up…",
   },
   dragHelper: {

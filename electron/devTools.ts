@@ -174,8 +174,12 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
     if (!fakes.freshFolder) freshFolder = undefined;
 
-    // As if the user turned it on in System Settings: the access step moves on by itself.
-    if (granted) host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, "screen");
+    // As if the user turned both on in System Settings: the access step moves on by itself.
+    if (granted) {
+      for (const permission of ["screen", "accessibility"] as const) {
+        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
+      }
+    }
 
     return state();
   });

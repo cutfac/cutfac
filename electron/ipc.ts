@@ -49,7 +49,15 @@ export const FIX_AGENT_CHANNEL = "cutfac:fix-agent";
 /** A line a running fix printed, for the agent step to show. */
 export const FIX_OUTPUT_CHANNEL = "cutfac:fix-output";
 
-/** Whether macOS grants the app a permission: screen recording. */
+/** What the first launch asked about the user before there was a workspace: read, keep, forget. */
+export const DRAFT_CHANNEL = "cutfac:onboarding-draft";
+export const SAVE_DRAFT_CHANNEL = "cutfac:save-onboarding-draft";
+export const CLEAR_DRAFT_CHANNEL = "cutfac:clear-onboarding-draft";
+
+/** macOS's major version, which names the lists in System Settings. */
+export const SYSTEM_VERSION_CHANNEL = "cutfac:system-version";
+
+/** Whether macOS grants the app a permission: screen recording, or accessibility. */
 export const PERMISSION_CHANNEL = "cutfac:permission";
 
 /** Put up a sample notification, which has macOS ask whether the app may notify. */

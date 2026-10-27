@@ -25,11 +25,16 @@ import {
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
   PERMISSION_CHANNEL,
+  DRAFT_CHANNEL,
+  SAVE_DRAFT_CHANNEL,
+  CLEAR_DRAFT_CHANNEL,
+  SYSTEM_VERSION_CHANNEL,
   ASK_NOTIFICATIONS_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
+import { clearDraft, isDraft, loadDraft, saveDraft } from "./settings.ts";
 import {
   appBadge,
   dragApp,
@@ -37,6 +42,7 @@ import {
   hasPermission,
   isPermission,
   openAccessSettings,
+  systemVersion,
 } from "./systemAccess.ts";
 
 const isAgentName = Schema.is(AgentName);
@@ -114,6 +120,28 @@ export function handleOnboarding(host: OnboardingHost): void {
     return checks.fixAgent(agent, (line) => {
       if (!event.sender.isDestroyed()) event.sender.send(FIX_OUTPUT_CHANNEL, agent, line);
     });
+  });
+  ipcMain.handle(DRAFT_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return loadDraft();
+  });
+  ipcMain.handle(SAVE_DRAFT_CHANNEL, (event, draft) => {
+    assertFromApp(event);
+
+    if (!isDraft(draft)) throw new Error("Unknown draft");
+
+    return saveDraft(draft);
+  });
+  ipcMain.handle(CLEAR_DRAFT_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return clearDraft();
+  });
+  ipcMain.handle(SYSTEM_VERSION_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return systemVersion();
   });
   ipcMain.handle(PERMISSION_CHANNEL, (event, permission) => {
     assertFromApp(event);

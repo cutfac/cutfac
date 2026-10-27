@@ -31,6 +31,10 @@ import {
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
   PERMISSION_CHANNEL,
+  DRAFT_CHANNEL,
+  SAVE_DRAFT_CHANNEL,
+  CLEAR_DRAFT_CHANNEL,
+  SYSTEM_VERSION_CHANNEL,
   ASK_NOTIFICATIONS_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
@@ -88,6 +92,10 @@ const onboarding = {
       ipcRenderer.removeListener(FIX_OUTPUT_CHANNEL, forward);
     };
   },
+  draft: () => ipcRenderer.invoke(DRAFT_CHANNEL),
+  saveDraft: (draft) => ipcRenderer.invoke(SAVE_DRAFT_CHANNEL, draft),
+  clearDraft: () => ipcRenderer.invoke(CLEAR_DRAFT_CHANNEL),
+  systemVersion: () => ipcRenderer.invoke(SYSTEM_VERSION_CHANNEL),
   permission: (permission) => ipcRenderer.invoke(PERMISSION_CHANNEL, permission),
   askNotifications: (sample) => ipcRenderer.invoke(ASK_NOTIFICATIONS_CHANNEL, sample),
   openAccessSettings: (permission) => ipcRenderer.invoke(OPEN_ACCESS_SETTINGS_CHANNEL, permission),

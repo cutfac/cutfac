@@ -5,14 +5,26 @@ import path from "node:path";
 import { Effect, Layer, Option, Schema } from "effect";
 import { app } from "electron";
 
+import { PLATFORMS, PURPOSES } from "../src/core/brief.ts";
 import { LicenseRecord, savedLicenseOf } from "../src/license.ts";
-import type { OnboardingStep } from "../web/src/desktop.ts";
+import type { OnboardingDraft as Draft, OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 import { ONBOARDING_STEPS } from "./boardPages.ts";
 import { LicenseNotSaved, LicenseSettings } from "./license.ts";
 import { runInMain } from "./runtime.ts";
 import { isSetAside, restore, setAside } from "./settingsAside.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
+
+/** What the first launch asked about the user, kept until there is a workspace to save it in. */
+const OnboardingDraft = Schema.Struct({
+  brief: Schema.Struct({
+    purpose: Schema.NullOr(Schema.Literals(PURPOSES)),
+    platforms: Schema.Array(Schema.Literals(PLATFORMS)),
+    body: Schema.String,
+  }),
+  sources: Schema.Array(Schema.String),
+  skipped: Schema.Boolean,
+});
 
 /** The board page last shown, for the workspace it belongs to. */
 const Page = Schema.Struct({
@@ -30,6 +42,7 @@ interface Settings {
   page: typeof Page.Type;
   /** Where the first launch got to, while there is no workspace yet. */
   onboarding: OnboardingStep | undefined;
+  onboardingDraft: typeof OnboardingDraft.Encoded | undefined;
 }
 
 export function settingsFile(): string {
@@ -52,6 +65,11 @@ const decodeLocale = Schema.decodeUnknownOption(Schema.Literals(LOCALES));
 const decodePage = Schema.decodeUnknownOption(Page);
 
 const decodeOnboarding = Schema.decodeUnknownOption(Schema.Literals(ONBOARDING_STEPS));
+
+const decodeDraft = Schema.decodeUnknownOption(OnboardingDraft);
+
+/** A draft as the board sends it, to check before it is kept. */
+export const isDraft = Schema.is(OnboardingDraft);
 
 /**
  * Whatever was saved. Each loader decodes only the field it reads, so a value written by another
@@ -175,6 +193,23 @@ export async function loadOnboarding(): Promise<OnboardingStep | undefined> {
 
 /** Saves the first-launch step the window shows, to pick up there next time. */
 export const saveOnboarding = (onboarding: OnboardingStep) => writeSettings({ onboarding });
+
+/** What the first launch asked about the user so far, if it asked. */
+export async function loadDraft(): Promise<Draft | undefined> {
+  const draft = Option.getOrUndefined(decodeDraft((await readSettings()).onboardingDraft));
+
+  return draft === undefined
+    ? undefined
+    : {
+        brief: { ...draft.brief, platforms: [...draft.brief.platforms] },
+        sources: [...draft.sources],
+        skipped: draft.skipped,
+      };
+}
+
+export const saveDraft = (draft: Draft) => writeSettings({ onboardingDraft: draft });
+
+export const clearDraft = () => writeSettings({ onboardingDraft: undefined });
 
 /** Dev Panel: sets the settings aside, so the app runs as on a new Mac until they are restored. */
 export const setSettingsAside = () =>

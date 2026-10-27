@@ -46,12 +46,13 @@ export function boardFile(root: string, url: string): string | undefined {
 
 export const ONBOARDING_STEPS = [
   "welcome",
+  "make",
   "agent",
   "access",
   "folder",
 ] as const satisfies ReadonlyArray<OnboardingStep>;
 
-const ONBOARDING_HASH = /^#\/welcome(?:\/(agent|access|folder))?$/;
+const ONBOARDING_HASH = /^#\/welcome(?:\/(make|agent|access|folder))?$/;
 
 /** The first-launch step a board page shows, from its hash, or undefined for any other page. */
 export function onboardingStep(hash: string): OnboardingStep | undefined {

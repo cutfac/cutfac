@@ -1,5 +1,6 @@
 import type { AgentName } from "./api.ts";
 import type { Locale } from "./i18n/locale.ts";
+import type { BriefDraft } from "./lib/brief.ts";
 
 export type EditCommand = "undo" | "redo";
 
@@ -38,11 +39,25 @@ export interface AgentFix {
   command: string;
 }
 
-/** What the app asks macOS for on a list in System Settings: recording the screen, for footage. */
-export type Permission = "screen";
+/**
+ * What the app asks macOS for on a list in System Settings: recording the screen for footage, and
+ * using other apps (accessibility). The agents it runs act under them too.
+ */
+export type Permission = "screen" | "accessibility";
+
+/**
+ * What the first launch asked about the user before there was a workspace to save it in: the
+ * brief and the material to read, or that they left it for later. The app keeps it until the
+ * workspace is made, so it lasts through the relaunch screen recording asks for.
+ */
+export interface OnboardingDraft {
+  brief: BriefDraft;
+  sources: string[];
+  skipped: boolean;
+}
 
 /** The first-launch steps that come before there is a workspace. */
-export type OnboardingStep = "welcome" | "agent" | "access" | "folder";
+export type OnboardingStep = "welcome" | "make" | "agent" | "access" | "folder";
 
 /** A folder as the workspace step shows it: its path, and the same shortened from the home folder. */
 export interface Folder {
@@ -61,6 +76,14 @@ export interface CutfacOnboarding {
   fixAgent: (agent: AgentName) => Promise<AgentFix>;
   /** A line a fix printed. Returns an unsubscribe. */
   onFixOutput: (listener: (agent: AgentName, line: string) => void) => () => void;
+  /** What the first launch asked about the user, kept since; undefined before it was asked. */
+  draft: () => Promise<OnboardingDraft | undefined>;
+  /** Keep what the first launch asked so far. */
+  saveDraft: (draft: OnboardingDraft) => Promise<void>;
+  /** Forget it, once the workspace has it. */
+  clearDraft: () => Promise<void>;
+  /** macOS's major version, such as 27; the lists in System Settings are named by it. */
+  systemVersion: () => Promise<number>;
   /** Whether macOS grants the app a permission. Screen recording shows only after the app reopens. */
   permission: (permission: Permission) => Promise<boolean>;
   /**

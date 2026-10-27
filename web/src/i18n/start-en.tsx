@@ -97,6 +97,16 @@ export const startEn = {
     noAgent: "No agent is ready. Set one up in Setup, then try again.",
   },
   firstVideo: {
+    /**
+     * Turning on notifications, asked here since it is when they help: the app tells the user when
+     * the agent waits for them. macOS asks on the first one, so Turn on puts up a sample.
+     */
+    notify: {
+      label: "Get notified when your agent needs you",
+      turnOn: "Turn on",
+      done: "Notifications on",
+      sample: { title: "Cutfac", body: "This is how Cutfac tells you your agent is waiting." },
+    },
     title: "Your first video",
     body: "Your agent is setting up how this kind of video gets made. Give the first one a title meanwhile.",
     readyBody:

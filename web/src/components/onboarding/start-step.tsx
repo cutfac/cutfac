@@ -1,39 +1,22 @@
 import { ArrowRightIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
-import { api, type AgentChoice, type AgentName, type WorkspaceInfo } from "../../api.ts";
+import type { WorkspaceInfo } from "../../api.ts";
 import { briefApi } from "../../briefApi.ts";
 import { desktop } from "../../desktop.ts";
 import { href } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
 import { briefPatch, briefReady, type BriefDraft } from "../../lib/brief.ts";
-import { importAgent } from "../../lib/imports.ts";
 import { errorText } from "../../lib/notify.ts";
-import { onboardingAgent, skipStart } from "../../lib/onboarding.ts";
+import { skipStart } from "../../lib/onboarding.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
+import { type Answers, startFirstTemplate } from "./first-template.ts";
 import { StepHeader } from "./frame.tsx";
 import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
-
-/**
- * The agent that makes the template: the workspace default when it is ready, else the first that
- * is. The app knows which are signed in; a browser only knows which are installed.
- */
-async function startAgent(preferred: AgentChoice): Promise<AgentName | undefined> {
-  const onboarding = desktop?.onboarding;
-
-  if (onboarding !== undefined) {
-    const ready = onboardingAgent(preferred, await onboarding.agents());
-
-    if (ready !== undefined) return ready;
-  }
-
-  return importAgent(preferred, await api.agents());
-}
 
 /** The parts of what to make, asked one at a time. A browser can't pick a folder, so skips it. */
 const PARTS = ["purpose", "website", "folder", "platforms", "details"] as const;
@@ -46,54 +29,32 @@ const STEPS: ReadonlyArray<Part> =
 /**
  * What to make, a part at a time so each screen asks one thing: what the user does, a website and a
  * folder about it to read, where the videos go, then anything else the agent should know, in the
- * user's own words, right after a platform the list doesn't name. Picking a
- * purpose moves on by itself, and a part that can be left out says so on its button. Start, on the
- * last part, saves the brief, learns the material, and has the agent make the first template.
+ * user's own words, right after a platform the list doesn't name. Picking a purpose moves on by
+ * itself, and a part that can be left out says so on its button. The last part's button finishes,
+ * with the link still in the field among the material; the first part's leaves it for later.
  */
-export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
+export function BriefQuestions({
+  initial,
+  finish,
+  busy = false,
+  error,
+  onFinish,
+  onSkip,
+}: {
+  initial: Answers;
+  /** The last part's button, and what it says while it works. */
+  finish: { label: string; busyLabel: string };
+  busy?: boolean;
+  error?: string | undefined;
+  onFinish: (answers: Answers) => void;
+  /** Leave the questions for later, with whatever the brief says so far. */
+  onSkip: (brief: BriefDraft) => void;
+}) {
   const { whatToMake: t, brief: b } = useMessages().start;
-  const locale = useLocale();
-  const [brief, setBrief] = useState(initial);
-  const [sources, setSources] = useState<string[]>([]);
+  const [brief, setBrief] = useState(initial.brief);
+  const [sources, setSources] = useState<string[]>([...initial.sources]);
   const [typed, setTyped] = useState("");
   const [part, setPart] = useState<Part>("purpose");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-
-  async function start() {
-    const material = [...new Set([...sources, typed.trim()].filter((source) => source !== ""))];
-
-    setBusy(true);
-    setError(undefined);
-
-    try {
-      // The agent reads the brief and the learned material first, so both are in before it starts.
-      const [, learned, agent] = await Promise.all([
-        briefApi.updateBrief(briefPatch(brief)),
-        Promise.allSettled(material.map((source) => api.learn(source))),
-        startAgent(ws.config.agent.default),
-      ]);
-
-      learned.forEach((result, index) => {
-        if (result.status === "rejected") {
-          toast.warning(t.learnFailed(material[index] ?? "", errorText(result.reason)));
-        }
-      });
-
-      if (agent === undefined) throw new Error(t.noAgent);
-
-      const detail = await api.startImport({
-        kind: "brief",
-        agent,
-        locale,
-      });
-
-      location.hash = href("start", detail.id);
-    } catch (cause) {
-      setError(errorText(cause));
-      setBusy(false);
-    }
-  }
 
   const index = STEPS.indexOf(part);
   const links = sources.some(isLink) || typed.trim() !== "";
@@ -101,14 +62,6 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
   const go = (step: 1 | -1) => setPart(STEPS[index + step] ?? part);
   const own = brief.purpose === "own";
   const parts = { value: brief, onChange: setBrief, disabled: busy };
-
-  const skip = () => {
-    // What the user already said is kept, for the next template to start from.
-    if (briefReady(brief)) void briefApi.updateBrief(briefPatch(brief)).catch(() => undefined);
-
-    skipStart(ws.root);
-    location.hash = href("board");
-  };
 
   const next = (label: string, ready = true) => (
     <Button size="lg" disabled={!ready} onClick={() => go(1)}>
@@ -135,12 +88,6 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       ),
       primary: next(t.next, brief.purpose !== null),
     },
-    platforms: {
-      title: b.platformsLabel,
-      body: b.platformsHint,
-      field: <PlatformToggles {...parts} />,
-      primary: next(brief.platforms.length > 0 ? t.next : t.skipPart),
-    },
     website: {
       title: t.material.website.title,
       body: t.material.website.body,
@@ -155,15 +102,25 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       field: <FolderPicker sources={sources} onSources={setSources} />,
       primary: next(folders ? t.next : t.skipPart),
     },
+    platforms: {
+      title: b.platformsLabel,
+      body: b.platformsHint,
+      field: <PlatformToggles {...parts} />,
+      primary: next(brief.platforms.length > 0 ? t.next : t.skipPart),
+    },
     // Last, so the user says anything the choices left out; for their own purpose, it is the brief.
     details: {
       title: own ? b.ownBodyLabel : t.details.title,
       body: own ? t.details.ownBody : t.details.body,
       field: <BriefBody {...parts} focusOnOpen />,
       primary: (
-        <Button size="lg" disabled={busy || !briefReady(brief)} onClick={() => void start()}>
+        <Button
+          size="lg"
+          disabled={busy || !briefReady(brief)}
+          onClick={() => onFinish({ brief, sources: [...sources, typed.trim()] })}
+        >
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          {busy ? t.starting : t.start}
+          {busy ? finish.busyLabel : finish.label}
           {busy ? null : <ArrowRightIcon data-icon="inline-end" />}
         </Button>
       ),
@@ -183,7 +140,7 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       {error === undefined ? null : <ErrorAlert message={error} />}
       {/*
         Two buttons at most, each place keeping its meaning: back at the left, on at the far right.
-        Leaving for the board is offered once, beside the way on, before anything is asked.
+        Leaving the questions for later is offered once, beside the way on, before anything is asked.
       */}
       <div className="flex items-center gap-2">
         {index === 0 ? null : (
@@ -193,7 +150,7 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
         )}
         <div className="ms-auto flex items-center gap-2">
           {index === 0 ? (
-            <Button size="lg" variant="ghost" onClick={skip}>
+            <Button size="lg" variant="ghost" onClick={() => onSkip(brief)}>
               {t.skip}
             </Button>
           ) : null}
@@ -201,5 +158,59 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * What to make in a workspace that has no template yet, where the first launch didn't ask already,
+ * as in a browser. Start saves the brief, learns the material, and has the agent make the first
+ * template; leaving it for later keeps what the brief says and opens the board.
+ */
+export function StartStep({
+  ws,
+  initial,
+  error: failed,
+}: {
+  ws: WorkspaceInfo;
+  initial: Answers;
+  /** Why starting from the first launch's answers didn't work, to try again from here. */
+  error?: string | undefined;
+}) {
+  const { whatToMake: t } = useMessages().start;
+  const locale = useLocale();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(failed);
+
+  const start = (answers: Answers) => {
+    setBusy(true);
+    setError(undefined);
+    startFirstTemplate(ws, answers, locale, t).then(
+      (id) => {
+        location.hash = href("start", id);
+      },
+      (cause: unknown) => {
+        setError(errorText(cause));
+        setBusy(false);
+      },
+    );
+  };
+
+  const skip = (brief: BriefDraft) => {
+    // What the user already said is kept, for the next template to start from.
+    if (briefReady(brief)) void briefApi.updateBrief(briefPatch(brief)).catch(() => undefined);
+
+    skipStart(ws.root);
+    location.hash = href("board");
+  };
+
+  return (
+    <BriefQuestions
+      initial={initial}
+      finish={{ label: t.start, busyLabel: t.starting }}
+      busy={busy}
+      error={error}
+      onFinish={start}
+      onSkip={skip}
+    />
   );
 }

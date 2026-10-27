@@ -1,4 +1,4 @@
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, BellIcon, CheckIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 
 import { api, onImportRun, type ImportDetail, type RunMessage } from "../../api.ts";
+import { desktop } from "../../desktop.ts";
 import { href, useLive } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
 import { importState, isWorking } from "../../lib/imports.ts";
@@ -123,6 +124,7 @@ export function FirstVideo({ id }: { id: string }) {
         }
         onWithoutReference={doc.link === undefined ? undefined : () => void startOver(undefined)}
       />
+      <NotifyRow />
       <form className="flex flex-col gap-8" onSubmit={(event) => void create(event)}>
         <Field>
           <FieldLabel htmlFor={titleId}>{f.titleLabel}</FieldLabel>
@@ -152,5 +154,56 @@ export function FirstVideo({ id }: { id: string }) {
         </StepActions>
       </form>
     </>
+  );
+}
+
+/** Asked notifications already: macOS answers once and doesn't say what, so asking is the step. */
+const NOTIFY_KEY = "cutfac.onboarding.notificationsAsked";
+
+function readAsked(): boolean {
+  try {
+    return localStorage.getItem(NOTIFY_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Notifications, offered while the agent works, when they help: the app says when the agent waits
+ * for the user and they are elsewhere. Only the desktop app notifies.
+ */
+function NotifyRow() {
+  const n = useMessages().start.firstVideo.notify;
+  const [asked, setAsked] = useState(readAsked);
+  const onboarding = desktop?.onboarding;
+
+  if (onboarding === undefined) return null;
+
+  const turnOn = () => {
+    try {
+      localStorage.setItem(NOTIFY_KEY, "1");
+    } catch {
+      // The row just offers it again after a reload.
+    }
+
+    setAsked(true);
+    onboarding.askNotifications(n.sample).catch(sendFailed);
+  };
+
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-muted py-2.5 pr-2.5 pl-4 text-sm">
+      <BellIcon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">{n.label}</span>
+      {asked ? (
+        <span className="flex shrink-0 items-center gap-1 pr-1.5 text-xs font-medium">
+          <CheckIcon className="size-3.5" />
+          {n.done}
+        </span>
+      ) : (
+        <Button size="sm" variant="outline" className="shrink-0" onClick={turnOn}>
+          {n.turnOn}
+        </Button>
+      )}
+    </div>
   );
 }

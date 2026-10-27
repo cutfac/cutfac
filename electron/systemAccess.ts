@@ -17,7 +17,7 @@ import { sandboxed } from "./permissions.ts";
 import { type Frame, followSettingsWindow } from "./settingsWindow.ts";
 
 /** The permissions the app asks for, which System Settings grants on a list the app is dragged into. */
-const PERMISSIONS: ReadonlyArray<Permission> = ["screen"];
+const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
 
 export const isPermission = (value: unknown): value is Permission =>
   PERMISSIONS.some((permission) => permission === value);
@@ -25,6 +25,8 @@ export const isPermission = (value: unknown): value is Permission =>
 /** System Settings, on each permission's list. */
 const SETTINGS_URL: Record<Permission, string> = {
   screen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+  // Device Control and Data Access from macOS 27 on, which the same link opens.
+  accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
 };
 
 const limits = {
@@ -55,14 +57,21 @@ let unfollow: (() => void) | undefined;
 let dragIcon: NativeImage | undefined;
 
 /**
- * Whether the app holds a permission; only macOS asks. macOS reads screen recording once per process,
- * so a grant shows after the app reopens, which macOS offers itself once it is on.
+ * Whether the app holds a permission; only macOS asks. The agents the app runs act under it too.
+ * macOS reads screen recording once per process, so a grant shows after the app reopens, which
+ * macOS offers itself once it is on. Accessibility shows at once.
  */
 export function hasPermission(permission: Permission): boolean {
   if (process.platform !== "darwin") return true;
 
-  return systemPreferences.getMediaAccessStatus(permission) === "granted";
+  return permission === "screen"
+    ? systemPreferences.getMediaAccessStatus("screen") === "granted"
+    : systemPreferences.isTrustedAccessibilityClient(false);
 }
+
+/** macOS's major version, such as 27, or 0 elsewhere. */
+export const systemVersion = () =>
+  process.platform === "darwin" ? Number.parseInt(process.getSystemVersion(), 10) : 0;
 
 /** The app bundle itself, which is what the lists in System Settings take. */
 const appBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");

@@ -1,0 +1,102 @@
+import { ArrowRightIcon, FolderIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { ErrorAlert } from "@/components/page";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+
+import type { CutfacOnboarding, Folder } from "../../desktop.ts";
+import { useMessages } from "../../i18n/index.ts";
+import { StepActions, StepHeader } from "./frame.tsx";
+
+/**
+ * The last step before there is a workspace: where the templates and videos will be kept, as one
+ * line with a way to change it, and the one press that makes the folder and starts the first
+ * template from what the user said. Most keep the folder, so it doesn't ask a step of its own. The
+ * app starts the server on it and the window moves on to the board by itself.
+ */
+export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
+  const t = useMessages().onboarding.ready;
+  const [folder, setFolder] = useState<Folder>();
+  // Whether the user answered what to make, or left it for later; the button says what comes.
+  const [answered, setAnswered] = useState<boolean>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    onboarding.defaultFolder().then(setFolder, (cause: Error) => setError(cause.message));
+    onboarding.draft().then(
+      (draft) => setAnswered(draft !== undefined && !draft.skipped),
+      () => setAnswered(false),
+    );
+  }, [onboarding]);
+
+  const change = () =>
+    onboarding.chooseFolder().then(
+      (next) => {
+        if (next === undefined) return;
+
+        setFolder(next);
+        setError(undefined);
+      },
+      (cause: Error) => setError(cause.message),
+    );
+
+  const create = (target: Folder) => {
+    setBusy(true);
+    setError(undefined);
+    // On success the window loads the board, so only a failure comes back here.
+    onboarding.createWorkspace(target.path).then(
+      (reason) => {
+        if (reason === undefined) return;
+
+        setError(reason);
+        setBusy(false);
+      },
+      (cause: Error) => {
+        setError(cause.message);
+        setBusy(false);
+      },
+    );
+  };
+
+  return (
+    <>
+      <StepHeader
+        title={answered === false ? t.skippedTitle : t.title}
+        body={answered === false ? t.skippedBody : t.body}
+      />
+      {folder === undefined ? (
+        <Skeleton className="h-14 w-full" />
+      ) : (
+        <div className="flex items-center gap-3 rounded-2xl bg-muted py-2.5 pr-2.5 pl-4">
+          <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="text-xs text-muted-foreground">{t.savedIn}</span>
+            <span className="truncate font-mono text-xs" title={folder.path}>
+              {folder.label}
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={change}>
+            {t.change}
+          </Button>
+        </div>
+      )}
+      {error === undefined ? null : <ErrorAlert message={error} />}
+      <StepActions>
+        <Button
+          size="lg"
+          disabled={folder === undefined || answered === undefined || busy}
+          onClick={() => {
+            if (folder !== undefined) create(folder);
+          }}
+        >
+          {busy ? <Spinner data-icon="inline-start" /> : null}
+          {busy ? t.creating : answered === false ? t.open : t.start}
+          {busy ? null : <ArrowRightIcon data-icon="inline-end" />}
+        </Button>
+      </StepActions>
+    </>
+  );
+}
