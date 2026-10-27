@@ -155,32 +155,41 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const replaceWatch = Effect.gen(function* () {
+    yield* stopWatching;
+
+    const scope = yield* Scope.make();
+
+    yield* Ref.set(watching, Option.some(scope));
+
+    return scope;
+  });
+
+  const loadDragIcon = Effect.gen(function* () {
+    if (Option.isSome(yield* Ref.get(dragIcon))) return;
+
+    yield* Ref.set(dragIcon, Option.some((yield* bundleIcon).resize({ width: 56 })));
+  });
+
+  const endWatchOnGrant = (waiting: Fiber.Fiber<Option.Option<boolean>>, watch: AccessWatch) =>
+    Fiber.join(waiting).pipe(
+      Effect.flatMap((granted) =>
+        Effect.andThen(stopWatching, Option.isSome(granted) ? watch.onGranted : Effect.void),
+      ),
+      Effect.ignore,
+      Effect.forkDetach,
+    );
+
   const openSettings = (watch: AccessWatch) =>
     Effect.gen(function* () {
-      // Set up before the wait, so a second call meanwhile replaces this one instead of doubling it.
-      yield* stopWatching;
+      const scope = yield* replaceWatch;
 
-      const scope = yield* Scope.make();
-
-      yield* Ref.set(watching, Option.some(scope));
-
-      if (Option.isNone(yield* Ref.get(dragIcon))) {
-        yield* Ref.set(dragIcon, Option.some((yield* bundleIcon).resize({ width: 56 })));
-      }
-
+      yield* loadDragIcon;
       yield* showHelper(watch).pipe(Scope.provide(scope));
 
       const waiting = yield* awaitGrant(hasPermission(watch.permission)).pipe(Effect.forkIn(scope));
 
-      // Outside the watch, which ends as the permission comes and must not end this with it.
-      yield* Fiber.join(waiting).pipe(
-        Effect.flatMap((granted) =>
-          Effect.andThen(stopWatching, Option.isSome(granted) ? watch.onGranted : Effect.void),
-        ),
-        Effect.ignore,
-        Effect.forkDetach,
-      );
-
+      yield* endWatchOnGrant(waiting, watch);
       yield* Effect.promise(() => shell.openExternal(SETTINGS_URL[watch.permission]));
     });
 

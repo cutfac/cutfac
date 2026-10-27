@@ -285,6 +285,17 @@ const setUp = (launch: Launch, workspace: string) =>
     }),
   );
 
+const reportCrashUntilStopped = (
+  server: Running,
+  stoppedWith: Scope.Closeable,
+  onCrash: (message: string) => Effect.Effect<void>,
+) =>
+  Effect.exit(server.handle.exitCode).pipe(
+    Effect.andThen(describeEnd(server, "The local server")),
+    Effect.flatMap(onCrash),
+    Effect.forkIn(stoppedWith),
+  );
+
 export interface SidecarOptions {
   readonly workspace: string;
   readonly port: { readonly fixed: number } | { readonly last: Option.Option<number> };
@@ -333,12 +344,7 @@ const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope
 
   yield* untilHealthy(`${url}api/health`, server);
 
-  // Stopping closes the scope, which ends this before the process, so only a crash is reported.
-  yield* Effect.exit(server.handle.exitCode).pipe(
-    Effect.andThen(describeEnd(server, "The local server")),
-    Effect.flatMap(options.onCrash),
-    Effect.forkIn(scope),
-  );
+  yield* reportCrashUntilStopped(server, scope, options.onCrash);
 
   const { handle } = server;
 
