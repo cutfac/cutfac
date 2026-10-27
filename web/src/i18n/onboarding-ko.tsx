@@ -48,8 +48,7 @@ export const onboardingKo: OnboardingMessages = {
     ],
     waiting: "목록에 컷팩이 추가되기를 기다리는 중…",
     granted: "권한을 받았어요",
-    skip: "나중에 하기",
-    skipNote: "대신 macOS가 폴더마다 물어봐요.",
+    skip: "나중에 하기 (매번 물어보기)",
     preview: {
       list: "전체 디스크 접근 권한",
       pane: "개인정보 보호 및 보안",

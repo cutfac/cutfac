@@ -99,7 +99,6 @@ export function AccessStep({
           <Button variant="ghost" onClick={onDone}>
             {t.skip}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">{t.skipNote}</p>
         </StepActions>
       )}
     </>

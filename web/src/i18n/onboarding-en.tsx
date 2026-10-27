@@ -51,8 +51,8 @@ export const onboardingEn = {
     ],
     waiting: "Waiting for Cutfac in the list…",
     granted: "Access granted",
-    skip: "Skip for now",
-    skipNote: "macOS will ask for each folder instead.",
+    /** Says what skipping means, since macOS then asks for each folder. */
+    skip: "Skip for now (ask each time)",
     /** The picture of System Settings with the panel under it. */
     preview: {
       list: "Full Disk Access",
