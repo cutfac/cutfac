@@ -8,8 +8,9 @@ import { useMessages } from "../i18n/index.ts";
 
 /**
  * The panel that sits under System Settings, after PermissionFlow's: a sentence pointing up at the
- * Full Disk Access list, and the app as a card to drag into it, which drags the app itself. The
- * panel moves by its background, and goes away by itself once the access is granted.
+ * Full Disk Access list, and the app as a card to drag into it. A drag from anywhere on the panel
+ * drags the app itself, never the panel, which follows System Settings on its own. It goes away by
+ * itself once the access is granted.
  */
 export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
   const t = useMessages();
@@ -20,7 +21,16 @@ export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
   }, [onboarding]);
 
   return (
-    <div className="flex h-dvh flex-col gap-2.5 p-3 [-webkit-app-region:drag]">
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- dragged with the mouse, as in Finder; the sentence on it says so
+    <div
+      draggable={app !== undefined}
+      className="group flex h-dvh cursor-grab flex-col gap-2.5 p-3 active:cursor-grabbing"
+      onDragStart={(event) => {
+        // The app drags its own bundle instead of the page.
+        event.preventDefault();
+        onboarding.startAppDrag();
+      }}
+    >
       <div className="flex items-start gap-2">
         <ArrowUpIcon className="mt-0.5 size-4 shrink-0 animate-bounce text-brand" />
         <p className="flex-1 text-sm/snug text-pretty">
@@ -30,23 +40,14 @@ export function DragHelper({ onboarding }: { onboarding: CutfacOnboarding }) {
           variant="ghost"
           size="icon-xs"
           aria-label={t.common.close}
-          className="-mt-0.5 [-webkit-app-region:no-drag]"
+          className="-mt-0.5"
           onClick={() => window.close()}
         >
           <XIcon />
         </Button>
       </div>
       {app === undefined ? null : (
-        // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- dragged with the mouse, as in Finder; the sentence above says so
-        <div
-          draggable
-          className="flex animate-in cursor-grab items-center gap-3 rounded-2xl bg-foreground/6 py-2 pr-3 pl-2 transition-colors duration-300 [-webkit-app-region:no-drag] fade-in hover:bg-foreground/10 active:cursor-grabbing"
-          onDragStart={(event) => {
-            // The app drags its own bundle instead of the card.
-            event.preventDefault();
-            onboarding.startAppDrag();
-          }}
-        >
+        <div className="flex animate-in items-center gap-3 rounded-2xl bg-foreground/6 py-2 pr-3 pl-2 transition-colors duration-300 fade-in group-hover:bg-foreground/10">
           <img src={app.icon} alt="" draggable={false} className="size-8" />
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
           <span className="flex shrink-0 flex-col items-center text-muted-foreground">
