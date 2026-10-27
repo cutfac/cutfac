@@ -19,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import type { AgentName } from "../../api.ts";
 import type { AgentSetup, CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { DONE_PAUSE_MS, StepDone, StepHeader } from "./frame.tsx";
+import { StepActions, StepHeader } from "./frame.tsx";
 
 /** A fix in flight shows the last line it printed; one that failed, the command to run instead. */
 type FixRun = { status: "running"; line?: string } | { status: "failed"; command: string };
@@ -45,8 +45,8 @@ const nearest = (setups: ReadonlyArray<AgentSetup>) =>
 
 /**
  * Claude Code and Codex as found on this Mac, each with the one button that fixes it. Checks again
- * when the window comes back to the front, in case the user fixed one in a terminal, and moves on
- * once either is ready.
+ * when the window comes back to the front, in case the user fixed one in a terminal. Once either is
+ * ready it waits for the user to move on, so they see what was found before the step leaves.
  */
 export function AgentStep({
   onboarding,
@@ -103,16 +103,6 @@ export function AgentStep({
       ),
     [onboarding],
   );
-
-  const done = useEffectEvent(onDone);
-
-  useEffect(() => {
-    if (!ready) return;
-
-    const timer = setTimeout(done, DONE_PAUSE_MS);
-
-    return () => clearTimeout(timer);
-  }, [ready]);
 
   const fix = (setup: AgentSetup) => {
     const failed = (command: string) =>
@@ -179,7 +169,11 @@ export function AgentStep({
         </ItemGroup>
       )}
       {ready ? (
-        <StepDone label={t.state.ready} />
+        <StepActions>
+          <Button size="lg" onClick={onDone}>
+            {t.next}
+          </Button>
+        </StepActions>
       ) : (
         <p className="text-xs/relaxed text-muted-foreground">{t.subscription}</p>
       )}

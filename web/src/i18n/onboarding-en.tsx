@@ -39,6 +39,7 @@ export const onboardingEn = {
     copied: "Copied. Paste it into Terminal, then come back.",
     checkAgain: "Check again",
     subscription: "Each needs its own subscription. Pick the one you already pay for.",
+    next: "Next",
   },
   access: {
     title: "Let your agent see your files",

@@ -36,6 +36,7 @@ export const onboardingKo: OnboardingMessages = {
     copied: "복사했어요. 터미널에 붙여 넣고 돌아오세요.",
     checkAgain: "다시 확인",
     subscription: "각각 따로 구독이 필요해요. 이미 쓰고 있는 쪽을 고르세요.",
+    next: "다음",
   },
   access: {
     title: "에이전트가 파일을 볼 수 있게 해 주세요",
