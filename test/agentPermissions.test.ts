@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { ConfigProvider, Effect, type Layer, Option } from "effect";
+import { ConfigProvider, Effect, FileSystem, Layer, Option } from "effect";
 
 import {
   agentPermissions,
@@ -19,16 +17,18 @@ import { AppData } from "../src/core/appData.ts";
 import { refuse } from "../src/core/approval.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";
 import type { AgentName } from "../src/core/schema.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
 import {
   codexAppServer,
   codexParams,
-  codexReceived,
-  makeFakeAgents,
-  makeWorkspace,
-  type FakeAgents,
-  type TestServices,
-  type TestWorkspace,
+  codexReceivedNow,
+  FakeAgentDir,
+  fakeAgents,
+  tempWorkspace,
 } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace("Permissions"), fakeAgents));
 
 test("Claude's flags leave the user's mode to Claude, or set one of Cutfac's over it", () => {
   expect(claudePermissionFlags("follow")).toEqual([]);
@@ -125,179 +125,222 @@ sandbox_approval = true
   });
 });
 
-let t: TestWorkspace;
+/**
+ * The test's workspace and fake agents, the user's agent config in a folder of its own (Claude
+ * Code's `settings.json` and Codex's `config.toml`), and the app's records in another. `inApp`
+ * runs an effect with the agents found only among the fakes and the app and the config there.
+ */
+const permissionsSetup = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const ws = yield* Workspace;
+  const fakes = yield* FakeAgentDir;
+  const config = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-agent-config-" });
+  const appDir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-app-" });
 
-let fakes: FakeAgents;
+  const env = ConfigProvider.fromEnv({
+    env: { PATH: join(fakes.dir, "bin"), CLAUDE_CONFIG_DIR: config, CODEX_HOME: config },
+  });
 
-/** Where the user's agents keep their config: Claude Code's `settings.json` and Codex's `config.toml`. */
-let config: string;
+  const inApp = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.provideService(AppData, Option.some(appDir)),
+      Effect.provideService(ConfigProvider.ConfigProvider, env),
+    );
 
-let appDir: string;
-
-let env: Layer.Layer<never>;
-
-beforeEach(async () => {
-  t = await makeWorkspace("Permissions");
-  fakes = await makeFakeAgents();
-  config = await mkdtemp(join(tmpdir(), "cutfac-agent-config-"));
-  appDir = await mkdtemp(join(tmpdir(), "cutfac-app-"));
-
-  env = ConfigProvider.layer(
-    ConfigProvider.fromEnv({
-      env: { PATH: join(fakes.dir, "bin"), CLAUDE_CONFIG_DIR: config, CODEX_HOME: config },
-    }),
-  );
+  return { fs, ws, fakes, config, appDir, inApp };
 });
-
-afterEach(async () => {
-  await rm(appDir, { recursive: true, force: true });
-  await rm(config, { recursive: true, force: true });
-  await fakes.remove();
-  await t.remove();
-});
-
-/** `effect` with the user's agent config in `config` and the app keeping its records in `appDir`. */
-const inApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) =>
-  t.runWith(env, Effect.provideService(effect, AppData, Option.some(appDir)));
 
 const claudeMode = (defaultMode: string) =>
   JSON.stringify({ permissions: { defaultMode }, model: "opus" });
 
 describe("the user's choice", () => {
-  test("follows their own settings until they choose, as the board shows them", async () => {
-    await writeFile(join(config, "settings.json"), claudeMode("auto"));
-    await writeFile(join(config, "config.toml"), 'sandbox_mode = "danger-full-access"\n');
-
-    expect(await inApp(agentPermissions())).toEqual([
-      { agent: "claude", mode: "follow", follows: "auto", setting: "auto" },
-      { agent: "codex", mode: "follow", follows: "full", setting: "danger-full-access" },
-    ]);
-  });
-
-  test("reads the workspace's Claude Code settings over the user's", async () => {
-    await writeFile(join(config, "settings.json"), claudeMode("auto"));
-    await mkdir(join(t.root, ".claude"), { recursive: true });
-    await writeFile(join(t.root, ".claude", "settings.json"), claudeMode("plan"));
-
-    const [claude] = await inApp(agentPermissions());
-
-    expect(claude).toMatchObject({ follows: "limited", setting: "plan" });
-  });
-
-  test("is kept in the app's own folder, beside what else it keeps for the agent", async () => {
-    await writeFile(join(appDir, "agents.json"), JSON.stringify({ codex: { seen: 1 } }));
-
-    expect(await inApp(setAgentPermissions({ agent: "codex", mode: "full" }))).toMatchObject({
-      agent: "codex",
-      mode: "full",
-    });
-    expect(JSON.parse(await readFile(join(appDir, "agents.json"), "utf8"))).toEqual({
-      codex: { seen: 1, permissions: "full" },
-    });
-
-    const views = await inApp(agentPermissions());
-
-    expect(views.map((view) => view.mode)).toEqual(["follow", "full"]);
-  });
-
-  test("falls back to following the user's settings when the record doesn't read", async () => {
-    await writeFile(
-      join(appDir, "agents.json"),
-      JSON.stringify({ claude: { permissions: "all" } }),
-    );
-
-    const [claude] = await inApp(agentPermissions());
-
-    expect(claude?.mode).toBe("follow");
-  });
-});
-
-/** What the fake Codex was asked to start the thread with. */
-const threadParams = async () => codexParams(await codexReceived(fakes.calls), "thread/start");
-
-const given = async () => (await readFile(join(fakes.calls, "args"), "utf8")).split("\0");
-
-const edit = (agent: AgentName) =>
-  inApp(
+  it.live("follows their own settings until they choose, as the board shows them", () =>
     Effect.gen(function* () {
-      const created = yield* createItem({ title: "Clip" });
-      const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
+      const { fs, config, inApp } = yield* permissionsSetup;
 
-      yield* runEdit(undefined)(
-        { itemId: created.id, feedbackId: feedback.id, agent },
-        () => Effect.void,
-        refuse,
+      yield* fs.writeFileString(join(config, "settings.json"), claudeMode("auto"));
+      yield* fs.writeFileString(
+        join(config, "config.toml"),
+        'sandbox_mode = "danger-full-access"\n',
       );
+
+      expect(yield* inApp(agentPermissions())).toEqual([
+        { agent: "claude", mode: "follow", follows: "auto", setting: "auto" },
+        { agent: "codex", mode: "follow", follows: "full", setting: "danger-full-access" },
+      ]);
     }),
   );
+
+  it.live("reads the workspace's Claude Code settings over the user's", () =>
+    Effect.gen(function* () {
+      const { fs, ws, config, inApp } = yield* permissionsSetup;
+
+      yield* fs.writeFileString(join(config, "settings.json"), claudeMode("auto"));
+      yield* ws.writeText(".claude/settings.json", claudeMode("plan"));
+
+      const [claude] = yield* inApp(agentPermissions());
+
+      expect(claude).toMatchObject({ follows: "limited", setting: "plan" });
+    }),
+  );
+
+  it.live("is kept in the app's own folder, beside what else it keeps for the agent", () =>
+    Effect.gen(function* () {
+      const { fs, appDir, inApp } = yield* permissionsSetup;
+
+      yield* fs.writeFileString(
+        join(appDir, "agents.json"),
+        JSON.stringify({ codex: { seen: 1 } }),
+      );
+
+      expect(yield* inApp(setAgentPermissions({ agent: "codex", mode: "full" }))).toMatchObject({
+        agent: "codex",
+        mode: "full",
+      });
+      expect(JSON.parse(yield* fs.readFileString(join(appDir, "agents.json")))).toEqual({
+        codex: { seen: 1, permissions: "full" },
+      });
+
+      const views = yield* inApp(agentPermissions());
+
+      expect(views.map((view) => view.mode)).toEqual(["follow", "full"]);
+    }),
+  );
+
+  it.live("falls back to following the user's settings when the record doesn't read", () =>
+    Effect.gen(function* () {
+      const { fs, appDir, inApp } = yield* permissionsSetup;
+
+      yield* fs.writeFileString(
+        join(appDir, "agents.json"),
+        JSON.stringify({ claude: { permissions: "all" } }),
+      );
+
+      const [claude] = yield* inApp(agentPermissions());
+
+      expect(claude?.mode).toBe("follow");
+    }),
+  );
+});
 
 /** The value after `flag` in `argv`. */
 const after = (argv: ReadonlyArray<string>, flag: string) => argv[argv.indexOf(flag) + 1];
 
-describe("an edit run", () => {
-  beforeEach(async () => {
-    await fakes.bin(
-      "claude",
-      `head -n 1 >/dev/null
+/** The workspace's set-up, with fake agents that note how they were started. */
+const editSetup = Effect.gen(function* () {
+  const setup = yield* permissionsSetup;
+  const { fs, fakes, inApp } = setup;
+
+  yield* fakes.bin(
+    "claude",
+    `head -n 1 >/dev/null
 printf '%s\\0' "$@" > "${fakes.calls}/args"
 echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
 `,
-    );
-    await fakes.bin("codex", codexAppServer(fakes.calls));
-  });
+  );
+  yield* fakes.bin("codex", codexAppServer(fakes.calls));
 
-  test("of Claude leaves the user's mode to Claude, which asks the board what it would ask", async () => {
-    await edit("claude");
+  const edit = (agent: AgentName) =>
+    inApp(
+      Effect.gen(function* () {
+        const created = yield* createItem({ title: "Clip" });
+        const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
 
-    const argv = await given();
-
-    expect(argv).not.toContain("--permission-mode");
-    expect(after(argv, "--permission-prompt-tool")).toBe("stdio");
-  });
-
-  test("of Claude takes the mode the user chose", async () => {
-    await writeFile(join(config, "settings.json"), claudeMode("plan"));
-    await inApp(setAgentPermissions({ agent: "claude", mode: "full" }));
-
-    await edit("claude");
-
-    expect(after(await given(), "--permission-mode")).toBe("bypassPermissions");
-  });
-
-  test("of Claude allows only Cutfac's own tools, whatever an earlier cutfac.yaml lists", async () => {
-    await writeFile(
-      join(t.root, "cutfac.yaml"),
-      "name: Permissions\nagent:\n  claudeAllowedTools: [Bash(uv:*)]\n",
+        yield* runEdit(undefined)(
+          { itemId: created.id, feedbackId: feedback.id, agent },
+          () => Effect.void,
+          refuse,
+        );
+      }),
     );
 
-    await edit("claude");
+  /** What the fake Codex was asked to start the thread with. */
+  const threadParams = Effect.map(codexReceivedNow(fakes.calls), (received) =>
+    codexParams(received, "thread/start"),
+  );
 
-    const allowed = after(await given(), "--allowedTools")?.split(",") ?? [];
+  const given = Effect.map(Effect.orDie(fs.readFileString(join(fakes.calls, "args"))), (args) =>
+    args.split("\0"),
+  );
 
-    expect(allowed).not.toContain("Bash(uv:*)");
+  return { ...setup, edit, threadParams, given };
+});
 
-    for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
-  });
+describe("an edit run", () => {
+  it.live(
+    "of Claude leaves the user's mode to Claude, which asks the board what it would ask",
+    () =>
+      Effect.gen(function* () {
+        const { edit, given } = yield* editSetup;
 
-  test("of Codex leaves the user's own approvals to Codex, with the workspace writable", async () => {
-    await writeFile(
-      join(config, "config.toml"),
-      'approval_policy = "on-request"\napprovals_reviewer = "guardian_subagent"\n',
-    );
+        yield* edit("claude");
 
-    await edit("codex");
+        const argv = yield* given;
 
-    expect(await threadParams()).toEqual({ sandbox: "workspace-write" });
-  });
+        expect(argv).not.toContain("--permission-mode");
+        expect(after(argv, "--permission-prompt-tool")).toBe("stdio");
+      }),
+  );
 
-  test("of Codex takes the mode the user chose", async () => {
-    await inApp(setAgentPermissions({ agent: "codex", mode: "full" }));
+  it.live("of Claude takes the mode the user chose", () =>
+    Effect.gen(function* () {
+      const { fs, config, inApp, edit, given } = yield* editSetup;
 
-    await edit("codex");
+      yield* fs.writeFileString(join(config, "settings.json"), claudeMode("plan"));
+      yield* inApp(setAgentPermissions({ agent: "claude", mode: "full" }));
 
-    expect(await threadParams()).toEqual({
-      sandbox: "danger-full-access",
-      approvalPolicy: "never",
-    });
-  });
+      yield* edit("claude");
+
+      expect(after(yield* given, "--permission-mode")).toBe("bypassPermissions");
+    }),
+  );
+
+  it.live("of Claude allows only Cutfac's own tools, whatever an earlier cutfac.yaml lists", () =>
+    Effect.gen(function* () {
+      const { ws, edit, given } = yield* editSetup;
+
+      yield* ws.writeText(
+        "cutfac.yaml",
+        "name: Permissions\nagent:\n  claudeAllowedTools: [Bash(uv:*)]\n",
+      );
+
+      yield* edit("claude");
+
+      const allowed = after(yield* given, "--allowedTools")?.split(",") ?? [];
+
+      expect(allowed).not.toContain("Bash(uv:*)");
+
+      for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
+    }),
+  );
+
+  it.live("of Codex leaves the user's own approvals to Codex, with the workspace writable", () =>
+    Effect.gen(function* () {
+      const { fs, config, edit, threadParams } = yield* editSetup;
+
+      yield* fs.writeFileString(
+        join(config, "config.toml"),
+        'approval_policy = "on-request"\napprovals_reviewer = "guardian_subagent"\n',
+      );
+
+      yield* edit("codex");
+
+      expect(yield* threadParams).toEqual({ sandbox: "workspace-write" });
+    }),
+  );
+
+  it.live("of Codex takes the mode the user chose", () =>
+    Effect.gen(function* () {
+      const { inApp, edit, threadParams } = yield* editSetup;
+
+      yield* inApp(setAgentPermissions({ agent: "codex", mode: "full" }));
+
+      yield* edit("codex");
+
+      expect(yield* threadParams).toEqual({
+        sandbox: "danger-full-access",
+        approvalPolicy: "never",
+      });
+    }),
+  );
 });

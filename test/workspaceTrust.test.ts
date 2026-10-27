@@ -1,15 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect, Option, Schema } from "effect";
+import { Context, Effect, FileSystem, Layer, Option, Schema } from "effect";
 
 import { runEdit } from "../src/core/agentRun.ts";
 import { AppData } from "../src/core/appData.ts";
 import { refuse } from "../src/core/approval.ts";
 import type { Approval, ApprovalAnswer } from "../src/core/approval.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
+import { Workspace } from "../src/core/workspace.ts";
 import {
   askingTrusted,
   fingerprintOf,
@@ -19,19 +18,40 @@ import {
   trustStatus,
   trustWorkspace,
 } from "../src/core/workspaceTrust.ts";
-import {
-  makeFakeAgents,
-  makeWorkspace,
-  type FakeAgents,
-  type TestServices,
-  type TestWorkspace,
-} from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace("Trust"), fakeAgents));
 
 const SETTINGS = ".claude/settings.json";
 
 const HOOKS = {
   PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "./check.sh" }] }],
 };
+
+/**
+ * The test's workspace with a `.claude` folder, and the app keeping its records in a folder of its
+ * own; `inApp` runs an effect against that folder, `failInApp` one that fails.
+ */
+const trustSetup = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const ws = yield* Workspace;
+  const appDir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-app-" });
+
+  yield* ws.mkdir(".claude");
+
+  const inApp = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.provideService(effect, AppData, Option.some(appDir));
+
+  const failInApp = <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.flip(inApp(effect));
+
+  const settle = (settings: Schema.JsonObject) =>
+    ws.writeText(SETTINGS, JSON.stringify(settings, null, 2));
+
+  return { ws, appDir, inApp, failInApp, settle };
+});
+
+const print = (text: string) => fingerprintOf(trustItems(SETTINGS, text));
 
 describe("the settings a workspace would have Claude Code act on by itself", () => {
   test("are what runs or allows a command, not what only shapes the answer", () => {
@@ -60,128 +80,126 @@ describe("the settings a workspace would have Claude Code act on by itself", () 
     expect(trustItems(SETTINGS, "{ hooks: ")).toEqual([{ file: SETTINGS, value: "{ hooks: " }]);
   });
 
-  test("read the same whatever order their keys come in", async () => {
-    const t = await makeWorkspace();
-    const print = (text: string) => t.run(fingerprintOf(trustItems(SETTINGS, text)));
+  it.live("read the same whatever order their keys come in", () =>
+    Effect.gen(function* () {
+      const first = yield* print('{"env": {"A": "1", "B": "2"}, "hooks": {"Stop": []}}');
 
-    try {
-      const first = await print('{"env": {"A": "1", "B": "2"}, "hooks": {"Stop": []}}');
-
-      expect(await print('{"hooks": {"Stop": []}, "env": {"B": "2", "A": "1"}}')).toBe(first);
-      expect(await print('{"env": {"A": "1", "B": "3"}, "hooks": {"Stop": []}}')).not.toBe(first);
-    } finally {
-      await t.remove();
-    }
-  });
+      expect(yield* print('{"hooks": {"Stop": []}, "env": {"B": "2", "A": "1"}}')).toBe(first);
+      expect(yield* print('{"env": {"A": "1", "B": "3"}, "hooks": {"Stop": []}}')).not.toBe(first);
+    }),
+  );
 });
 
+const Records = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json));
+
 describe("trusting a workspace", () => {
-  let t: TestWorkspace;
-  let appDir: string;
+  it.live("isn't needed while the settings act on nothing", () =>
+    Effect.gen(function* () {
+      const { inApp, settle } = yield* trustSetup;
 
-  /** `effect` with the app keeping its records in `appDir`. */
-  const withApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) =>
-    Effect.provideService(effect, AppData, Option.some(appDir));
+      yield* settle({ model: "opus" });
 
-  const inApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) => t.run(withApp(effect));
+      expect(yield* inApp(trustStatus())).toMatchObject({ needed: false, items: [] });
+      yield* inApp(requireTrust("claude"));
+    }),
+  );
 
-  const failInApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) => t.fail(withApp(effect));
+  it.live("holds Claude back until the user trusts the settings they saw", () =>
+    Effect.gen(function* () {
+      const { inApp, failInApp, settle } = yield* trustSetup;
 
-  const settle = (settings: Schema.JsonObject) =>
-    writeFile(join(t.root, SETTINGS), JSON.stringify(settings, null, 2));
+      yield* settle({ hooks: HOOKS });
+      const status = yield* inApp(trustStatus());
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Trust");
-    appDir = await mkdtemp(join(tmpdir(), "cutfac-app-"));
-    await mkdir(join(t.root, ".claude"));
-  });
+      expect(status.needed).toBe(true);
+      expect((yield* failInApp(requireTrust("claude")))._tag).toBe("Conflict");
+      // Codex leaves a folder's own settings off by itself.
+      yield* inApp(requireTrust("codex"));
 
-  afterEach(async () => {
-    await rm(appDir, { recursive: true, force: true });
-    await t.remove();
-  });
+      expect((yield* failInApp(trustWorkspace("not-these")))._tag).toBe("Conflict");
+      expect(yield* inApp(trustWorkspace(status.fingerprint))).toMatchObject({ needed: false });
+      expect(yield* inApp(trustStatus())).toMatchObject({ needed: false });
+      yield* inApp(requireTrust("claude"));
 
-  test("isn't needed while the settings act on nothing", async () => {
-    await settle({ model: "opus" });
+      // Settings added since are not trusted.
+      yield* settle({ hooks: HOOKS, env: { A: "1" } });
+      expect(yield* inApp(trustStatus())).toMatchObject({ needed: true });
+    }),
+  );
 
-    expect(await inApp(trustStatus())).toMatchObject({ needed: false, items: [] });
-    await inApp(requireTrust("claude"));
-  });
+  it.live("keeps other workspaces' records as they were", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { ws, appDir, inApp, settle } = yield* trustSetup;
+      const store = join(appDir, "workspaces.json");
 
-  test("holds Claude back until the user trusts the settings they saw", async () => {
-    await settle({ hooks: HOOKS });
-    const status = await inApp(trustStatus());
+      yield* fs.writeFileString(
+        store,
+        JSON.stringify({ "/elsewhere": { settings: "abc", later: 1 } }),
+      );
+      yield* settle({ hooks: HOOKS });
 
-    expect(status.needed).toBe(true);
-    expect((await failInApp(requireTrust("claude")))._tag).toBe("Conflict");
-    // Codex leaves a folder's own settings off by itself.
-    await inApp(requireTrust("codex"));
+      yield* inApp(trustWorkspace((yield* inApp(trustStatus())).fingerprint));
 
-    expect((await failInApp(trustWorkspace("not-these")))._tag).toBe("Conflict");
-    expect(await inApp(trustWorkspace(status.fingerprint))).toMatchObject({ needed: false });
-    expect(await inApp(trustStatus())).toMatchObject({ needed: false });
-    await inApp(requireTrust("claude"));
+      const saved = yield* Schema.decodeEffect(Records)(yield* fs.readFileString(store));
 
-    // Settings added since are not trusted.
-    await settle({ hooks: HOOKS, env: { A: "1" } });
-    expect(await inApp(trustStatus())).toMatchObject({ needed: true });
-  });
+      expect(saved["/elsewhere"]).toEqual({ settings: "abc", later: 1 });
+      expect(saved[ws.root]).toEqual({ settings: expect.any(String) });
+    }),
+  );
 
-  test("keeps other workspaces' records as they were", async () => {
-    const store = join(appDir, "workspaces.json");
-    await writeFile(store, JSON.stringify({ "/elsewhere": { settings: "abc", later: 1 } }));
-    await settle({ hooks: HOOKS });
+  it.live("leaves a record file it can't read as it was", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { appDir, inApp, failInApp, settle } = yield* trustSetup;
+      const store = join(appDir, "workspaces.json");
 
-    await inApp(trustWorkspace((await inApp(trustStatus())).fingerprint));
+      yield* fs.writeFileString(store, "{ not json");
+      yield* settle({ hooks: HOOKS });
+      const status = yield* inApp(trustStatus());
 
-    const saved = JSON.parse(await readFile(store, "utf8"));
+      expect(status.needed).toBe(true);
+      expect((yield* failInApp(trustWorkspace(status.fingerprint)))._tag).toBe("WorkspaceError");
+      expect(yield* fs.readFileString(store)).toBe("{ not json");
+    }),
+  );
 
-    expect(saved["/elsewhere"]).toEqual({ settings: "abc", later: 1 });
-    expect(saved[t.root]).toEqual({ settings: expect.any(String) });
-  });
+  it.live("can't be kept without the app's folder", () =>
+    Effect.gen(function* () {
+      const { settle } = yield* trustSetup;
 
-  test("leaves a record file it can't read as it was", async () => {
-    const store = join(appDir, "workspaces.json");
-    await writeFile(store, "{ not json");
-    await settle({ hooks: HOOKS });
-    const status = await inApp(trustStatus());
+      yield* settle({ hooks: HOOKS });
+      const status = yield* trustStatus();
 
-    expect(status.needed).toBe(true);
-    expect((await failInApp(trustWorkspace(status.fingerprint)))._tag).toBe("WorkspaceError");
-    expect(await readFile(store, "utf8")).toBe("{ not json");
-  });
+      expect((yield* Effect.flip(trustWorkspace(status.fingerprint)))._tag).toBe("InvalidRequest");
+    }),
+  );
 
-  test("can't be kept without the app's folder", async () => {
-    await settle({ hooks: HOOKS });
-    const status = await t.run(trustStatus());
+  it.live("comes with a workspace Cutfac made, unless its folder already had such settings", () =>
+    Effect.gen(function* () {
+      const { inApp, settle } = yield* trustSetup;
 
-    expect((await t.fail(trustWorkspace(status.fingerprint)))._tag).toBe("InvalidRequest");
-  });
+      yield* inApp(trustCreated());
+      yield* settle({ hooks: HOOKS });
 
-  test("comes with a workspace Cutfac made, unless its folder already had such settings", async () => {
-    await inApp(trustCreated());
-    await settle({ hooks: HOOKS });
+      expect(yield* inApp(trustStatus())).toMatchObject({ needed: false });
 
-    expect(await inApp(trustStatus())).toMatchObject({ needed: false });
+      const other = yield* Layer.build(tempWorkspace("Cloned"));
+      const cloned = Context.get(other, Workspace);
 
-    const other = await makeWorkspace("Cloned");
+      yield* cloned.mkdir(".claude");
+      yield* cloned.writeText(SETTINGS, JSON.stringify({ hooks: HOOKS }));
 
-    try {
-      await mkdir(join(other.root, ".claude"));
-      await writeFile(join(other.root, SETTINGS), JSON.stringify({ hooks: HOOKS }));
+      const inCloned = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        Effect.provide(inApp(effect), other);
 
-      await other.run(withApp(trustCreated()));
-      expect(await other.run(withApp(trustStatus()))).toMatchObject({ needed: true });
-    } finally {
-      await other.remove();
-    }
-  });
+      yield* inCloned(trustCreated());
+      expect(yield* inCloned(trustStatus())).toMatchObject({ needed: true });
+    }),
+  );
 });
 
 describe("Always allow on the board", () => {
-  let t: TestWorkspace;
-  let appDir: string;
-
   const LOCAL = ".claude/settings.local.json";
 
   const ffmpeg: Approval = {
@@ -192,117 +210,107 @@ describe("Always allow on the board", () => {
     rules: ["Bash(ffmpeg:*)"],
   };
 
-  const inApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) =>
-    t.run(Effect.provideService(effect, AppData, Option.some(appDir)));
+  /** The trust set-up, with what a Claude run that asks for ffmpeg does to the settings. */
+  const alwaysSetup = Effect.gen(function* () {
+    const setup = yield* trustSetup;
+    const { ws, inApp } = setup;
 
-  const write = (file: string, settings: Schema.JsonObject) =>
-    writeFile(join(t.root, file), JSON.stringify(settings, null, 2));
+    const write = (file: string, settings: Schema.JsonObject) =>
+      ws.writeText(file, JSON.stringify(settings, null, 2));
 
-  /**
-   * A Claude run that asks for ffmpeg, gets `answer`, then leaves the workspace's settings as
-   * `after` has them; whether Claude may still run there afterwards.
-   */
-  const run = async (
-    answer: ApprovalAnswer,
-    after: Readonly<Record<string, Schema.JsonObject>>,
-  ) => {
-    await inApp(
+    /**
+     * A Claude run that asks for ffmpeg, gets `answer`, then leaves the workspace's settings as
+     * `after` has them; whether Claude may still run there afterwards.
+     */
+    const run = (answer: ApprovalAnswer, after: Readonly<Record<string, Schema.JsonObject>>) =>
       Effect.gen(function* () {
-        const trust = yield* requireTrust("claude");
+        yield* inApp(
+          Effect.gen(function* () {
+            const trust = yield* requireTrust("claude");
 
-        yield* askingTrusted(
-          trust,
-          () => Effect.succeed(answer),
-          (ask) =>
-            Effect.andThen(
-              ask(ffmpeg),
-              Effect.promise(() =>
-                Promise.all(Object.entries(after).map(([file, settings]) => write(file, settings))),
-              ),
-            ),
+            yield* askingTrusted(
+              trust,
+              () => Effect.succeed(answer),
+              (ask) =>
+                Effect.andThen(
+                  ask(ffmpeg),
+                  Effect.forEach(
+                    Object.entries(after),
+                    ([file, settings]) => write(file, settings),
+                    { concurrency: "unbounded", discard: true },
+                  ),
+                ),
+            );
+          }),
         );
-      }),
-    );
 
-    return !(await inApp(trustStatus())).needed;
-  };
+        return !(yield* inApp(trustStatus())).needed;
+      });
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Always");
-    appDir = await mkdtemp(join(tmpdir(), "cutfac-app-"));
-    await mkdir(join(t.root, ".claude"));
+    return { ...setup, write, run };
   });
 
-  afterEach(async () => {
-    await rm(appDir, { recursive: true, force: true });
-    await t.remove();
-  });
+  it.live("keeps the workspace trusted for the rule Claude keeps for it", () =>
+    Effect.gen(function* () {
+      const { run } = yield* alwaysSetup;
 
-  test("keeps the workspace trusted for the rule Claude keeps for it", async () => {
-    expect(await run("always", { [LOCAL]: { permissions: { allow: ["Bash(ffmpeg:*)"] } } })).toBe(
-      true,
-    );
-  });
+      expect(
+        yield* run("always", { [LOCAL]: { permissions: { allow: ["Bash(ffmpeg:*)"] } } }),
+      ).toBe(true);
+    }),
+  );
 
-  test("adds to the rules the user trusted before", async () => {
-    await write(SETTINGS, { permissions: { allow: ["Bash(ls:*)"] } });
-    await inApp(trustWorkspace((await inApp(trustStatus())).fingerprint));
+  it.live("adds to the rules the user trusted before", () =>
+    Effect.gen(function* () {
+      const { inApp, write, run } = yield* alwaysSetup;
 
-    const allow = ["Bash(ls:*)", "Bash(ffmpeg:*)"];
+      yield* write(SETTINGS, { permissions: { allow: ["Bash(ls:*)"] } });
+      yield* inApp(trustWorkspace((yield* inApp(trustStatus())).fingerprint));
 
-    expect(await run("always", { [SETTINGS]: { permissions: { allow } } })).toBe(true);
-  });
+      const allow = ["Bash(ls:*)", "Bash(ffmpeg:*)"];
 
-  test("doesn't cover anything else the run changed in the settings", async () => {
-    const rules = (allow: ReadonlyArray<string>) => ({ [LOCAL]: { permissions: { allow } } });
+      expect(yield* run("always", { [SETTINGS]: { permissions: { allow } } })).toBe(true);
+    }),
+  );
 
-    expect(await run("always", rules(["Bash(ffmpeg:*)", "Bash(curl:*)"]))).toBe(false);
-    await rm(join(t.root, LOCAL));
-    expect(await run("allow", rules(["Bash(ffmpeg:*)"]))).toBe(false);
-    await rm(join(t.root, LOCAL));
-    expect(
-      await run("always", { ...rules(["Bash(ffmpeg:*)"]), [SETTINGS]: { hooks: HOOKS } }),
-    ).toBe(false);
-  });
+  it.live("doesn't cover anything else the run changed in the settings", () =>
+    Effect.gen(function* () {
+      const { ws, run } = yield* alwaysSetup;
+      const rules = (allow: ReadonlyArray<string>) => ({ [LOCAL]: { permissions: { allow } } });
+
+      expect(yield* run("always", rules(["Bash(ffmpeg:*)", "Bash(curl:*)"]))).toBe(false);
+      yield* ws.remove(LOCAL);
+      expect(yield* run("allow", rules(["Bash(ffmpeg:*)"]))).toBe(false);
+      yield* ws.remove(LOCAL);
+      expect(
+        yield* run("always", { ...rules(["Bash(ffmpeg:*)"]), [SETTINGS]: { hooks: HOOKS } }),
+      ).toBe(false);
+    }),
+  );
 });
 
 describe("an edit run in a workspace the user hasn't trusted", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
+  it.live("fails before Claude starts, saying what to look over", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const fakes = yield* FakeAgentDir;
+      const ws = yield* Workspace;
+      const started = join(fakes.calls, "started");
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Untrusted");
-    fakes = await makeFakeAgents();
-    await mkdir(join(t.root, ".claude"));
-    await writeFile(join(t.root, SETTINGS), JSON.stringify({ hooks: HOOKS }));
-  });
+      yield* ws.writeText(SETTINGS, JSON.stringify({ hooks: HOOKS }));
+      yield* fakes.bin("claude", `touch "${started}"\n`);
 
-  afterEach(async () => {
-    await fakes.remove();
-    await t.remove();
-  });
+      const created = yield* createItem({ title: "Clip" });
+      const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
+      const input = { itemId: created.id, feedbackId: feedback.id, agent: "claude" as const };
 
-  test("fails before Claude starts, saying what to look over", async () => {
-    const started = join(fakes.calls, "started");
-    await fakes.bin("claude", `touch "${started}"\n`);
+      yield* runEdit(undefined)(input, () => Effect.void, refuse);
 
-    const item = await t.runWith(
-      fakes.layer,
-      Effect.gen(function* () {
-        const created = yield* createItem({ title: "Clip" });
-        const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
-        const input = { itemId: created.id, feedbackId: feedback.id, agent: "claude" as const };
+      const run = (yield* getItem(created.id)).doc.feedback[0]?.run;
 
-        yield* runEdit(undefined)(input, () => Effect.void, refuse);
-
-        return yield* getItem(created.id);
-      }),
-    );
-
-    const run = item.doc.feedback[0]?.run;
-
-    expect(run?.status).toBe("failed");
-    expect(run?.error).toContain(`hooks in ${SETTINGS}`);
-    expect(await Bun.file(started).exists()).toBe(false);
-  });
+      expect(run?.status).toBe("failed");
+      expect(run?.error).toContain(`hooks in ${SETTINGS}`);
+      expect(yield* fs.exists(started)).toBe(false);
+    }),
+  );
 });
