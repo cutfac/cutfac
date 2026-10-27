@@ -10,6 +10,7 @@ import { mcpEn } from "./mcp-en.tsx";
 import { onboardingEn } from "./onboarding-en.tsx";
 import { permissionsEn } from "./permissions-en.tsx";
 import { renderEn } from "./render-en.tsx";
+import { reportsEn } from "./reports-en.tsx";
 import { startEn } from "./start-en.tsx";
 import { trustEn } from "./trust-en.tsx";
 
@@ -730,6 +731,7 @@ export const en = {
   onboarding: onboardingEn,
   start: startEn,
   trust: trustEn,
+  reports: reportsEn,
   mcp: mcpEn,
   permissions: permissionsEn,
   gallery: galleryEn,

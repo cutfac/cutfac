@@ -7,6 +7,7 @@ import { mcpKo } from "./mcp-ko.tsx";
 import { onboardingKo } from "./onboarding-ko.tsx";
 import { permissionsKo } from "./permissions-ko.tsx";
 import { renderKo } from "./render-ko.tsx";
+import { reportsKo } from "./reports-ko.tsx";
 import { startKo } from "./start-ko.tsx";
 import { trustKo } from "./trust-ko.tsx";
 
@@ -677,6 +678,7 @@ export const ko: Messages = {
   onboarding: onboardingKo,
   start: startKo,
   trust: trustKo,
+  reports: reportsKo,
   mcp: mcpKo,
   permissions: permissionsKo,
   gallery: galleryKo,

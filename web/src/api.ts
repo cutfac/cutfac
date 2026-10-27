@@ -78,6 +78,14 @@ export interface TeamFeedback {
   logs?: boolean;
 }
 
+/** Whether this build can send error reports, what the person chose, and this install's ID. */
+export interface ErrorReports {
+  available: boolean;
+  /** Null until the person chooses. */
+  errorReports: boolean | null;
+  installId: string | null;
+}
+
 /** The `?id=` query naming an item. */
 export const q = (id: string) => `?id=${encodeURIComponent(id)}`;
 
@@ -802,6 +810,10 @@ export const api = {
     send<{ ok: true }, TeamFeedback>("POST", "/api/team-feedback", feedback),
   /** The log feedback would carry, for the person to read first; null outside the desktop app. */
   teamFeedbackLogs: () => request<{ logs: string | null }>("/api/team-feedback/logs"),
+  errorReports: () => request<ErrorReports>("/api/error-reports"),
+  setErrorReports: (on: boolean) =>
+    send<ErrorReports, { on: boolean }>("POST", "/api/error-reports", { on }),
+  resetInstallId: () => send<ErrorReports, {}>("POST", "/api/error-reports/install-id", {}),
   learned: () => request<LearnedList>("/api/learned"),
   /** Learn a link, or a folder or file on this computer. */
   learn: (source: string) =>
