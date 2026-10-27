@@ -8,14 +8,17 @@ Agreement ("CLA") from each Contributor, indicating agreement with the license t
 agreement is for your protection as a Contributor as well as the protection of Wyverse Labs and its
 users. It does not change your rights to use your own Contributions for any other purpose.
 
-You accept this Agreement as [CONTRIBUTING.md](CONTRIBUTING.md#license) describes. If you
-contribute as part of your work for an employer, your employer may need to accept the
-[Corporate CLA](CCLA.md) as well.
+You accept this Agreement by signing it with CLA assistant when you open your first pull request,
+which records the version you signed and when. If you contribute as part of your work for an
+employer, your employer must also sign the
+[Corporate CLA](https://github.com/wyverselabs/cutfac/blob/main/CCLA.md). A
+[Korean translation](https://github.com/wyverselabs/cutfac/blob/main/ICLA.ko.md) is available for
+reference.
 
 You accept and agree to the following terms and conditions for Your Contributions (present and
 future) that you submit to Wyverse Labs. Except for the license granted herein to Wyverse Labs and
-recipients of software distributed by Wyverse Labs, You reserve all right, title, and interest in and
-to Your Contributions.
+recipients of software distributed by Wyverse Labs, You reserve all right, title, and interest in
+and to Your Contributions.
 
 1. Definitions.
 
@@ -59,7 +62,8 @@ to Your Contributions.
    rights to intellectual property that you create that includes your Contributions, you represent
    that you have received permission to make Contributions on behalf of that employer, that your
    employer has waived such rights for your Contributions to Wyverse Labs, or that your employer has
-   executed a separate [Corporate CLA](CCLA.md) with Wyverse Labs.
+   executed a separate [Corporate CLA](https://github.com/wyverselabs/cutfac/blob/main/CCLA.md) with
+   Wyverse Labs.
 
 5. You represent that each of Your Contributions is Your original creation (see section 7 for
    submissions on behalf of others). You represent that Your Contribution submissions include
@@ -83,4 +87,16 @@ to Your Contributions.
 8. You agree to notify Wyverse Labs of any facts or circumstances of which you become aware that
    would make these representations inaccurate in any respect.
 
-9. This Agreement is governed by the laws of the Republic of Korea.
+9. Moral Rights. To the extent permitted by applicable law, You agree not to assert any moral rights
+   in Your Contributions, including the right of integrity, against Wyverse Labs or recipients of
+   software distributed by Wyverse Labs for any use this Agreement permits, including modifying
+   Your Contributions. Wyverse Labs will keep Your name with Your Contributions where the Work
+   customarily records authorship, such as its version history.
+
+10. You represent that You are of legal age to enter into this Agreement under the laws where You
+    live, or that Your parent or legal guardian has consented to it.
+
+11. This Agreement is written in English. Any translation, including the Korean one Wyverse Labs
+    publishes, is for reference only; if they differ, the English text prevails.
+
+12. This Agreement is governed by the laws of the Republic of Korea.

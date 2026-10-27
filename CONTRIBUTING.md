@@ -75,14 +75,16 @@ Cutfac is licensed under the [GNU Affero General Public License v3.0](LICENSE) o
 merge your first pull request, you accept a Contributor License Agreement, adapted from the Apache
 Software Foundation's:
 
-- Everyone accepts the [Individual CLA](ICLA.md) by ticking its box in the pull request. That covers
-  the pull request and every one after it.
+- Everyone signs the [Individual CLA](ICLA.md) once. On your first pull request, CLA assistant
+  comments with a link; sign there with your GitHub account. It records the version you signed and
+  when, and covers every pull request after it.
 - If you contribute as part of your job, your employer also signs the [Corporate CLA](CCLA.md) and
   names you in its Schedule A. Ask us in an issue or through [cutfac.com](https://cutfac.com), and
   we'll send it to sign.
 
-You keep the copyright to your work; the agreement lets Wyverse Labs ship it under the AGPL and under
-other terms, such as in the signed Mac app.
+[ICLA.ko.md](ICLA.ko.md) and [CCLA.ko.md](CCLA.ko.md) are Korean translations for reference; the
+English text is the agreement. You keep the copyright to your work; the agreement lets Wyverse Labs
+ship it under the AGPL and under other terms, such as in the signed Mac app.
 
 The license doesn't cover the Cutfac name, logo or icon. [TRADEMARKS.md](TRADEMARKS.md) says how to
 use them and what a fork you distribute should change.

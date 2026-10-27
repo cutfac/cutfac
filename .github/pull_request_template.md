@@ -1,4 +1,5 @@
 <!-- Pull requests without a linked issue we agreed on are closed, except for typos and small fixes. -->
+<!-- On your first pull request, CLA assistant asks you to sign the Individual CLA (ICLA.md). -->
 
 Closes #
 
@@ -14,4 +15,3 @@ Closes #
 
 - [ ] I read the whole diff and can explain every line of it.
 - [ ] `bun test`, `bun run typecheck`, `bun run lint`, `bun run format:check` and `bun run build` pass.
-- [ ] I accept the [Individual CLA](https://github.com/wyverselabs/cutfac/blob/main/ICLA.md) for this and my future contributions. If this is part of my job, my employer has signed the [Corporate CLA](https://github.com/wyverselabs/cutfac/blob/main/CCLA.md).

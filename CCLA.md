@@ -12,15 +12,20 @@ other purpose.
 
 This version of the Agreement allows an entity (the "Corporation") to submit Contributions to
 Wyverse Labs, to authorize Contributions submitted by its designated employees to Wyverse Labs, and
-to grant copyright and patent licenses thereto. Individuals contributing on their own behalf accept
-the [Individual CLA](ICLA.md) instead. The Corporation signs this Agreement as
-[CONTRIBUTING.md](CONTRIBUTING.md#license) describes, giving its name and address, a point of
-contact, and the employees it designates in Schedule A.
+to grant copyright and patent licenses thereto. Individuals contributing on their own behalf sign
+the [Individual CLA](https://github.com/wyverselabs/cutfac/blob/main/ICLA.md) instead. To sign this
+Agreement, ask Wyverse Labs as
+[CONTRIBUTING.md](https://github.com/wyverselabs/cutfac/blob/main/CONTRIBUTING.md#license)
+describes. Wyverse Labs sends it for a dated signature, electronic or on paper, and each party keeps
+a signed copy. The Corporation gives its name and address, a point of contact, and the employees it
+designates in Schedule A. A
+[Korean translation](https://github.com/wyverselabs/cutfac/blob/main/CCLA.ko.md) is available for
+reference.
 
 You accept and agree to the following terms and conditions for Your present and future
 Contributions submitted to Wyverse Labs. Except for the license granted herein to Wyverse Labs and
-recipients of software distributed by Wyverse Labs, You reserve all right, title, and interest in and
-to Your Contributions.
+recipients of software distributed by Wyverse Labs, You reserve all right, title, and interest in
+and to Your Contributions.
 
 1. Definitions.
 
@@ -86,7 +91,20 @@ to Your Contributions.
    designated employees authorized to submit Contributions on behalf of the Corporation, or to the
    Corporation's Point of Contact with Wyverse Labs.
 
-9. This Agreement is governed by the laws of the Republic of Korea.
+9. Moral Rights. To the extent permitted by applicable law, You agree not to assert, and to have
+   Your designated employees not assert, any moral rights in Your Contributions, including the
+   right of integrity, against Wyverse Labs or recipients of software distributed by Wyverse Labs
+   for any use this Agreement permits, including modifying Your Contributions. Wyverse Labs will
+   keep the names of the authors with Your Contributions where the Work customarily records
+   authorship, such as its version history.
+
+10. The person who signs this Agreement for the Corporation represents that they are authorized to
+    bind the Corporation to it.
+
+11. This Agreement is written in English. Any translation, including the Korean one Wyverse Labs
+    publishes, is for reference only; if they differ, the English text prevails.
+
+12. This Agreement is governed by the laws of the Republic of Korea.
 
 ## Schedule A
 
