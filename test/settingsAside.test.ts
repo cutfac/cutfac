@@ -1,58 +1,81 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { describe, expect } from "bun:test";
 
+import { Effect, FileSystem, Path } from "effect";
+
+import { platform } from "../electron/runtime.ts";
 import { isSetAside, restore, setAside } from "../electron/settingsAside.ts";
+import { testEffect } from "./effect.ts";
+
+const it = testEffect(platform);
+
+/** The settings file and its backup, in a folder removed after the test. */
+const files = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-aside-" });
+
+  return {
+    file: path.join(dir, "settings.json"),
+    backup: path.join(dir, "settings.dev-backup.json"),
+  };
+});
 
 describe("settings set aside", () => {
-  let dir: string;
-  let file: string;
-  let backup: string;
+  it.effect("moves the settings out of the way, and back", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, backup } = yield* files;
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "cutfac-aside-"));
-    file = join(dir, "settings.json");
-    backup = join(dir, "settings.dev-backup.json");
-  });
+      yield* fs.writeFileString(file, '{"workspace":"/work"}\n');
+      yield* setAside(file, backup);
 
-  afterEach(() => rm(dir, { recursive: true, force: true }));
+      expect(yield* isSetAside(backup)).toBe(true);
+      expect(yield* fs.exists(file)).toBe(false);
+      expect(yield* restore(file, backup)).toBe(true);
+      expect(yield* fs.readFileString(file)).toBe('{"workspace":"/work"}\n');
+      expect(yield* isSetAside(backup)).toBe(false);
+    }),
+  );
 
-  test("moves the settings out of the way, and back", async () => {
-    await writeFile(file, '{"workspace":"/work"}\n');
-    await setAside(file, backup);
+  it.effect("keeps the first backup when set aside again", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, backup } = yield* files;
 
-    expect(await isSetAside(backup)).toBe(true);
-    expect(await Bun.file(file).exists()).toBe(false);
-    expect(await restore(file, backup)).toBe(true);
-    expect(await readFile(file, "utf8")).toBe('{"workspace":"/work"}\n');
-    expect(await isSetAside(backup)).toBe(false);
-  });
+      yield* fs.writeFileString(file, '{"workspace":"/work"}\n');
+      yield* setAside(file, backup);
+      // A pretend user's settings, from going through the first launch.
+      yield* fs.writeFileString(file, '{"workspace":"/qa"}\n');
+      yield* setAside(file, backup);
 
-  test("keeps the first backup when set aside again", async () => {
-    await writeFile(file, '{"workspace":"/work"}\n');
-    await setAside(file, backup);
-    // A pretend user's settings, from going through the first launch.
-    await writeFile(file, '{"workspace":"/qa"}\n');
-    await setAside(file, backup);
+      expect(yield* fs.exists(file)).toBe(false);
+      expect(yield* restore(file, backup)).toBe(true);
+      expect(yield* fs.readFileString(file)).toBe('{"workspace":"/work"}\n');
+    }),
+  );
 
-    expect(await Bun.file(file).exists()).toBe(false);
-    expect(await restore(file, backup)).toBe(true);
-    expect(await readFile(file, "utf8")).toBe('{"workspace":"/work"}\n');
-  });
+  it.effect("restores no settings as none", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, backup } = yield* files;
 
-  test("restores no settings as none", async () => {
-    await setAside(file, backup);
-    await writeFile(file, '{"workspace":"/qa"}\n');
+      yield* setAside(file, backup);
+      yield* fs.writeFileString(file, '{"workspace":"/qa"}\n');
 
-    expect(await restore(file, backup)).toBe(true);
-    expect(await readFile(file, "utf8")).toBe("{}\n");
-  });
+      expect(yield* restore(file, backup)).toBe(true);
+      expect(yield* fs.readFileString(file)).toBe("{}\n");
+    }),
+  );
 
-  test("says when there is nothing to restore", async () => {
-    await writeFile(file, '{"workspace":"/work"}\n');
+  it.effect("says when there is nothing to restore", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, backup } = yield* files;
 
-    expect(await restore(file, backup)).toBe(false);
-    expect(await readFile(file, "utf8")).toBe('{"workspace":"/work"}\n');
-  });
+      yield* fs.writeFileString(file, '{"workspace":"/work"}\n');
+
+      expect(yield* restore(file, backup)).toBe(false);
+      expect(yield* fs.readFileString(file)).toBe('{"workspace":"/work"}\n');
+    }),
+  );
 });

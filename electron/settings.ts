@@ -10,6 +10,7 @@ import type { OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 import { ONBOARDING_STEPS } from "./boardPages.ts";
 import { LicenseNotSaved, LicenseSettings } from "./license.ts";
+import { runInMain } from "./runtime.ts";
 import { isSetAside, restore, setAside } from "./settingsAside.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
 
@@ -176,9 +177,10 @@ export async function loadOnboarding(): Promise<OnboardingStep | undefined> {
 export const saveOnboarding = (onboarding: OnboardingStep) => writeSettings({ onboarding });
 
 /** Dev Panel: sets the settings aside, so the app runs as on a new Mac until they are restored. */
-export const setSettingsAside = () => queued(() => setAside(settingsFile(), backupFile()));
+export const setSettingsAside = () =>
+  queued(() => runInMain(setAside(settingsFile(), backupFile())));
 
 /** Dev Panel: brings back the settings set aside. Resolves false if none were. */
-export const restoreSettings = () => queued(() => restore(settingsFile(), backupFile()));
+export const restoreSettings = () => queued(() => runInMain(restore(settingsFile(), backupFile())));
 
-export const settingsSetAside = () => isSetAside(backupFile());
+export const settingsSetAside = () => runInMain(isSetAside(backupFile()));

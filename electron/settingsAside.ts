@@ -1,9 +1,9 @@
-import { access, rename, rm, writeFile } from "node:fs/promises";
+import { Effect, FileSystem } from "effect";
 
+/** Whether `file` is there; one that can't be checked counts as missing. */
 const exists = (file: string) =>
-  access(file).then(
-    () => true,
-    () => false,
+  Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(file)).pipe(
+    Effect.orElseSucceed(() => false),
   );
 
 /**
@@ -11,24 +11,24 @@ const exists = (file: string) =>
  * already there is kept: it holds the settings from before the first time, not a pretend user's.
  * With no settings yet, the backup is an empty set, so restoring them means none again.
  */
-export async function setAside(file: string, backup: string): Promise<void> {
-  if (await exists(backup)) {
-    await rm(file, { force: true });
+export const setAside = Effect.fn("settings.setAside")(function* (file: string, backup: string) {
+  const fs = yield* FileSystem.FileSystem;
 
-    return;
-  }
+  if (yield* exists(backup)) return yield* fs.remove(file, { force: true });
 
-  if (await exists(file)) await rename(file, backup);
-  else await writeFile(backup, "{}\n");
-}
+  if (yield* exists(file)) yield* fs.rename(file, backup);
+  else yield* fs.writeFileString(backup, "{}\n");
+});
 
-/** Puts the settings set aside back over `file`. Resolves false if none were. */
-export async function restore(file: string, backup: string): Promise<boolean> {
-  if (!(await exists(backup))) return false;
+/** Puts the settings set aside back over `file`. Succeeds with false if none were. */
+export const restore = Effect.fn("settings.restore")(function* (file: string, backup: string) {
+  const fs = yield* FileSystem.FileSystem;
 
-  await rename(backup, file);
+  if (!(yield* exists(backup))) return false;
+
+  yield* fs.rename(backup, file);
 
   return true;
-}
+});
 
 export const isSetAside = exists;
