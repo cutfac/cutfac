@@ -32,7 +32,7 @@
   --text-sm--line-height: calc(1.125 / 0.8125);
   /* Hovers and state changes settle quickly instead of easing in and out. */
   --default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
-  /* The Full Disk Access step's picture: the app dragged from the panel into the list, on a loop. */
+  /* The access step's picture: the app dragged from the panel into the list, on a loop. */
   --animate-access-carry: access-carry 3.6s ease-in-out infinite;
   --animate-access-card: access-card 3.6s linear infinite;
   --animate-access-row: access-row 3.6s ease-out infinite;
@@ -295,7 +295,7 @@
 }
 
 :root {
-  /* How far the card in the Full Disk Access picture moves from the panel to its row in the list. */
+  /* How far the card in the access picture moves from the panel to its row in the list. */
   --access-shift: 0.25rem;
   --access-lift: -6.25rem;
 }

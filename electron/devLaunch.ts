@@ -1,7 +1,7 @@
 /**
  * Starts the dev app for `bun run desktop:dev`. On macOS it goes through Launch Services, as a
  * Finder double-click does, so the app is the one macOS answers for: a permission granted to
- * Cutfac Dev, such as Full Disk Access, then holds. Spawned straight from a terminal, macOS would
+ * Cutfac Dev, such as screen recording, then holds. Spawned straight from a terminal, macOS would
  * ask the terminal's permissions instead, and the grant would never show.
  */
 import { createReadStream } from "node:fs";

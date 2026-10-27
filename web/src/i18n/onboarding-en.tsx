@@ -1,6 +1,13 @@
-import type { AgentSetup } from "../desktop.ts";
+import type { AgentSetup, Permission } from "../desktop.ts";
 
 type FixState = Exclude<AgentSetup["state"], "ready">;
+
+interface PermissionCopy {
+  name: string;
+  why: string;
+  waiting: string;
+  list: string;
+}
 
 /** The first launch's copy, kept apart from the board's so neither file grows past reading. */
 export const onboardingEn = {
@@ -42,20 +49,32 @@ export const onboardingEn = {
     next: "Next",
   },
   access: {
-    title: "Let your agent see your files",
-    body: "Your agent reads the files you point it at, like a video in Downloads. Without Full Disk Access, macOS stops it with a prompt for each folder.",
-    open: "Open System Settings",
-    howTo: [
-      "System Settings opens on Full Disk Access.",
-      "Drag Cutfac from the small window into the list.",
-    ],
-    waiting: "Waiting for Cutfac in the list…",
-    granted: "Access granted",
-    /** Says what skipping means, since macOS then asks for each folder. */
-    skip: "Skip for now (ask each time)",
+    title: "Let your agent see and use your screen",
+    body: "Your agent records your apps for your videos, and clicks through them when it needs to. It works under Cutfac's permissions, so turn these two on for Cutfac.",
+    turnOn: "Turn on",
+    on: "On",
+    granted: "Both are on",
+    skip: "Skip for now",
+    /**
+     * Each permission: its name, what it lets the agent do, what to do while its list is open, and
+     * the list's title in System Settings, for the picture.
+     */
+    permissions: {
+      screen: {
+        name: "Screen Recording",
+        why: "Record your screen and apps to use in videos.",
+        waiting: "Turn on Cutfac in the list. When macOS offers to reopen it, go ahead.",
+        list: "Screen & System Audio Recording",
+      },
+      accessibility: {
+        name: "Accessibility",
+        why: "Let your agent click and type in other apps.",
+        waiting: "Turn on Cutfac in the list…",
+        list: "Accessibility",
+      },
+    } satisfies Record<Permission, PermissionCopy>,
     /** The picture of System Settings with the panel under it. */
     preview: {
-      list: "Full Disk Access",
       pane: "Privacy & Security",
       search: "Search",
     },

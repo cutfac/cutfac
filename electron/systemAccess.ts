@@ -1,4 +1,3 @@
-import { open } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -8,15 +7,26 @@ import {
   type NativeImage,
   screen,
   shell,
+  systemPreferences,
   type WebContents,
 } from "electron";
 
+import type { Permission } from "../web/src/desktop.ts";
 import { lockNavigation } from "./navigation.ts";
 import { sandboxed } from "./permissions.ts";
 import { type Frame, followSettingsWindow } from "./settingsWindow.ts";
 
-/** System Settings, on the Full Disk Access list. */
-const SETTINGS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+/** The permissions the app asks for, which System Settings grants on a list the app is dragged into. */
+const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
+
+export const isPermission = (value: unknown): value is Permission =>
+  PERMISSIONS.some((permission) => permission === value);
+
+/** System Settings, on each permission's list. */
+const SETTINGS_URL: Record<Permission, string> = {
+  screen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+  accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+};
 
 const limits = {
   pollMs: 1_000,
@@ -46,32 +56,20 @@ let unfollow: (() => void) | undefined;
 let dragIcon: NativeImage | undefined;
 
 /**
- * Files only Full Disk Access opens: the privacy databases. The system's is on every recent macOS,
- * and the user's own is gone from macOS 27 on, so the first is the one that answers there.
+ * Whether the app holds a permission; only macOS asks. The agents the app runs act under it too, so
+ * this is what they may do: record the screen, and use other apps. macOS reads screen recording once
+ * per process, so a grant shows after the app reopens, which macOS offers itself once it is on.
+ * Accessibility shows at once.
  */
-const probeFiles = () => [
-  "/Library/Application Support/com.apple.TCC/TCC.db",
-  path.join(app.getPath("home"), "Library", "Application Support", "com.apple.TCC", "TCC.db"),
-];
-
-/** Whether the app may read every file. Only macOS asks; elsewhere it always may. */
-export async function hasFullDiskAccess(): Promise<boolean> {
+export function hasPermission(permission: Permission): boolean {
   if (process.platform !== "darwin") return true;
 
-  for (const file of probeFiles()) {
-    try {
-      await (await open(file, "r")).close();
-
-      return true;
-    } catch {
-      // Refused without the access, or missing on this macOS: the next file may answer.
-    }
-  }
-
-  return false;
+  return permission === "screen"
+    ? systemPreferences.getMediaAccessStatus("screen") === "granted"
+    : systemPreferences.isTrustedAccessibilityClient(false);
 }
 
-/** The app bundle itself, which is what the Full Disk Access list takes. */
+/** The app bundle itself, which is what the lists in System Settings take. */
 const appBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
 
 /** The app's icon, large enough for the helper window to show crisp. */
@@ -83,7 +81,7 @@ async function bundleIcon(): Promise<Electron.NativeImage> {
     .catch(() => app.getFileIcon(bundle, { size: "normal" }));
 }
 
-/** The app as the Full Disk Access list will show it: its icon and its name. */
+/** The app as a list in System Settings will show it: its icon and its name. */
 export async function appBadge(): Promise<{ icon: string; name: string }> {
   return {
     icon: (await bundleIcon()).toDataURL(),
@@ -109,6 +107,7 @@ export function focusHelper(): void {
 }
 
 export interface AccessWatch {
+  permission: Permission;
   /** The board's address, where the helper window's page is. */
   boardUrl: string;
   preload: string;
@@ -117,8 +116,8 @@ export interface AccessWatch {
 }
 
 /**
- * Opens the Full Disk Access list with a small window beside it to drag the app from, and watches
- * for the access until it is granted, the user comes back to the app, or it has waited long enough.
+ * Opens a permission's list with a small window beside it to drag the app from, and watches for the
+ * permission until it is granted, the user comes back to the app, or it has waited long enough.
  */
 export async function openAccessSettings(watch: AccessWatch): Promise<void> {
   // Set up before the wait, so a second call meanwhile replaces this one instead of doubling it.
@@ -131,15 +130,13 @@ export async function openAccessSettings(watch: AccessWatch): Promise<void> {
   poll = setInterval(() => {
     if (Date.now() > until) return stopWatching();
 
-    void hasFullDiskAccess().then((granted) => {
-      if (!granted || poll === undefined) return;
+    if (!hasPermission(watch.permission)) return;
 
-      stopWatching();
-      watch.onGranted();
-    });
+    stopWatching();
+    watch.onGranted();
   }, limits.pollMs);
 
-  await shell.openExternal(SETTINGS_URL);
+  await shell.openExternal(SETTINGS_URL[watch.permission]);
 }
 
 /** Closes the helper window and stops checking, as when the user comes back to the app. */

@@ -23,7 +23,6 @@ import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
 import { DEV_APP } from "./devApp.ts";
 import { handleDevTools } from "./devTools.ts";
 import { describeError, pickSource, pickWorkspace, showStartFailure } from "./dialogs.ts";
-import { stopWatching } from "./fullDiskAccess.ts";
 import {
   APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,
@@ -63,6 +62,7 @@ import {
   settingsWritten,
 } from "./settings.ts";
 import { boardDir, startSidecar, type Sidecar } from "./sidecar.ts";
+import { stopWatching } from "./systemAccess.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";

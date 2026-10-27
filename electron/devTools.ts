@@ -17,7 +17,6 @@ import {
   NO_FAKES,
   withFakes,
 } from "./devFakes.ts";
-import { hasFullDiskAccess } from "./fullDiskAccess.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   DEV_BUILD_FLAG,
@@ -42,6 +41,7 @@ import {
   settingsFile,
   settingsSetAside,
 } from "./settings.ts";
+import { hasPermission } from "./systemAccess.ts";
 
 const PANEL_SIZE = { width: 420, height: 760 };
 
@@ -119,8 +119,8 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     agentSetups: async () =>
       withFakes(checksAgents(fakes) ? await agentSetups() : [], fakes.agents),
     fixAgent: fix,
-    hasFullDiskAccess: async () =>
-      fakes.access === "real" ? hasFullDiskAccess() : fakes.access === "granted",
+    hasPermission: (permission) =>
+      fakes.access === "real" ? hasPermission(permission) : fakes.access === "granted",
     defaultFolder: () => {
       if (!fakes.freshFolder) return macChecks.defaultFolder();
 
@@ -136,8 +136,8 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     setAside: await settingsSetAside(),
     workspace: await loadWorkspace(),
     defaultFolder: checks.defaultFolder(),
-    // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps Full Disk
-    // Access by it.
+    // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps its permissions
+    // by it.
     bundleId: process.env.CUTFAC_DEV_URL ? DEV_APP.bundleId : "com.github.Electron",
   });
 
@@ -170,8 +170,12 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
     if (!fakes.freshFolder) freshFolder = undefined;
 
-    // As if the user turned it on in System Settings: the access step moves on by itself.
-    if (granted) host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL);
+    // As if the user turned both on in System Settings: the access step moves on by itself.
+    if (granted) {
+      for (const permission of ["screen", "accessibility"] as const) {
+        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
+      }
+    }
 
     return state();
   });

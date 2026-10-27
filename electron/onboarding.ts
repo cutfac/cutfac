@@ -15,13 +15,6 @@ import type { Folder } from "../web/src/desktop.ts";
 import { agentSetups, fixAgent } from "./agents.ts";
 import { pickWorkspace } from "./dialogs.ts";
 import {
-  appBadge,
-  dragApp,
-  focusHelper,
-  hasFullDiskAccess,
-  openAccessSettings,
-} from "./fullDiskAccess.ts";
-import {
   ACCESS_GRANTED_CHANNEL,
   AGENTS_CHANNEL,
   APP_ICON_CHANNEL,
@@ -30,11 +23,19 @@ import {
   DEFAULT_FOLDER_CHANNEL,
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
-  FULL_DISK_ACCESS_CHANNEL,
+  PERMISSION_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
+import {
+  appBadge,
+  dragApp,
+  focusHelper,
+  hasPermission,
+  isPermission,
+  openAccessSettings,
+} from "./systemAccess.ts";
 
 const isAgentName = Schema.is(AgentName);
 
@@ -53,18 +54,15 @@ function folder(target: string): Folder {
 export interface OnboardingChecks {
   agentSetups: typeof agentSetups;
   fixAgent: typeof fixAgent;
-  hasFullDiskAccess: typeof hasFullDiskAccess;
-  /**
-   * Where the workspace step suggests making one. It isn't checked: without Full Disk Access, even
-   * looking in Documents would have macOS ask.
-   */
+  hasPermission: typeof hasPermission;
+  /** Where the workspace step suggests making one. It isn't checked: looking in Documents has macOS ask. */
   defaultFolder: () => string;
 }
 
 export const macChecks: OnboardingChecks = {
   agentSetups,
   fixAgent,
-  hasFullDiskAccess,
+  hasPermission,
   defaultFolder: () => path.join(app.getPath("documents"), "Cutfac"),
 };
 
@@ -113,22 +111,27 @@ export function handleOnboarding(host: OnboardingHost): void {
       if (!event.sender.isDestroyed()) event.sender.send(FIX_OUTPUT_CHANNEL, agent, line);
     });
   });
-  ipcMain.handle(FULL_DISK_ACCESS_CHANNEL, (event) => {
+  ipcMain.handle(PERMISSION_CHANNEL, (event, permission) => {
     assertFromApp(event);
 
-    return checks.hasFullDiskAccess();
+    if (!isPermission(permission)) throw new Error("Unknown permission");
+
+    return checks.hasPermission(permission);
   });
-  ipcMain.handle(OPEN_ACCESS_SETTINGS_CHANNEL, (event) => {
+  ipcMain.handle(OPEN_ACCESS_SETTINGS_CHANNEL, (event, permission) => {
     assertFromApp(event);
+
+    if (!isPermission(permission)) throw new Error("Unknown permission");
 
     return openAccessSettings({
+      permission,
       boardUrl: host.boardUrl,
       preload: host.preload,
       onGranted: () => {
         // System Settings is in front; the app comes back on the step that waited for it.
         app.focus({ steal: true });
         host.bringToFront();
-        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL);
+        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
       },
     });
   });

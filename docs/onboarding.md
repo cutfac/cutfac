@@ -30,14 +30,14 @@ From step 5 on the board opens on Start while the workspace has neither a templa
 unless the user chose to continue on the board; each template run has its own page, so a reload
 keeps it.
 
-| Step            | Shows                                                                                                                                                                                                                   | Done when                         |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| 1. Welcome      | What Cutfac does in one sentence, and Start                                                                                                                                                                             | Start is pressed                  |
-| 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                       | One agent is ready                |
-| 3. Permissions  | Why the app needs file access, and Open System Settings. A small window floats next to Settings with Cutfac's icon to drag into the list                                                                                | macOS reports the access granted  |
-| 4. Workspace    | A folder already filled in (`~/Documents/Cutfac`) with Create, and Choose another folder. The agents from step 2 connect to it without a separate button                                                                | The server runs on the folder     |
-| 5. What to make | What the videos are for and where they go, the user's own material (a website, a local folder), and a gallery of references to start from. Start has the agent make a template from them and moves on to step 6 at once | Start is pressed                  |
-| 6. First video  | The template run's progress, and a title field. Allow shows here when the import needs it                                                                                                                               | The item exists; its detail opens |
+| Step            | Shows                                                                                                                                                                                                                   | Done when                               |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1. Welcome      | What Cutfac does in one sentence, and Start                                                                                                                                                                             | Start is pressed                        |
+| 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                       | One agent is ready, and Next is pressed |
+| 3. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                  | macOS reports both on, or Skip          |
+| 4. Workspace    | A folder already filled in (`~/Documents/Cutfac`) with Create, and Choose another folder. The agents from step 2 connect to it without a separate button                                                                | The server runs on the folder           |
+| 5. What to make | What the videos are for and where they go, the user's own material (a website, a local folder), and a gallery of references to start from. Start has the agent make a template from them and moves on to step 6 at once | Start is pressed                        |
+| 6. First video  | The template run's progress, and a title field. Allow shows here when the import needs it                                                                                                                               | The item exists; its detail opens       |
 
 ### Before the workspace
 
@@ -77,26 +77,36 @@ as the Connect button does today.
 
 ### Permissions
 
-macOS doesn't let an app ask for some access in a dialog: Full Disk Access (and Accessibility, Screen
-Recording) is granted only by adding the app in System Settings. Apps like Codex make that one
-motion:
+The agents Cutfac runs act under Cutfac's permissions: macOS holds whatever they do to the app that
+started them. Two of those the agents need for their work, and macOS doesn't let an app ask for
+either in a dialog; each is granted only by adding the app to a list in System Settings:
 
-1. The step says, in a sentence, what the access is for: the agents Cutfac runs read the files the
-   user points them at, a video in Downloads or a project on the Desktop, and without it macOS stops
-   each one with its own prompt, attributed to Cutfac.
-2. Open System Settings goes straight to the pane (`x-apple.systempreferences:` with
-   `Privacy_AllFiles`).
-3. A small frameless window appears beside the Settings window, with Cutfac's icon and "Drag
-   Cutfac into the list". Dragging the icon drags the app bundle itself (`webContents.startDrag`
-   with the `.app` path), which is what the list accepts. The user never hunts for the app with +.
-4. Cutfac checks the access every second by reading a file only Full Disk Access opens. When it
-   reads, the helper window closes, Cutfac comes back to the front, and the step shows a check and
-   moves on. Nothing to confirm.
+- **Screen Recording**, to record the user's screen and apps as footage for a video.
+- **Accessibility**, to click and type in other apps, as Claude Code's and Codex's computer use do.
 
-It comes right after the agent and before the workspace, so nothing reads the user's files before
-the access is settled. The step can be skipped. Without it, macOS asks per folder the first time an
-agent reaches one, which works, only with more prompts. A dev build signs differently from the
-release, so it gets its own entry in the list.
+Apps like Codex make adding the app one motion, after
+[PermissionFlow](https://github.com/jaywcjlove/PermissionFlow):
+
+1. The step says, in a sentence, what the two are for, with a picture of System Settings and the
+   panel under it, and a pointer dragging the app into the list.
+2. Each permission's Turn on opens its pane (`x-apple.systempreferences:` with
+   `Privacy_ScreenCapture` or `Privacy_Accessibility`).
+3. A small panel sits under the Settings window, lined up with the list, and follows the window as
+   it moves. It is one card with Cutfac's icon and name; dragging it drags the app bundle itself
+   (`webContents.startDrag` with the `.app` path), which is what the list accepts. The user never
+   hunts for the app with +.
+4. Accessibility shows as soon as it is on (`isTrustedAccessibilityClient`): the panel closes,
+   Cutfac comes back to the front, and the row shows it on. Screen recording is read once per
+   process (`getMediaAccessStatus`), so it shows only after the app reopens. macOS offers that
+   itself once it is on; the app opens again on this step, which finds it then.
+
+Once both are on, the step moves on by itself. It can be skipped; macOS then asks the first time an
+agent needs either.
+
+Files need no permission up front. Cutfac doesn't ask for Full Disk Access: that would let every
+agent read the user's mail and messages too. Reading Desktop, Documents, Downloads and the like,
+macOS asks once per folder the first time an agent reaches one, and remembers the answer. A dev
+build signs differently from the release, so it gets its own entry in each list.
 
 ### What to make
 

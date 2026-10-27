@@ -49,16 +49,16 @@ export const FIX_AGENT_CHANNEL = "cutfac:fix-agent";
 /** A line a running fix printed, for the agent step to show. */
 export const FIX_OUTPUT_CHANNEL = "cutfac:fix-output";
 
-/** Whether macOS lets the app read every file. */
-export const FULL_DISK_ACCESS_CHANNEL = "cutfac:full-disk-access";
+/** Whether macOS grants the app a permission: screen recording, or accessibility. */
+export const PERMISSION_CHANNEL = "cutfac:permission";
 
-/** Open the Full Disk Access list in System Settings, with the helper window beside it. */
+/** Open a permission's list in System Settings, with the helper window beside it. */
 export const OPEN_ACCESS_SETTINGS_CHANNEL = "cutfac:open-access-settings";
 
-/** Full Disk Access was granted while System Settings was open. */
+/** A permission was granted while System Settings was open. */
 export const ACCESS_GRANTED_CHANNEL = "cutfac:access-granted";
 
-/** Drag the app itself out of the helper window, into the Full Disk Access list. */
+/** Drag the app itself out of the helper window, into a list in System Settings. */
 export const START_APP_DRAG_CHANNEL = "cutfac:start-app-drag";
 
 /** Make the helper window the key one as the pointer reaches it, so it shows its cursor. */

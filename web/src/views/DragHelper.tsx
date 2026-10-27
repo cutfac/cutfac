@@ -8,7 +8,7 @@ import { useMessages } from "../i18n/index.ts";
 
 /**
  * The panel that sits under System Settings, after PermissionFlow's: the whole panel is one card,
- * the app to drag into the Full Disk Access list above it, which drags the app itself. It shimmers
+ * the app to drag into the System Settings list above it, which drags the app itself. It shimmers
  * and glows gold so it is easy to find beside the window, and goes away by itself once the access
  * is granted.
  */

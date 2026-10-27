@@ -26,11 +26,11 @@ const SIDEBAR_ABOVE = ["w-3/5", "w-1/2"];
 const SIDEBAR_BELOW = ["w-2/3", "w-1/2"];
 
 /**
- * A small picture of what the button opens: System Settings on the Full Disk Access list, the
+ * A small picture of what the button opens: System Settings on a permission's list, the
  * panel under it, and a pointer that takes the app from the panel into the list, on a loop. With
  * reduced motion it shows the app already in the list.
  */
-export function AccessPreview({ app }: { app: App | undefined }) {
+export function AccessPreview({ app, list }: { app: App | undefined; list: string }) {
   const messages = useMessages().onboarding;
   const t = messages.access.preview;
   const hint = messages.dragHelper.hint;
@@ -43,7 +43,7 @@ export function AccessPreview({ app }: { app: App | undefined }) {
           <div className="flex h-4 items-center gap-1 text-muted-foreground">
             <ChevronLeftIcon className="size-3" />
             <ChevronRightIcon className="size-3 opacity-40" />
-            <span className="ml-1 text-xs font-semibold text-foreground">{t.list}</span>
+            <span className="ml-1 text-xs font-semibold text-foreground">{list}</span>
           </div>
           <div className="mt-3 flex flex-col divide-y divide-foreground/8 rounded-lg bg-foreground/5 px-2">
             <Row />

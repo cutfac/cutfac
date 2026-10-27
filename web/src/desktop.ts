@@ -38,6 +38,12 @@ export interface AgentFix {
   command: string;
 }
 
+/**
+ * What the app asks macOS for: recording the screen, and using other apps (accessibility). The
+ * agents it runs act under them too.
+ */
+export type Permission = "screen" | "accessibility";
+
 /** The first-launch steps that come before there is a workspace. */
 export type OnboardingStep = "welcome" | "agent" | "access" | "folder";
 
@@ -58,20 +64,20 @@ export interface CutfacOnboarding {
   fixAgent: (agent: AgentName) => Promise<AgentFix>;
   /** A line a fix printed. Returns an unsubscribe. */
   onFixOutput: (listener: (agent: AgentName, line: string) => void) => () => void;
-  /** Whether macOS lets the app read every file, as the agents it runs need. */
-  fullDiskAccess: () => Promise<boolean>;
+  /** Whether macOS grants the app a permission. Screen recording shows only after the app reopens. */
+  permission: (permission: Permission) => Promise<boolean>;
   /**
-   * Open the Full Disk Access list in System Settings, with a small window beside it to drag the
-   * app from. The app comes back to the front once the access is granted.
+   * Open a permission's list in System Settings, with a small window beside it to drag the app
+   * from. The app comes back to the front once the permission is granted.
    */
-  openAccessSettings: () => Promise<void>;
-  /** Full Disk Access was granted while System Settings was open. Returns an unsubscribe. */
-  onAccessGranted: (listener: () => void) => () => void;
-  /** Drag the app itself into the Full Disk Access list, from the helper window. */
+  openAccessSettings: (permission: Permission) => Promise<void>;
+  /** A permission was granted while System Settings was open. Returns an unsubscribe. */
+  onAccessGranted: (listener: (permission: Permission) => void) => () => void;
+  /** Drag the app itself into a list in System Settings, from the helper window. */
   startAppDrag: () => void;
   /** Makes the helper window the one that shows the cursor, as the pointer reaches it. */
   focusDragHelper: () => void;
-  /** The app as the Full Disk Access list shows it, for the helper window to show as the thing to drag. */
+  /** The app as a list in System Settings shows it, for the helper window to show as the thing to drag. */
   appIcon: () => Promise<{ icon: string; name: string }>;
   /** The folder the workspace step suggests. */
   defaultFolder: () => Promise<Folder>;
@@ -105,7 +111,7 @@ export interface DevState {
   setAside: boolean;
   workspace: string | undefined;
   defaultFolder: string;
-  /** The bundle id macOS keeps this build's Full Disk Access under. */
+  /** The bundle id macOS keeps this build's permissions under. */
   bundleId: string;
 }
 

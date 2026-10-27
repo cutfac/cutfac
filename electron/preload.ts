@@ -7,6 +7,7 @@ import type {
   CutfacDevTools,
   CutfacOnboarding,
   NewVideoLink,
+  Permission,
 } from "../web/src/desktop.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
@@ -29,7 +30,7 @@ import {
   EDIT_COMMAND_CHANNEL,
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
-  FULL_DISK_ACCESS_CHANNEL,
+  PERMISSION_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
   NEW_VIDEO_LINK_CHANNEL,
@@ -86,10 +87,10 @@ const onboarding = {
       ipcRenderer.removeListener(FIX_OUTPUT_CHANNEL, forward);
     };
   },
-  fullDiskAccess: () => ipcRenderer.invoke(FULL_DISK_ACCESS_CHANNEL),
-  openAccessSettings: () => ipcRenderer.invoke(OPEN_ACCESS_SETTINGS_CHANNEL),
+  permission: (permission) => ipcRenderer.invoke(PERMISSION_CHANNEL, permission),
+  openAccessSettings: (permission) => ipcRenderer.invoke(OPEN_ACCESS_SETTINGS_CHANNEL, permission),
   onAccessGranted: (listener) => {
-    const forward = () => listener();
+    const forward = (_event: IpcRendererEvent, permission: Permission) => listener(permission);
 
     ipcRenderer.on(ACCESS_GRANTED_CHANNEL, forward);
 
