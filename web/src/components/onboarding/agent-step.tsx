@@ -192,10 +192,10 @@ const GLOW = {
   codex: "bg-linear-to-br from-codex-from via-codex-via to-codex-to",
 } satisfies Record<AgentName, string>;
 
-/** A faint wash of the same color across the row, fading out before its far end. */
+/** A faint wash of the same color across the whole row, fading out only at its far end. */
 const WASH = {
-  claude: "from-claude/20",
-  codex: "from-codex-via/20",
+  claude: "from-claude/22 via-claude/10",
+  codex: "from-codex-via/22 via-codex-via/10",
 } satisfies Record<AgentName, string>;
 
 /**
@@ -226,7 +226,7 @@ function AgentRow({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute inset-0 bg-linear-to-r via-transparent to-transparent transition-opacity duration-700",
+          "pointer-events-none absolute inset-0 bg-linear-to-r to-transparent transition-opacity duration-700",
           WASH[setup.agent],
           state === "ready" ? "opacity-100" : "opacity-40",
         )}
