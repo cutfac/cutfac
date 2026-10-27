@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect } from "bun:test";
 import { join } from "node:path";
 
-import { ConfigProvider, Effect, type Layer, Option, type Schema } from "effect";
+import { ConfigProvider, Context, Effect, FileSystem, Layer, Option, type Schema } from "effect";
 
 import { runEdit } from "../src/core/agentRun.ts";
 import { AppData } from "../src/core/appData.ts";
@@ -18,392 +16,476 @@ import {
   mcpServersStatus,
 } from "../src/core/mcpApprovals.ts";
 import type { AgentName } from "../src/core/schema.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
 import { pluginFolder, setUpClaudePlugins, writeFiles } from "./pluginFixtures.ts";
-import {
-  makeFakeAgents,
-  makeWorkspace,
-  type FakeAgents,
-  type TestServices,
-  type TestWorkspace,
-} from "./support.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
 
-let t: TestWorkspace;
+class AgentHome extends Context.Service<
+  AgentHome,
+  {
+    /** Where the user's agents keep their config: Claude Code's `.claude.json` and Codex's `config.toml`. */
+    readonly config: string;
+    /** Where the app keeps its records. */
+    readonly appDir: string;
+  }
+>()("test/AgentHome") {}
 
-let fakes: FakeAgents;
+/** The user's agent config and the app's folder, which the fake agents and the core look in. */
+const agentHome = Layer.unwrap(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const fakes = yield* FakeAgentDir;
+    const config = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-agent-config-" });
+    const appDir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-app-" });
+    const env = { PATH: join(fakes.dir, "bin"), CLAUDE_CONFIG_DIR: config, CODEX_HOME: config };
 
-/** Where the user's agents keep their config: Claude Code's `.claude.json` and Codex's `config.toml`. */
-let config: string;
+    return Layer.mergeAll(
+      Layer.succeed(AgentHome, { config, appDir }),
+      Layer.succeed(AppData, Option.some(appDir)),
+      ConfigProvider.layer(ConfigProvider.fromEnv({ env })),
+    );
+  }),
+).pipe(Layer.orDie);
 
-let appDir: string;
+const it = testEffect(
+  agentHome.pipe(Layer.provideMerge(Layer.merge(tempWorkspace("Servers"), fakeAgents))),
+);
 
-let env: Layer.Layer<never>;
+const writeConfig = (file: string, text: string) =>
+  Effect.gen(function* () {
+    const { config } = yield* AgentHome;
+    const fs = yield* FileSystem.FileSystem;
 
-beforeEach(async () => {
-  t = await makeWorkspace("Servers");
-  fakes = await makeFakeAgents();
-  config = await mkdtemp(join(tmpdir(), "cutfac-agent-config-"));
-  appDir = await mkdtemp(join(tmpdir(), "cutfac-app-"));
-
-  env = ConfigProvider.layer(
-    ConfigProvider.fromEnv({
-      env: { PATH: join(fakes.dir, "bin"), CLAUDE_CONFIG_DIR: config, CODEX_HOME: config },
-    }),
-  );
-});
-
-afterEach(async () => {
-  await rm(appDir, { recursive: true, force: true });
-  await rm(config, { recursive: true, force: true });
-  await fakes.remove();
-  await t.remove();
-});
-
-/** `effect` with the user's agent config in `config` and the app keeping its records in `appDir`. */
-const inApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) =>
-  t.runWith(env, Effect.provideService(effect, AppData, Option.some(appDir)));
-
-const failInApp = <A, E>(effect: Effect.Effect<A, E, TestServices>) => inApp(Effect.flip(effect));
+    yield* Effect.orDie(fs.writeFileString(join(config, file), text));
+  });
 
 const setUpClaude = (record: Schema.JsonObject) =>
-  writeFile(join(config, ".claude.json"), JSON.stringify(record));
+  writeConfig(".claude.json", JSON.stringify(record));
 
 const stateOf = (status: McpServersStatus, name: string) =>
   status.servers.find((server) => server.name === name)?.state;
 
+/** The app's record of what the user turned on, as it is on disk. */
+const savedFile = (file: string) =>
+  Effect.gen(function* () {
+    const { appDir } = yield* AgentHome;
+    const fs = yield* FileSystem.FileSystem;
+
+    return JSON.parse(yield* Effect.orDie(fs.readFileString(join(appDir, file))));
+  });
+
 /** Turn `name` on or off as the user sees it now. */
-const decide = async (agent: AgentName, name: string, on: boolean) => {
-  const status = await inApp(mcpServersStatus());
+const decide = Effect.fnUntraced(function* (agent: AgentName, name: string, on: boolean) {
+  const status = yield* mcpServersStatus();
   const server = status.servers.find((one) => one.agent === agent && one.name === name);
 
-  return inApp(decideMcpServer({ agent, name, fingerprint: server?.fingerprint ?? "", on }));
-};
+  return yield* decideMcpServer({ agent, name, fingerprint: server?.fingerprint ?? "", on });
+});
 
 const DOCS = { command: "docs-mcp", env: { TOKEN: "t-1" } };
 
+/** A Claude Code the user has set up with a server of their own and one for this workspace. */
+const userServers = Effect.gen(function* () {
+  const fakes = yield* FakeAgentDir;
+  const ws = yield* Workspace;
+
+  yield* fakes.bin("claude", "");
+  yield* setUpClaude({
+    mcpServers: { docs: DOCS },
+    projects: { [ws.root]: { mcpServers: { notes: { command: "notes-mcp" } } } },
+  });
+});
+
 describe("the MCP servers the user set up", () => {
-  beforeEach(async () => {
-    await fakes.bin("claude", "");
-    await setUpClaude({
-      mcpServers: { docs: DOCS },
-      projects: { [t.root]: { mcpServers: { notes: { command: "notes-mcp" } } } },
-    });
-  });
-
-  test("are off for runs until the user turns them on, as they saw them", async () => {
-    const status = await inApp(mcpServersStatus());
-
-    expect(status.servers.map((server) => [server.name, server.source, server.state])).toEqual([
-      ["docs", "user", "new"],
-      ["notes", "local", "new"],
-    ]);
-    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
-
-    expect(
-      (
-        await failInApp(
-          decideMcpServer({ agent: "claude", name: "docs", fingerprint: "x", on: true }),
-        )
-      )._tag,
-    ).toBe("Conflict");
-
-    expect((await decide("claude", "docs", true)).state).toBe("on");
-    expect((await decide("claude", "notes", false)).state).toBe("off");
-
-    const approved = await inApp(approvedClaudeServers());
-
-    expect(Object.keys(approved.servers)).toEqual(["docs"]);
-  });
-
-  test("keep the user's own once for every workspace, and this folder's by its root", async () => {
-    await decide("claude", "docs", true);
-    await decide("claude", "notes", false);
-
-    const saved = JSON.parse(await readFile(join(appDir, "mcp-servers.json"), "utf8"));
-
-    expect(saved.user.claude.docs).toEqual({ on: true, fingerprint: expect.any(String) });
-    expect(saved.workspaces[t.root].claude.notes).toEqual({
-      on: false,
-      fingerprint: expect.any(String),
-    });
-  });
-
-  test("are asked about again when how they start changes, but not for a new key", async () => {
-    await decide("claude", "docs", true);
-    await decide("claude", "notes", false);
-
-    await setUpClaude({
-      mcpServers: { docs: { ...DOCS, env: { TOKEN: "t-2" } } },
-      projects: { [t.root]: { mcpServers: { notes: { command: "notes-mcp", args: ["--all"] } } } },
-    });
-
-    const rotated = await inApp(mcpServersStatus());
-
-    expect(stateOf(rotated, "docs")).toBe("on");
-    // Off stays off, whatever it starts.
-    expect(stateOf(rotated, "notes")).toBe("off");
-
-    await setUpClaude({ mcpServers: { docs: { ...DOCS, command: "other-mcp" } } });
-
-    expect(stateOf(await inApp(mcpServersStatus()), "docs")).toBe("changed");
-    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
-    expect(await inApp(mcpNotices())).toEqual([
-      expect.stringContaining("docs (Claude Code, changed since turned on)"),
-    ]);
-  });
-
-  test("are told to the agent while they wait for the user", async () => {
-    const [notice] = await inApp(mcpNotices());
-
-    expect(notice).toContain("docs (Claude Code, new), notes (Claude Code, new)");
-
-    await decide("claude", "docs", true);
-    await decide("claude", "notes", false);
-
-    expect(await inApp(mcpNotices())).toEqual([]);
-  });
-
-  test("keep every other record in the file as it was", async () => {
-    const store = join(appDir, "mcp-servers.json");
-    await writeFile(store, JSON.stringify({ user: { codex: { web: { on: true } } }, later: 1 }));
-
-    await decide("claude", "docs", true);
-    const saved = JSON.parse(await readFile(store, "utf8"));
-
-    expect(saved.user.codex).toEqual({ web: { on: true } });
-    expect(saved.later).toBe(1);
-  });
-
-  test("can't be turned on when they aren't there, or with nowhere to keep it", async () => {
-    expect(
-      (
-        await failInApp(
-          decideMcpServer({ agent: "claude", name: "gone", fingerprint: "x", on: true }),
-        )
-      )._tag,
-    ).toBe("NotFound");
-
-    const { fingerprint = "" } = (await inApp(mcpServersStatus())).servers[0] ?? {};
-
-    const error = await t.runWith(
-      env,
-      Effect.flip(decideMcpServer({ agent: "claude", name: "docs", fingerprint, on: true })),
-    );
-
-    expect(error._tag).toBe("InvalidRequest");
-  });
-});
-
-test("an agent the user doesn't have shows none of its servers", async () => {
-  await setUpClaude({ mcpServers: { docs: DOCS } });
-  await writeFile(join(config, "config.toml"), '[mcp_servers.web]\nurl = "https://x"\n');
-
-  expect(await inApp(mcpServersStatus())).toEqual({ servers: [], plugins: [], problems: [] });
-  expect(await inApp(mcpNotices())).toEqual([]);
-});
-
-test("Codex's servers are told to the agent from its config, without starting Codex", async () => {
-  const started = join(fakes.calls, "started");
-  await fakes.bin("codex", `touch "${started}"\n`);
-  await writeFile(join(config, "config.toml"), '[mcp_servers.web]\nurl = "https://x"\n');
-
-  expect(await inApp(mcpNotices())).toEqual([expect.stringContaining("web (Codex, new)")]);
-  expect(await Bun.file(started).exists()).toBe(false);
-});
-
-/** What the fake agent was given, one argument at a time. */
-const given = async () => (await readFile(join(fakes.calls, "args"), "utf8")).split("\0");
-
-const edit = (agent: AgentName) =>
-  inApp(
+  it.live("are off for runs until the user turns them on, as they saw them", () =>
     Effect.gen(function* () {
-      const created = yield* createItem({ title: "Clip" });
-      const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
+      yield* userServers;
 
-      yield* runEdit(undefined)(
-        { itemId: created.id, feedbackId: feedback.id, agent },
-        () => Effect.void,
-        refuse,
+      const status = yield* mcpServersStatus();
+
+      expect(status.servers.map((server) => [server.name, server.source, server.state])).toEqual([
+        ["docs", "user", "new"],
+        ["notes", "local", "new"],
+      ]);
+      expect((yield* approvedClaudeServers()).servers).toEqual({});
+
+      const unseen = yield* Effect.flip(
+        decideMcpServer({ agent: "claude", name: "docs", fingerprint: "x", on: true }),
       );
+
+      expect(unseen._tag).toBe("Conflict");
+      expect((yield* decide("claude", "docs", true)).state).toBe("on");
+      expect((yield* decide("claude", "notes", false)).state).toBe("off");
+
+      const approved = yield* approvedClaudeServers();
+
+      expect(Object.keys(approved.servers)).toEqual(["docs"]);
     }),
   );
 
+  it.live("keep the user's own once for every workspace, and this folder's by its root", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+
+      yield* userServers;
+      yield* decide("claude", "docs", true);
+      yield* decide("claude", "notes", false);
+
+      const saved = yield* savedFile("mcp-servers.json");
+
+      expect(saved.user.claude.docs).toEqual({ on: true, fingerprint: expect.any(String) });
+      expect(saved.workspaces[ws.root].claude.notes).toEqual({
+        on: false,
+        fingerprint: expect.any(String),
+      });
+    }),
+  );
+
+  it.live("are asked about again when how they start changes, but not for a new key", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+
+      yield* userServers;
+      yield* decide("claude", "docs", true);
+      yield* decide("claude", "notes", false);
+
+      yield* setUpClaude({
+        mcpServers: { docs: { ...DOCS, env: { TOKEN: "t-2" } } },
+        projects: {
+          [ws.root]: { mcpServers: { notes: { command: "notes-mcp", args: ["--all"] } } },
+        },
+      });
+
+      const rotated = yield* mcpServersStatus();
+
+      expect(stateOf(rotated, "docs")).toBe("on");
+      // Off stays off, whatever it starts.
+      expect(stateOf(rotated, "notes")).toBe("off");
+
+      yield* setUpClaude({ mcpServers: { docs: { ...DOCS, command: "other-mcp" } } });
+
+      expect(stateOf(yield* mcpServersStatus(), "docs")).toBe("changed");
+      expect((yield* approvedClaudeServers()).servers).toEqual({});
+      expect(yield* mcpNotices()).toEqual([
+        expect.stringContaining("docs (Claude Code, changed since turned on)"),
+      ]);
+    }),
+  );
+
+  it.live("are told to the agent while they wait for the user", () =>
+    Effect.gen(function* () {
+      yield* userServers;
+
+      const [notice] = yield* mcpNotices();
+
+      expect(notice).toContain("docs (Claude Code, new), notes (Claude Code, new)");
+
+      yield* decide("claude", "docs", true);
+      yield* decide("claude", "notes", false);
+
+      expect(yield* mcpNotices()).toEqual([]);
+    }),
+  );
+
+  it.live("keep every other record in the file as it was", () =>
+    Effect.gen(function* () {
+      const { appDir } = yield* AgentHome;
+      const fs = yield* FileSystem.FileSystem;
+
+      yield* userServers;
+      yield* fs.writeFileString(
+        join(appDir, "mcp-servers.json"),
+        JSON.stringify({ user: { codex: { web: { on: true } } }, later: 1 }),
+      );
+      yield* decide("claude", "docs", true);
+
+      const saved = yield* savedFile("mcp-servers.json");
+
+      expect(saved.user.codex).toEqual({ web: { on: true } });
+      expect(saved.later).toBe(1);
+    }),
+  );
+
+  it.live("can't be turned on when they aren't there, or with nowhere to keep it", () =>
+    Effect.gen(function* () {
+      yield* userServers;
+
+      const gone = yield* Effect.flip(
+        decideMcpServer({ agent: "claude", name: "gone", fingerprint: "x", on: true }),
+      );
+
+      expect(gone._tag).toBe("NotFound");
+
+      const { fingerprint = "" } = (yield* mcpServersStatus()).servers[0] ?? {};
+
+      const error = yield* Effect.flip(
+        decideMcpServer({ agent: "claude", name: "docs", fingerprint, on: true }),
+      ).pipe(Effect.provideService(AppData, Option.none()));
+
+      expect(error._tag).toBe("InvalidRequest");
+    }),
+  );
+});
+
+it.live("an agent the user doesn't have shows none of its servers", () =>
+  Effect.gen(function* () {
+    yield* setUpClaude({ mcpServers: { docs: DOCS } });
+    yield* writeConfig("config.toml", '[mcp_servers.web]\nurl = "https://x"\n');
+
+    expect(yield* mcpServersStatus()).toEqual({ servers: [], plugins: [], problems: [] });
+    expect(yield* mcpNotices()).toEqual([]);
+  }),
+);
+
+it.live("Codex's servers are told to the agent from its config, without starting Codex", () =>
+  Effect.gen(function* () {
+    const fakes = yield* FakeAgentDir;
+    const fs = yield* FileSystem.FileSystem;
+    const started = join(fakes.calls, "started");
+
+    yield* fakes.bin("codex", `touch "${started}"\n`);
+    yield* writeConfig("config.toml", '[mcp_servers.web]\nurl = "https://x"\n');
+
+    expect(yield* mcpNotices()).toEqual([expect.stringContaining("web (Codex, new)")]);
+    expect(yield* fs.exists(started)).toBe(false);
+  }),
+);
+
+/** What the fake agent was given, one argument at a time. */
+const given = Effect.gen(function* () {
+  const fakes = yield* FakeAgentDir;
+  const fs = yield* FileSystem.FileSystem;
+
+  return (yield* Effect.orDie(fs.readFileString(join(fakes.calls, "args")))).split("\0");
+});
+
+const edit = (agent: AgentName) =>
+  Effect.gen(function* () {
+    const created = yield* createItem({ title: "Clip" });
+    const { feedback } = yield* addFeedback(created.id, { body: "Trim it" });
+
+    yield* runEdit(undefined)(
+      { itemId: created.id, feedbackId: feedback.id, agent },
+      () => Effect.void,
+      refuse,
+    );
+  });
+
+/** A fake Codex that lists `servers` as its MCP servers and keeps the arguments of its app-server. */
+const codexListing = (servers: Schema.Json) =>
+  Effect.flatMap(FakeAgentDir, (fakes) =>
+    fakes.bin(
+      "codex",
+      `[ "$1" = mcp ] && { echo '${JSON.stringify(servers)}'; exit 0; }
+[ "$1" = app-server ] || exit 0
+printf '%s\\0' "$@" > "${fakes.calls}/args"
+`,
+    ),
+  );
+
 describe("an edit run", () => {
-  test("of Claude loads the servers the user turned on, their secrets off the command line", async () => {
-    await fakes.bin(
-      "claude",
-      `head -n 1 >/dev/null
+  it.live(
+    "of Claude loads the servers the user turned on, their secrets off the command line",
+    () =>
+      Effect.gen(function* () {
+        const fakes = yield* FakeAgentDir;
+        const fs = yield* FileSystem.FileSystem;
+
+        yield* fakes.bin(
+          "claude",
+          `head -n 1 >/dev/null
 printf '%s\\0' "$@" > "${fakes.calls}/args"
 env | grep '^CUTFAC_MCP_SECRET_' > "${fakes.calls}/env"
 echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
 `,
-    );
-    await setUpClaude({ mcpServers: { docs: DOCS, notes: { command: "notes-mcp" } } });
-    await decide("claude", "docs", true);
+        );
+        yield* setUpClaude({ mcpServers: { docs: DOCS, notes: { command: "notes-mcp" } } });
+        yield* decide("claude", "docs", true);
+        yield* edit("claude");
 
-    await edit("claude");
+        const argv = yield* given;
+        const mcpConfig = JSON.parse(argv[argv.indexOf("--mcp-config") + 1] ?? "{}");
 
-    const argv = await given();
-    const mcpConfig = JSON.parse(argv[argv.indexOf("--mcp-config") + 1] ?? "{}");
+        expect(mcpConfig.mcpServers).toEqual({
+          docs: { command: "docs-mcp", env: { TOKEN: "${CUTFAC_MCP_SECRET_0}" } },
+        });
+        expect(argv.join(" ")).not.toContain("t-1");
+        expect(yield* fs.readFileString(join(fakes.calls, "env"))).toBe(
+          "CUTFAC_MCP_SECRET_0=t-1\n",
+        );
 
-    expect(mcpConfig.mcpServers).toEqual({
-      docs: { command: "docs-mcp", env: { TOKEN: "${CUTFAC_MCP_SECRET_0}" } },
-    });
-    expect(argv.join(" ")).not.toContain("t-1");
-    expect(await readFile(join(fakes.calls, "env"), "utf8")).toBe("CUTFAC_MCP_SECRET_0=t-1\n");
+        // Claude asks the board before it uses their tools, as it would ask in a terminal.
+        const allowed = (argv[argv.indexOf("--allowedTools") + 1] ?? "").split(",");
 
-    // Claude asks the board before it uses their tools, as it would ask in a terminal.
-    const allowed = (argv[argv.indexOf("--allowedTools") + 1] ?? "").split(",");
+        for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
+      }),
+  );
 
-    for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
-  });
+  it.live("of Codex keeps the servers the user turned on and switches off the rest", () =>
+    Effect.gen(function* () {
+      yield* codexListing([
+        { name: "docs", enabled: true, transport: { type: "stdio", command: "docs-mcp" } },
+        { name: "web", enabled: true, transport: { type: "streamable_http", url: "https://x" } },
+      ]);
+      yield* decide("codex", "docs", true);
+      yield* edit("codex");
 
-  test("of Codex keeps the servers the user turned on and switches off the rest", async () => {
-    const listing = JSON.stringify([
-      { name: "docs", enabled: true, transport: { type: "stdio", command: "docs-mcp" } },
-      { name: "web", enabled: true, transport: { type: "streamable_http", url: "https://x" } },
-    ]);
+      const argv = yield* given;
 
-    await fakes.bin(
-      "codex",
-      `[ "$1" = mcp ] && { echo '${listing}'; exit 0; }
-[ "$1" = app-server ] || exit 0
-printf '%s\\0' "$@" > "${fakes.calls}/args"
-`,
-    );
-    await decide("codex", "docs", true);
-
-    await edit("codex");
-
-    const argv = await given();
-
-    expect(argv).toContain("mcp_servers.web.enabled=false");
-    expect(argv).toContain('mcp_servers.web.url="http://127.0.0.1:9"');
-    expect(argv).not.toContain("mcp_servers.docs.enabled=false");
-  });
+      expect(argv).toContain("mcp_servers.web.enabled=false");
+      expect(argv).toContain('mcp_servers.web.url="http://127.0.0.1:9"');
+      expect(argv).not.toContain("mcp_servers.docs.enabled=false");
+    }),
+  );
 });
 
 /** Turn the plugin `id` on or off as the user sees it now. */
-const decidePlugin = async (agent: AgentName, id: string, on: boolean) => {
-  const status = await inApp(mcpServersStatus());
+const decidePlugin = Effect.fnUntraced(function* (agent: AgentName, id: string, on: boolean) {
+  const status = yield* mcpServersStatus();
   const plugin = status.plugins.find((one) => one.agent === agent && one.id === id);
 
-  return inApp(decideMcpPlugin({ agent, id, fingerprint: plugin?.fingerprint ?? "", on }));
-};
+  return yield* decideMcpPlugin({ agent, id, fingerprint: plugin?.fingerprint ?? "", on });
+});
 
 const DOCS_PLUGIN = {
   ".claude-plugin/plugin.json": { name: "docs", description: "Search the docs" },
   ".mcp.json": { mcpServers: { search: { command: "${CLAUDE_PLUGIN_ROOT}/bin/search" } } },
 };
 
-describe("a plugin with MCP servers", () => {
-  beforeEach(async () => {
-    await fakes.bin("claude", "");
-    await setUpClaudePlugins(
-      config,
-      { "docs@market": { files: DOCS_PLUGIN } },
-      { "docs@market": true },
-    );
-  });
+/** A Claude Code the user has set up with the docs plugin, turned on in their settings. */
+const docsPlugin = Effect.gen(function* () {
+  const { config } = yield* AgentHome;
+  const fakes = yield* FakeAgentDir;
 
-  test("is asked about once for all of its servers, which stay off until the user says", async () => {
-    const [plugin] = (await inApp(mcpServersStatus())).plugins;
-
-    expect(plugin).toMatchObject({
-      agent: "claude",
-      id: "docs@market",
-      title: "docs",
-      description: "Search the docs",
-      state: "new",
-      // Where the plugin is, filled in.
-      servers: [{ name: "search", launch: `${pluginFolder(config, "docs@market")}/bin/search` }],
-    });
-    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
-
-    const [notice] = await inApp(mcpNotices());
-
-    expect(notice).toContain("the docs plugin's servers (Claude Code, new)");
-    expect(notice).toContain("ask the user to turn it on there");
-    expect(notice).toContain("Plugins' skills load either way.");
-
-    expect((await decidePlugin("claude", "docs@market", true)).state).toBe("on");
-    expect(await inApp(mcpNotices())).toEqual([]);
-
-    const saved = JSON.parse(await readFile(join(appDir, "mcp-servers.json"), "utf8"));
-
-    expect(saved.plugins.claude["docs@market"]).toEqual({
-      on: true,
-      fingerprint: plugin?.fingerprint,
-    });
-  });
-
-  test("once on, loads in Claude's runs as Claude Code names it, where the plugin is", async () => {
-    await decidePlugin("claude", "docs@market", true);
-
-    const approved = await inApp(approvedClaudeServers());
-    const root = pluginFolder(config, "docs@market");
-
-    expect(approved.servers["plugin:docs:search"]).toMatchObject({
-      command: `${root}/bin/search`,
-    });
-    expect(Object.values(approved.env)).toContain(root);
-  });
-
-  test("is asked about again when what it starts changes, and not turned on unseen", async () => {
-    const [seen] = (await inApp(mcpServersStatus())).plugins;
-    await decidePlugin("claude", "docs@market", true);
-
-    await writeFiles(pluginFolder(config, "docs@market"), {
-      ".mcp.json": { mcpServers: { search: { command: "other" } } },
-    });
-
-    expect((await inApp(mcpServersStatus())).plugins[0]?.state).toBe("changed");
-    expect((await inApp(approvedClaudeServers())).servers).toEqual({});
-
-    const decision = { agent: "claude", id: "docs@market", on: true } as const;
-
-    expect(
-      (await failInApp(decideMcpPlugin({ ...decision, fingerprint: seen?.fingerprint ?? "" })))
-        ._tag,
-    ).toBe("Conflict");
-    expect(
-      (await failInApp(decideMcpPlugin({ ...decision, id: "gone@market", fingerprint: "" })))._tag,
-    ).toBe("NotFound");
-  });
+  yield* fakes.bin("claude", "");
+  yield* Effect.promise(() =>
+    setUpClaudePlugins(config, { "docs@market": { files: DOCS_PLUGIN } }, { "docs@market": true }),
+  );
 });
 
-test("Codex's runs keep the servers of a plugin the user turned on, offered as the plugin", async () => {
-  const listing = JSON.stringify([
-    { name: "notes", enabled: true, transport: { type: "stdio", command: "notes-mcp" } },
-    { name: "web", enabled: true, transport: { type: "streamable_http", url: "https://x" } },
-  ]);
+describe("a plugin with MCP servers", () => {
+  it.live("is asked about once for all of its servers, which stay off until the user says", () =>
+    Effect.gen(function* () {
+      const { config } = yield* AgentHome;
 
-  await fakes.bin(
-    "codex",
-    `[ "$1" = mcp ] && { echo '${listing}'; exit 0; }
-[ "$1" = app-server ] || exit 0
-printf '%s\\0' "$@" > "${fakes.calls}/args"
-`,
+      yield* docsPlugin;
+
+      const [plugin] = (yield* mcpServersStatus()).plugins;
+
+      expect(plugin).toMatchObject({
+        agent: "claude",
+        id: "docs@market",
+        title: "docs",
+        description: "Search the docs",
+        state: "new",
+        // Where the plugin is, filled in.
+        servers: [{ name: "search", launch: `${pluginFolder(config, "docs@market")}/bin/search` }],
+      });
+      expect((yield* approvedClaudeServers()).servers).toEqual({});
+
+      const [notice] = yield* mcpNotices();
+
+      expect(notice).toContain("the docs plugin's servers (Claude Code, new)");
+      expect(notice).toContain("ask the user to turn it on there");
+      expect(notice).toContain("Plugins' skills load either way.");
+
+      expect((yield* decidePlugin("claude", "docs@market", true)).state).toBe("on");
+      expect(yield* mcpNotices()).toEqual([]);
+
+      const saved = yield* savedFile("mcp-servers.json");
+
+      expect(saved.plugins.claude["docs@market"]).toEqual({
+        on: true,
+        fingerprint: plugin?.fingerprint,
+      });
+    }),
   );
 
-  await writeFiles(config, {
-    "config.toml":
-      '[mcp_servers.web]\nurl = "https://x"\n\n[plugins."notes@local"]\nenabled = true\n',
-  });
+  it.live("once on, loads in Claude's runs as Claude Code names it, where the plugin is", () =>
+    Effect.gen(function* () {
+      const { config } = yield* AgentHome;
 
-  await writeFiles(pluginFolder(config, "notes@local"), {
-    ".mcp.json": { mcpServers: { notes: { command: "notes-mcp" } } },
-  });
+      yield* docsPlugin;
+      yield* decidePlugin("claude", "docs@market", true);
 
-  const status = await inApp(mcpServersStatus());
+      const approved = yield* approvedClaudeServers();
+      const root = pluginFolder(config, "docs@market");
 
-  expect(status.servers.map((server) => server.name)).toEqual(["web"]);
-  expect(status.plugins.map((plugin) => plugin.id)).toEqual(["notes@local"]);
+      expect(approved.servers["plugin:docs:search"]).toMatchObject({
+        command: `${root}/bin/search`,
+      });
+      expect(Object.values(approved.env)).toContain(root);
+    }),
+  );
 
-  await decidePlugin("codex", "notes@local", true);
-  await edit("codex");
+  it.live("is asked about again when what it starts changes, and not turned on unseen", () =>
+    Effect.gen(function* () {
+      const { config } = yield* AgentHome;
 
-  const argv = await given();
+      yield* docsPlugin;
 
-  expect(argv).toContain("mcp_servers.web.enabled=false");
-  expect(argv).not.toContain("mcp_servers.notes.enabled=false");
+      const [seen] = (yield* mcpServersStatus()).plugins;
+
+      yield* decidePlugin("claude", "docs@market", true);
+      yield* Effect.promise(() =>
+        writeFiles(pluginFolder(config, "docs@market"), {
+          ".mcp.json": { mcpServers: { search: { command: "other" } } },
+        }),
+      );
+
+      expect((yield* mcpServersStatus()).plugins[0]?.state).toBe("changed");
+      expect((yield* approvedClaudeServers()).servers).toEqual({});
+
+      const decision = { agent: "claude", id: "docs@market", on: true } as const;
+
+      const stale = yield* Effect.flip(
+        decideMcpPlugin({ ...decision, fingerprint: seen?.fingerprint ?? "" }),
+      );
+
+      expect(stale._tag).toBe("Conflict");
+
+      const gone = yield* Effect.flip(
+        decideMcpPlugin({ ...decision, id: "gone@market", fingerprint: "" }),
+      );
+
+      expect(gone._tag).toBe("NotFound");
+    }),
+  );
 });
+
+it.live("Codex's runs keep the servers of a plugin the user turned on, offered as the plugin", () =>
+  Effect.gen(function* () {
+    const { config } = yield* AgentHome;
+
+    yield* codexListing([
+      { name: "notes", enabled: true, transport: { type: "stdio", command: "notes-mcp" } },
+      { name: "web", enabled: true, transport: { type: "streamable_http", url: "https://x" } },
+    ]);
+
+    yield* Effect.promise(() =>
+      writeFiles(config, {
+        "config.toml":
+          '[mcp_servers.web]\nurl = "https://x"\n\n[plugins."notes@local"]\nenabled = true\n',
+      }),
+    );
+    yield* Effect.promise(() =>
+      writeFiles(pluginFolder(config, "notes@local"), {
+        ".mcp.json": { mcpServers: { notes: { command: "notes-mcp" } } },
+      }),
+    );
+
+    const status = yield* mcpServersStatus();
+
+    expect(status.servers.map((server) => server.name)).toEqual(["web"]);
+    expect(status.plugins.map((plugin) => plugin.id)).toEqual(["notes@local"]);
+
+    yield* decidePlugin("codex", "notes@local", true);
+    yield* edit("codex");
+
+    const argv = yield* given;
+
+    expect(argv).toContain("mcp_servers.web.enabled=false");
+    expect(argv).not.toContain("mcp_servers.notes.enabled=false");
+  }),
+);
