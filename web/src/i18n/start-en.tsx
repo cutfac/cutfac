@@ -74,10 +74,14 @@ export const startEn = {
       ownBody: "A line or two is enough.",
     },
     material: {
-      title: "Anything your agent should read?",
-      hint: "Your agent reads them before it starts.",
-      website: { title: "Website", hint: "Your product page or app listing" },
-      folder: { title: "Folder", hint: "A brand kit or your footage" },
+      website: {
+        title: "Any website your agent should read?",
+        body: "Like your product page or app listing.",
+      },
+      folder: {
+        title: "Any folder your agent should read?",
+        body: "Like a brand kit or your footage. It stays where it is.",
+      },
       placeholder: "https://your-site.com",
       add: "Add",
       choose: "Choose folder…",

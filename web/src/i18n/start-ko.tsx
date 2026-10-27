@@ -62,10 +62,14 @@ export const startKo: StartMessages = {
       ownBody: "한두 줄이면 충분해요.",
     },
     material: {
-      title: "에이전트가 읽을 자료가 있나요?",
-      hint: "에이전트가 시작하기 전에 읽어요.",
-      website: { title: "웹사이트", hint: "제품 페이지나 스토어 페이지" },
-      folder: { title: "폴더", hint: "브랜드 키트나 영상 소재" },
+      website: {
+        title: "에이전트가 읽을 웹사이트가 있나요?",
+        body: "제품 페이지나 앱 소개 페이지처럼요.",
+      },
+      folder: {
+        title: "에이전트가 읽을 폴더가 있나요?",
+        body: "브랜드 키트나 영상 소재처럼요. 폴더는 옮기지 않아요.",
+      },
       placeholder: "https://내-사이트.com",
       add: "추가",
       choose: "폴더 선택…",

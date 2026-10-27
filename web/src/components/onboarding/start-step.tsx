@@ -17,7 +17,7 @@ import { errorText } from "../../lib/notify.ts";
 import { onboardingAgent, skipStart } from "../../lib/onboarding.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
 import { StepHeader } from "./frame.tsx";
-import { MaterialPicker } from "./material-picker.tsx";
+import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
 
 /**
  * The agent that makes the template: the workspace default when it is ready, else the first that
@@ -35,14 +35,18 @@ async function startAgent(preferred: AgentChoice): Promise<AgentName | undefined
   return importAgent(preferred, await api.agents());
 }
 
-/** The parts of what to make, asked one at a time. */
-const PARTS = ["purpose", "platforms", "material", "details"] as const;
+/** The parts of what to make, asked one at a time. A browser can't pick a folder, so skips it. */
+const PARTS = ["purpose", "platforms", "website", "folder", "details"] as const;
 
 type Part = (typeof PARTS)[number];
 
+const STEPS: ReadonlyArray<Part> =
+  desktop === undefined ? PARTS.filter((part) => part !== "folder") : PARTS;
+
 /**
  * What to make, a part at a time so each screen asks one thing: what the videos are for, where they
- * go, material to read, then anything else the agent should know, in the user's own words. Picking a
+ * go, a website and a folder to read, then anything else the agent should know, in the user's own
+ * words. Picking a
  * purpose moves on by itself, and a part that can be left out says so on its button. Start, on the
  * last part, saves the brief, learns the material, and has the agent make the first template.
  */
@@ -91,9 +95,10 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
     }
   }
 
-  const index = PARTS.indexOf(part);
-  const material = sources.length > 0 || typed.trim() !== "";
-  const go = (step: 1 | -1) => setPart(PARTS[index + step] ?? part);
+  const index = STEPS.indexOf(part);
+  const links = sources.some(isLink) || typed.trim() !== "";
+  const folders = sources.some((source) => !isLink(source));
+  const go = (step: 1 | -1) => setPart(STEPS[index + step] ?? part);
   const own = brief.purpose === "own";
   const parts = { value: brief, onChange: setBrief, disabled: busy };
 
@@ -136,13 +141,19 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       field: <PlatformToggles {...parts} />,
       primary: next(brief.platforms.length > 0 ? t.next : t.skipPart),
     },
-    material: {
-      title: t.material.title,
-      body: t.material.hint,
+    website: {
+      title: t.material.website.title,
+      body: t.material.website.body,
       field: (
-        <MaterialPicker sources={sources} draft={typed} onSources={setSources} onDraft={setTyped} />
+        <WebsitePicker sources={sources} onSources={setSources} draft={typed} onDraft={setTyped} />
       ),
-      primary: next(material ? t.next : t.skipPart),
+      primary: next(links ? t.next : t.skipPart),
+    },
+    folder: {
+      title: t.material.folder.title,
+      body: t.material.folder.body,
+      field: <FolderPicker sources={sources} onSources={setSources} />,
+      primary: next(folders ? t.next : t.skipPart),
     },
     // Last, so the user says anything the choices left out; for their own purpose, it is the brief.
     details: {

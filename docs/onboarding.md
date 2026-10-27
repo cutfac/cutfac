@@ -122,8 +122,8 @@ writes the template from that. So step 5 asks, a part at a time and in this orde
 - **Platforms**: TikTok, YouTube Shorts, Instagram Reels, any of them. They set the aspect ratios and
   lengths.
 - **Their material**, optional: website links, or local folders to read from (a brand kit, past
-  videos, a product folder). A website and a folder each have a tile of their own, side by side, so
-  either or both read as fine. Start learns each one into the workspace with the Learn the board
+  videos, a product folder). A website and a folder are each a part of their own, so each screen asks
+  for one thing; the browser, which can't pick a folder, asks for the website alone. Start learns each one into the workspace with the Learn the board
   already has, into `about.md`, so every later run reads it too. A folder is read where it is, not
   copied.
 - **Anything else**, last and optional: a line or two in the user's own words, for what the choices
