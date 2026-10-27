@@ -55,7 +55,7 @@ export function Welcome({
   if (current === "agent") {
     return (
       <OnboardingFrame step={2}>
-        <AgentStep onboarding={onboarding} onDone={() => go("access")} />
+        <AgentStep onboarding={onboarding} onDone={() => go("access")} onBack={() => go("make")} />
       </OnboardingFrame>
     );
   }
@@ -63,7 +63,11 @@ export function Welcome({
   if (current === "access") {
     return (
       <OnboardingFrame step={3}>
-        <AccessStep onboarding={onboarding} onDone={() => go("folder")} />
+        <AccessStep
+          onboarding={onboarding}
+          onDone={() => go("folder")}
+          onBack={() => go("agent")}
+        />
       </OnboardingFrame>
     );
   }
@@ -71,7 +75,7 @@ export function Welcome({
   if (current === "folder") {
     return (
       <OnboardingFrame step={4}>
-        <ReadyStep onboarding={onboarding} />
+        <ReadyStep onboarding={onboarding} onBack={() => go("access")} />
       </OnboardingFrame>
     );
   }

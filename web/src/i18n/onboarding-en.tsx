@@ -7,6 +7,7 @@ export const onboardingEn = {
   step: (current: number, total: number) => `Step ${current} of ${total}`,
   /** A `cutfac://new` link opened the app; its request opens on the board once setup is done. */
   linkWaiting: "A video request from a link is waiting. It opens once setup is done.",
+  back: "Back",
   welcome: {
     title: "Welcome to Cutfac",
     /** One line each, broken where the sentences end rather than wherever the width runs out. */

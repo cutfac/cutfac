@@ -18,7 +18,13 @@ import { SharingChoice } from "./sharing-choice.tsx";
  * template from what the user said. Most keep the folder, so it doesn't ask a step of its own. The
  * app starts the server on it and the window moves on to the board by itself.
  */
-export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
+export function ReadyStep({
+  onboarding,
+  onBack,
+}: {
+  onboarding: CutfacOnboarding;
+  onBack: () => void;
+}) {
   const t = useMessages().onboarding.ready;
   const [folder, setFolder] = useState<Folder>();
   const [busy, setBusy] = useState(false);
@@ -105,7 +111,7 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
         <SharingChoice value={sharing} disabled={busy} onChange={share} />
       ) : null}
       {error === undefined ? null : <ErrorAlert message={error} />}
-      <StepActions>
+      <StepActions onBack={onBack} backDisabled={busy}>
         <Button
           size="lg"
           disabled={folder === undefined || sharing === undefined || busy}

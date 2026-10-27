@@ -34,9 +34,11 @@ const DEVICE_CONTROL_FROM = 27;
 export function AccessStep({
   onboarding,
   onDone,
+  onBack,
 }: {
   onboarding: CutfacOnboarding;
   onDone: () => void;
+  onBack: () => void;
 }) {
   const t = useMessages().onboarding.access;
   const [granted, setGranted] = useState<Partial<Record<Permission, true>>>({});
@@ -144,8 +146,8 @@ export function AccessStep({
       {allGranted ? (
         <StepDone label={t.granted} />
       ) : (
-        <StepActions>
-          <Button variant="ghost" onClick={onDone}>
+        <StepActions onBack={onBack}>
+          <Button size="lg" variant="ghost" onClick={onDone}>
             {t.skip}
           </Button>
         </StepActions>

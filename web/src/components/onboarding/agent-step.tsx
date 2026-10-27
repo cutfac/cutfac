@@ -1,4 +1,4 @@
-import { CopyIcon, RotateCwIcon } from "lucide-react";
+import { ArrowRightIcon, CopyIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -51,9 +51,11 @@ const nearest = (setups: ReadonlyArray<AgentSetup>) =>
 export function AgentStep({
   onboarding,
   onDone,
+  onBack,
 }: {
   onboarding: CutfacOnboarding;
   onDone: () => void;
+  onBack: () => void;
 }) {
   const t = useMessages().onboarding.agent;
   const [setups, setSetups] = useState<ReadonlyArray<AgentSetup>>();
@@ -168,15 +170,15 @@ export function AgentStep({
           ))}
         </ItemGroup>
       )}
-      {ready ? (
-        <StepActions>
+      {ready ? null : <p className="text-xs/relaxed text-muted-foreground">{t.subscription}</p>}
+      <StepActions onBack={onBack}>
+        {ready ? (
           <Button size="lg" onClick={onDone}>
             {t.next}
+            <ArrowRightIcon data-icon="inline-end" />
           </Button>
-        </StepActions>
-      ) : (
-        <p className="text-xs/relaxed text-muted-foreground">{t.subscription}</p>
-      )}
+        ) : null}
+      </StepActions>
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { CheckIcon, LinkIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { desktop, insetTitleBar } from "../../desktop.ts";
@@ -113,7 +114,29 @@ export function StepDone({ label }: { label: string }) {
   );
 }
 
-/** A step's buttons, the main one first and full width. */
-export function StepActions({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-2 [&>button]:w-full">{children}</div>;
+/**
+ * A step's buttons, as the questions lay them out: back at the left, the way on at the far right.
+ * Every step after the first can go back, even while it has nothing to go on with yet.
+ */
+export function StepActions({
+  onBack,
+  backDisabled = false,
+  children,
+}: {
+  onBack?: (() => void) | undefined;
+  backDisabled?: boolean;
+  children?: ReactNode;
+}) {
+  const t = useMessages().onboarding;
+
+  return (
+    <div className="flex items-center gap-2">
+      {onBack === undefined ? null : (
+        <Button size="lg" variant="ghost" disabled={backDisabled} onClick={onBack}>
+          {t.back}
+        </Button>
+      )}
+      <div className="ms-auto flex items-center gap-2">{children}</div>
+    </div>
+  );
 }
