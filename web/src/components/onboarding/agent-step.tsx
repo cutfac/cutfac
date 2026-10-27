@@ -1,7 +1,8 @@
-import { ArrowRightIcon, CopyIcon, RotateCwIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, CopyIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { AgentLogo } from "@/components/agent-logo";
 import { ErrorAlert } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,12 @@ import {
   ItemContent,
   ItemDescription,
   ItemGroup,
+  ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 
 import type { AgentName } from "../../api.ts";
 import type { AgentSetup, CutfacOnboarding } from "../../desktop.ts";
@@ -183,6 +186,16 @@ export function AgentStep({
   );
 }
 
+/** The glow behind each agent's mark, in its own colors. */
+const GLOW = {
+  claude: "bg-claude",
+  codex: "bg-linear-to-br from-codex-from via-codex-via to-codex-to",
+} satisfies Record<AgentName, string>;
+
+/**
+ * One agent, with its own mark on a soft glow of its colors that brightens once it is ready, so
+ * the step reads as the two apps the user knows rather than two lines of text.
+ */
 function AgentRow({
   setup,
   run,
@@ -203,8 +216,21 @@ function AgentRow({
   const description = state === "outdated" ? copy.state.outdated(setup.version) : copy.state[state];
 
   return (
-    <Item variant="outline">
-      <ItemContent className="min-w-0">
+    <Item variant="muted" className="relative overflow-hidden">
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute top-1/2 -left-8 size-32 -translate-y-1/2 rounded-full blur-2xl transition-opacity duration-700",
+          GLOW[setup.agent],
+          state === "ready" ? "opacity-45" : "opacity-15",
+        )}
+      />
+      <ItemMedia variant="image" className="relative">
+        <span className="flex size-full items-center justify-center bg-background/70">
+          <AgentLogo agent={setup.agent} className="size-7" />
+        </span>
+      </ItemMedia>
+      <ItemContent className="relative min-w-0">
         <ItemTitle>{t.setup.agents[setup.agent]}</ItemTitle>
         {run?.status === "running" && state !== "ready" ? (
           <ItemDescription>
@@ -215,11 +241,18 @@ function AgentRow({
               </span>
             </span>
           </ItemDescription>
+        ) : state === "ready" ? (
+          <ItemDescription>
+            <span className="flex items-center gap-1 text-foreground">
+              <CheckIcon className="size-3.5" />
+              {description}
+            </span>
+          </ItemDescription>
         ) : (
           <ItemDescription>{description}</ItemDescription>
         )}
       </ItemContent>
-      <ItemActions>
+      <ItemActions className="relative">
         {state === "ready" ? null : (
           <Button
             variant={primary ? "default" : "outline"}

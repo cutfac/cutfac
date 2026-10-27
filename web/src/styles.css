@@ -54,6 +54,11 @@
   --color-instagram: #ff0069;
   --color-tiktok-cyan: #25f4ee;
   --color-tiktok-red: #fe2c55;
+  /* Each agent's own colors, only for its logo and the glow behind it, from LobeHub Icons. */
+  --color-claude: #d97757;
+  --color-codex-from: #b1a7ff;
+  --color-codex-via: #7a9dff;
+  --color-codex-to: #3941ff;
 }
 
 @theme inline {
