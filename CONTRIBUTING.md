@@ -25,7 +25,7 @@ bun run serve -- --workspace <dir>   # API and board on :4317
 bun run dev:web                      # board with hot reload on :5173
 ```
 
-`bun run desktop:dev` runs the Mac app on live code. The [README](README.md#development) has more.
+`bun run desktop:dev` runs the Mac app on live code. [docs/desktop.md](docs/desktop.md#running-it-from-source) has more.
 
 ## Checks
 

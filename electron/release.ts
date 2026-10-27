@@ -309,7 +309,7 @@ async function preflight(): Promise<string[]> {
   return [
     missing.length === 0
       ? undefined
-      : `Set ${missing.join(", ")} in .env.release (see README, Releasing the app).`,
+      : `Set ${missing.join(", ")} in .env.release (see docs/desktop.md, Releasing the app).`,
     status === undefined ? "Run this in a git checkout." : treeProblem(status),
     fetched === undefined
       ? `Couldn't fetch origin/${BRANCH}.`

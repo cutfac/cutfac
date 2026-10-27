@@ -28,6 +28,19 @@
 | `electron/`   | Desktop shell: starts the server as a sidecar and opens the SPA in a window                                                                                                                   |
 | `skills/`     | Agent skill copied into each workspace and kept current on `init`, `serve` and MCP start. A copy the user edited is left alone, and `workspace_overview` tells the agent to offer the new one |
 
+## Workspace layout
+
+```
+cutfac.yaml             name, paths, default agent
+brief.md                what the videos are for and where they go
+about.md                what agents read about the product, audience, and voice, one section per source
+learned/<id>/           learned.yaml and a first look: pictures, or a video with frames/, contact.jpg, audio.wav
+formats/<id>/           format.yaml, README.md, previews and choice files, optional template/
+items/<id>/             item.yaml, brief.md, shotlist.md, [9x16] video.mp4, [9x16] cover.jpg, …
+items/<id>/review/      frames, a contact sheet and cut strips of each video, from review_media
+items/<id>/history/     history.yaml: the undo stack and every saved version of the media
+```
+
 ## Editing by chat
 
 Users do not edit video themselves. The item editor only says where and what; agents do the editing
