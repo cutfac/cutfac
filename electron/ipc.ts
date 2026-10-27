@@ -51,7 +51,9 @@ export const FIX_OUTPUT_CHANNEL = "cutfac:fix-output";
 
 /** What the first launch asked about the user before there was a workspace: read, keep, forget. */
 export const DRAFT_CHANNEL = "cutfac:onboarding-draft";
+
 export const SAVE_DRAFT_CHANNEL = "cutfac:save-onboarding-draft";
+
 export const CLEAR_DRAFT_CHANNEL = "cutfac:clear-onboarding-draft";
 
 /** Whether this build can share with the Cutfac team, and what the person answered before. */
