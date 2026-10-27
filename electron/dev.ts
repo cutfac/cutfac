@@ -30,6 +30,10 @@ while (vitePort === serverPort) vitePort = await probePort(0);
 
 const devUrl = `http://localhost:${vitePort}`;
 
+// The app's Chrome DevTools Protocol, on localhost, so an agent's tools can drive the dev app: on
+// 9222 when it is free, the port they look at first.
+const cdpPort = await probePort(9222).catch(() => probePort(0));
+
 /** What the app needs from this script; it finds the rest of its environment as a released app does. */
 const appEnv = { CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
 
@@ -108,7 +112,12 @@ async function launch(): Promise<void> {
 
   if (stopping) return;
 
-  const child = launchApp({ executable: app, root, env: appEnv });
+  const child = launchApp({
+    executable: app,
+    root,
+    args: [`--remote-debugging-port=${cdpPort}`],
+    env: appEnv,
+  });
 
   electron = child;
 
@@ -183,6 +192,6 @@ await waitForVite();
 
 if (!(await buildElectron())) await stop(1);
 
-log(`Board on ${devUrl}, server on port ${serverPort}.`);
+log(`Board on ${devUrl}, server on port ${serverPort}, DevTools Protocol on port ${cdpPort}.`);
 
 await launch();

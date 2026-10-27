@@ -26,6 +26,8 @@ interface Launch {
   executable: string;
   /** The app's code, the repository's root. */
   root: string;
+  /** Switches for Electron after the app's path. */
+  args: string[];
   /** What the app needs to find the dev server and the board. */
   env: Record<string, string>;
 }
@@ -44,8 +46,8 @@ export function launchApp(launch: Launch): AppProcess {
 }
 
 /** Stock Electron, or another platform: a plain child, which owns its permissions there. */
-function spawnApp({ executable, root, env }: Launch): AppProcess {
-  const child = Bun.spawn([executable, root], {
+function spawnApp({ executable, root, args, env }: Launch): AppProcess {
+  const child = Bun.spawn([executable, root, ...args], {
     cwd: root,
     env: { ...process.env, ...env },
     stdio: ["ignore", "inherit", "inherit"],
@@ -63,7 +65,7 @@ function spawnApp({ executable, root, env }: Launch): AppProcess {
  * still shows in this terminal. `open` doesn't say which process it started, so the app is found by
  * its executable and its argument, which no other app has.
  */
-function openApp(bundle: string, { executable, root, env }: Launch): AppProcess {
+function openApp(bundle: string, { executable, root, args, env }: Launch): AppProcess {
   const pipe = makePipe();
 
   const opened = pipe.then((fifo) =>
@@ -81,6 +83,7 @@ function openApp(bundle: string, { executable, root, env }: Launch): AppProcess 
         fifo.file,
         "--args",
         root,
+        ...args,
       ],
       { stdio: ["ignore", "inherit", "inherit"] },
     ),
@@ -94,7 +97,7 @@ function openApp(bundle: string, { executable, root, env }: Launch): AppProcess 
     return code;
   });
 
-  const pid = findPid(`${executable} ${root}`, exited);
+  const pid = findPid([executable, root, ...args].join(" "), exited);
 
   return {
     pid,
