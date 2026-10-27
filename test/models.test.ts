@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { ConfigProvider, Option, Schema } from "effect";
+import { ConfigProvider, Effect, FileSystem, Layer, Option, Schema } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
 import { agentStatus } from "../src/core/agents.ts";
@@ -13,7 +12,11 @@ import {
   parseCodexModels,
 } from "../src/core/models.ts";
 import { ModelSettings } from "../src/core/schema.ts";
-import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace("Models"), fakeAgents));
 
 const level = (effort: string) => ({ effort, description: `${effort} thinking` });
 
@@ -190,74 +193,84 @@ describe("the model an agent picks itself", () => {
   });
 });
 
+/** A Claude Code settings file under `dir`, a home folder or a workspace. */
+const claudeSettings = (dir: string, name: string) => join(dir, ".claude", name);
+
 describe("agent status", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
+  it.live("offers claude's aliases and the models the installed codex lists", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Models");
-    fakes = await makeFakeAgents();
-  });
-
-  afterEach(async () => {
-    await fakes.remove();
-    await t.remove();
-  });
-
-  test("offers claude's aliases and the models the installed codex lists", async () => {
-    await fakes.bin("claude", "exit 0\n");
-    await fakes.bin(
-      "codex",
-      `if [ "$1 $2" = "debug models" ]; then cat <<'JSON'
+      yield* fakes.bin("claude", "exit 0\n");
+      yield* fakes.bin(
+        "codex",
+        `if [ "$1 $2" = "debug models" ]; then cat <<'JSON'
 ${catalog}
 JSON
 exit 0; fi
 exit 1
 `,
-    );
+      );
 
-    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+      const [claude, codex] = yield* agentStatus();
 
-    expect(claude).toMatchObject({ agent: "claude", installed: true, ...CLAUDE_MODELS });
-    expect(codex).toMatchObject({ agent: "codex", installed: true, connected: false });
-    expect(codex?.models.map((m) => m.id)).toEqual(["gpt-a", "gpt-b"]);
-  });
+      expect(claude).toMatchObject({ agent: "claude", installed: true, ...CLAUDE_MODELS });
+      expect(codex).toMatchObject({ agent: "codex", installed: true, connected: false });
+      expect(codex?.models.map((m) => m.id)).toEqual(["gpt-a", "gpt-b"]);
+    }),
+  );
 
-  test("names the model each agent runs when none is picked, as its own settings set it", async () => {
-    const home = join(fakes.dir, "home");
-    await mkdir(join(home, ".claude"), { recursive: true });
-    await mkdir(join(home, ".codex"));
-    await mkdir(join(t.root, ".claude"));
-    await writeFile(join(home, ".claude/settings.json"), '{"model":"claude-opus-5-5"}');
-    await writeFile(join(home, ".codex/config.toml"), 'model = "gpt-b"\n');
-    await fakes.bin("claude", "exit 0\n");
-    await fakes.bin("codex", `[ "$1 $2" = "debug models" ] && cat <<'JSON'\n${catalog}\nJSON\n`);
+  it.live("names the model each agent runs when none is picked, as its own settings set it", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+      const fs = yield* FileSystem.FileSystem;
+      const ws = yield* Workspace;
+      const home = join(fakes.dir, "home");
 
-    const env = { PATH: join(fakes.dir, "bin"), HOME: home };
-    const layer = ConfigProvider.layer(ConfigProvider.fromEnv({ env }));
-    const status = () => t.runWith(layer, agentStatus());
-    const named = async () => (await status()).map((agent) => agent.defaultModel);
+      yield* fs.makeDirectory(join(home, ".claude"), { recursive: true });
+      yield* fs.makeDirectory(join(home, ".codex"));
+      yield* fs.makeDirectory(join(ws.root, ".claude"));
+      yield* fs.writeFileString(
+        claudeSettings(home, "settings.json"),
+        '{"model":"claude-opus-5-5"}',
+      );
+      yield* fs.writeFileString(join(home, ".codex/config.toml"), 'model = "gpt-b"\n');
+      yield* fakes.bin("claude", "exit 0\n");
+      yield* fakes.bin("codex", `[ "$1 $2" = "debug models" ] && cat <<'JSON'\n${catalog}\nJSON\n`);
 
-    expect(await named()).toEqual(["Opus 5.5", "GPT-B"]);
+      const env = { PATH: join(fakes.dir, "bin"), HOME: home };
 
-    // The workspace's own settings come before the user's, and its local ones before both.
-    await writeFile(join(t.root, ".claude/settings.json"), '{"model":"sonnet"}');
-    expect((await named())[0]).toBe("Sonnet 5.5");
-    await writeFile(join(t.root, ".claude/settings.local.json"), '{"model":"claude-haiku-4-5"}');
-    expect((await named())[0]).toBe("Haiku 4.5");
+      const named = Effect.map(agentStatus(), (agents) =>
+        agents.map((agent) => agent.defaultModel),
+      ).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env })));
 
-    // Set nowhere, Claude's pick is unknown and Codex's is the first model it lists.
-    await rm(join(t.root, ".claude"), { recursive: true });
-    await rm(join(home, ".codex/config.toml"));
-    const [claude, codex] = await t.runWith(fakes.layer, agentStatus());
+      expect(yield* named).toEqual(["Opus 5.5", "GPT-B"]);
 
-    expect(claude?.defaultModel).toBeUndefined();
-    expect(codex?.defaultModel).toBe("GPT-A");
-  });
+      // The workspace's own settings come before the user's, and its local ones before both.
+      yield* fs.writeFileString(claudeSettings(ws.root, "settings.json"), '{"model":"sonnet"}');
+      expect((yield* named)[0]).toBe("Sonnet 5.5");
+      yield* fs.writeFileString(
+        claudeSettings(ws.root, "settings.local.json"),
+        '{"model":"claude-haiku-4-5"}',
+      );
+      expect((yield* named)[0]).toBe("Haiku 4.5");
 
-  test("an agent that is not installed offers nothing to pick", async () => {
-    const [, codex] = await t.runWith(fakes.layer, agentStatus());
+      // Set nowhere, Claude's pick is unknown and Codex's is the first model it lists.
+      yield* fs.remove(join(ws.root, ".claude"), { recursive: true });
+      yield* fs.remove(join(home, ".codex/config.toml"));
 
-    expect(codex).toMatchObject({ installed: false, models: [], efforts: [] });
-  });
+      const [claude, codex] = yield* agentStatus();
+
+      expect(claude?.defaultModel).toBeUndefined();
+      expect(codex?.defaultModel).toBe("GPT-A");
+    }),
+  );
+
+  it.live("an agent that is not installed offers nothing to pick", () =>
+    Effect.gen(function* () {
+      const [, codex] = yield* agentStatus();
+
+      expect(codex).toMatchObject({ installed: false, models: [], efforts: [] });
+    }),
+  );
 });
