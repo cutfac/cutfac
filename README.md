@@ -21,8 +21,6 @@
 <p align="center">
   <a href="#quick-start"><strong>Quick start »</strong></a>
   ·
-  <a href="https://cutfac.com">Mac app</a>
-  ·
   <a href="docs/architecture.md">Architecture</a>
   ·
   <a href="https://github.com/wyverselabs/cutfac/issues">Issues</a>
@@ -69,8 +67,7 @@ Oksana Kyzyma and Sergei Starostin.</sub>
 
 ## Quick start
 
-The easiest way is the signed [Mac app](https://cutfac.com). To run it from source, install
-[Bun](https://bun.sh) 1.3+ and ffmpeg, then:
+Install [Bun](https://bun.sh) 1.3+ and ffmpeg, then:
 
 ```sh
 bun install && bun run build
@@ -92,16 +89,10 @@ make next to the message box to compare several takes.
 Requests made while the agent works line up and run in turn. Every change can be undone, and the
 History tab keeps each saved version. Press `?` for shortcuts.
 
-## Mac app vs. open source
+## Mac app
 
-Both are built from this repository and have the same features.
-
-|              | Mac app                                                             | Open source                         |
-| ------------ | ------------------------------------------------------------------- | ----------------------------------- |
-| **Cost**     | First 3 videos free, then a [paid plan](https://cutfac.com/pricing) | Free (AGPL-3.0)                     |
-| **Setup**    | Download and open                                                   | Install Bun and ffmpeg, then build  |
-| **Updates**  | Automatic                                                           | Pull and rebuild                    |
-| **Extras**   | Reference feed and format packs, once they ship                     | Not included                        |
+A signed Mac app built from this repository is at [cutfac.com](https://cutfac.com). It has the same
+features and updates itself; this repository is free under the AGPL-3.0.
 
 ## Privacy
 
