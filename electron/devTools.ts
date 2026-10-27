@@ -123,7 +123,9 @@ export function handleDevTools(host: DevToolsHost): DevTools {
       withFakes(checksAgents(fakes) ? await agentSetups() : [], fakes.agents),
     fixAgent: fix,
     hasPermission: (permission) =>
-      fakes.access === "real" ? hasPermission(permission) : fakes.access === "granted",
+      fakes.access === "real"
+        ? runInMain(hasPermission(permission))
+        : Promise.resolve(fakes.access === "granted"),
     suggestion: async () => {
       if (!fakes.freshFolder) return macChecks.suggestion();
 

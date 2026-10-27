@@ -11,7 +11,8 @@ import {
 } from "electron";
 
 import { AgentName } from "../src/core/schema.ts";
-import type { CreateFailure, Folder } from "../web/src/desktop.ts";
+import type { CreateFailure, Folder, Permission } from "../web/src/desktop.ts";
+import { isPermission } from "./accessWatch.ts";
 import { firstWorkspace } from "./firstWorkspace.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
@@ -34,19 +35,11 @@ import {
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
 import { decodeWorkspaceName } from "./library.ts";
-import { runInMain } from "./runtime.ts";
+import { runInMain, runNow } from "./runtime.ts";
 import { clearDraft, isDraft, loadDraft, loadLibrary, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
 import { agentSetups, fixAgent } from "./sidecarRuntime.ts";
-import {
-  appBadge,
-  dragApp,
-  focusHelper,
-  hasPermission,
-  isPermission,
-  openAccessSettings,
-  systemVersion,
-} from "./systemAccess.ts";
+import { appBadge, hasPermission, SystemAccess, systemVersion } from "./systemAccess.ts";
 
 const isAgentName = Schema.is(AgentName);
 
@@ -65,7 +58,7 @@ function folder(target: string): Folder {
 export interface OnboardingChecks {
   agentSetups: typeof agentSetups;
   fixAgent: typeof fixAgent;
-  hasPermission: typeof hasPermission;
+  hasPermission: (permission: Permission) => Promise<boolean>;
   /** The app's folder for the first workspace, and a name for it when the build has one. */
   suggestion: () => Promise<{ library: string; name: string | undefined }>;
 }
@@ -73,7 +66,7 @@ export interface OnboardingChecks {
 export const macChecks: OnboardingChecks = {
   agentSetups,
   fixAgent,
-  hasPermission,
+  hasPermission: (permission) => runInMain(hasPermission(permission)),
   suggestion: async () => ({ library: await runInMain(loadLibrary), name: undefined }),
 };
 
@@ -164,7 +157,7 @@ export function handleOnboarding(host: OnboardingHost): void {
   ipcMain.handle(SYSTEM_VERSION_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return systemVersion();
+    return runInMain(systemVersion);
   });
   ipcMain.handle(PERMISSION_CHANNEL, (event, permission) => {
     assertFromApp(event);
@@ -185,28 +178,34 @@ export function handleOnboarding(host: OnboardingHost): void {
 
     if (!isPermission(permission)) throw new Error("Unknown permission");
 
-    return openAccessSettings({
-      permission,
-      boardUrl: host.boardUrl,
-      preload: host.preload,
-      onGranted: () => {
-        // System Settings is in front; the app comes back on the step that waited for it.
-        app.focus({ steal: true });
-        host.bringToFront();
-        host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
-      },
-    });
+    return runInMain(
+      Effect.flatMap(SystemAccess, (access) =>
+        access.openSettings({
+          permission,
+          boardUrl: host.boardUrl,
+          preload: host.preload,
+          onGranted: Effect.sync(() => {
+            // System Settings is in front; the app comes back on the step that waited for it.
+            app.focus({ steal: true });
+            host.bringToFront();
+            host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
+          }),
+        }),
+      ),
+    );
   });
   ipcMain.on(FOCUS_DRAG_HELPER_CHANNEL, (event) => {
-    if (host.isFromApp(event)) focusHelper();
+    if (host.isFromApp(event)) runNow(Effect.flatMap(SystemAccess, (access) => access.focusHelper));
   });
   ipcMain.on(START_APP_DRAG_CHANNEL, (event) => {
-    if (host.isFromApp(event)) dragApp(event.sender);
+    if (host.isFromApp(event)) {
+      runNow(Effect.flatMap(SystemAccess, (access) => access.dragApp(event.sender)));
+    }
   });
   ipcMain.handle(APP_ICON_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return appBadge();
+    return runInMain(appBadge);
   });
   ipcMain.handle(START_WORKSPACE_CHANNEL, (event, name) => {
     assertFromApp(event);

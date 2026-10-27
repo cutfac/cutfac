@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Ref, Scope, Stream } from "effect";
+import type { ChildProcessSpawner } from "effect/process";
 import {
   app,
   BrowserWindow,
@@ -12,222 +14,211 @@ import {
 } from "electron";
 
 import type { Permission } from "../web/src/desktop.ts";
+import { awaitGrant, HELPER, helperBounds } from "./accessWatch.ts";
 import { lockNavigation } from "./navigation.ts";
 import { sandboxed } from "./permissions.ts";
-import { type Frame, followSettingsWindow } from "./settingsWindow.ts";
+import { settingsWindowFrames } from "./settingsWindow.ts";
 
-/** The permissions the app asks for, which System Settings grants on a list the app is dragged into. */
-const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
-
-export const isPermission = (value: unknown): value is Permission =>
-  PERMISSIONS.some((permission) => permission === value);
-
-/** System Settings, on each permission's list. */
 const SETTINGS_URL: Record<Permission, string> = {
   screen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
   // Device Control and Data Access from macOS 27 on, which the same link opens.
   accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
 };
 
-const limits = {
-  pollMs: 1_000,
-  /** Long enough to find the list and drag the app in; past that the board checks on focus. */
-  pollForMs: 10 * 60_000,
-};
-
-const HELPER = {
-  /** As wide as the list it points at, at the least. */
-  width: 440,
-  height: 72,
-  /** The System Settings sidebar, which the panel leaves out to line up with the list beside it. */
-  sidebar: 230,
-  /** Between the panel and the window above it, and the screen's edges. */
-  gap: 10,
-};
-
 const ICON_SIZE = { width: 256, height: 256 };
-
-let helper: BrowserWindow | undefined;
-
-let poll: ReturnType<typeof setInterval> | undefined;
-
-let unfollow: (() => void) | undefined;
-
-/** The picture the app drags as, made ahead, since a drag only starts in step with the press. */
-let dragIcon: NativeImage | undefined;
 
 /**
  * Whether the app holds a permission; only macOS asks. The agents the app runs act under it too.
  * macOS reads screen recording once per process, so a grant shows after the app reopens, which
  * macOS offers itself once it is on. Accessibility shows at once.
  */
-export function hasPermission(permission: Permission): boolean {
-  if (process.platform !== "darwin") return true;
+export const hasPermission = (permission: Permission) =>
+  Effect.sync(() => {
+    if (process.platform !== "darwin") return true;
 
-  return permission === "screen"
-    ? systemPreferences.getMediaAccessStatus("screen") === "granted"
-    : systemPreferences.isTrustedAccessibilityClient(false);
-}
+    return permission === "screen"
+      ? systemPreferences.getMediaAccessStatus("screen") === "granted"
+      : systemPreferences.isTrustedAccessibilityClient(false);
+  });
 
 /** macOS's major version, such as 27, or 0 elsewhere. */
-export const systemVersion = () =>
-  process.platform === "darwin" ? Number.parseInt(process.getSystemVersion(), 10) : 0;
+export const systemVersion = Effect.sync(() =>
+  process.platform === "darwin" ? Number.parseInt(process.getSystemVersion(), 10) : 0,
+);
 
 /** The app bundle itself, which is what the lists in System Settings take. */
 const appBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
 
-/** The app's icon, large enough for the helper window to show crisp. */
-async function bundleIcon(): Promise<Electron.NativeImage> {
-  const bundle = appBundle();
+const bundleIcon = Effect.promise(() =>
+  nativeImage
+    .createThumbnailFromPath(appBundle(), ICON_SIZE)
+    .catch(() => app.getFileIcon(appBundle(), { size: "normal" })),
+);
 
-  return nativeImage
-    .createThumbnailFromPath(bundle, ICON_SIZE)
-    .catch(() => app.getFileIcon(bundle, { size: "normal" }));
-}
-
-/** The app as a list in System Settings will show it: its icon and its name. */
-export async function appBadge(): Promise<{ icon: string; name: string }> {
-  return {
-    icon: (await bundleIcon()).toDataURL(),
-    name: path.basename(appBundle(), ".app"),
-  };
-}
-
-/**
- * Drags the app bundle out of the helper window, into the list in System Settings. It has to run
- * while the page's drag is starting, so it can't wait for anything, the drag's picture included.
- */
-export function dragApp(sender: WebContents): void {
-  if (dragIcon !== undefined) sender.startDrag({ file: appBundle(), icon: dragIcon });
-}
-
-/**
- * Makes the helper the window that takes the pointer, as the pointer reaches it. macOS shows a page's
- * cursor only in the key window, and System Settings is in front then, so the card wouldn't show
- * the grab cursor. The helper is a panel, which becomes key without bringing the app to the front.
- */
-export function focusHelper(): void {
-  if (helper !== undefined && !helper.isDestroyed() && !helper.isFocused()) helper.focus();
-}
+/** The app as a list in System Settings shows it: its icon and its name. */
+export const appBadge = Effect.map(bundleIcon, (icon) => ({
+  icon: icon.toDataURL(),
+  name: path.basename(appBundle(), ".app"),
+}));
 
 export interface AccessWatch {
-  permission: Permission;
+  readonly permission: Permission;
   /** The board's address, where the helper window's page is. */
-  boardUrl: string;
-  preload: string;
+  readonly boardUrl: string;
+  readonly preload: string;
   /** The access was granted while System Settings was open. */
-  onGranted: () => void;
+  readonly onGranted: Effect.Effect<void>;
 }
 
 /**
- * Opens a permission's list with a small window beside it to drag the app from, and watches for the
- * permission until it is granted, the user comes back to the app, or it has waited long enough.
+ * Opening a permission's list in System Settings with a small window beside it to drag the app
+ * from, and watching for the permission until it is granted, the user comes back, or it has
+ * waited long enough.
  */
-export async function openAccessSettings(watch: AccessWatch): Promise<void> {
-  // Set up before the wait, so a second call meanwhile replaces this one instead of doubling it.
-  stopWatching();
-  dragIcon ??= (await bundleIcon()).resize({ width: 56 });
-  showHelper(watch);
-
-  const until = Date.now() + limits.pollForMs;
-
-  poll = setInterval(() => {
-    if (Date.now() > until) return stopWatching();
-
-    if (!hasPermission(watch.permission)) return;
-
-    stopWatching();
-    watch.onGranted();
-  }, limits.pollMs);
-
-  await shell.openExternal(SETTINGS_URL[watch.permission]);
+export class SystemAccess extends Context.Service<
+  SystemAccess,
+  {
+    openSettings(watch: AccessWatch): Effect.Effect<void>;
+    /** Closes the helper window and stops checking, as when the user comes back to the app. */
+    readonly stopWatching: Effect.Effect<void>;
+    /**
+     * Drags the app bundle out of the helper window, into the list. It runs while the page's drag
+     * is starting, so it can't wait for anything, the drag's picture included.
+     */
+    dragApp(sender: WebContents): Effect.Effect<void>;
+    /**
+     * Makes the helper the key window as the pointer reaches it: macOS shows a page's cursor only
+     * in the key window, and the helper is a panel, which becomes key without bringing the app to
+     * the front over System Settings.
+     */
+    readonly focusHelper: Effect.Effect<void>;
+  }
+>()("cutfac/desktop/SystemAccess") {
+  static readonly layer = Layer.effect(
+    SystemAccess,
+    Effect.suspend(() => make),
+  );
 }
 
-/** Closes the helper window and stops checking, as when the user comes back to the app. */
-export function stopWatching(): void {
-  clearInterval(poll);
-  poll = undefined;
-  unfollow?.();
-  unfollow = undefined;
-  helper?.close();
-  helper = undefined;
-}
+const make = Effect.gen(function* () {
+  const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
+  const watching = yield* Ref.make(Option.none<Scope.Closeable>());
+  const helper = yield* Ref.make(Option.none<BrowserWindow>());
+  const dragIcon = yield* Ref.make(Option.none<NativeImage>());
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-/**
- * Where the panel goes for the System Settings window at `frame`: right under it, lined up with the
- * list beside its sidebar, as PermissionFlow places its own. Kept on the screen the window is on.
- */
-function helperBounds(frame: Frame): Electron.Rectangle {
-  const area = screen.getDisplayMatching(frame).workArea;
-
-  const width = Math.min(
-    Math.max(HELPER.width, frame.width - HELPER.sidebar),
-    area.width - HELPER.gap * 2,
+  const stopWatching = Effect.flatMap(
+    Ref.getAndSet(watching, Option.none()),
+    Option.match({ onNone: () => Effect.void, onSome: (scope) => Scope.close(scope, Exit.void) }),
   );
 
-  return {
-    x: Math.round(
-      clamp(
-        frame.x + HELPER.sidebar,
-        area.x + HELPER.gap,
-        area.x + area.width - width - HELPER.gap,
+  /** The helper window, closed with the watch, following the System Settings window. */
+  const showHelper = Effect.fnUntraced(function* ({ boardUrl, preload }: AccessWatch) {
+    const area = screen.getPrimaryDisplay().workArea;
+    const closed = yield* Deferred.make<void>();
+
+    // A panel floats over System Settings and takes the drag without bringing the app's own window
+    // to the front, over the list it is dragged into. Until System Settings has a window, it waits
+    // at the screen's right.
+    const created = yield* Effect.acquireRelease(
+      Effect.sync(
+        () =>
+          new BrowserWindow({
+            width: HELPER.width,
+            height: HELPER.height,
+            x: area.x + area.width - HELPER.width - 32,
+            y: Math.round(area.y + (area.height - HELPER.height) / 2),
+            type: "panel",
+            frame: false,
+            resizable: false,
+            minimizable: false,
+            maximizable: false,
+            fullscreenable: false,
+            alwaysOnTop: true,
+            acceptFirstMouse: true,
+            skipTaskbar: true,
+            show: false,
+            backgroundColor: "#171717",
+            webPreferences: sandboxed(preload),
+          }),
       ),
-    ),
-    y: Math.round(
-      clamp(
-        frame.y + frame.height + HELPER.gap,
-        area.y + HELPER.gap,
-        area.y + area.height - HELPER.height - HELPER.gap,
+      (window) =>
+        Effect.andThen(
+          Ref.set(helper, Option.none()),
+          Effect.sync(() => {
+            if (!window.isDestroyed()) window.close();
+          }),
+        ),
+    );
+
+    created.once("ready-to-show", () => created.showInactive());
+    // Its page closes it with window.close(); the app's own window carries on watching.
+    created.on("closed", () => Deferred.doneUnsafe(closed, Exit.void));
+    lockNavigation(created.webContents);
+    void created.loadURL(new URL("#/drag-helper", boardUrl).href);
+    yield* Ref.set(helper, Option.some(created));
+
+    // It follows the window as the user moves it, and stays where it was while the window is away.
+    yield* settingsWindowFrames.pipe(
+      Stream.interruptWhen(Deferred.await(closed)),
+      Stream.runForEach((frame) =>
+        Effect.sync(() => {
+          if (Option.isSome(frame) && !created.isDestroyed()) {
+            created.setBounds(
+              helperBounds(frame.value, screen.getDisplayMatching(frame.value).workArea),
+            );
+          }
+        }),
       ),
-    ),
-    width: Math.round(width),
-    height: HELPER.height,
-  };
-}
-
-function showHelper({ boardUrl, preload }: AccessWatch): void {
-  const area = screen.getPrimaryDisplay().workArea;
-
-  // A panel floats over System Settings and takes the drag without bringing the app's own window
-  // to the front, over the list it is dragged into. Until System Settings has a window, it waits
-  // at the screen's right.
-  const created = new BrowserWindow({
-    width: HELPER.width,
-    height: HELPER.height,
-    x: area.x + area.width - HELPER.width - 32,
-    y: Math.round(area.y + (area.height - HELPER.height) / 2),
-    type: "panel",
-    frame: false,
-    resizable: false,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    alwaysOnTop: true,
-    acceptFirstMouse: true,
-    skipTaskbar: true,
-    show: false,
-    // The board's own dark background, so its words read as they do in the app.
-    backgroundColor: "#171717",
-    webPreferences: sandboxed(preload),
+      Effect.provideContext(services),
+      Effect.forkScoped,
+    );
   });
 
-  created.once("ready-to-show", () => created.showInactive());
-  // Its page closes it with window.close(); the app's own window carries on watching.
-  created.on("closed", () => {
-    if (helper !== created) return;
+  const openSettings = (watch: AccessWatch) =>
+    Effect.gen(function* () {
+      // Set up before the wait, so a second call meanwhile replaces this one instead of doubling it.
+      yield* stopWatching;
 
-    helper = undefined;
-    unfollow?.();
-    unfollow = undefined;
-  });
-  lockNavigation(created.webContents);
-  void created.loadURL(new URL("#/drag-helper", boardUrl).href);
-  helper = created;
+      const scope = yield* Scope.make();
 
-  // It follows the window as the user moves it, and stays where it was while the window is away.
-  unfollow = followSettingsWindow((frame) => {
-    if (frame !== null && !created.isDestroyed()) created.setBounds(helperBounds(frame));
-  });
-}
+      yield* Ref.set(watching, Option.some(scope));
+
+      if (Option.isNone(yield* Ref.get(dragIcon))) {
+        yield* Ref.set(dragIcon, Option.some((yield* bundleIcon).resize({ width: 56 })));
+      }
+
+      yield* showHelper(watch).pipe(Scope.provide(scope));
+
+      const waiting = yield* awaitGrant(hasPermission(watch.permission)).pipe(Effect.forkIn(scope));
+
+      // Outside the watch, which ends as the permission comes and must not end this with it.
+      yield* Fiber.join(waiting).pipe(
+        Effect.flatMap((granted) =>
+          Effect.andThen(stopWatching, Option.isSome(granted) ? watch.onGranted : Effect.void),
+        ),
+        Effect.ignore,
+        Effect.forkDetach,
+      );
+
+      yield* Effect.promise(() => shell.openExternal(SETTINGS_URL[watch.permission]));
+    });
+
+  const dragApp = (sender: WebContents) =>
+    Effect.flatMap(Ref.get(dragIcon), (icon) =>
+      Effect.sync(() => {
+        if (Option.isSome(icon)) sender.startDrag({ file: appBundle(), icon: icon.value });
+      }),
+    );
+
+  const focusHelper = Effect.flatMap(Ref.get(helper), (window) =>
+    Effect.sync(() => {
+      if (Option.isSome(window) && !window.value.isDestroyed() && !window.value.isFocused()) {
+        window.value.focus();
+      }
+    }),
+  );
+
+  yield* Effect.addFinalizer(() => stopWatching);
+
+  return SystemAccess.of({ openSettings, stopWatching, dragApp, focusHelper });
+});

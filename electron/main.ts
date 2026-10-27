@@ -66,7 +66,7 @@ import {
   stopWorkspaceServer,
   watchServerCrashes,
 } from "./sidecarRuntime.ts";
-import { stopWatching } from "./systemAccess.ts";
+import { SystemAccess } from "./systemAccess.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
@@ -410,7 +410,7 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
   created.on("focus", () => {
     license?.refresh();
     // Back from System Settings: the board checks the access itself.
-    stopWatching();
+    forkInMain(Effect.flatMap(SystemAccess, (access) => access.stopWatching));
   });
 
   const rememberSoon = () => {
@@ -429,7 +429,7 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
   });
   created.on("closed", () => {
     window = undefined;
-    stopWatching();
+    forkInMain(Effect.flatMap(SystemAccess, (access) => access.stopWatching));
   });
   // The title is the workspace folder, not whatever the board's <title> says.
   created.on("page-title-updated", (event) => event.preventDefault());

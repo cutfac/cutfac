@@ -1,7 +1,5 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { createInterface } from "node:readline";
-
-import { Option, Schema } from "effect";
+import { Effect, Option, Schema, Stream } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 /** Where a window is on screen, in points from the top left of the main display, as Electron has it. */
 const Frame = Schema.Struct({
@@ -55,30 +53,28 @@ function run() {
 `;
 
 /**
- * Follows the System Settings window, calling `onFrame` with its frame as it opens, moves and
- * resizes. Returns a function that stops following it.
+ * The System Settings window's frame as it opens, moves and resizes; none while it has no window
+ * on screen. Following it ends when the stream does, and with nothing if the script can't run.
  */
-export function followSettingsWindow(onFrame: (frame: Frame | null) => void): () => void {
-  let child: ChildProcess | undefined = spawn(
-    "/usr/bin/osascript",
-    ["-l", "JavaScript", "-e", SCRIPT],
-    {
-      stdio: ["ignore", "pipe", "ignore"],
-    },
-  );
+export const settingsWindowFrames = Stream.unwrap(
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
-  child.on("error", () => (child = undefined));
-
-  if (child.stdout !== null) {
-    // A line that doesn't read, such as one cut off as the script stops, is skipped; the next one
-    // says where the window is.
-    createInterface({ input: child.stdout }).on("line", (line) =>
-      Option.map(decodeFrameLine(line), onFrame),
+    const script = yield* spawner.spawn(
+      ChildProcess.make("/usr/bin/osascript", ["-l", "JavaScript", "-e", SCRIPT], {
+        stdin: "ignore",
+        stderr: "ignore",
+        detached: false,
+      }),
     );
-  }
 
-  return () => {
-    child?.kill();
-    child = undefined;
-  };
-}
+    // A line cut off as the script stops doesn't read and is skipped; the next one says where.
+    return script.stdout.pipe(
+      Stream.decodeText(),
+      Stream.splitLines,
+      Stream.map((line) => decodeFrameLine(line)),
+      Stream.filter(Option.isSome),
+      Stream.map((frame) => Option.fromNullishOr(frame.value)),
+    );
+  }),
+).pipe(Stream.ignore);
