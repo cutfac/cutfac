@@ -1,8 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-// The end-to-end test runs the import registry against the test workspace.
-// @effect-diagnostics strictEffectProvide:off
-import { Effect, Layer, ManagedRuntime, type Schema, Stream } from "effect";
+import { Effect, Layer, Ref, type Schema, Stream } from "effect";
 
 import type { RunEvent } from "../src/core/agentParse.ts";
 import type { McpLaunch } from "../src/core/agents.ts";
@@ -12,13 +10,12 @@ import { ImportRuns, startImport } from "../src/core/importRun.ts";
 import { getImport } from "../src/core/imports.ts";
 import type { AgentRun, RunMessage } from "../web/src/api.ts";
 import { NO_RUN, reduceRun, runView } from "../web/src/lib/run.ts";
-import {
-  type FakeAgents,
-  type TestServices,
-  makeFakeAgents,
-  makeWorkspace,
-  type TestWorkspace,
-} from "./support.ts";
+import { it, testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const inImports = testEffect(
+  ImportRuns.layer.pipe(Layer.provideMerge(Layer.merge(tempWorkspace("Compaction"), fakeAgents))),
+);
 
 const COMPACTING = { type: "system", subtype: "status", status: "compacting" };
 
@@ -98,94 +95,65 @@ describe("an agent compacting its conversation", () => {
     expect(runView(saved, undefined, false).steps).toEqual([]);
   });
 
-  test("a run remembers it compacted only once the agent got through it", async () => {
-    const passed: Array<RunEvent> = [];
+  it.effect("a run remembers it compacted only once the agent got through it", () =>
+    Effect.gen(function* () {
+      const passed = yield* Ref.make<ReadonlyArray<RunEvent>>([]);
 
-    const flags = await Effect.runPromise(
-      Effect.gen(function* () {
-        const { emit, compacted } = yield* noteCompaction((event) =>
-          Effect.sync(() => passed.push(event)),
-        );
+      const { emit, compacted } = yield* noteCompaction((event) =>
+        Ref.update(passed, (all) => [...all, event]),
+      );
 
-        const seen: Array<boolean | undefined> = [];
+      const seen: Array<boolean | undefined> = [];
 
-        for (const state of ["running", "failed", "running", "done"] as const) {
-          yield* emit({ type: "compaction", state });
-          seen.push(yield* compacted);
-        }
+      for (const state of ["running", "failed", "running", "done"] as const) {
+        yield* emit({ type: "compaction", state });
+        seen.push(yield* compacted);
+      }
 
-        return seen;
-      }),
-    );
-
-    expect(flags).toEqual([undefined, undefined, undefined, true]);
-    expect(passed.map((event) => event.type === "compaction" && event.state)).toEqual([
-      "running",
-      "failed",
-      "running",
-      "done",
-    ]);
-  });
+      expect(seen).toEqual([undefined, undefined, undefined, true]);
+      expect(
+        (yield* Ref.get(passed)).map((event) => event.type === "compaction" && event.state),
+      ).toEqual(["running", "failed", "running", "done"]);
+    }),
+  );
 });
 
 describe("an import turn the agent compacted", () => {
   const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"] };
 
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
-  let runtime: ManagedRuntime.ManagedRuntime<ImportRuns | TestServices, never>;
+  inImports.live("is recorded as compacted, for the chat to show once the stream is gone", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Compaction");
-    fakes = await makeFakeAgents();
-
-    runtime = ManagedRuntime.make(
-      ImportRuns.layer.pipe(Layer.provideMerge(t.layer), Layer.provideMerge(fakes.layer)),
-    );
-  });
-
-  afterEach(async () => {
-    // Stops any agent still running before the workspace is removed.
-    await runtime.dispose();
-    await fakes.remove();
-    await t.remove();
-  });
-
-  test("is recorded as compacted, for the chat to show once the stream is gone", async () => {
-    await fakes.bin(
-      "claude",
-      `cat > /dev/null
+      yield* fakes.bin(
+        "claude",
+        `cat > /dev/null
 echo '{"type":"system","subtype":"init","session_id":"sess-1"}'
 echo '${JSON.stringify(COMPACTING)}'
 echo '${JSON.stringify(BOUNDARY)}'
 echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done."}'
 `,
-    );
+      );
 
-    const link = "https://example.com/pack";
-    const started = await runtime.runPromise(startImport({ link, agent: "claude" }, SERVER));
+      const link = "https://example.com/pack";
+      const started = yield* startImport({ link, agent: "claude" }, SERVER);
 
-    // The stream replays the run from its start, so nothing it said before this is missed.
-    const events = await runtime.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const { events: stream } = yield* (yield* ImportRuns).subscribe(started.id);
+      // The stream replays the run from its start, so nothing it said before this is missed.
+      const { events: stream } = yield* (yield* ImportRuns).subscribe(started.id);
 
-          return yield* stream.pipe(
-            Stream.takeUntil((event) => event.type === "done" || event.type === "error"),
-            Stream.runCollect,
-          );
-        }),
-      ),
-    );
+      const events = yield* stream.pipe(
+        Stream.takeUntil((event) => event.type === "done" || event.type === "error"),
+        Stream.runCollect,
+      );
 
-    expect(events.filter((event) => event.type === "compaction")).toEqual([
-      { type: "compaction", state: "running" },
-      { type: "compaction", state: "done" },
-    ]);
-    expect((await t.run(getImport(started.id))).doc.turns[0]?.run).toMatchObject({
-      status: "done",
-      compacted: true,
-    });
-  });
+      expect(events.filter((event) => event.type === "compaction")).toEqual([
+        { type: "compaction", state: "running" },
+        { type: "compaction", state: "done" },
+      ]);
+      expect((yield* getImport(started.id)).doc.turns[0]?.run).toMatchObject({
+        status: "done",
+        compacted: true,
+      });
+    }),
+  );
 });
