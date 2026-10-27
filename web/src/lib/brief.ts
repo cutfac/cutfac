@@ -4,7 +4,7 @@ export const PURPOSES = ["promote", "tips", "brand", "own"] as const;
 export type Purpose = (typeof PURPOSES)[number];
 
 /** Where the videos go. Each sets the aspect ratios and lengths that fit. */
-export const PLATFORMS = ["tiktok", "shorts", "reels"] as const;
+export const PLATFORMS = ["tiktok", "shorts", "reels", "other"] as const;
 
 export type Platform = (typeof PLATFORMS)[number];
 

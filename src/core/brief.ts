@@ -18,7 +18,7 @@ export const PURPOSES = ["promote", "tips", "brand", "own"] as const;
 export type Purpose = (typeof PURPOSES)[number];
 
 /** Where the videos go. Each sets the aspect ratios and lengths that fit. */
-export const PLATFORMS = ["tiktok", "shorts", "reels"] as const;
+export const PLATFORMS = ["tiktok", "shorts", "reels", "other"] as const;
 
 export type Platform = (typeof PLATFORMS)[number];
 
@@ -40,7 +40,9 @@ export const BriefPatch = Schema.Struct({
   ),
   platforms: Schema.optional(
     Schema.Array(Schema.Literals(PLATFORMS)).annotate({
-      description: "every platform the videos go on; replaces the list",
+      description:
+        "every platform the videos go on; other: somewhere the list doesn't name, which the body " +
+        "says; replaces the list",
     }),
   ),
   body: Schema.optional(
@@ -172,6 +174,8 @@ const PLATFORM_TEXT: Record<Platform, string> = {
   tiktok: "TikTok",
   shorts: "YouTube Shorts",
   reels: "Instagram Reels",
+  // Somewhere the choices don't name, which the user says in the brief's body.
+  other: "elsewhere, as the user's own words say",
 };
 
 /** The brief as an agent reads it in a prompt: one line each for purpose and platforms. */

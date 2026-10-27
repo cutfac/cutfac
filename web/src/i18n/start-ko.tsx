@@ -39,11 +39,13 @@ export const startKo: StartMessages = {
       tiktok: "틱톡",
       shorts: "유튜브 쇼츠",
       reels: "인스타그램 릴스",
+      other: "기타",
     },
     platformShort: {
       tiktok: "틱톡",
       shorts: "쇼츠",
       reels: "릴스",
+      other: "기타",
     },
     title: "목적과 플랫폼",
     body: "에이전트가 템플릿과 영상을 만들기 전에 매번 읽어요.",

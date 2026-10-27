@@ -49,6 +49,11 @@
   --color-mac-minimize: oklch(0.83 0.16 80);
   --color-mac-zoom: oklch(0.75 0.19 145);
   --color-mac-accent: oklch(0.62 0.19 255);
+  /* Each platform's own colors, only for its logo, from its brand guidelines via Simple Icons. */
+  --color-youtube: #ff0000;
+  --color-instagram: #ff0069;
+  --color-tiktok-cyan: #25f4ee;
+  --color-tiktok-red: #fe2c55;
 }
 
 @theme inline {

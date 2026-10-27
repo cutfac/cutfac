@@ -51,11 +51,13 @@ export const startEn = {
       tiktok: "TikTok",
       shorts: "YouTube Shorts",
       reels: "Instagram Reels",
+      other: "Other",
     } satisfies Record<Platform, string>,
     platformShort: {
       tiktok: "TikTok",
       shorts: "Shorts",
       reels: "Reels",
+      other: "Other",
     } satisfies Record<Platform, string>,
     title: "Purpose and platforms",
     body: "Your agent reads it before every template and video.",

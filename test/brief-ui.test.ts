@@ -19,7 +19,7 @@ const labels: BriefLabels = {
     brand: { short: "Personal brand" },
     own: { short: "Your own" },
   },
-  platform: { tiktok: "TikTok", shorts: "Shorts", reels: "Reels" },
+  platform: { tiktok: "TikTok", shorts: "Shorts", reels: "Reels", other: "Other" },
 };
 
 const draft = (rest: Partial<BriefDraft>): BriefDraft => ({ ...EMPTY_BRIEF, ...rest });

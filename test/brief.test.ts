@@ -64,6 +64,12 @@ describe("parsing brief.md", () => {
     ]);
     expect(briefLines({ platforms: [], body: "" })).toEqual([]);
   });
+
+  test("a platform the list doesn't name points the agent at the user's own words", () => {
+    expect(briefLines({ platforms: ["shorts", "other"], body: "Also LinkedIn." })).toEqual([
+      "They go on YouTube Shorts, elsewhere, as the user's own words say.",
+    ]);
+  });
 });
 
 describe("brief.md in a workspace", () => {

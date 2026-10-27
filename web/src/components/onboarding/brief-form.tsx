@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 
+import { PlatformIcon } from "@/components/platform-icon";
 import {
   Field,
   FieldDescription,
@@ -134,6 +135,7 @@ export function PlatformToggles({
       >
         {PLATFORMS.map((platform) => (
           <ToggleGroupItem key={platform} value={platform}>
+            <PlatformIcon platform={platform} />
             {t.platform[platform]}
           </ToggleGroupItem>
         ))}
