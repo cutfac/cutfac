@@ -150,10 +150,19 @@ export function parsePlayHtml(html: string, url: string): Listing {
   const fullDescription = /data-g-id="description"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1];
 
   const shots = Array.from(html.matchAll(/<img[^>]*data-screenshot-index[^>]*>/g), (match) =>
-    attr(match[0], "src"),
-  ).flatMap((src) => (src === undefined || src === "" ? [] : [src.replace(/=[^=/]*$/, "=h2048")]));
+    attr(match[0], "src").pipe(
+      Option.filter((src) => src !== ""),
+      Option.map((src) => src.replace(/=[^=/]*$/, "=h2048")),
+      Option.toArray,
+    ),
+  ).flat();
 
-  const name = app.name ?? meta(html, "og:title")?.replace(/ - Apps on Google Play$/, "") ?? "";
+  const name =
+    app.name ??
+    Option.getOrElse(
+      Option.map(meta(html, "og:title"), (title) => title.replace(/ - Apps on Google Play$/, "")),
+      () => "",
+    );
 
   const description =
     fullDescription === undefined ? (app.description ?? "") : htmlText(fullDescription);
@@ -172,10 +181,14 @@ export function parsePlayHtml(html: string, url: string): Listing {
 }
 
 export function parseWebHtml(html: string, url: string): Listing {
-  const title =
-    meta(html, "og:title") ?? htmlText(/<title[^>]*>([\s\S]*?)<\/title>/.exec(html)?.[1] ?? "");
+  const title = Option.getOrElse(meta(html, "og:title"), () =>
+    htmlText(/<title[^>]*>([\s\S]*?)<\/title>/.exec(html)?.[1] ?? ""),
+  );
 
-  const summary = meta(html, "og:description") ?? meta(html, "description") ?? "";
+  const summary = meta(html, "og:description").pipe(
+    Option.orElse(() => meta(html, "description")),
+    Option.getOrElse(() => ""),
+  );
 
   const storeLinks = Array.from(
     html.matchAll(/href="(https:\/\/(?:apps\.apple\.com|play\.google\.com)[^"]+)"/g),
@@ -183,17 +196,24 @@ export function parseWebHtml(html: string, url: string): Listing {
   );
 
   const image = meta(html, "og:image");
-  const icon = linkHref(html, "apple-touch-icon") ?? linkHref(html, "icon");
+  const icon = Option.orElse(linkHref(html, "apple-touch-icon"), () => linkHref(html, "icon"));
+
+  const absolute = (href: Option.Option<string>) =>
+    Option.getOrUndefined(
+      Option.flatMapNullishOr(href, (relative) => URL.parse(relative, url)?.href),
+    );
 
   return {
     source: "web",
     url,
-    name: meta(html, "og:site_name") ?? (title.split(/\s[-–—|:]\s/)[0] ?? title).trim(),
+    name: Option.getOrElse(meta(html, "og:site_name"), () =>
+      (title.split(/\s[-–—|:]\s/)[0] ?? title).trim(),
+    ),
     title: title.trim() === "" ? undefined : title.trim(),
     summary,
     description: summary,
-    icon: icon === undefined ? undefined : URL.parse(icon, url)?.href,
-    image: image === undefined ? undefined : URL.parse(image, url)?.href,
+    icon: absolute(icon),
+    image: absolute(image),
     screenshots: [],
     links: {
       appStore: storeLinks.find((link) => detectSource(link) === "appStore" && /id\d+/.test(link)),
@@ -264,40 +284,50 @@ function playApp(html: string): Option.Option<PlayApp> {
   return Option.none();
 }
 
-const filled = (value: string | undefined): value is string =>
-  value !== undefined && value.trim() !== "";
+/** `value` trimmed, unless it is blank. */
+const filled = (value: Option.Option<string>) =>
+  value.pipe(
+    Option.map((text) => text.trim()),
+    Option.filter((text) => text !== ""),
+  );
 
-function meta(html: string, key: string): string | undefined {
+function meta(html: string, key: string): Option.Option<string> {
   for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
     const tag = match[0];
 
-    if (attr(tag, "property") !== key && attr(tag, "name") !== key) continue;
-    const content = attr(tag, "content");
+    if (!Option.contains(attr(tag, "property"), key) && !Option.contains(attr(tag, "name"), key)) {
+      continue;
+    }
 
-    if (filled(content)) return content.trim();
+    const content = filled(attr(tag, "content"));
+
+    if (Option.isSome(content)) return content;
   }
 
-  return undefined;
+  return Option.none();
 }
 
 /** The href of the first `<link>` whose rel includes `rel`. */
-function linkHref(html: string, rel: string): string | undefined {
+function linkHref(html: string, rel: string): Option.Option<string> {
   for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
     const tag = match[0];
-    const rels = attr(tag, "rel")?.toLowerCase().split(/\s+/) ?? [];
-    const href = attr(tag, "href");
+    const href = filled(attr(tag, "href"));
 
-    if (rels.includes(rel) && filled(href)) return href.trim();
+    const rels = Option.match(attr(tag, "rel"), {
+      onNone: (): ReadonlyArray<string> => [],
+      onSome: (value) => value.toLowerCase().split(/\s+/),
+    });
+
+    if (rels.includes(rel) && Option.isSome(href)) return href;
   }
 
-  return undefined;
+  return Option.none();
 }
 
-function attr(tag: string, name: string): string | undefined {
+function attr(tag: string, name: string): Option.Option<string> {
   const value = new RegExp(`\\s${name}=(?:"([^"]*)"|'([^']*)')`, "i").exec(tag);
-  const raw = value?.[1] ?? value?.[2];
 
-  return raw === undefined ? undefined : decodeEntities(raw);
+  return Option.map(Option.fromUndefinedOr(value?.[1] ?? value?.[2]), decodeEntities);
 }
 
 function htmlText(html: string): string {

@@ -17,8 +17,11 @@ import { makeWorkspace, type TestWorkspace } from "./support.ts";
 const LANDING = `<html><head>
 <title>Fernly | Plant care reminders</title>
 <meta content="Fernly — Plant care one reminder at a time" property="og:title"/>
+<meta property="og:description" content="  ">
 <meta name="description" content="Care for your plants in two minutes a day &amp; never miss a watering."/>
 <meta property="og:image" content="/og.png">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/touch.png">
 </head><body>
 <a href="https://apps.apple.com/us/app/fernly/id123456">App Store</a>
 <a href="https://play.google.com/store/apps/details?id=app.fernly&amp;hl=en">Google Play</a>
@@ -103,6 +106,7 @@ describe("listing parsers", () => {
       "Care for your plants in two minutes a day & never miss a watering.",
     );
     expect(listing.image).toBe("https://fernly.app/og.png");
+    expect(listing.icon).toBe("https://fernly.app/touch.png");
     expect(listing.links).toEqual({
       appStore: "https://apps.apple.com/us/app/fernly/id123456",
       googlePlay: "https://play.google.com/store/apps/details?id=app.fernly&hl=en",
