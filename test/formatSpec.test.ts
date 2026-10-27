@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 
-import { ConfigProvider, Effect, Schema } from "effect";
+import { ConfigProvider, Effect, FileSystem, Schema } from "effect";
 
 import { InvalidRequest } from "../src/core/errors.ts";
 import {
@@ -15,7 +14,11 @@ import {
 import { createItem } from "../src/core/items.ts";
 import { formatNotices, listFormats, readFormats, saveFormat } from "../src/core/library.ts";
 import { FormatDoc } from "../src/core/schema.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { it as pure, testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace());
 
 const decode = (doc: typeof FormatDoc.Encoded) => Schema.decodeSync(FormatDoc)(doc);
 
@@ -80,46 +83,36 @@ describe("resolveInputs", () => {
     inputs: [STYLE, { id: "topic", title: "Topic", required: true }, { id: "cta", title: "CTA" }],
   }).inputs;
 
-  test("fills defaults and keeps the format's order", async () => {
-    const inputs = await Effect.runPromise(
-      resolveInputs("t", fields, { topic: " Forks ", cta: "" }),
-    );
+  pure.effect("fills defaults and keeps the format's order", () =>
+    Effect.gen(function* () {
+      const inputs = yield* resolveInputs("t", fields, { topic: " Forks ", cta: "" });
 
-    expect(inputs).toEqual({ style: "swiss", topic: "Forks" });
-    expect(Object.keys(inputs)).toEqual(["style", "topic"]);
-  });
+      expect(inputs).toEqual({ style: "swiss", topic: "Forks" });
+      expect(Object.keys(inputs)).toEqual(["style", "topic"]);
+    }),
+  );
 
-  const fail = (given: Record<string, string>) =>
-    Effect.runPromise(Effect.flip(resolveInputs("t", fields, given)));
+  const refused = (given: Record<string, string>) => Effect.flip(resolveInputs("t", fields, given));
 
-  test("refuses unknown inputs, missing required ones, and choices that are not there", async () => {
-    expect((await fail({ topic: "x", mood: "calm" })).message).toBe(
-      "Format t has no input mood (its inputs: style, topic, cta)",
-    );
-    expect((await fail({})).message).toBe("Format t needs Topic (topic)");
-    expect((await fail({ topic: "x", style: "pastel" })).message).toBe(
-      "Style (style) must be one of swiss, neon",
-    );
-  });
+  pure.effect("refuses unknown inputs, missing required ones, and choices that are not there", () =>
+    Effect.gen(function* () {
+      expect((yield* refused({ topic: "x", mood: "calm" })).message).toBe(
+        "Format t has no input mood (its inputs: style, topic, cta)",
+      );
+      expect((yield* refused({})).message).toBe("Format t needs Topic (topic)");
+      expect((yield* refused({ topic: "x", style: "pastel" })).message).toBe(
+        "Style (style) must be one of swiss, neon",
+      );
+    }),
+  );
 });
 
+const put = (rel: string, text = "") => Effect.flatMap(Workspace, (ws) => ws.writeText(rel, text));
+
 describe("formats in a workspace", () => {
-  let t: TestWorkspace;
-
-  const put = async (rel: string, text = "") => {
-    await mkdir(dirname(join(t.root, rel)), { recursive: true });
-    await writeFile(join(t.root, rel), text);
-  };
-
-  beforeEach(async () => {
-    t = await makeWorkspace();
-  });
-
-  afterEach(() => t.remove());
-
-  test("reports missing skills, programs, and files, then passes once they are there", async () => {
-    await t.run(
-      saveFormat({
+  it.live("reports missing skills, programs, and files, then passes once they are there", () =>
+    Effect.gen(function* () {
+      yield* saveFormat({
         ...decode({
           title: "Art motion",
           skills: [{ name: "art-motion", source: "https://github.com/example/art-motion" }],
@@ -127,135 +120,160 @@ describe("formats in a workspace", () => {
           inputs: [STYLE],
         }),
         id: "art",
-      }),
-    );
+      });
 
-    const before = await t.run(checkFormat("art"));
+      const before = yield* checkFormat("art");
 
-    expect(before.ready).toBe(false);
-    expect(before.problems.map((p) => [p.kind, p.subject])).toEqual([
-      ["skill", "art-motion"],
-      ["program", "surely-not-installed-cutfac"],
-      ["file", "previews/swiss.png"],
-      ["file", "styles/swiss.md"],
-    ]);
-    expect(before.problems[0]?.message).toContain("from https://github.com/example/art-motion");
+      expect(before.ready).toBe(false);
+      expect(before.problems.map((p) => [p.kind, p.subject])).toEqual([
+        ["skill", "art-motion"],
+        ["program", "surely-not-installed-cutfac"],
+        ["file", "previews/swiss.png"],
+        ["file", "styles/swiss.md"],
+      ]);
+      expect(before.problems[0]?.message).toContain("from https://github.com/example/art-motion");
 
-    await put(".claude/skills/art-motion/SKILL.md", "---\nname: art-motion\n---\n");
-    await put("formats/art/previews/swiss.png");
-    await put("formats/art/styles/swiss.md");
+      yield* put(".claude/skills/art-motion/SKILL.md", "---\nname: art-motion\n---\n");
+      yield* put("formats/art/previews/swiss.png");
+      yield* put("formats/art/styles/swiss.md");
 
-    const after = await t.run(checkFormat("art"));
+      const after = yield* checkFormat("art");
 
-    expect(after.problems.map((p) => p.subject)).toEqual(["surely-not-installed-cutfac"]);
-    expect(after.skills).toEqual({ "art-motion": ".claude/skills/art-motion/SKILL.md" });
-  });
+      expect(after.problems.map((p) => p.subject)).toEqual(["surely-not-installed-cutfac"]);
+      expect(after.skills).toEqual({ "art-motion": ".claude/skills/art-motion/SKILL.md" });
+    }),
+  );
 
-  test("says where each program is and its version, so an agent need not look", async () => {
-    const bin = join(t.root, "bin");
+  it.live("says where each program is and its version, so an agent need not look", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const ws = yield* Workspace;
+      const bin = join(ws.root, "bin");
 
-    await put("bin/tool", "#!/bin/sh\necho 'tool 2.4.1'\necho 'more'\n");
-    await put("bin/mute", "#!/bin/sh\nexit 1\n");
-    await chmod(join(bin, "tool"), 0o755);
-    await chmod(join(bin, "mute"), 0o755);
-    await t.run(saveFormat({ ...decode({ title: "Art", requires: ["tool", "mute"] }), id: "art" }));
+      yield* put("bin/tool", "#!/bin/sh\necho 'tool 2.4.1'\necho 'more'\n");
+      yield* put("bin/mute", "#!/bin/sh\nexit 1\n");
+      yield* fs.chmod(join(bin, "tool"), 0o755);
+      yield* fs.chmod(join(bin, "mute"), 0o755);
+      yield* saveFormat({ ...decode({ title: "Art", requires: ["tool", "mute"] }), id: "art" });
 
-    const env = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { PATH: bin } }));
-    const check = await t.runWith(env, checkFormat("art"));
+      const check = yield* checkFormat("art").pipe(
+        Effect.provideService(
+          ConfigProvider.ConfigProvider,
+          ConfigProvider.fromEnv({ env: { PATH: bin } }),
+        ),
+      );
 
-    expect(check.ready).toBe(true);
-    expect(check.programs).toEqual({
-      tool: { path: join(bin, "tool"), version: "tool 2.4.1" },
-      mute: { path: join(bin, "mute") },
-    });
-  });
+      expect(check.ready).toBe(true);
+      expect(check.programs).toEqual({
+        tool: { path: join(bin, "tool"), version: "tool 2.4.1" },
+        mute: { path: join(bin, "mute") },
+      });
+    }),
+  );
 
-  test("a link that carries a password or token is not saved", async () => {
-    const source = await t.fail(
-      saveFormat({
-        ...decode({ title: "Art", source: { url: "https://user:pass@example.com/art" } }),
-        id: "art",
-      }),
-    );
-
-    expect(source.message).toContain("source.url carries a password or token");
-
-    const skill = await t.fail(
-      saveFormat({
-        ...decode({
-          title: "Art",
-          skills: [{ name: "art-motion", source: "https://example.com/skill.zip?token=abc" }],
+  it.live("a link that carries a password or token is not saved", () =>
+    Effect.gen(function* () {
+      const source = yield* Effect.flip(
+        saveFormat({
+          ...decode({ title: "Art", source: { url: "https://user:pass@example.com/art" } }),
+          id: "art",
         }),
-        id: "art",
-      }),
-    );
+      );
 
-    expect(skill.message).toContain("skill art-motion carries a password or token");
-    expect(await t.run(formatStatuses())).toEqual([]);
-  });
+      expect(source.message).toContain("source.url carries a password or token");
 
-  test("a format.yaml that does not decode is reported, and the list skips it", async () => {
-    await t.run(saveFormat({ ...decode({ title: "Good" }), id: "good" }));
-    await put("formats/bad/format.yaml", "summary: no title\n");
+      const skill = yield* Effect.flip(
+        saveFormat({
+          ...decode({
+            title: "Art",
+            skills: [{ name: "art-motion", source: "https://example.com/skill.zip?token=abc" }],
+          }),
+          id: "art",
+        }),
+      );
 
-    const statuses = await t.run(formatStatuses());
+      expect(skill.message).toContain("skill art-motion carries a password or token");
+      expect(yield* formatStatuses()).toEqual([]);
+    }),
+  );
 
-    expect(statuses.map((s) => [s.id, s.check.ready, s.format?.id])).toEqual([
-      ["bad", false, undefined],
-      ["good", true, "good"],
-    ]);
-    expect(statuses[0]?.check.problems[0]?.kind).toBe("spec");
-    expect((await t.run(listFormats())).map((f) => f.id)).toEqual(["good"]);
-  });
+  it.live("a format.yaml that does not decode is reported, and the list skips it", () =>
+    Effect.gen(function* () {
+      yield* saveFormat({ ...decode({ title: "Good" }), id: "good" });
+      yield* put("formats/bad/format.yaml", "summary: no title\n");
 
-  test("a format.yaml without a title becomes a notice, and the other formats still list", async () => {
-    await t.run(saveFormat({ ...decode({ title: "Good" }), id: "good" }));
-    await put("formats/bad/format.yaml", "summary: no title\n");
+      const statuses = yield* formatStatuses();
 
-    const { formats, unreadable } = await t.run(readFormats());
-    const notices = formatNotices(unreadable);
+      expect(statuses.map((s) => [s.id, s.check.ready, s.format?.id])).toEqual([
+        ["bad", false, undefined],
+        ["good", true, "good"],
+      ]);
+      expect(statuses[0]?.check.problems[0]?.kind).toBe("spec");
+      expect((yield* listFormats()).map((f) => f.id)).toEqual(["good"]);
+    }),
+  );
 
-    expect(formats.map((f) => f.id)).toEqual(["good"]);
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('Format "bad"');
-    expect(notices[0]).toContain('formats/bad/format.yaml: Missing key at ["title"]');
-    expect(notices[0]).toContain('check_format with id "bad"');
-  });
+  it.live("a format.yaml without a title becomes a notice, and the other formats still list", () =>
+    Effect.gen(function* () {
+      yield* saveFormat({ ...decode({ title: "Good" }), id: "good" });
+      yield* put("formats/bad/format.yaml", "summary: no title\n");
 
-  test("lists formats in name order, however long each check takes", async () => {
-    const ids = Array.from({ length: 24 }, (_, n) => `f${String(n).padStart(2, "0")}`);
-    await Promise.all(ids.map((id) => put(`formats/${id}/format.yaml`, `title: ${id}\n`)));
-    await put("formats/empty/notes.md");
+      const { formats, unreadable } = yield* readFormats();
+      const notices = formatNotices(unreadable);
 
-    expect((await t.run(formatStatuses())).map((s) => s.id)).toEqual(ids);
-    expect((await t.run(listFormats())).map((f) => f.id)).toEqual(ids);
-  });
+      expect(formats.map((f) => f.id)).toEqual(["good"]);
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toContain('Format "bad"');
+      expect(notices[0]).toContain('formats/bad/format.yaml: Missing key at ["title"]');
+      expect(notices[0]).toContain('check_format with id "bad"');
+    }),
+  );
 
-  test("a new item keeps its format's inputs", async () => {
-    await t.run(saveFormat({ ...decode({ title: "Art", inputs: [STYLE] }), id: "art" }));
+  it.live("lists formats in name order, however long each check takes", () =>
+    Effect.gen(function* () {
+      const ids = Array.from({ length: 24 }, (_, n) => `f${String(n).padStart(2, "0")}`);
 
-    const item = await t.run(createItem({ title: "Morning routine", format: "art", inputs: {} }));
+      yield* Effect.forEach(ids, (id) => put(`formats/${id}/format.yaml`, `title: ${id}\n`), {
+        concurrency: "unbounded",
+      });
+      yield* put("formats/empty/notes.md");
 
-    const picked = await t.run(
-      createItem({ title: "Evening routine", format: "art", inputs: { style: "neon" } }),
-    );
+      expect((yield* formatStatuses()).map((s) => s.id)).toEqual(ids);
+      expect((yield* listFormats()).map((f) => f.id)).toEqual(ids);
+    }),
+  );
 
-    expect(item.doc.inputs).toEqual({ style: "swiss" });
-    expect(picked.doc.inputs).toEqual({ style: "neon" });
+  it.live("a new item keeps its format's inputs", () =>
+    Effect.gen(function* () {
+      yield* saveFormat({ ...decode({ title: "Art", inputs: [STYLE] }), id: "art" });
 
-    const wrong = await t.fail(
-      createItem({ title: "Tactics", format: "art", inputs: { style: "x" } }),
-    );
+      const item = yield* createItem({ title: "Morning routine", format: "art", inputs: {} });
 
-    const loose = await t.fail(createItem({ title: "Loose", inputs: { style: "neon" } }));
+      const picked = yield* createItem({
+        title: "Evening routine",
+        format: "art",
+        inputs: { style: "neon" },
+      });
 
-    expect(wrong).toBeInstanceOf(InvalidRequest);
-    expect(loose.message).toBe("Inputs belong to a format; pick one first");
-  });
+      expect(item.doc.inputs).toEqual({ style: "swiss" });
+      expect(picked.doc.inputs).toEqual({ style: "neon" });
 
-  test("an item may name a format that has no folder, as before", async () => {
-    const item = await t.run(createItem({ title: "Tips", format: "tips" }));
+      const wrong = yield* Effect.flip(
+        createItem({ title: "Tactics", format: "art", inputs: { style: "x" } }),
+      );
 
-    expect(item.doc.inputs).toBeUndefined();
-  });
+      const loose = yield* Effect.flip(createItem({ title: "Loose", inputs: { style: "neon" } }));
+
+      expect(wrong).toBeInstanceOf(InvalidRequest);
+      expect(loose.message).toBe("Inputs belong to a format; pick one first");
+    }),
+  );
+
+  it.live("an item may name a format that has no folder, as before", () =>
+    Effect.gen(function* () {
+      const item = yield* createItem({ title: "Tips", format: "tips" });
+
+      expect(item.doc.inputs).toBeUndefined();
+    }),
+  );
 });
