@@ -6,14 +6,20 @@
  * tells it from the released app. The copy is cached in node_modules and rebuilt when the installed
  * Electron or the icon changes.
  */
-import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { Console, Crypto, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Hex } from "effect/encoding";
 
-import { Schema } from "effect";
+import { run } from "../src/core/process.ts";
 
 export const DEV_APP = { name: "Cutfac Dev", bundleId: "com.cutfac.app.dev" };
 
-const decodePackage = Schema.decodeUnknownSync(Schema.Struct({ version: Schema.NonEmptyString }));
+export class DevAppFailed extends Schema.TaggedError<DevAppFailed>()("DevAppFailed", {
+  message: Schema.String,
+}) {}
+
+const decodePackage = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Struct({ version: Schema.NonEmptyString })),
+);
 
 /** An object schema that keeps the keys it does not name, so a rewrite drops nothing. */
 const openStruct = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
@@ -28,6 +34,8 @@ type IconManifest = typeof IconManifest.Type;
 
 export const decodeIconManifest = Schema.decodeUnknownSync(IconManifest);
 
+const decodeManifestText = Schema.decodeUnknownEffect(Schema.fromJsonString(IconManifest));
+
 const BAND = "dev.svg";
 
 /** The Icon Composer manifest with the DEV band as the front layer, out of the glass. */
@@ -37,8 +45,30 @@ export function devIconManifest({ groups: [front, ...back], ...rest }: IconManif
   return { ...rest, groups: [{ ...front, layers: [band, ...front.layers] }, ...back] };
 }
 
+const devLog = (message: string) => Console.log(`[desktop:dev] ${message}`);
+
+/** Runs `command`, failing with all it printed when it exits with anything but 0. */
+const runOrFail = Effect.fnUntraced(function* (command: string, ...args: Array<string>) {
+  const shown = [command, ...args].join(" ");
+
+  const result = yield* run(command, args).pipe(
+    Effect.mapError(
+      (error) => new DevAppFailed({ message: `\`${shown}\` failed: ${error.message}` }),
+    ),
+  );
+
+  // actool reports its errors on stdout.
+  if (result.code !== 0) {
+    const printed = `${result.stdout}\n${result.stderr}`.trim();
+
+    return yield* new DevAppFailed({ message: `\`${shown}\` failed: ${printed}` });
+  }
+});
+
 /** The Cutfac Dev executable, built on first use. macOS only. */
-export async function devElectron(root: string, log: (message: string) => void): Promise<string> {
+export const devElectron = Effect.fn("devApp.devElectron")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const electron = path.join(root, "node_modules", "electron");
   const cache = path.join(root, "node_modules", ".cache", "cutfac-dev");
   const bundle = path.join(cache, `${DEV_APP.name}.app`);
@@ -50,16 +80,18 @@ export async function devElectron(root: string, log: (message: string) => void):
     band: path.join(root, "build", "icon-dev-badge.svg"),
   };
 
-  const { version } = decodePackage(await Bun.file(path.join(electron, "package.json")).json());
+  const { version } = yield* fs
+    .readFileString(path.join(electron, "package.json"))
+    .pipe(Effect.flatMap(decodePackage));
 
-  const stamp = JSON.stringify({ electron: version, ...DEV_APP, icon: await hashIcon(icon) });
+  const stamp = JSON.stringify({ electron: version, ...DEV_APP, icon: yield* hashIcon(icon) });
 
-  if ((await readFile(stampFile, "utf8").catch(() => undefined)) === stamp) return executable;
+  if (Option.contains(yield* Effect.option(fs.readFileString(stampFile)), stamp)) return executable;
 
-  await rm(cache, { recursive: true, force: true });
-  await mkdir(cache, { recursive: true });
+  yield* fs.remove(cache, { recursive: true, force: true });
+  yield* fs.makeDirectory(cache, { recursive: true });
   // -c clones on APFS, so the copy is instant and takes no space; -R keeps the framework symlinks.
-  await run(["cp", "-Rc", path.join(electron, "dist", "Electron.app"), bundle]);
+  yield* runOrFail("cp", "-Rc", path.join(electron, "dist", "Electron.app"), bundle);
 
   const plist = path.join(bundle, "Contents", "Info.plist");
 
@@ -68,64 +100,85 @@ export async function devElectron(root: string, log: (message: string) => void):
     ["CFBundleName", DEV_APP.name],
     ["CFBundleDisplayName", DEV_APP.name],
   ] as const) {
-    await run(["/usr/libexec/PlistBuddy", "-c", `Set :${key} "${value}"`, plist]);
+    yield* runOrFail("/usr/libexec/PlistBuddy", "-c", `Set :${key} "${value}"`, plist);
   }
-
-  let iconSet = false;
 
   // Electron's own icon is no reason to stop: the app runs the same without the band.
-  try {
-    await setIcon(icon, path.join(cache, "icon"), bundle);
-    iconSet = true;
-  } catch (error) {
-    log(
-      `Could not give ${DEV_APP.name} its icon (it needs Xcode 26), keeping Electron's: ${String(error)}`,
-    );
-  }
+  const iconSet = yield* setIcon(icon, path.join(cache, "icon"), bundle).pipe(
+    Effect.as(true),
+    Effect.catch((error) =>
+      Effect.as(
+        devLog(
+          `Could not give ${DEV_APP.name} its icon (it needs Xcode 26), keeping Electron's: ${error.message}`,
+        ),
+        false,
+      ),
+    ),
+  );
 
   // The edits break Electron's signature, and Apple silicon will not run an unsigned app.
-  await run(["codesign", "--force", "--deep", "--sign", "-", bundle]);
+  yield* runOrFail("codesign", "--force", "--deep", "--sign", "-", bundle);
 
   // Last, so a copy cut short is rebuilt on the next run, and a missing icon is tried again.
-  if (iconSet) await writeFile(stampFile, stamp);
+  if (iconSet) yield* fs.writeFileString(stampFile, stamp);
 
   return executable;
-}
+});
 
 type IconSources = { source: string; band: string };
 
 /** A digest of every file that goes into the icon, so a change to any of them rebuilds it. */
-async function hashIcon({ source, band }: IconSources): Promise<string> {
-  const hasher = new Bun.CryptoHasher("sha256");
+const hashIcon = Effect.fnUntraced(function* ({ source, band }: IconSources) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const crypto = yield* Crypto.Crypto;
+  const encoder = new TextEncoder();
 
-  const files = (await readdir(source, { recursive: true, withFileTypes: true }))
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.join(entry.parentPath, entry.name))
-    .toSorted();
+  const entries = yield* fs.readDirectory(source, { recursive: true });
 
-  for (const file of [...files, band]) {
-    hasher.update(path.relative(source, file));
-    hasher.update(await readFile(file));
-  }
+  const files = yield* Effect.filter(
+    entries.map((entry) => path.join(source, entry)).toSorted(),
+    (file) => Effect.map(fs.stat(file), (info) => info.type === "File"),
+  );
 
-  return hasher.digest("hex");
-}
+  // Each file's path from the icon, then its bytes, in one stream.
+  const parts = yield* Effect.forEach([...files, band], (file) =>
+    Effect.map(fs.readFile(file), (bytes) => [encoder.encode(path.relative(source, file)), bytes]),
+  );
+
+  const all = parts.flat();
+  const joined = new Uint8Array(all.reduce((size, part) => size + part.length, 0));
+
+  all.reduce((offset, part) => {
+    joined.set(part, offset);
+
+    return offset + part.length;
+  }, 0);
+
+  return Hex.encode(yield* crypto.digest("SHA-256", joined));
+});
 
 /** Compiles the Cutfac icon with the DEV band into `bundle`, as the Liquid Glass icon and the icns. */
-async function setIcon({ source, band }: IconSources, work: string, bundle: string): Promise<void> {
+const setIcon = Effect.fnUntraced(function* (
+  { source, band }: IconSources,
+  work: string,
+  bundle: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const document = path.join(work, "Icon.icon");
   const out = path.join(work, "out");
   const manifest = path.join(document, "icon.json");
 
-  await mkdir(out, { recursive: true });
-  await run(["cp", "-R", source, document]);
-  await copyFile(band, path.join(document, "Assets", BAND));
-  await writeFile(
-    manifest,
-    JSON.stringify(devIconManifest(decodeIconManifest(await Bun.file(manifest).json()))),
-  );
+  yield* fs.makeDirectory(out, { recursive: true });
+  yield* runOrFail("cp", "-R", source, document);
+  yield* fs.copyFile(band, path.join(document, "Assets", BAND));
+
+  const shipped = yield* fs.readFileString(manifest).pipe(Effect.flatMap(decodeManifestText));
+
+  yield* fs.writeFileString(manifest, JSON.stringify(devIconManifest(shipped)));
   // Writes Assets.car, which macOS 26 draws by CFBundleIconName, and Icon.icns for older systems.
-  await run([
+  yield* runOrFail(
     "xcrun",
     "actool",
     document,
@@ -144,31 +197,17 @@ async function setIcon({ source, band }: IconSources, work: string, bundle: stri
     "26.0",
     "--platform",
     "macosx",
-  ]);
+  );
 
   const resources = path.join(bundle, "Contents", "Resources");
 
-  await copyFile(path.join(out, "Assets.car"), path.join(resources, "Assets.car"));
+  yield* fs.copyFile(path.join(out, "Assets.car"), path.join(resources, "Assets.car"));
   // Info.plist names electron.icns as the icon file, so the icns takes its place.
-  await copyFile(path.join(out, "Icon.icns"), path.join(resources, "electron.icns"));
-  await run([
+  yield* fs.copyFile(path.join(out, "Icon.icns"), path.join(resources, "electron.icns"));
+  yield* runOrFail(
     "/usr/libexec/PlistBuddy",
     "-c",
     "Add :CFBundleIconName string Icon",
     path.join(bundle, "Contents", "Info.plist"),
-  ]);
-}
-
-async function run(command: string[]): Promise<void> {
-  const child = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-
-  // actool reports its errors on stdout.
-  const [stdout, stderr] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-
-  if ((await child.exited) !== 0) {
-    throw new Error(`\`${command.join(" ")}\` failed: ${`${stdout}\n${stderr}`.trim()}`);
-  }
-}
+  );
+});

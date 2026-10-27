@@ -36,6 +36,3 @@ export const freePort = (last: Option.Option<number>) =>
     // Something else took it since; the board starts with default preferences.
     onSome: (port) => bindPort(port).pipe(Effect.catchTag("PortTaken", () => bindPort(0))),
   });
-
-/** `bindPort` for the dev runner, which runs outside Effect. */
-export const probePort = (port: number): Promise<number> => Effect.runPromise(bindPort(port));

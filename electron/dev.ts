@@ -3,200 +3,270 @@
  * server restarts itself when src/ changes, and the app restarts when electron/ changes, or only
  * reloads its page when the preload script alone did. Closing the app or Ctrl+C stops everything.
  */
-import { watch } from "node:fs";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+
+// The runner is the entry point, so it provides the platform's services itself.
+// @effect-diagnostics strictEffectProvide:off
+import { BunServices } from "@effect/platform-bun";
+import {
+  Config,
+  Console,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Option,
+  Ref,
+  Schedule,
+  Scope,
+  Stream,
+} from "effect";
+import { FetchHttpClient, HttpClient } from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { DEV_APP, devElectron } from "./devApp.ts";
 import { type AppProcess, launchApp } from "./devLaunch.ts";
-import { probePort } from "./ports.ts";
+import { bindPort, freePort } from "./ports.ts";
 
 const root = path.resolve(import.meta.dir, "..");
 
-const limits = { viteReadyMs: 30_000, vitePollMs: 150, restartDebounceMs: 300 };
+const VITE_READY = "30 seconds";
+
+const VITE_POLL = "150 millis";
+
+const RESTART_DEBOUNCE = "300 millis";
 
 const bin = (name: string) => path.join(root, "node_modules", ".bin", name);
 
-const log = (message: string) => console.log(`[desktop:dev] ${message}`);
+const log = (message: string) => Console.log(`[desktop:dev] ${message}`);
 
-// Never a fixed default: 4317 is what `cutfac serve` uses, and it may be someone's real board.
-const serverPort = process.env.CUTFAC_PORT
-  ? Number.parseInt(process.env.CUTFAC_PORT, 10)
-  : await probePort(0);
-
-let vitePort = await probePort(0);
-
-while (vitePort === serverPort) vitePort = await probePort(0);
-
-const devUrl = `http://localhost:${vitePort}`;
-
-// The app's Chrome DevTools Protocol, on localhost, so an agent's tools can drive the dev app: on
-// 9222 when it is free, the port they look at first.
-const cdpPort = await probePort(9222).catch(() => probePort(0));
-
-/** What the app needs from this script; it finds the rest of its environment as a released app does. */
-const appEnv = { CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
-
-const env = { ...process.env, ...appEnv };
-
-const spawnLogged = (command: string[]) =>
-  Bun.spawn(command, { cwd: root, env, stdio: ["ignore", "inherit", "inherit"] });
-
-const vite = spawnLogged([bin("vite"), "--port", String(vitePort), "--strictPort"]);
-
-let electron: AppProcess | undefined;
-
-let stopping = false;
-
-async function stop(code: number): Promise<never> {
-  if (!stopping) {
-    stopping = true;
-    electron?.kill("SIGTERM");
-    vite.kill("SIGTERM");
-    await Promise.all([electron?.exited, vite.exited]);
-  }
-
-  process.exit(code);
-}
-
-process.on("SIGINT", () => void stop(130));
-
-process.on("SIGTERM", () => void stop(143));
-
-// The terminal closed. The app runs apart from this script on macOS, so it would outlive it.
-process.on("SIGHUP", () => void stop(129));
-
-void vite.exited.then((code) => {
-  if (stopping) return;
-
-  log(`Vite exited with code ${code}.`);
-  void stop(1);
-});
-
-async function waitForVite(): Promise<void> {
-  const deadline = Date.now() + limits.viteReadyMs;
-
-  while (Date.now() < deadline) {
-    try {
-      if ((await fetch(devUrl, { signal: AbortSignal.timeout(1_000) })).ok) return;
-    } catch {
-      // Not listening yet.
-    }
-
-    await delay(limits.vitePollMs);
-  }
-
-  log(`Vite did not answer on ${devUrl} within ${limits.viteReadyMs / 1_000}s.`);
-  await stop(1);
-}
-
-async function buildElectron(): Promise<boolean> {
-  return (await spawnLogged(["bun", "run", "build:electron"]).exited) === 0;
-}
-
-// A failed copy is no reason to stop working: run stock Electron instead.
-async function electronExecutable(): Promise<string> {
-  if (process.platform !== "darwin") return bin("electron");
-
-  try {
-    return await devElectron(root, log);
-  } catch (error) {
-    log(`Could not set up ${DEV_APP.name}, running stock Electron: ${String(error)}`);
-
-    return bin("electron");
-  }
-}
-
-// Built while Vite starts.
-const executable = electronExecutable();
-
-/** Starts the app; a restart opens it behind what the developer works in, and its window too. */
-async function launch(again = false): Promise<void> {
-  const app = await executable;
-
-  if (stopping) return;
-
-  const child = launchApp({
-    executable: app,
-    root,
-    args: [`--remote-debugging-port=${cdpPort}`],
-    env: again ? { ...appEnv, CUTFAC_DEV_RESTART: "1" } : appEnv,
-    background: again,
-  });
-
-  electron = child;
-
-  void child.pid.then((pid) => {
-    if (pid === undefined && electron === child)
-      log(`Could not find ${DEV_APP.name} to restart it.`);
-  });
-
-  // The app quit by itself (window closed or Cmd+Q), not for a restart: wind everything down.
-  void child.exited.then((code) => {
-    if (electron === child) void stop(code);
-  });
-}
-
-async function restart(): Promise<void> {
-  if (stopping) return;
-
-  log("electron/ changed, rebuilding.");
-
-  // A broken build keeps the running app; the next save tries again.
-  if (!(await buildElectron())) return;
-
-  const previous = electron;
-
-  electron = undefined;
-  previous?.kill("SIGTERM");
-  // The app holds a single-instance lock and the server port until it has quit.
-  await previous?.exited;
-
-  if (!stopping) await launch(true);
-}
-
-// The preload script runs in the page, so a new one needs only the page reloaded, which the app
-// does on SIGUSR2. Windows has no such signal, so the app restarts there.
-async function reloadPage(): Promise<void> {
-  if (stopping) return;
-
-  log("electron/preload.ts changed, rebuilding and reloading the page.");
-
-  // Through process.kill, never a Bun subprocess's kill: Bun sends Linux's number for SIGUSR2,
-  // which is SIGSYS on macOS.
-  if ((await buildElectron()) && electron) electron.kill("SIGUSR2");
-}
+// The app does not run these, so a change to them is no reason to restart it.
+const DEV_SCRIPTS = new Set([path.basename(import.meta.path), "devApp.ts", "devLaunch.ts"]);
 
 const reloadsPage = (files: ReadonlySet<string>) =>
   process.platform !== "win32" && [...files].every((file) => file === "preload.ts");
 
-let restarts = Promise.resolve();
+/** The app running now, and the scope that stops it. */
+interface Running {
+  readonly app: AppProcess;
+  readonly scope: Scope.Closeable;
+}
 
-let pending: ReturnType<typeof setTimeout> | undefined;
+const program = Effect.gen(function* () {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const fs = yield* FileSystem.FileSystem;
 
-/** The files changed since the last rebuild, so a burst of saves rebuilds once. */
-const changed = new Set<string>();
+  /** The exit code everything stops with; the first reason to stop wins. */
+  const stopped = yield* Deferred.make<number>();
+  const stop = (code: number) => Deferred.succeed(stopped, code);
 
-// The app does not run these, so a change to them is no reason to restart it.
-const devScripts = new Set([path.basename(import.meta.path), "devApp.ts", "devLaunch.ts"]);
+  const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
-watch(path.join(root, "electron"), { recursive: true }, (_event, file) => {
-  if (!file?.endsWith(".ts") || devScripts.has(file)) return;
+  for (const [name, code] of [
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+    // The terminal closed. The app runs apart from this script on macOS, so it would outlive it.
+    ["SIGHUP", 129],
+  ] as const) {
+    process.on(name, () => runSync(stop(code)));
+  }
 
-  changed.add(file);
-  clearTimeout(pending);
-  pending = setTimeout(() => {
-    const next = reloadsPage(changed) ? reloadPage : restart;
+  // Never a fixed default: 4317 is what `cutfac serve` uses, and it may be someone's real board.
+  const serverPort = yield* Option.match(yield* Config.option(Config.Int("CUTFAC_PORT")), {
+    onNone: () => freePort(Option.none()),
+    onSome: Effect.succeed,
+  });
 
-    changed.clear();
-    restarts = restarts.then(next);
-  }, limits.restartDebounceMs);
-});
+  const vitePort = yield* freePort(Option.none()).pipe(
+    Effect.repeat({ until: (port) => port !== serverPort }),
+  );
 
-await waitForVite();
+  const devUrl = `http://localhost:${vitePort}`;
 
-if (!(await buildElectron())) await stop(1);
+  // The app's Chrome DevTools Protocol, on localhost, so an agent's tools can drive the dev app: on
+  // 9222 when it is free, the port they look at first.
+  const cdpPort = yield* bindPort(9222).pipe(Effect.catch(() => freePort(Option.none())));
 
-log(`Board on ${devUrl}, server on port ${serverPort}, DevTools Protocol on port ${cdpPort}.`);
+  /** What the app needs from this script; it finds the rest of its environment as a released app does. */
+  const appEnv = { CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
 
-await launch();
+  const spawnLogged = (command: string, args: ReadonlyArray<string>) =>
+    spawner.spawn(
+      ChildProcess.make(command, args, {
+        cwd: root,
+        env: appEnv,
+        extendEnv: true,
+        stdin: "ignore",
+        stdout: "inherit",
+        stderr: "inherit",
+      }),
+    );
+
+  const vite = yield* spawnLogged(bin("vite"), ["--port", String(vitePort), "--strictPort"]);
+
+  yield* vite.exitCode.pipe(
+    Effect.exit,
+    Effect.flatMap((exit) =>
+      log(`Vite exited with code ${Exit.isSuccess(exit) ? exit.value : "unknown"}.`),
+    ),
+    Effect.andThen(stop(1)),
+    Effect.forkScoped,
+  );
+
+  const buildElectron = Effect.scoped(
+    spawnLogged("bun", ["run", "build:electron"]).pipe(
+      Effect.flatMap((build) => build.exitCode),
+      Effect.map((code) => code === 0),
+      Effect.orElseSucceed(() => false),
+    ),
+  );
+
+  // A failed copy is no reason to stop working: run stock Electron instead.
+  const electronExecutable =
+    process.platform === "darwin"
+      ? devElectron(root).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              log(`Could not set up ${DEV_APP.name}, running stock Electron: ${error.message}`),
+              bin("electron"),
+            ),
+          ),
+        )
+      : Effect.succeed(bin("electron"));
+
+  // Built while Vite starts.
+  const executable = yield* Effect.forkScoped(electronExecutable);
+
+  const running = yield* Ref.make(Option.none<Running>());
+
+  const isRunning = (app: AppProcess) =>
+    Effect.map(
+      Ref.get(running),
+      Option.exists((now) => now.app === app),
+    );
+
+  const stopApp = Effect.flatMap(Ref.getAndSet(running, Option.none()), (previous) =>
+    Option.match(previous, {
+      onNone: () => Effect.void,
+      // The app holds a single-instance lock and the server port until it has quit.
+      onSome: ({ scope }) => Scope.close(scope, Exit.void),
+    }),
+  );
+
+  yield* Effect.addFinalizer(() => stopApp);
+
+  /** Starts the app; a restart opens it behind what the developer works in, and its window too. */
+  const launch = (again: boolean) =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make();
+
+      const app = yield* launchApp({
+        executable: yield* Fiber.join(executable),
+        root,
+        args: [`--remote-debugging-port=${cdpPort}`],
+        env: again ? { ...appEnv, CUTFAC_DEV_RESTART: "1" } : appEnv,
+        background: again,
+      }).pipe(Scope.provide(scope));
+
+      yield* Ref.set(running, Option.some({ app, scope }));
+
+      yield* app.pid.pipe(
+        Effect.flatMap((pid) =>
+          Effect.flatMap(isRunning(app), (current) =>
+            Option.isNone(pid) && current
+              ? log(`Could not find ${DEV_APP.name} to restart it.`)
+              : Effect.void,
+          ),
+        ),
+        Effect.forkScoped,
+      );
+
+      // The app quit by itself (window closed or Cmd+Q), not for a restart: wind everything down.
+      yield* app.exited.pipe(
+        Effect.flatMap((code) =>
+          Effect.flatMap(isRunning(app), (current) => (current ? stop(code) : Effect.void)),
+        ),
+        Effect.forkScoped,
+      );
+    });
+
+  const restart = Effect.gen(function* () {
+    yield* log("electron/ changed, rebuilding.");
+
+    // A broken build keeps the running app; the next save tries again.
+    if (!(yield* buildElectron)) return;
+
+    yield* stopApp;
+    yield* launch(true);
+  });
+
+  // The preload script runs in the page, so a new one needs only the page reloaded, which the app
+  // does on SIGUSR2. Windows has no such signal, so the app restarts there.
+  const reloadPage = Effect.gen(function* () {
+    yield* log("electron/preload.ts changed, rebuilding and reloading the page.");
+
+    if (!(yield* buildElectron)) return;
+
+    yield* Option.match(yield* Ref.get(running), {
+      onNone: () => Effect.void,
+      onSome: ({ app }) => app.kill("SIGUSR2"),
+    });
+  });
+
+  /** The files changed since the last rebuild, so a burst of saves rebuilds once. */
+  const changed = yield* Ref.make<ReadonlySet<string>>(new Set());
+
+  const start = Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+
+    const answers = client.get(devUrl).pipe(
+      Effect.timeout("1 second"),
+      Effect.map((response) => response.status >= 200 && response.status < 300),
+      Effect.orElseSucceed(() => false),
+    );
+
+    const ready = yield* answers.pipe(
+      Effect.repeat({ schedule: Schedule.spaced(VITE_POLL), until: (up) => up }),
+      Effect.timeoutOption(VITE_READY),
+    );
+
+    if (Option.isNone(ready)) {
+      yield* log(`Vite did not answer on ${devUrl} within 30s.`);
+
+      return yield* stop(1);
+    }
+
+    if (!(yield* buildElectron)) return yield* stop(1);
+
+    yield* log(
+      `Board on ${devUrl}, server on port ${serverPort}, DevTools Protocol on port ${cdpPort}.`,
+    );
+    yield* launch(false);
+
+    yield* fs.watch(path.join(root, "electron"), { recursive: true }).pipe(
+      Stream.map((event) => event.path),
+      Stream.filter((file) => file.endsWith(".ts") && !DEV_SCRIPTS.has(file)),
+      Stream.tap((file) => Ref.update(changed, (files) => new Set([...files, file]))),
+      Stream.debounce(RESTART_DEBOUNCE),
+      Stream.runForEach(() =>
+        Effect.flatMap(Ref.getAndSet(changed, new Set()), (files) =>
+          reloadsPage(files) ? reloadPage : restart,
+        ),
+      ),
+    );
+  });
+
+  yield* Effect.forkScoped(start);
+
+  return yield* Deferred.await(stopped);
+}).pipe(Effect.scoped);
+
+const code = await Effect.runPromise(
+  program.pipe(
+    Effect.provide([BunServices.layer, FetchHttpClient.layer]),
+    Effect.orElseSucceed(() => 1),
+  ),
+);
+
+process.exit(code);
