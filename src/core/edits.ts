@@ -709,7 +709,7 @@ export const editImages = Effect.fn("edits.editImages")(function* (item: Item, f
 
   const pictures = [
     ...(f.context?.frame === undefined ? [] : [f.context.frame]),
-    ...(f.attachments ?? []).filter((path) => mediaKind(path) === "image"),
+    ...(f.attachments ?? []).filter((path) => Option.contains(mediaKind(path), "image")),
   ];
 
   const kept = yield* Effect.filter(pictures, (path) => ws.exists(`${item.dir}/${path}`));

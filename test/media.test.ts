@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import { InvalidRequest } from "../src/core/errors.ts";
 import { createItem, importMedia } from "../src/core/items.ts";
@@ -20,10 +20,10 @@ import { makeWorkspace, type TestWorkspace } from "./support.ts";
 
 describe("media names", () => {
   test("reads the aspect prefix", () => {
-    expect(aspectFromName("[9x16] video.mp4")).toBe("9x16");
-    expect(aspectFromName("[3x4] 01-cover.jpg")).toBe("3x4");
-    expect(aspectFromName("[2x3] odd.jpg")).toBeUndefined();
-    expect(aspectFromName("video.mp4")).toBeUndefined();
+    expect(aspectFromName("[9x16] video.mp4")).toEqual(Option.some("9x16"));
+    expect(aspectFromName("[3x4] 01-cover.jpg")).toEqual(Option.some("3x4"));
+    expect(aspectFromName("[2x3] odd.jpg")).toEqual(Option.none());
+    expect(aspectFromName("video.mp4")).toEqual(Option.none());
   });
 
   test("keeps only media files", () => {
@@ -41,11 +41,11 @@ describe("media names", () => {
   });
 
   test("matches a frame size to a listed aspect within 2%", () => {
-    expect(aspectOf(1080, 1920)).toBe("9x16");
-    expect(aspectOf(1080, 1350)).toBe("4x5");
-    expect(aspectOf(1000, 1000)).toBe("1x1");
-    expect(aspectOf(1000, 1500)).toBeUndefined();
-    expect(aspectOf(0, 1920)).toBeUndefined();
+    expect(aspectOf(1080, 1920)).toEqual(Option.some("9x16"));
+    expect(aspectOf(1080, 1350)).toEqual(Option.some("4x5"));
+    expect(aspectOf(1000, 1000)).toEqual(Option.some("1x1"));
+    expect(aspectOf(1000, 1500)).toEqual(Option.none());
+    expect(aspectOf(0, 1920)).toEqual(Option.none());
   });
 });
 

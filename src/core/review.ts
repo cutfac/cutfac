@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { type Item, getItem } from "./items.ts";
@@ -48,8 +48,11 @@ export interface ReviewOptions {
 export const VERTICAL_SAFE_ZONE: SafeZone = { top: 0.15, bottom: 0.35, left: 0.06, right: 0.15 };
 
 /** The margins platform UI covers on a `width`×`height` video, if it has any. */
-export const safeZoneOf = (width: number, height: number): SafeZone | undefined =>
-  aspectOf(width, height) === "9x16" ? VERTICAL_SAFE_ZONE : undefined;
+export const safeZoneOf = (width: number, height: number) =>
+  Option.as(
+    Option.filter(aspectOf(width, height), (aspect) => aspect === "9x16"),
+    VERTICAL_SAFE_ZONE,
+  );
 
 const box = (x: string, y: string, w: string, h: string, look: string) =>
   `drawbox=x=${x}:y=${y}:w=${w}:h=${h}:${look}`;
@@ -206,11 +209,13 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
   yield* ws.mkdir(`${dir}/strips`);
 
   const portrait = info.height > info.width;
-  const safeZone = options.safeZones === false ? undefined : safeZoneOf(info.width, info.height);
+
+  const safeZone =
+    options.safeZones === false ? Option.none<SafeZone>() : safeZoneOf(info.width, info.height);
 
   /** Scale to `width`, then shade the safe zone when there is one. */
   const fit = (width: number) =>
-    [`scale=${width}:-2`, ...(safeZone === undefined ? [] : safeZoneFilters(safeZone))].join(",");
+    [`scale=${width}:-2`, ...Option.toArray(safeZone).flatMap(safeZoneFilters)].join(",");
 
   const frames = yield* Effect.forEach(
     times,
@@ -278,7 +283,7 @@ export const reviewMedia = Effect.fn("review.reviewMedia")(function* (
     sheet,
     frames: made,
     strips: strips.flat(),
-    safeZone,
+    safeZone: Option.getOrUndefined(safeZone),
     notes,
   };
 

@@ -1,4 +1,4 @@
-import { Context, Effect } from "effect";
+import { Context, Effect, Option } from "effect";
 
 import { type SessionArgs, agentBin, claudeCommand, codexInvocation } from "./agentCommand.ts";
 import {
@@ -243,7 +243,7 @@ const performTurn = Effect.fnUntraced(function* (input: ImportInput, emit: Emit)
     agent === "claude"
       ? []
       : yield* Effect.filter(
-          (turn.attachments ?? []).filter((path) => mediaKind(path) === "image"),
+          (turn.attachments ?? []).filter((path) => Option.contains(mediaKind(path), "image")),
           (path) => ws.exists(`${owner}/${path}`),
         );
 

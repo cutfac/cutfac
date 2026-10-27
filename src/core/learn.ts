@@ -1,4 +1,4 @@
-import { Effect, Path } from "effect";
+import { Effect, Option, Path } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { isSimpleId, readOptionalText } from "./library.ts";
@@ -379,7 +379,7 @@ const learnFile = Effect.fn("learn.learnFile")(function* (
 ) {
   const ws = yield* Workspace;
   const ext = extension(name);
-  const kind = mediaKind(name);
+  const kind = Option.getOrUndefined(mediaKind(name));
   const warnings: Array<string> = [];
 
   const text = TEXT_FILE.has(ext)

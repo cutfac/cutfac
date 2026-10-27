@@ -68,7 +68,7 @@ export const downloadVideo = Effect.fn("preprocess.downloadVideo")(function* (
   const entries = yield* ws.list(dir);
 
   const video = entries.find(
-    (entry) => entry.name.startsWith("source.") && mediaKind(entry.name) === "video",
+    (entry) => entry.name.startsWith("source.") && Option.contains(mediaKind(entry.name), "video"),
   );
 
   if (video === undefined)

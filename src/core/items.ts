@@ -414,12 +414,12 @@ export const importMedia = Effect.fn("items.importMedia")(function* (
   const item = yield* getItem(id);
   const clean = stripAspectTag(path.basename(fileName.replaceAll("\\", "/")).trim());
 
-  if (mediaKind(clean) === undefined) {
+  if (Option.isNone(mediaKind(clean))) {
     return yield* new InvalidRequest({ message: `Not a video or image file: ${fileName}` });
   }
 
   const probed = yield* Effect.option(probe(source));
-  const aspect = Option.flatMapNullishOr(probed, (p) => aspectOf(p.width, p.height));
+  const aspect = Option.flatMap(probed, (p) => aspectOf(p.width, p.height));
   const ext = extension(clean);
   const stem = clean.slice(0, clean.length - ext.length - 1);
   const tag = Option.match(aspect, { onNone: () => "", onSome: (value) => `[${value}] ` });

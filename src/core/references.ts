@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import type { Item } from "./items.ts";
@@ -94,7 +94,7 @@ export const listReferences = Effect.fn("references.listReferences")(function* (
           dir: entry.dir,
           size: entry.size,
           mtime: entry.mtime,
-          kind: entry.dir ? undefined : mediaKind(entry.name),
+          kind: entry.dir ? undefined : Option.getOrUndefined(mediaKind(entry.name)),
         };
 
         if (!entry.dir) return reference;

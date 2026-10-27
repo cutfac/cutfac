@@ -1,4 +1,4 @@
-import { Effect, Match, Schema } from "effect";
+import { Array, Effect, Match, Option, Schema } from "effect";
 
 import { CommandFailed } from "./errors.ts";
 import { run, runChecked, tail } from "./process.ts";
@@ -25,31 +25,36 @@ export function extension(name: string): string {
   return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-export function mediaKind(name: string): MediaKind | undefined {
+export function mediaKind(name: string): Option.Option<MediaKind> {
   const ext = extension(name);
 
-  if (VIDEO_EXT.has(ext)) return "video";
+  if (VIDEO_EXT.has(ext)) return Option.some("video");
 
-  if (IMAGE_EXT.has(ext)) return "image";
+  if (IMAGE_EXT.has(ext)) return Option.some("image");
 
-  return undefined;
+  return Option.none();
 }
 
 /** `[9x16] cover.jpg` → `9x16`. */
-export function aspectFromName(name: string): Aspect | undefined {
+export function aspectFromName(name: string): Option.Option<Aspect> {
   const value = /^\[(\d+x\d+)\]/.exec(name)?.[1];
 
-  return ASPECTS.find((aspect) => aspect === value);
+  return Array.findFirst(ASPECTS, (aspect) => aspect === value);
 }
 
 export function toMediaFiles(entries: ReadonlyArray<Entry>): MediaFile[] {
   return entries.flatMap((entry): MediaFile[] => {
-    const kind = entry.dir ? undefined : mediaKind(entry.name);
+    if (entry.dir) return [];
 
-    if (kind === undefined) return [];
-    const aspect = aspectFromName(entry.name);
-
-    return [{ name: entry.name, kind, aspect, size: entry.size, mtime: entry.mtime }];
+    return Option.toArray(
+      Option.map(mediaKind(entry.name), (kind) => ({
+        name: entry.name,
+        kind,
+        aspect: Option.getOrUndefined(aspectFromName(entry.name)),
+        size: entry.size,
+        mtime: entry.mtime,
+      })),
+    );
   });
 }
 
@@ -146,8 +151,8 @@ export const ffmpeg = (args: ReadonlyArray<string>) =>
 
 /** Parse `pts_time:` values printed by ffmpeg's showinfo filter. */
 export function parseShowinfoTimes(stderr: string): number[] {
-  return Array.from(
-    stderr.matchAll(/pts_time:([\d.]+)/g),
+  return Array.map(
+    Array.fromIterable(stderr.matchAll(/pts_time:([\d.]+)/g)),
     (match) => Math.round(Number(match[1]) * 100) / 100,
   );
 }
@@ -189,11 +194,11 @@ export const ASPECT_RATIO = {
 } satisfies Record<Aspect, number>;
 
 /** The listed aspect a `width`×`height` frame matches within 2%, if any. */
-export function aspectOf(width: number, height: number): Aspect | undefined {
-  if (width <= 0 || height <= 0) return undefined;
+export function aspectOf(width: number, height: number): Option.Option<Aspect> {
+  if (width <= 0 || height <= 0) return Option.none();
   const ratio = width / height;
 
-  return ASPECTS.find((aspect) => Math.abs(ratio / ASPECT_RATIO[aspect] - 1) < 0.02);
+  return Array.findFirst(ASPECTS, (aspect) => Math.abs(ratio / ASPECT_RATIO[aspect] - 1) < 0.02);
 }
 
 export interface CheckOptions {

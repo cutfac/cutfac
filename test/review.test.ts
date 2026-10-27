@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
 import { createItem, getItem, importMedia } from "../src/core/items.ts";
@@ -44,11 +44,11 @@ describe("review layout", () => {
 
 describe("safe zones", () => {
   test("only full-screen vertical video has bands under platform UI", () => {
-    expect(safeZoneOf(1080, 1920)).toEqual(VERTICAL_SAFE_ZONE);
-    expect(safeZoneOf(180, 320)).toEqual(VERTICAL_SAFE_ZONE);
-    expect(safeZoneOf(1080, 1350)).toBeUndefined();
-    expect(safeZoneOf(1080, 1080)).toBeUndefined();
-    expect(safeZoneOf(1920, 1080)).toBeUndefined();
+    expect(safeZoneOf(1080, 1920)).toEqual(Option.some(VERTICAL_SAFE_ZONE));
+    expect(safeZoneOf(180, 320)).toEqual(Option.some(VERTICAL_SAFE_ZONE));
+    expect(safeZoneOf(1080, 1350)).toEqual(Option.none());
+    expect(safeZoneOf(1080, 1080)).toEqual(Option.none());
+    expect(safeZoneOf(1920, 1080)).toEqual(Option.none());
   });
 
   test("clears every platform's interface on vertical video", () => {
