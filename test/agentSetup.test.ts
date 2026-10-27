@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import { INSTALL_COMMAND, SIGN_IN_COMMAND, agentSetup, readiness } from "../src/core/agentSetup.ts";
 import { MIN_AGENT_VERSION } from "../src/core/agentVersion.ts";
 import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
@@ -12,7 +14,9 @@ const answering = (version: string, rest: string) =>
 
 describe("what an installed agent needs", () => {
   test("an old release needs its update first, whatever its sign-in", () => {
-    expect(readiness("claude", { version: "2.1.1", installedAt: NATIVE }, false)).toEqual({
+    expect(
+      readiness("claude", Option.some({ version: "2.1.1", installedAt: NATIVE }), false),
+    ).toEqual({
       state: "outdated",
       version: "2.1.1",
       fix: "claude update",
@@ -20,7 +24,9 @@ describe("what an installed agent needs", () => {
   });
 
   test("a signed-out agent needs its sign-in", () => {
-    expect(readiness("codex", { version: "99.0.0", installedAt: "/x/codex" }, false)).toEqual({
+    expect(
+      readiness("codex", Option.some({ version: "99.0.0", installedAt: "/x/codex" }), false),
+    ).toEqual({
       state: "signedOut",
       version: "99.0.0",
       fix: SIGN_IN_COMMAND.codex,
@@ -28,7 +34,7 @@ describe("what an installed agent needs", () => {
   });
 
   test("an agent that can't say holds nothing up", () => {
-    expect(readiness("claude", undefined, undefined)).toEqual({
+    expect(readiness("claude", Option.none(), undefined)).toEqual({
       state: "ready",
       version: undefined,
     });

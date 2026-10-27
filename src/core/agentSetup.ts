@@ -6,6 +6,7 @@ import {
   CODEX_INSTALLER,
   detectAgentRelease,
   outdatedAgent,
+  versionOf,
 } from "./agentVersion.ts";
 import { run, which } from "./process.ts";
 import { AGENTS, type AgentName } from "./schema.ts";
@@ -48,13 +49,13 @@ const checkSignIn = (agent: AgentName, bin: string) =>
 /** The state an installed agent is in, and what fixes it. */
 export function readiness(
   agent: AgentName,
-  release: AgentRelease | undefined,
+  release: Option.Option<AgentRelease>,
   signedIn: boolean | undefined,
 ): Omit<AgentSetup, "agent"> {
-  const version = release?.version;
+  const version = versionOf(release);
   const outdated = outdatedAgent(agent, release);
 
-  if (outdated !== undefined) return { state: "outdated", version, fix: outdated.update };
+  if (Option.isSome(outdated)) return { state: "outdated", version, fix: outdated.value.update };
 
   if (signedIn === false) return { state: "signedOut", version, fix: SIGN_IN_COMMAND[agent] };
 

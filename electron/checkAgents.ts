@@ -23,7 +23,7 @@ import {
   mcpLaunch,
   runMcpConfig,
 } from "../src/core/agents.ts";
-import { detectAgentRelease, outdatedAgent } from "../src/core/agentVersion.ts";
+import { detectAgentRelease, outdatedAgent, versionOf } from "../src/core/agentVersion.ts";
 import { codexServers } from "../src/core/mcpServers.ts";
 import { UNINHERITED } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
@@ -398,10 +398,12 @@ async function checkAgent(agent: AgentName, save: boolean): Promise<boolean> {
 
   const outdated = outdatedAgent(agent, release);
 
-  log(`${agent} ${release?.version ?? "(version unknown)"}`);
+  log(`${agent} ${versionOf(release) ?? "(version unknown)"}`);
 
-  if (outdated !== undefined) {
-    log(`  older than ${outdated.minimum}, the oldest Cutfac supports; run \`${outdated.update}\``);
+  if (Option.isSome(outdated)) {
+    const { minimum, update } = outdated.value;
+
+    log(`  older than ${minimum}, the oldest Cutfac supports; run \`${update}\``);
   }
 
   const workspace = await makeCheckWorkspace();

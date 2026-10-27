@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
 import { agentStatus } from "../src/core/agents.ts";
@@ -23,25 +23,25 @@ import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } fr
 
 describe("parseAgentVersion", () => {
   test("reads what claude and codex print", () => {
-    expect(parseAgentVersion("2.1.301 (Claude Code)\n")).toBe("2.1.301");
-    expect(parseAgentVersion("codex-cli 0.163.0\n")).toBe("0.163.0");
+    expect(parseAgentVersion("2.1.301 (Claude Code)\n")).toEqual(Option.some("2.1.301"));
+    expect(parseAgentVersion("codex-cli 0.163.0\n")).toEqual(Option.some("0.163.0"));
   });
 
   test("keeps the release of a prerelease or a prefixed number", () => {
-    expect(parseAgentVersion("codex-cli 0.164.0-alpha.2")).toBe("0.164.0");
-    expect(parseAgentVersion("v1.2.3")).toBe("1.2.3");
+    expect(parseAgentVersion("codex-cli 0.164.0-alpha.2")).toEqual(Option.some("0.164.0"));
+    expect(parseAgentVersion("v1.2.3")).toEqual(Option.some("1.2.3"));
   });
 
   test("says nothing for output that holds no release number", () => {
-    expect(parseAgentVersion("")).toBeUndefined();
-    expect(parseAgentVersion("command not found")).toBeUndefined();
-    expect(parseAgentVersion("1.2")).toBeUndefined();
-    expect(parseAgentVersion("listening on 10.0.0.1")).toBeUndefined();
+    expect(parseAgentVersion("")).toEqual(Option.none());
+    expect(parseAgentVersion("command not found")).toEqual(Option.none());
+    expect(parseAgentVersion("1.2")).toEqual(Option.none());
+    expect(parseAgentVersion("listening on 10.0.0.1")).toEqual(Option.none());
   });
 
   test("the minimums are releases it can read", () => {
     for (const minimum of Object.values(MIN_AGENT_VERSION)) {
-      expect(parseAgentVersion(minimum)).toBe(minimum);
+      expect(parseAgentVersion(minimum)).toEqual(Option.some(minimum));
     }
   });
 });
@@ -57,6 +57,8 @@ const release = (agent: AgentName, version: string): AgentRelease => ({
   installedAt: NATIVE[agent],
 });
 
+const known = (agent: AgentName, version: string) => Option.some(release(agent, version));
+
 describe("comparing versions", () => {
   test("compares each part as a number", () => {
     expect(isOlderVersion("2.1.9", "2.1.257")).toBe(true);
@@ -68,27 +70,26 @@ describe("comparing versions", () => {
   });
 
   test("only an older release is outdated, and it comes with how to update", () => {
-    expect(outdatedAgent("claude", release("claude", "2.1.1"))).toEqual({
-      minimum: MIN_AGENT_VERSION.claude,
-      update: "claude update",
-    });
-
-    expect(outdatedAgent("codex", release("codex", "0.1.0"))?.minimum).toBe(
-      MIN_AGENT_VERSION.codex,
+    expect(outdatedAgent("claude", known("claude", "2.1.1"))).toEqual(
+      Option.some({ minimum: MIN_AGENT_VERSION.claude, update: "claude update" }),
     );
-    expect(outdatedAgent("claude", release("claude", MIN_AGENT_VERSION.claude))).toBeUndefined();
-    expect(outdatedAgent("claude", release("claude", "99.0.0"))).toBeUndefined();
+
+    expect(
+      Option.map(outdatedAgent("codex", known("codex", "0.1.0")), (outdated) => outdated.minimum),
+    ).toEqual(Option.some(MIN_AGENT_VERSION.codex));
+    expect(outdatedAgent("claude", known("claude", MIN_AGENT_VERSION.claude))).toEqual(
+      Option.none(),
+    );
+    expect(outdatedAgent("claude", known("claude", "99.0.0"))).toEqual(Option.none());
   });
 
   test("an unknown version is never outdated", () => {
-    expect(outdatedAgent("claude", undefined)).toBeUndefined();
-    expect(outdatedAgent("codex", undefined)).toBeUndefined();
+    expect(outdatedAgent("claude", Option.none())).toEqual(Option.none());
+    expect(outdatedAgent("codex", Option.none())).toEqual(Option.none());
   });
 
   test("the notice names the agent, both versions and the command", () => {
-    const outdated = outdatedAgent("claude", release("claude", "2.1.1"));
-
-    if (outdated === undefined) throw new Error("2.1.1 should be outdated");
+    const outdated = Option.getOrThrow(outdatedAgent("claude", known("claude", "2.1.1")));
     const notice = outdatedNotice("claude", "2.1.1", outdated);
 
     expect(notice).toContain("Claude Code 2.1.1");
@@ -145,19 +146,19 @@ describe("updateCommand", () => {
 
 describe("unreadableOutputMessage", () => {
   test("names the agent and its version", () => {
-    expect(unreadableOutputMessage("claude", release("claude", "99.0.0"))).toBe(
+    expect(unreadableOutputMessage("claude", known("claude", "99.0.0"))).toBe(
       "Couldn't read claude 99.0.0's output; Cutfac may need an update.",
     );
   });
 
   test("leaves the version out when it is not known", () => {
-    expect(unreadableOutputMessage("codex", undefined)).toBe(
+    expect(unreadableOutputMessage("codex", Option.none())).toBe(
       "Couldn't read codex's output; Cutfac may need an update.",
     );
   });
 
   test("tells an agent that is too old to update first", () => {
-    const message = unreadableOutputMessage("claude", release("claude", "2.1.1"));
+    const message = unreadableOutputMessage("claude", known("claude", "2.1.1"));
 
     expect(message).toStartWith("Couldn't read claude 2.1.1's output");
     expect(message).toContain("`claude update`");

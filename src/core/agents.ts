@@ -1,6 +1,12 @@
 import { Config, Effect, Option, Path, Schema } from "effect";
 
-import { type OutdatedAgent, detectAgentRelease, outdatedAgent } from "./agentVersion.ts";
+import {
+  type AgentRelease,
+  type OutdatedAgent,
+  detectAgentRelease,
+  outdatedAgent,
+  versionOf,
+} from "./agentVersion.ts";
 import { WorkspaceError } from "./errors.ts";
 import type { CodexListed, CodexTransport } from "./mcpServers.ts";
 import {
@@ -441,7 +447,7 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
   const codex = yield* which("codex");
 
   const codexStatus = Option.match(codex, {
-    onNone: () => Effect.succeed([false, NO_MODELS, undefined] as const),
+    onNone: () => Effect.succeed([false, NO_MODELS, Option.none<AgentRelease>()] as const),
     onSome: (bin) =>
       Effect.all(
         [
@@ -468,7 +474,7 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
   const [[codexConnected, codexOffers, codexRelease], claudeRelease] = yield* Effect.all(
     [
       codexStatus,
-      Option.match(claude, { onNone: () => Effect.undefined, onSome: detectAgentRelease }),
+      Option.match(claude, { onNone: () => Effect.succeedNone, onSome: detectAgentRelease }),
     ],
     { concurrency: "unbounded" },
   );
@@ -478,8 +484,8 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
       agent: "claude",
       installed: Option.isSome(claude),
       connected: claudeConnected,
-      version: claudeRelease?.version,
-      outdated: outdatedAgent("claude", claudeRelease),
+      version: versionOf(claudeRelease),
+      outdated: Option.getOrUndefined(outdatedAgent("claude", claudeRelease)),
       ...CLAUDE_MODELS,
       defaultModel: yield* claudeDefaultModel(),
     },
@@ -487,8 +493,8 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
       agent: "codex",
       installed: Option.isSome(codex),
       connected: codexConnected,
-      version: codexRelease?.version,
-      outdated: outdatedAgent("codex", codexRelease),
+      version: versionOf(codexRelease),
+      outdated: Option.getOrUndefined(outdatedAgent("codex", codexRelease)),
       ...codexOffers,
     },
   ];

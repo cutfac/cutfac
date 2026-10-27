@@ -31,9 +31,10 @@ const VERSION = /(?<![\d.])(\d+\.\d+\.\d+)(?!\d|\.\d)/;
 
 /**
  * The release number in what an agent prints for `--version`, such as `2.1.301 (Claude Code)` or
- * `codex-cli 0.163.0`. A suffix such as `-beta.1` is dropped. Anything else is undefined.
+ * `codex-cli 0.163.0`. A suffix such as `-beta.1` is dropped. Anything else is none.
  */
-export const parseAgentVersion = (output: string): string | undefined => VERSION.exec(output)?.[1];
+export const parseAgentVersion = (output: string) =>
+  Option.fromNullishOr(VERSION.exec(output)?.[1]);
 
 /** Whether the release `version` is older than `minimum`. */
 export const isOlderVersion = (version: string, minimum: string) =>
@@ -45,6 +46,10 @@ export interface AgentRelease {
   /** Where the program really lives, past the links that put it on PATH: it tells how it was installed. */
   readonly installedAt: string;
 }
+
+/** The version of `release` for a status the board reads, undefined when it is unknown. */
+export const versionOf = (release: Option.Option<AgentRelease>) =>
+  Option.getOrUndefined(Option.map(release, (known) => known.version));
 
 /** A program Homebrew installed, under the cask or formula it came from. */
 const HOMEBREW = /\/(Caskroom|Cellar)\/([^/]+)\//;
@@ -88,16 +93,17 @@ export interface OutdatedAgent {
   readonly update: string;
 }
 
-/** Where `release` falls short of the minimum for `agent`. Undefined when it does not, or is unknown. */
+/** Where `release` falls short of the minimum for `agent`. None when it does not, or is unknown. */
 export function outdatedAgent(
   agent: AgentName,
-  release: AgentRelease | undefined,
-): OutdatedAgent | undefined {
+  release: Option.Option<AgentRelease>,
+): Option.Option<OutdatedAgent> {
   const minimum = MIN_AGENT_VERSION[agent];
 
-  if (release === undefined || !isOlderVersion(release.version, minimum)) return undefined;
-
-  return { minimum, update: updateCommand(agent, release) };
+  return release.pipe(
+    Option.filter((known) => isOlderVersion(known.version, minimum)),
+    Option.map((known) => ({ minimum, update: updateCommand(agent, known) })),
+  );
 }
 
 /** What the user's agent is told when the installed `agent` is too old, for it to pass on. */
@@ -111,25 +117,27 @@ const VERSION_TIMEOUT = "5 seconds";
 
 const reportedVersion = (bin: string) =>
   run(bin, ["--version"]).pipe(
-    Effect.map((result) => (result.code === 0 ? parseAgentVersion(result.stdout) : undefined)),
-    Effect.timeoutOrElse({ duration: VERSION_TIMEOUT, orElse: () => Effect.undefined }),
-    Effect.orElseSucceed(() => undefined),
+    Effect.map((result) =>
+      result.code === 0 ? parseAgentVersion(result.stdout) : Option.none<string>(),
+    ),
+    Effect.timeoutOrElse({ duration: VERSION_TIMEOUT, orElse: () => Effect.succeedNone }),
+    Effect.orElseSucceed(Option.none<string>),
   );
 
-/** The CLI at `bin`, or undefined when it does not say its version. Never fails. */
+/** The CLI at `bin`, or none when it does not say its version. Never fails. */
 export const detectAgentRelease = (bin: string) =>
   Effect.zipWith(
     reportedVersion(bin),
     realProgram(bin),
-    (version, installedAt): AgentRelease | undefined =>
-      version === undefined ? undefined : { version, installedAt },
+    (version, installedAt): Option.Option<AgentRelease> =>
+      Option.map(version, (known) => ({ version: known, installedAt })),
     { concurrent: true },
   );
 
-/** `agent` on PATH, or undefined when it is not installed or does not say its version. */
+/** `agent` on PATH, or none when it is not installed or does not say its version. */
 export const installedRelease = (agent: AgentName) =>
   Effect.flatMap(which(agent), (bin) =>
-    Option.isSome(bin) ? detectAgentRelease(bin.value) : Effect.undefined,
+    Option.match(bin, { onNone: () => Effect.succeedNone, onSome: detectAgentRelease }),
   );
 
 /** One notice for each installed agent that is older than Cutfac supports. */
@@ -137,13 +145,13 @@ export const agentVersionNotices = Effect.fn("agentVersion.notices")(function* (
   const found = yield* Effect.forEach(
     AGENTS,
     (agent) =>
-      Effect.map(installedRelease(agent), (release) => {
-        const outdated = outdatedAgent(agent, release);
-
-        return release === undefined || outdated === undefined
-          ? []
-          : [outdatedNotice(agent, release.version, outdated)];
-      }),
+      Effect.map(installedRelease(agent), (release) =>
+        Option.toArray(
+          Option.zipWith(release, outdatedAgent(agent, release), (known, outdated) =>
+            outdatedNotice(agent, known.version, outdated),
+          ),
+        ),
+      ),
     { concurrency: "unbounded" },
   );
 
@@ -156,13 +164,18 @@ export const agentVersionNotices = Effect.fn("agentVersion.notices")(function* (
  */
 export function unreadableOutputMessage(
   agent: AgentName,
-  release: AgentRelease | undefined,
+  release: Option.Option<AgentRelease>,
 ): string {
-  const outdated = outdatedAgent(agent, release);
-  const named = release === undefined ? agent : `${agent} ${release.version}`;
+  const named = Option.match(release, {
+    onNone: () => agent,
+    onSome: (known) => `${agent} ${known.version}`,
+  });
+
   const base = `Couldn't read ${named}'s output; Cutfac may need an update.`;
 
-  return outdated === undefined
-    ? base
-    : `${base} ${AGENT_TITLE[agent]} is older than ${outdated.minimum}; running \`${outdated.update}\` may fix it.`;
+  return Option.match(outdatedAgent(agent, release), {
+    onNone: () => base,
+    onSome: (outdated) =>
+      `${base} ${AGENT_TITLE[agent]} is older than ${outdated.minimum}; running \`${outdated.update}\` may fix it.`,
+  });
 }
