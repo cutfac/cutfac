@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
-import { envVar } from "./agents.ts";
+import { envVar } from "./agentConfig.ts";
 import { AGENT_TITLE } from "./agentVersion.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
 import { Conflict, NotFound } from "./errors.ts";

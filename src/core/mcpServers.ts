@@ -1,6 +1,7 @@
 import { Effect, Option, Path, Predicate, Schema } from "effect";
 
-import { LEGACY_SERVER_NAME, SERVER_NAME, codexHome, envVar } from "./agents.ts";
+import { codexHome, envVar } from "./agentConfig.ts";
+import { LEGACY_SERVER_NAME, SERVER_NAME } from "./agents.ts";
 import { fromTomlString } from "./configText.ts";
 import { CommandFailed } from "./errors.ts";
 import { canonicalJson, isEmptyJson, isJsonObject, lenient } from "./json.ts";

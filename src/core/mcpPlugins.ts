@@ -1,7 +1,7 @@
 import { Effect, Option, Path, Predicate, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 
-import { claudeConfigDir, codexHome } from "./agents.ts";
+import { claudeConfigDir, codexHome } from "./agentConfig.ts";
 import { byName, canonicalJson, isJsonObject, lenient } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import {

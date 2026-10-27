@@ -1,6 +1,6 @@
 import { Effect, Option, Path, Schema } from "effect";
 
-import { claudeSettingsFiles, codexHome } from "./agents.ts";
+import { claudeSettingsFiles, codexHome } from "./agentConfig.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
 import type { CodexPermissions } from "./codexProtocol.ts";
 import { fromTomlString } from "./configText.ts";
