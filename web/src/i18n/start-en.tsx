@@ -16,23 +16,23 @@ interface PurposeCopy {
  */
 export const startEn = {
   brief: {
-    purposeLabel: "What are the videos for?",
+    purposeLabel: "What do you do?",
     purpose: {
       promote: {
-        title: "Promote something",
-        hint: "Your product, app or service",
+        title: "I run a business",
+        hint: "A product, app, shop or service",
         example: "e.g. A budgeting app for students. Light and friendly.",
         short: "Promotion",
       },
       tips: {
-        title: "Share tips",
-        hint: "Information and how-tos",
+        title: "I teach what I know",
+        hint: "Expertise, how-tos, lessons",
         example: "e.g. Quick cooking tips for busy people.",
         short: "Tips",
       },
       brand: {
-        title: "Grow a personal brand",
-        hint: "You, your voice, your story",
+        title: "I'm a creator",
+        hint: "My day, my thoughts, my story",
         example: "e.g. A designer sharing their day. Calm and honest.",
         short: "Personal brand",
       },
@@ -64,7 +64,7 @@ export const startEn = {
     saveFailed: (message: string) => `Could not save the brief: ${message}`,
   },
   whatToMake: {
-    title: "What will you make?",
+    title: "What do you do?",
     body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later under Brief in the sidebar.",
     details: {
       body: "A line or two is enough, or skip it.",

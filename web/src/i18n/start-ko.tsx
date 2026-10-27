@@ -4,28 +4,28 @@ import type { StartMessages } from "./start-en.tsx";
 /** 브리프와 첫 템플릿 문구, 해요체. */
 export const startKo: StartMessages = {
   brief: {
-    purposeLabel: "어떤 영상을 만드나요?",
+    purposeLabel: "무슨 일을 하나요?",
     purpose: {
       promote: {
-        title: "무언가를 홍보해요",
-        hint: "내 제품, 앱, 서비스",
+        title: "사업을 해요",
+        hint: "제품, 앱, 가게, 서비스",
         example: "예: 대학생을 위한 가계부 앱. 밝고 친근하게.",
         short: "홍보",
       },
       tips: {
-        title: "정보와 팁을 나눠요",
-        hint: "지식, 노하우, 방법",
+        title: "노하우를 나눠요",
+        hint: "전문 지식, 팁, 강의",
         example: "예: 바쁜 사람을 위한 간단 요리 팁.",
         short: "정보·팁",
       },
       brand: {
-        title: "나를 알려요",
-        hint: "내 목소리와 이야기",
+        title: "크리에이터예요",
+        hint: "내 일상, 생각, 이야기",
         example: "예: 디자이너의 하루를 담담하게 보여줘요.",
         short: "퍼스널 브랜드",
       },
       own: {
-        title: "다른 걸 만들어요",
+        title: "다른 일을 해요",
         hint: "직접 설명할게요",
         example: "예: 우리 밴드 노래의 가사 영상.",
         short: "직접 설명",
@@ -52,7 +52,7 @@ export const startKo: StartMessages = {
     saveFailed: (message) => `브리프를 저장하지 못했어요: ${message}`,
   },
   whatToMake: {
-    title: "무엇을 만들까요?",
+    title: "무슨 일을 하나요?",
     body: "에이전트에게 조금만 알려 주면 영상 만드는 방식을 알아서 준비해요. 나중에 사이드바의 브리프에서 언제든 바꿀 수 있어요.",
     details: {
       body: "한두 줄이면 충분해요. 건너뛰어도 돼요.",
