@@ -39,8 +39,8 @@ Engineering:
   services as `Context.Service` with a `layer`, named operations with `Effect.fn`, errors as
   `Schema.TaggedError`, and time, requests and state through `Clock`, `HttpClient` and `Ref` rather
   than `Date.now()`, `fetch` and `let`. Where Electron calls in, as `app` and `ipcMain` handlers do,
-  run Effect code through a `ManagedRuntime`, as `electron/licenseRuntime.ts` does, and keep the
-  handler to that.
+  run Effect code through the app's `ManagedRuntime` in `electron/runtime.ts`, and keep the handler
+  to that.
 - The board runs in the browser as React, which stays plain TypeScript, but it still decodes what
   it receives with `Schema` and uses `Option`, `Match` and Effect's other data types.
 - Parse what comes from outside with `Schema` (`Schema.fromJsonString`, and `fromTomlString` and
