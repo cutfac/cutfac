@@ -1,15 +1,19 @@
-import * as BunFileSystem from "@effect/platform-bun/BunFileSystem";
-import * as BunPath from "@effect/platform-bun/BunPath";
-import { Effect, Layer, ManagedRuntime, Predicate } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Predicate } from "effect";
 import type { PlatformError } from "effect/PlatformError";
+import { app } from "electron";
 
-/**
- * The file system and paths for the main process's Effect code. Bun's layers are Node's own
- * implementation, which Electron runs as well.
- */
-export const platform = Layer.mergeAll(BunFileSystem.layer, BunPath.layer);
+import { LogDir, logToFile } from "../src/core/logFile.ts";
+import { platform } from "./platform.ts";
 
-const runtime = ManagedRuntime.make(platform);
+/** The app's own log, in Electron's logs folder: `~/Library/Logs/Cutfac`, or `Cutfac Dev`. */
+export const appLog = logToFile("app").pipe(
+  Layer.provide([Layer.sync(LogDir, () => Option.some(app.getPath("logs"))), platform]),
+);
+
+/** Shared by the main process's runtimes, so they build the app's log once between them. */
+export const memoMap = Layer.makeMemoMapUnsafe();
+
+const runtime = ManagedRuntime.make(Layer.merge(platform, appLog), { memoMap });
 
 /**
  * The error a handler rejects with, as it did before it ran Effect: Node's own for a file system

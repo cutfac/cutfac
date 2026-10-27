@@ -3,6 +3,7 @@ import { FetchHttpClient } from "effect/http";
 
 import type { LicenseCheck } from "../web/src/desktop.ts";
 import { License as LicenseService } from "./license.ts";
+import { appLog, memoMap } from "./runtime.ts";
 import { licenseSettings } from "./settings.ts";
 
 /** The license as the app's main process uses it, outside Effect. */
@@ -19,8 +20,9 @@ export interface License {
 export async function startLicense(changed: () => void): Promise<License> {
   const runtime = ManagedRuntime.make(
     LicenseService.layer(Effect.sync(changed)).pipe(
-      Layer.provide([licenseSettings, FetchHttpClient.layer]),
+      Layer.provide([licenseSettings, FetchHttpClient.layer, appLog]),
     ),
+    { memoMap },
   );
 
   // Building it reads the saved key and starts asking cutfac.com about it.

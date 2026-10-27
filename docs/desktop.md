@@ -81,6 +81,17 @@ agent shows them the exact text and sends it only once they agree. The board pos
 `https://cutfac.com/api/feedback` gets the message, an optional reply address, the app's version,
 platform and language, which way it came, and the agent, if one was involved. Nothing else is sent.
 
+## Logs
+
+The desktop app keeps a log of its own in `~/Library/Logs/Cutfac`, or `Cutfac Dev` for the dev
+build, a file per process and day: `app-` for Electron's main process, `server-` for the board's
+server, `mcp-` for the agent tools. Each line is JSON: what the app logged at info level and up,
+and each top-level operation that failed, took a second or more, or answered an agent, with how
+long it took. The home folder shows as `~`, and the log never holds what is in a video, a prompt,
+a chat or a key. A process that starts removes the days older than a week, then the oldest until
+the folder holds 50 MB or less. The log stays on this Mac. The open-source CLI keeps none; from
+source, `CUTFAC_LOG_DIR` names a folder to keep one in.
+
 ## Running it from source
 
 ```sh

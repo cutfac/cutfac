@@ -80,7 +80,12 @@ async function readServerEnv(): Promise<NodeJS.ProcessEnv> {
 
   if (app.isPackaged) return env;
 
-  return { ...process.env, PATH: joinPath(process.env.PATH, env.PATH) };
+  // The bundled server finds the app's logs folder itself; one run from source is told it.
+  return {
+    ...process.env,
+    PATH: joinPath(process.env.PATH, env.PATH),
+    CUTFAC_LOG_DIR: app.getPath("logs"),
+  };
 }
 
 function findExecutable(name: string, searchPath: string): string {

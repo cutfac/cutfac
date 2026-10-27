@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test";
 
 import { Effect, FileSystem, Option, Path } from "effect";
 
-import { platform } from "../electron/runtime.ts";
+import { platform } from "../electron/platform.ts";
 import { inWorkspace, workspaceRoot } from "../electron/workspacePath.ts";
 import { testEffect } from "./effect.ts";
 

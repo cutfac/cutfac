@@ -17,6 +17,7 @@ import {
 import { agentSetup } from "./core/agentSetup.ts";
 import { COMPILED } from "./core/build.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
+import { logDir, logToFile } from "./core/logFile.ts";
 import { syncSkill } from "./core/skill.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
 import { trustCreated } from "./core/workspaceTrust.ts";
@@ -157,6 +158,9 @@ const init = Command.make(
   }),
 ).pipe(Command.withDescription("Create a workspace and connect your agents"));
 
+/** The desktop app's log for this process, `server` or `mcp`; none for the open-source CLI. */
+const processLog = (name: string) => logToFile(name).pipe(Layer.provide(logDir));
+
 const serve = Command.make(
   "serve",
   {
@@ -207,13 +211,18 @@ const serve = Command.make(
       );
 
       return yield* Effect.never;
-    }).pipe(Effect.scoped, Effect.provide([appData, Workspace.layer(workspace)]));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide([appData, Workspace.layer(workspace), processLog("server")]),
+    );
   }),
 ).pipe(Command.withDescription("Serve the web board and local API"));
 
 const mcp = Command.make("mcp", { workspace: workspaceFlag }, ({ workspace }) =>
   // stdout carries the protocol, so nothing here may print to it.
-  Layer.launch(mcpLayer.pipe(Layer.provide([appData, Workspace.layer(workspace)]))),
+  Layer.launch(
+    mcpLayer.pipe(Layer.provide([appData, Workspace.layer(workspace), processLog("mcp")])),
+  ),
 ).pipe(Command.withDescription("Run the MCP server over stdio for Claude Code and Codex"));
 
 const learnCommand = Command.make(

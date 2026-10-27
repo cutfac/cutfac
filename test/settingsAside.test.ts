@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test";
 
 import { Effect, FileSystem, Path } from "effect";
 
-import { platform } from "../electron/runtime.ts";
+import { platform } from "../electron/platform.ts";
 import { isSetAside, restore, setAside } from "../electron/settingsAside.ts";
 import { testEffect } from "./effect.ts";
 
