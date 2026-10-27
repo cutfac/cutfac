@@ -40,7 +40,7 @@ export function BoardColumns({
   formatTitle,
   onMove,
 }: {
-  items: ItemSummary[];
+  items: ReadonlyArray<ItemSummary>;
   statuses: Status[];
   formatTitle: (id: string) => string;
   onMove: (items: readonly ItemSummary[], status: Status) => void;

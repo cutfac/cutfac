@@ -34,9 +34,7 @@ const format = (id: string, title: string): Format => ({
 function status(id: string, title: string | undefined, ready: boolean): FormatStatus {
   const result: FormatStatus = { id, check: { ready, problems: [], skills: {} } };
 
-  if (title !== undefined) result.format = format(id, title);
-
-  return result;
+  return title === undefined ? result : { ...result, format: format(id, title) };
 }
 
 const field = (id: string, overrides: Partial<InputField> = {}): InputField => ({
@@ -133,20 +131,17 @@ describe("isClip", () => {
 });
 
 function withPreviews(...previews: string[]): FormatStatus {
-  const result = status("art", "Art", false);
+  const art = format("art", "Art");
 
-  result.format?.doc.inputs.push(
-    field("style", {
-      choices: previews.map((preview, i) => ({
-        id: `c${i}`,
-        title: preview,
-        preview,
-        files: [],
-      })),
-    }),
-  );
+  const style = field("style", {
+    choices: previews.map((preview, i) => ({ id: `c${i}`, title: preview, preview, files: [] })),
+  });
 
-  return result;
+  return {
+    id: "art",
+    format: { ...art, doc: { ...art.doc, inputs: [style] } },
+    check: { ready: false, problems: [], skills: {} },
+  };
 }
 
 describe("coverOf", () => {
@@ -157,9 +152,16 @@ describe("coverOf", () => {
   });
 
   test("skips previews the check reports missing", () => {
-    const art = withPreviews("previews/gone.png", "previews/here.png");
+    const previewed = withPreviews("previews/gone.png", "previews/here.png");
 
-    art.check.problems.push({ kind: "file", subject: "previews/gone.png", message: "missing" });
+    const art: FormatStatus = {
+      ...previewed,
+      check: {
+        ...previewed.check,
+        problems: [{ kind: "file", subject: "previews/gone.png", message: "missing" }],
+      },
+    };
+
     expect(missingFiles(art)).toEqual(new Set(["previews/gone.png"]));
     expect(coverOf(art)).toBe("formats/art/previews/here.png");
   });

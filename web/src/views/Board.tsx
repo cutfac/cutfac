@@ -351,7 +351,7 @@ function Gallery({
   formatTitle,
   onMove,
 }: {
-  items: ItemSummary[];
+  items: ReadonlyArray<ItemSummary>;
   formatTitle: (id: string) => string;
   onMove: (items: readonly ItemSummary[], status: Status) => void;
 }) {

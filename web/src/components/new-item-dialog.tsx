@@ -99,7 +99,7 @@ export function NewItemTrigger({ render }: { render?: ReactElement }) {
 }
 
 interface NewItemDialogProps {
-  formats: Format[] | undefined;
+  formats: ReadonlyArray<Format> | undefined;
   /** The free version says when this is its last video, and past that, how to make more. */
   plan: Live<Plan>;
   /** The workspace's agent, which the first request goes to when it is installed. */

@@ -174,19 +174,18 @@ export const href = (view: string, id?: string) =>
 const pickKey = (agent: AgentName, part: keyof ModelSettings) => `cutfac.${part}.${agent}`;
 
 function readPick(agent: AgentName): ModelSettings {
-  const settings: ModelSettings = {};
-
   try {
-    for (const part of ["model", "effort"] as const) {
-      const value = localStorage.getItem(pickKey(agent, part));
+    const model = localStorage.getItem(pickKey(agent, "model")) || undefined;
+    const effort = localStorage.getItem(pickKey(agent, "effort")) || undefined;
 
-      if (value !== null && value !== "") settings[part] = value;
-    }
+    return {
+      ...(model !== undefined && { model }),
+      ...(effort !== undefined && { effort }),
+    };
   } catch {
     // Storage can be blocked; the agent starts on its own default.
+    return {};
   }
-
-  return settings;
 }
 
 /**

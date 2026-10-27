@@ -45,6 +45,7 @@ function itemWith(feedback: Feedback[], extra: Partial<ItemDetail> = {}): ItemDe
       title: "Item",
       status: "drafting",
       sources: [],
+      sessions: {},
       feedback,
     },
     history: { cursor: 0, entries: [], versions: [], heads: {} },

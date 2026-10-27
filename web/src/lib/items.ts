@@ -22,7 +22,7 @@ export const moveItem = (id: string, status: Status) =>
  * already there stay put.
  */
 export function moveItems(
-  live: Pick<Live<ItemSummary[]>, "data" | "setData" | "reload">,
+  live: Pick<Live<ReadonlyArray<ItemSummary>>, "data" | "setData" | "reload">,
   moving: readonly ItemSummary[],
   status: Status,
 ) {

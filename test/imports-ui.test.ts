@@ -19,9 +19,7 @@ const run = (status: AgentRun["status"]): AgentRun => ({ agent: "claude", status
 function turn(id: string, kind: ImportTurn["kind"], status?: AgentRun["status"]): ImportTurn {
   const entry: ImportTurn = { id, at: AT, kind, body: "" };
 
-  if (status !== undefined) entry.run = run(status);
-
-  return entry;
+  return status === undefined ? entry : { ...entry, run: run(status) };
 }
 
 const detail = (

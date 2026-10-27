@@ -59,23 +59,21 @@ export function usableSettings(
 ): ModelSettings {
   if (!offersModels(status)) return {};
 
-  const settings: ModelSettings = {};
-
   const option =
     status.models.find((candidate) => candidate.id === pick?.model) ?? status.models[0];
 
-  if (option !== undefined) settings.model = option.id;
-
-  const efforts = effortsFor(status, settings.model);
+  const model = option?.id;
+  const efforts = effortsFor(status, model);
 
   const effort =
     pick?.effort !== undefined && efforts.includes(pick.effort)
       ? pick.effort
       : defaultEffort(efforts, option?.defaultEffort);
 
-  if (effort !== undefined) settings.effort = effort;
-
-  return settings;
+  return {
+    ...(model !== undefined && { model }),
+    ...(effort !== undefined && { effort }),
+  };
 }
 
 /** The settings picked for `agent`, as a request to it is sent; a prompt to copy has none. */

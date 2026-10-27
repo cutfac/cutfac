@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 /** What the videos are for. `own` leaves it to the body, in the user's words. */
 export const PURPOSES = ["promote", "tips", "brand", "own"] as const;
 
@@ -9,18 +11,20 @@ export const PLATFORMS = ["tiktok", "shorts", "reels", "other"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 /** brief.md as the board edits it; `exists` is false until someone writes one. */
-export interface BriefView {
-  path: string;
-  exists: boolean;
-  purpose: Purpose | null;
-  platforms: Platform[];
-  body: string;
-}
+export const BriefView = Schema.Struct({
+  path: Schema.String,
+  exists: Schema.Boolean,
+  purpose: Schema.NullOr(Schema.Literals(PURPOSES)),
+  platforms: Schema.Array(Schema.Literals(PLATFORMS)),
+  body: Schema.String,
+});
+
+export type BriefView = typeof BriefView.Type;
 
 /** A change to the brief: what it names is replaced, the rest kept. */
 export interface BriefPatch {
   purpose?: Purpose;
-  platforms?: Platform[];
+  platforms?: ReadonlyArray<Platform>;
   body?: string;
 }
 

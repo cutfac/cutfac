@@ -477,7 +477,7 @@ function List({
   ordered = false,
 }: {
   title: string;
-  items: string[];
+  items: ReadonlyArray<string>;
   ordered?: boolean;
 }) {
   if (items.length === 0) return null;
