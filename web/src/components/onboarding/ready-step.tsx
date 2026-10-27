@@ -8,7 +8,9 @@ import { Spinner } from "@/components/ui/spinner";
 
 import type { CutfacOnboarding, Folder } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { EMPTY_BRIEF } from "../../lib/brief.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
+import { SharingChoice } from "./sharing-choice.tsx";
 
 /**
  * The last step before there is a workspace: where the templates and videos will be kept, as one
@@ -23,6 +25,8 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
   const [answered, setAnswered] = useState<boolean>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // Asked here only in a build that can send; undefined until it is known.
+  const [sharing, setSharing] = useState<{ available: boolean; share: boolean | null }>();
 
   useEffect(() => {
     onboarding.defaultFolder().then(setFolder, (cause: Error) => setError(cause.message));
@@ -30,7 +34,26 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
       (draft) => setAnswered(draft !== undefined && !draft.skipped),
       () => setAnswered(false),
     );
+    // An answer given here before wins over one from an earlier install.
+    Promise.all([onboarding.sharing(), onboarding.draft()]).then(
+      ([found, draft]) => setSharing({ ...found, share: draft?.share ?? found.share }),
+      () => setSharing({ available: false, share: null }),
+    );
   }, [onboarding]);
+
+  // Kept with the other answers; the board saves it once the workspace is there.
+  const share = (answer: boolean) => {
+    setSharing({ available: true, share: answer });
+    onboarding
+      .draft()
+      .then((draft) =>
+        onboarding.saveDraft({
+          ...(draft ?? { brief: EMPTY_BRIEF, sources: [], skipped: true }),
+          share: answer,
+        }),
+      )
+      .catch((cause: Error) => setError(cause.message));
+  };
 
   const change = () =>
     onboarding.chooseFolder().then(
@@ -83,11 +106,14 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
           </Button>
         </div>
       )}
+      {sharing?.available === true ? (
+        <SharingChoice value={sharing.share} disabled={busy} onChange={share} />
+      ) : null}
       {error === undefined ? null : <ErrorAlert message={error} />}
       <StepActions>
         <Button
           size="lg"
-          disabled={folder === undefined || answered === undefined || busy}
+          disabled={folder === undefined || answered === undefined || sharing === undefined || busy}
           onClick={() => {
             if (folder !== undefined) create(folder);
           }}

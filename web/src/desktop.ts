@@ -54,6 +54,8 @@ export interface OnboardingDraft {
   brief: BriefDraft;
   sources: string[];
   skipped: boolean;
+  /** Whether to share error reports and usage statistics with the Cutfac team, once answered. */
+  share?: boolean;
 }
 
 /** The first-launch steps that come before there is a workspace. */
@@ -82,6 +84,11 @@ export interface CutfacOnboarding {
   saveDraft: (draft: OnboardingDraft) => Promise<void>;
   /** Forget it, once the workspace has it. */
   clearDraft: () => Promise<void>;
+  /**
+   * Whether this build can share error reports and usage statistics with the Cutfac team, and the
+   * person's one answer for both: null until they give it, or after they gave different ones.
+   */
+  sharing: () => Promise<{ available: boolean; share: boolean | null }>;
   /** macOS's major version, such as 27; the lists in System Settings are named by it. */
   systemVersion: () => Promise<number>;
   /** Whether macOS grants the app a permission. Screen recording shows only after the app reopens. */

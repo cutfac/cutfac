@@ -24,6 +24,8 @@ const OnboardingDraft = Schema.Struct({
   }),
   sources: Schema.Array(Schema.String),
   skipped: Schema.Boolean,
+  /** Whether to share error reports and usage statistics; left out until answered. */
+  share: Schema.optionalKey(Schema.Boolean),
 });
 
 /** The board page last shown, for the workspace it belongs to. */
@@ -198,13 +200,17 @@ export const saveOnboarding = (onboarding: OnboardingStep) => writeSettings({ on
 export async function loadDraft(): Promise<Draft | undefined> {
   const draft = Option.getOrUndefined(decodeDraft((await readSettings()).onboardingDraft));
 
-  return draft === undefined
-    ? undefined
-    : {
-        brief: { ...draft.brief, platforms: [...draft.brief.platforms] },
-        sources: [...draft.sources],
-        skipped: draft.skipped,
-      };
+  if (draft === undefined) return undefined;
+
+  const copy: Draft = {
+    brief: { ...draft.brief, platforms: [...draft.brief.platforms] },
+    sources: [...draft.sources],
+    skipped: draft.skipped,
+  };
+
+  if (draft.share !== undefined) copy.share = draft.share;
+
+  return copy;
 }
 
 export const saveDraft = (draft: Draft) => writeSettings({ onboardingDraft: draft });

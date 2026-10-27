@@ -54,6 +54,9 @@ export const DRAFT_CHANNEL = "cutfac:onboarding-draft";
 export const SAVE_DRAFT_CHANNEL = "cutfac:save-onboarding-draft";
 export const CLEAR_DRAFT_CHANNEL = "cutfac:clear-onboarding-draft";
 
+/** Whether this build can share with the Cutfac team, and what the person answered before. */
+export const SHARING_CHANNEL = "cutfac:sharing";
+
 /** macOS's major version, which names the lists in System Settings. */
 export const SYSTEM_VERSION_CHANNEL = "cutfac:system-version";
 

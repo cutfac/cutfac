@@ -28,6 +28,7 @@ import {
   DRAFT_CHANNEL,
   SAVE_DRAFT_CHANNEL,
   CLEAR_DRAFT_CHANNEL,
+  SHARING_CHANNEL,
   SYSTEM_VERSION_CHANNEL,
   ASK_NOTIFICATIONS_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
@@ -35,6 +36,7 @@ import {
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
 import { clearDraft, isDraft, loadDraft, saveDraft } from "./settings.ts";
+import { sharingChoice } from "./sharing.ts";
 import {
   appBadge,
   dragApp,
@@ -137,6 +139,11 @@ export function handleOnboarding(host: OnboardingHost): void {
     assertFromApp(event);
 
     return clearDraft();
+  });
+  ipcMain.handle(SHARING_CHANNEL, (event) => {
+    assertFromApp(event);
+
+    return sharingChoice();
   });
   ipcMain.handle(SYSTEM_VERSION_CHANNEL, (event) => {
     assertFromApp(event);

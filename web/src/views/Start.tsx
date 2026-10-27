@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
+import { both, saveReportChoices } from "@/components/error-reports";
 import { type Answers, startFirstTemplate } from "@/components/onboarding/first-template";
 import { FirstVideo } from "@/components/onboarding/first-video";
 import { OnboardingFrame, StepHeader } from "@/components/onboarding/frame";
 import { StartStep } from "@/components/onboarding/start-step";
 import { ListSkeleton } from "@/components/page";
 
-import type { WorkspaceInfo } from "../api.ts";
-import { desktop } from "../desktop.ts";
+import { api, type WorkspaceInfo } from "../api.ts";
+import { type CutfacOnboarding, desktop, type OnboardingDraft } from "../desktop.ts";
 import { href, type Live } from "../hooks.ts";
 import { useLocale, useMessages } from "../i18n/index.ts";
 import { EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
@@ -72,6 +73,7 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
         if (draft === undefined) return setBegun(asked);
 
         await onboarding.clearDraft();
+        await handOnSharing(onboarding, draft).catch(() => undefined);
 
         if (draft.skipped) {
           skipStart(ws.root);
@@ -97,6 +99,31 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
       <StartStep ws={ws} initial={begun.answers} error={begun.error} />
     </OnboardingFrame>
   );
+}
+
+/**
+ * Saves whether the first launch said to share with the Cutfac team, then counts how it went if
+ * that allows. Going on without an answer is not sharing, and the board doesn't ask again.
+ */
+async function handOnSharing(onboarding: CutfacOnboarding, draft: OnboardingDraft) {
+  const settings = await api.errorReports();
+
+  if (!settings.available) return;
+
+  if (draft.share !== undefined || settings.errorReports === null || settings.usageStats === null) {
+    await saveReportChoices(both(draft.share ?? false));
+  }
+
+  const [screen, accessibility] = await Promise.all([
+    onboarding.permission("screen"),
+    onboarding.permission("accessibility"),
+  ]);
+
+  await api.onboardingFinished({
+    answered: !draft.skipped,
+    screen_recording: screen,
+    accessibility,
+  });
 }
 
 /** While the workspace loads, or the agent starts on the first launch's answers. */
