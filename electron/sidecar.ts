@@ -69,16 +69,20 @@ export class Install extends Context.Service<Install, InstallInfo>()("cutfac/des
  * the app was started from the developer's own terminal or editor, so that is kept and only the
  * PATH is widened.
  */
-const readServerEnv: Effect.Effect<Env, never, Install> = Effect.gen(function* () {
+const readServerEnv = Effect.gen(function* () {
   const install = yield* Install;
 
   // The desktop app ships for macOS only; elsewhere there's no login shell to ask.
   if (process.platform === "win32") return install.launchEnv;
 
-  const account = yield* Effect.promise(readAccount);
+  const account = yield* readAccount;
   const clean = cleanEnv(account, install.launchEnv);
-  const login = account.shell;
-  const shell = login ? yield* Effect.promise(() => readShellEnv(login, clean)) : undefined;
+
+  const shell = yield* Option.match(account.shell, {
+    onNone: () => Effect.succeedNone,
+    onSome: (login) => readShellEnv(login, clean),
+  });
+
   const env = serverEnv(shell, clean);
 
   if (install.packaged) return env;

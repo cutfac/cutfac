@@ -24,10 +24,13 @@ const install = (): InstallInfo => ({
   launchEnv: process.env,
 });
 
+/** What the server and its commands run with: the install, files, and child processes. */
+const services = BunChildProcessSpawner.layer.pipe(
+  Layer.provideMerge(Layer.mergeAll(Layer.sync(Install, install), platform)),
+);
+
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(ServerEnv.layer, BunChildProcessSpawner.layer, FetchHttpClient.layer, appLog).pipe(
-    Layer.provideMerge(Layer.mergeAll(Layer.sync(Install, install), platform)),
-  ),
+  Layer.mergeAll(ServerEnv.layer, FetchHttpClient.layer, appLog).pipe(Layer.provideMerge(services)),
   { memoMap },
 );
 
