@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 /** What the guard looks at in a request; every header is as the client sent it, if it did. */
@@ -37,22 +37,24 @@ const asHostname = (listen: string) => {
 const sameHost = (origin: string, host: string) => URL.parse(origin)?.host === host.toLowerCase();
 
 /**
- * Why a request may not reach the server, or `undefined` when it may. The board itself and
+ * Why a request may not reach the server, or none when it may. The board itself and
  * clients that are not browsers (agents, curl) get through; a page on another site can neither
  * call the API, which runs agents and writes files, nor reach it under a DNS name it controls.
  */
-export function requestProblem(request: RequestFacts, listen: string): string | undefined {
+export function requestProblem(request: RequestFacts, listen: string): Option.Option<string> {
   const { method, host, origin, fetchSite, fetchMode, fetchDest } = request;
 
   if (host !== undefined && !WILDCARD.has(listen)) {
     const name = hostnameOf(host);
 
-    if (!isLoopback(name) && name !== asHostname(listen)) return `Unexpected host ${name}`;
+    if (!isLoopback(name) && name !== asHostname(listen)) {
+      return Option.some(`Unexpected host ${name}`);
+    }
   }
 
   // "null" and other origins that are not this server's own.
   if (origin !== undefined && (host === undefined || !sameHost(origin, host))) {
-    return "Cross-origin request";
+    return Option.some("Cross-origin request");
   }
 
   const fromOtherSite = fetchSite === "cross-site" || fetchSite === "same-site";
@@ -62,7 +64,7 @@ export function requestProblem(request: RequestFacts, listen: string): string | 
   const navigation =
     (method === "GET" || method === "HEAD") && fetchMode === "navigate" && fetchDest === "document";
 
-  return fromOtherSite && !navigation ? "Cross-site request" : undefined;
+  return fromOtherSite && !navigation ? Option.some("Cross-site request") : Option.none();
 }
 
 /** Refuses, for every route, the requests `requestProblem` turns away. */
@@ -82,9 +84,11 @@ export const requestGuard = (listen: string) =>
           listen,
         );
 
-        return problem === undefined
-          ? httpEffect
-          : Effect.succeed(HttpServerResponse.jsonUnsafe({ error: problem }, { status: 403 }));
+        return Option.match(problem, {
+          onNone: () => httpEffect,
+          onSome: (error) =>
+            Effect.succeed(HttpServerResponse.jsonUnsafe({ error }, { status: 403 })),
+        });
       }),
     { global: true },
   );
