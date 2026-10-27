@@ -43,9 +43,6 @@ export const realProgram = Effect.fnUntraced(function* (bin: string) {
   return yield* fs.realPath(bin).pipe(Effect.orElseSucceed(() => bin));
 });
 
-export const isInstalled = (name: string): Effect.Effect<boolean> =>
-  Effect.map(which(name), Option.isSome);
-
 /** Why a command could not start: a missing binary reads better than a raw spawn error. */
 export const spawnFailure = (command: string) => (error: PlatformError) =>
   new CommandFailed({

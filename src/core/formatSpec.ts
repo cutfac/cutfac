@@ -1,8 +1,8 @@
-import { Effect } from "effect";
+import { Duration, Effect, Option } from "effect";
 
 import { InvalidRequest } from "./errors.ts";
 import { FORMAT_FILE, type Format, getFormat, isSimpleId } from "./library.ts";
-import { isInstalled } from "./process.ts";
+import { run, which } from "./process.ts";
 import type { FormatDoc, InputField } from "./schema.ts";
 import { SKILL_FOLDERS } from "./skill.ts";
 import { Workspace, foldersWith } from "./workspace.ts";
@@ -31,6 +31,14 @@ export interface FormatCheck {
   readonly problems: ReadonlyArray<FormatProblem>;
   /** Workspace-relative SKILL.md of each skill the format names that is installed. */
   readonly skills: Readonly<Record<string, string>>;
+  /** Each program the format requires that is installed. */
+  readonly programs: Readonly<Record<string, Program>>;
+}
+
+/** A program on PATH: where it is, and the release it reports when asked. */
+export interface Program {
+  readonly path: string;
+  readonly version?: string;
 }
 
 /** A format folder as the board lists it: readable or not, and what it still needs. */
@@ -162,8 +170,14 @@ export const checkFormatDoc = Effect.fn("formatSpec.checkFormatDoc")(function* (
     });
   }
 
+  const programs: Record<string, Program> = {};
+
   for (const program of doc.requires.filter((p) => PROGRAM.test(p))) {
-    if (!(yield* isInstalled(program))) {
+    const path = yield* which(program);
+
+    if (Option.isSome(path)) {
+      programs[program] = { path: path.value };
+    } else {
       problems.push({
         kind: "program",
         subject: program,
@@ -182,7 +196,7 @@ export const checkFormatDoc = Effect.fn("formatSpec.checkFormatDoc")(function* (
     }
   }
 
-  const check: FormatCheck = { ready: problems.length === 0, problems, skills };
+  const check: FormatCheck = { ready: problems.length === 0, problems, skills, programs };
 
   return check;
 });
@@ -191,6 +205,7 @@ const unreadable = (message: string): FormatCheck => ({
   ready: false,
   problems: [spec(FORMAT_FILE, message)],
   skills: {},
+  programs: {},
 });
 
 /** One format's status; a format.yaml that does not decode is reported, not raised. */
@@ -217,8 +232,41 @@ export const formatStatuses = Effect.fn("formatSpec.formatStatuses")(function* (
 export const itemFormat = (formatId: string | undefined) =>
   formatId === undefined ? Effect.succeedNone : Effect.option(getFormat(formatId));
 
-/** Check a format by id, failing only when there is no such format. */
-export const checkFormat = (id: string) => Effect.map(formatStatus(id), (status) => status.check);
+/** The first line `--version` prints, or none when the program doesn't answer it in time. */
+const versionOf = (path: string) =>
+  run(path, ["--version"]).pipe(
+    Effect.timeout(Duration.seconds(3)),
+    Effect.map((result) => {
+      if (result.code !== 0) return undefined;
+
+      const output = result.stdout.trim() === "" ? result.stderr : result.stdout;
+      const line = output.trim().split("\n")[0]?.trim() ?? "";
+
+      return line === "" ? undefined : line;
+    }),
+    Effect.orElseSucceed(() => undefined),
+  );
+
+/**
+ * Check a format by id, failing only when there is no such format. Says where each program it
+ * requires is and which release, so an agent need not look for them; the board's list leaves the
+ * releases out, as asking each program takes a moment.
+ */
+export const checkFormat = Effect.fn("formatSpec.checkFormat")(function* (id: string) {
+  const { check } = yield* formatStatus(id);
+
+  const programs = yield* Effect.forEach(
+    Object.entries(check.programs),
+    ([name, program]) =>
+      Effect.map(versionOf(program.path), (version): [string, Program] => [
+        name,
+        version === undefined ? program : { ...program, version },
+      ]),
+    { concurrency: "unbounded" },
+  );
+
+  return { ...check, programs: Object.fromEntries(programs) };
+});
 
 /**
  * An item's inputs: the given values checked against the format's fields, with defaults filled

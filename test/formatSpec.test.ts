@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { Effect, Schema } from "effect";
+import { ConfigProvider, Effect, Schema } from "effect";
 
 import { InvalidRequest } from "../src/core/errors.ts";
 import {
@@ -149,6 +149,25 @@ describe("formats in a workspace", () => {
 
     expect(after.problems.map((p) => p.subject)).toEqual(["surely-not-installed-cutfac"]);
     expect(after.skills).toEqual({ "art-motion": ".claude/skills/art-motion/SKILL.md" });
+  });
+
+  test("says where each program is and its version, so an agent need not look", async () => {
+    const bin = join(t.root, "bin");
+
+    await put("bin/tool", "#!/bin/sh\necho 'tool 2.4.1'\necho 'more'\n");
+    await put("bin/mute", "#!/bin/sh\nexit 1\n");
+    await chmod(join(bin, "tool"), 0o755);
+    await chmod(join(bin, "mute"), 0o755);
+    await t.run(saveFormat({ ...decode({ title: "Art", requires: ["tool", "mute"] }), id: "art" }));
+
+    const env = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { PATH: bin } }));
+    const check = await t.runWith(env, checkFormat("art"));
+
+    expect(check.ready).toBe(true);
+    expect(check.programs).toEqual({
+      tool: { path: join(bin, "tool"), version: "tool 2.4.1" },
+      mute: { path: join(bin, "mute") },
+    });
   });
 
   test("a link that carries a password or token is not saved", async () => {

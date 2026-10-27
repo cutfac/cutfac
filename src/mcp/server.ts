@@ -460,7 +460,8 @@ const GetSkill = tool("get_skill", {
 const CheckFormat = tool("check_format", {
   description:
     "Whether a format is ready to use: mistakes in its format.yaml, and the skills, programs, and files it names " +
-    "that are missing. Fix every problem it lists; install skills or programs only with the user's consent.",
+    "that are missing. Fix every problem it lists; install skills or programs only with the user's consent. " +
+    "Also says where each installed skill and program is, and each program's version.",
   parameters: ById,
   success: Schema.Struct({
     ready: Schema.Boolean,
@@ -468,6 +469,13 @@ const CheckFormat = tool("check_format", {
     skills: Schema.Record(Schema.String, Schema.String).annotate(
       describe("absolute SKILL.md of each skill the format names that is installed"),
     ),
+    programs: Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        path: Schema.String,
+        version: Schema.optional(Schema.String.annotate(describe("what `--version` printed"))),
+      }),
+    ).annotate(describe("each program the format requires that is installed, and where")),
   }),
   readonly: true,
 });
