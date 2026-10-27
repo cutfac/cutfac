@@ -110,19 +110,21 @@ describe("the error report choice", () => {
     }),
   );
 
-  it.live("feedback carries the install ID only while reports go", () =>
+  it.live("feedback carries the install ID only with its log, while reports go", () =>
     Effect.gen(function* () {
       const data = yield* dataFolder;
 
-      const unasked = yield* asApp(feedbackInstallId, data, []);
+      const unasked = yield* asApp(feedbackInstallId(true), data, []);
       const on = yield* asApp(setErrorReports(true), data, []);
-      const whileOn = yield* asApp(feedbackInstallId, data, []);
+      const withLog = yield* asApp(feedbackInstallId(true), data, []);
+      const withoutLog = yield* asApp(feedbackInstallId(false), data, []);
 
       yield* asApp(setErrorReports(false), data, []);
 
       expect(unasked).toEqual(Option.none());
-      expect(whileOn).toEqual(on.installId);
-      expect(yield* asApp(feedbackInstallId, data, [])).toEqual(Option.none());
+      expect(withLog).toEqual(on.installId);
+      expect(withoutLog).toEqual(Option.none());
+      expect(yield* asApp(feedbackInstallId(true), data, [])).toEqual(Option.none());
     }),
   );
 

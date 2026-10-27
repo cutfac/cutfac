@@ -34,7 +34,7 @@ import {
   waitingPick,
 } from "../core/edits.ts";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
-import { recentLogs } from "../core/feedbackLogs.ts";
+import { errorCount, recentLogs } from "../core/feedbackLogs.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
 import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
 import {
@@ -1002,7 +1002,7 @@ const apiRoutes = (options: ServerOptions) =>
           ...body,
           withLogs: logs,
           agent: body.agent ?? defaultAgent(ws),
-          install: Option.getOrUndefined(yield* feedbackInstallId),
+          install: Option.getOrUndefined(yield* feedbackInstallId(logs)),
         });
 
         return { ok: true };
@@ -1011,7 +1011,10 @@ const apiRoutes = (options: ServerOptions) =>
     json(
       "GET",
       "/api/team-feedback/logs",
-      Effect.map(recentLogs, (logs) => ({ logs: Option.getOrNull(logs) })),
+      Effect.map(recentLogs, (logs) => ({
+        logs: Option.getOrNull(logs),
+        errors: Option.match(logs, { onNone: () => 0, onSome: errorCount }),
+      })),
     ),
     json("GET", "/api/error-reports", Effect.map(reportSettings, reportView)),
     json(

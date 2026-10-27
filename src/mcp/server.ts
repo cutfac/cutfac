@@ -487,7 +487,7 @@ const SendFeedbackToCutfac = tool("send_feedback_to_cutfac", {
     "Call it only when the user asks to send feedback, or takes you up on an offer to report a Cutfac bug. Show them the exact text first and send it once they agree. " +
     "Write it in their words; leave out file contents, paths, and other private details unless they say to include them. " +
     "Add a reply email only if they give one. " +
-    "Attach the app's recent log with logs: true, which helps the team find the cause; say in the text you show that the log goes with it, and leave it off if they say so.",
+    "Ask whether to attach the app's recent log, which helps the team find the cause, and pass logs: true only if they agree.",
   parameters: Schema.Struct({
     message: Schema.String.annotate(
       describe(`what to tell the team, at most ${MAX_TEAM_FEEDBACK_CHARS} characters`),
@@ -496,7 +496,7 @@ const SendFeedbackToCutfac = tool("send_feedback_to_cutfac", {
     logs: Schema.optional(
       Schema.Boolean.annotate(
         describe(
-          "attach the app's recent log: what it did and any errors, never a video, prompt, chat or key",
+          "attach the app's recent log, once the user agreed: what it did and any errors, never a video, prompt, chat or key",
         ),
       ),
     ),
@@ -793,7 +793,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 message,
                 email,
                 withLogs: logs,
-                install: Option.getOrUndefined(yield* feedbackInstallId),
+                install: Option.getOrUndefined(yield* feedbackInstallId(logs)),
                 source: "agent",
                 platform: process.platform,
                 agent: Option.getOrUndefined(Option.map(request, clientName)),

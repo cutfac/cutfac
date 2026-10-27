@@ -1,9 +1,21 @@
-import { Effect, FileSystem, Option } from "effect";
+import { Effect, FileSystem, Option, Schema } from "effect";
 
 import { LogDir, dayLogs } from "./logFile.ts";
 
 /** How much of the log goes with feedback: the newest lines, enough to cover the last few days. */
 export const MAX_FEEDBACK_LOG_CHARS = 1024 * 1024;
+
+const decodeLevel = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ level: Schema.String })),
+);
+
+/** How many of the log's lines are errors, for the board to say what the log could explain. */
+export const errorCount = (logs: string) =>
+  logs
+    .split("\n")
+    .filter((line) =>
+      Option.exists(decodeLevel(line), ({ level }) => level === "ERROR" || level === "FATAL"),
+    ).length;
 
 /** `text` without its first `cut` characters, from the next whole line on. */
 const fromLine = (text: string, cut: number) => {

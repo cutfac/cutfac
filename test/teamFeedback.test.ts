@@ -1,4 +1,4 @@
-import { describe, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 // Each test sends to a fake site of its own, with the environment and logs that test needs.
 // @effect-diagnostics strictEffectProvide:off
 
@@ -7,7 +7,7 @@ import { ConfigProvider, Effect, FileSystem, Layer, Option, Path, Predicate } fr
 import { HttpClient, HttpClientResponse, type HttpBody } from "effect/http";
 
 import { APP_VERSION } from "../src/core/build.ts";
-import { MAX_FEEDBACK_LOG_CHARS, recentLogs } from "../src/core/feedbackLogs.ts";
+import { MAX_FEEDBACK_LOG_CHARS, errorCount, recentLogs } from "../src/core/feedbackLogs.ts";
 import { LogDir } from "../src/core/logFile.ts";
 import {
   MAX_TEAM_FEEDBACK_CHARS,
@@ -227,4 +227,20 @@ describe("feedback with the app's log", () => {
       expect(logs.split("\n")[1]).toMatch(/^old line \d+$/);
     }),
   );
+});
+
+describe("errors in the log", () => {
+  test("counts the lines at error level and up, and nothing else", () => {
+    const logs = [
+      "# server-2026-10-28.log",
+      '{"message":"Listening","level":"INFO"}',
+      '{"message":"render.run took 2000ms and failed","level":"ERROR"}',
+      '{"message":"get_item answered with an error","level":"WARN"}',
+      '{"message":"died","level":"FATAL"}',
+      "not json",
+    ].join("\n");
+
+    expect(errorCount(logs)).toBe(2);
+    expect(errorCount("")).toBe(0);
+  });
 });

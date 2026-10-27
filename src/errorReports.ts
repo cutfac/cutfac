@@ -95,10 +95,16 @@ export const resetInstallId = Effect.fn("errorReports.resetInstallId")(function*
   return yield* reportSettings;
 });
 
-/** The install ID feedback carries: only while the person sends error reports, to match them. */
-export const feedbackInstallId = Effect.map(reportSettings, ({ errorReports, installId }) =>
-  Option.getOrElse(errorReports, () => false) ? installId : Option.none<string>(),
-);
+/**
+ * The install ID feedback carries: only with its log, and only while the person sends error
+ * reports, so the team can match the two. Other feedback stays apart from the reports.
+ */
+export const feedbackInstallId = (withLogs: boolean | undefined) =>
+  withLogs === true
+    ? Effect.map(reportSettings, ({ errorReports, installId }) =>
+        Option.getOrElse(errorReports, () => false) ? installId : Option.none<string>(),
+      )
+    : Effect.succeed(Option.none<string>());
 
 /** What a report says about one failure. */
 interface Report {
