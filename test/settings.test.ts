@@ -1,0 +1,223 @@
+import { describe, expect } from "bun:test";
+import path from "node:path";
+
+// Each check gives the settings a folder of its own.
+// @effect-diagnostics strictEffectProvide:off
+import { Effect, FileSystem, Option, Schema } from "effect";
+import { TestClock } from "effect/testing";
+
+import { LicenseSettings } from "../electron/license.ts";
+import { platform } from "../electron/platform.ts";
+import {
+  clearDraft,
+  licenseSettings,
+  loadDraft,
+  loadLibrary,
+  loadLocale,
+  loadOnboarding,
+  loadPage,
+  loadPort,
+  loadWorkspace,
+  saveDraft,
+  saveLibrary,
+  saveLocale,
+  saveOnboarding,
+  savePage,
+  savePort,
+  saveWorkspace,
+  Settings,
+  settingsWritten,
+} from "../electron/settings.ts";
+import { LicenseKey, LicenseRecord, paidInSettings } from "../src/license.ts";
+import { testEffect } from "./effect.ts";
+import { signedGrant, testLicenseKey } from "./support.ts";
+
+const it = testEffect(platform);
+
+const DEFAULT_LIBRARY = "/Users/ada/Movies/Cutfac";
+
+/** A folder for the app's data, and the settings kept in it. */
+const appData = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-settings-" });
+  const file = path.join(dir, "settings.json");
+
+  const saved = Effect.map(fs.readFileString(file), (text) => JSON.parse(text));
+
+  const settingsIn = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.provide(effect, Settings.layer({ dir, defaultLibrary: DEFAULT_LIBRARY }));
+
+  return { dir, file, saved, settingsIn };
+});
+
+describe("saving the settings", () => {
+  it.live("keeps what a save doesn't change, fields this version can't read included", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, saved, settingsIn } = yield* appData;
+
+      yield* fs.writeFileString(file, JSON.stringify({ locale: "ko", future: { kept: true } }));
+      yield* settingsIn(savePort(4321));
+
+      expect(yield* saved).toEqual({ locale: "ko", future: { kept: true }, port: 4321 });
+    }),
+  );
+
+  it.live("keeps each of several saves made at once", () =>
+    Effect.gen(function* () {
+      const { saved, settingsIn } = yield* appData;
+
+      yield* settingsIn(
+        Effect.all(
+          [
+            savePort(4321),
+            saveLocale("ko"),
+            saveLibrary("/Volumes/Work/Cutfac"),
+            savePage("/work", "#/item/a"),
+          ],
+          { concurrency: "unbounded" },
+        ),
+      );
+
+      expect(yield* saved).toEqual({
+        port: 4321,
+        locale: "ko",
+        library: "/Volumes/Work/Cutfac",
+        page: { workspace: "/work", hash: "#/item/a" },
+      });
+    }),
+  );
+
+  it.live("reads a file it can't make sense of as empty, and replaces it on the next save", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, saved, settingsIn } = yield* appData;
+
+      yield* fs.writeFileString(file, "{ half written");
+
+      expect(yield* settingsIn(loadLocale)).toEqual(Option.none());
+
+      yield* settingsIn(saveLocale("en"));
+
+      expect(yield* saved).toEqual({ locale: "en" });
+    }),
+  );
+
+  it.live("waits on quit for the saves started before it", () =>
+    Effect.gen(function* () {
+      const { saved, settingsIn } = yield* appData;
+
+      yield* settingsIn(
+        Effect.gen(function* () {
+          yield* Effect.forkScoped(savePort(4321), { startImmediately: true });
+          yield* settingsWritten;
+        }),
+      );
+
+      expect(yield* saved).toEqual({ port: 4321 });
+    }),
+  );
+});
+
+describe("loading the settings", () => {
+  it.live("reads each field on its own, so one it can't read leaves the others", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, settingsIn } = yield* appData;
+
+      yield* fs.writeFileString(
+        file,
+        JSON.stringify({ port: 80, locale: "ko", onboarding: "somewhere", library: "" }),
+      );
+
+      expect(yield* settingsIn(loadPort)).toEqual(Option.none());
+      expect(yield* settingsIn(loadLocale)).toEqual(Option.some("ko"));
+      expect(yield* settingsIn(loadOnboarding)).toEqual(Option.none());
+      expect(yield* settingsIn(loadLibrary)).toBe(DEFAULT_LIBRARY);
+    }),
+  );
+
+  it.live("opens the last workspace only while its folder is still there", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, settingsIn } = yield* appData;
+      const workspace = path.join(dir, "Channel");
+
+      yield* fs.makeDirectory(workspace);
+      yield* settingsIn(saveWorkspace(workspace));
+
+      expect(yield* settingsIn(loadWorkspace)).toEqual(Option.some(workspace));
+
+      yield* fs.remove(workspace, { recursive: true });
+
+      expect(yield* settingsIn(loadWorkspace)).toEqual(Option.none());
+    }),
+  );
+
+  it.live("brings a page back only in the workspace it was shown in", () =>
+    Effect.gen(function* () {
+      const { settingsIn } = yield* appData;
+
+      yield* settingsIn(savePage("/work/a", "#/item/x"));
+
+      expect(yield* settingsIn(loadPage("/work/a"))).toEqual(Option.some("#/item/x"));
+      expect(yield* settingsIn(loadPage("/work/b"))).toEqual(Option.none());
+    }),
+  );
+
+  it.live(
+    "keeps the first launch's step and answers until a workspace opens and they're cleared",
+    () =>
+      Effect.gen(function* () {
+        const { settingsIn } = yield* appData;
+
+        const draft = {
+          brief: { purpose: null, platforms: [], body: "Recipes" },
+          sources: ["https://example.com"],
+          sharing: { errorReports: true },
+        };
+
+        yield* settingsIn(saveOnboarding("make"));
+        yield* settingsIn(saveDraft(draft));
+
+        expect(yield* settingsIn(loadOnboarding)).toEqual(Option.some("make"));
+        expect(yield* settingsIn(loadDraft)).toEqual(Option.some(draft));
+
+        yield* settingsIn(saveWorkspace("/work"));
+        yield* settingsIn(clearDraft);
+
+        expect(yield* settingsIn(loadOnboarding)).toEqual(Option.none());
+        expect(yield* settingsIn(loadDraft)).toEqual(Option.none());
+      }),
+  );
+});
+
+describe("the license in the settings", () => {
+  it.effect(
+    "a license the app saves unlocks the paid plan for the agent tools reading the file",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const { file, settingsIn } = yield* appData;
+        const now = Date.UTC(2026, 9, 1);
+        const key = yield* Schema.decodeEffect(LicenseKey)("KEY-1");
+        const record = LicenseRecord.cases.LicenseGrant.make({ token: signedGrant(now) });
+
+        yield* TestClock.setTime(now);
+        yield* settingsIn(
+          Effect.gen(function* () {
+            const license = yield* LicenseSettings;
+
+            yield* license.save(key, Option.some(record));
+
+            expect(yield* license.load).toEqual({
+              key: Option.some(key),
+              record: Option.some(record),
+            });
+          }).pipe(Effect.provide(licenseSettings)),
+        );
+
+        expect(yield* paidInSettings(yield* fs.readFileString(file))).toBe(true);
+      }).pipe(Effect.provide(testLicenseKey)),
+  );
+});

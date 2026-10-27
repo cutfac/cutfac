@@ -34,6 +34,7 @@ import { WORKSPACES } from "./library.ts";
 import { lockNavigation } from "./navigation.ts";
 import { macChecks, type OnboardingChecks } from "./onboarding.ts";
 import { sandboxed } from "./permissions.ts";
+import { runInMain } from "./runtime.ts";
 import {
   loadLibrary,
   loadOnboarding,
@@ -129,7 +130,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
       // A new workspace each run, named for when it was made, in the dev build's own folder.
       freshName ??= freshFolderName(new Date());
 
-      return { library: await loadLibrary(), name: freshName };
+      return { library: await runInMain(loadLibrary), name: freshName };
     },
   };
 
@@ -142,9 +143,9 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
   const state = async (): Promise<DevState> => ({
     fakes,
-    settingsFile: settingsFile(),
-    setAside: await settingsSetAside(),
-    workspace: await loadWorkspace(),
+    settingsFile: await runInMain(settingsFile),
+    setAside: await runInMain(settingsSetAside),
+    workspace: Option.getOrUndefined(await runInMain(loadWorkspace)),
     defaultFolder: await suggestedFolder(),
     // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps its permissions
     // by it.
@@ -192,7 +193,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
   ipcMain.handle(DEV_START_OVER_CHANNEL, async (event) => {
     fromPanel(event);
     stopFixes();
-    await setSettingsAside();
+    await runInMain(setSettingsAside);
     freshName = undefined;
 
     const shown = originOf(host.window()?.webContents.getURL() ?? "");
@@ -212,14 +213,14 @@ export function handleDevTools(host: DevToolsHost): DevTools {
   ipcMain.handle(DEV_RESTORE_CHANNEL, async (event) => {
     fromPanel(event);
     stopFixes();
-    await restoreSettings();
+    await runInMain(restoreSettings);
     freshName = undefined;
 
-    const saved = await loadWorkspace();
+    const saved = Option.getOrUndefined(await runInMain(loadWorkspace));
 
     if (saved !== undefined && (await host.activate(saved))) return;
 
-    await host.showOnboarding((await loadOnboarding()) ?? "welcome");
+    await host.showOnboarding(Option.getOrElse(await runInMain(loadOnboarding), () => "welcome"));
   });
   ipcMain.handle(DEV_OPEN_STEP_CHANNEL, (event, step) => {
     fromPanel(event);

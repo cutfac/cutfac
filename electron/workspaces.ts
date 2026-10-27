@@ -72,7 +72,7 @@ export function handleWorkspaces(host: WorkspacesHost) {
     assertFromApp(event);
 
     const current = host.current();
-    const found = await workspacesIn(await loadLibrary());
+    const found = await workspacesIn(await runInMain(loadLibrary));
 
     return {
       workspaces: found.map((workspace) => ({ ...workspace, current: workspace.path === current })),
@@ -82,7 +82,9 @@ export function handleWorkspaces(host: WorkspacesHost) {
     assertFromApp(event);
 
     // Only a workspace the app's folder holds, by name, never a path a page sends.
-    const found = (await workspacesIn(await loadLibrary())).find((one) => one.name === name);
+    const found = (await workspacesIn(await runInMain(loadLibrary))).find(
+      (one) => one.name === name,
+    );
 
     if (found === undefined || host.switching() || found.path === host.current()) return false;
 
@@ -98,7 +100,7 @@ export function handleWorkspaces(host: WorkspacesHost) {
       if (name === undefined) return { kind: "invalid" };
 
       try {
-        const prepared = await prepareWorkspaceFolder(await loadLibrary(), name, false);
+        const prepared = await prepareWorkspaceFolder(await runInMain(loadLibrary), name, false);
 
         if (prepared.kind === "taken") return { kind: "taken" };
 

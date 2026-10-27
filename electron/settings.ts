@@ -1,21 +1,19 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Effect, Layer, Option, Schema } from "effect";
-import { app } from "electron";
+import { Context, Effect, FileSystem, Layer, Option, Schema, Semaphore } from "effect";
+import type { Crypto } from "effect/Crypto";
+import type { Path } from "effect/Path";
 
+import { readAppFile, writeAppFile } from "../src/core/appData.ts";
 import { PLATFORMS, PURPOSES } from "../src/core/brief.ts";
 import { LicenseRecord, savedLicenseOf } from "../src/license.ts";
 import type { OnboardingDraft as Draft, OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 import { ONBOARDING_STEPS } from "./boardPages.ts";
 import { LicenseNotSaved, LicenseSettings } from "./license.ts";
-import { runInMain } from "./runtime.ts";
 import { isSetAside, restore, setAside } from "./settingsAside.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
 
-/** What the first launch asked about the user, kept until there is a workspace to save it in. */
 const OnboardingDraft = Schema.Struct({
   brief: Schema.Struct({
     purpose: Schema.NullOr(Schema.Literals(PURPOSES)),
@@ -23,7 +21,6 @@ const OnboardingDraft = Schema.Struct({
     body: Schema.String,
   }),
   sources: Schema.Array(Schema.String),
-  /** Whether to share error reports, and usage statistics; each left out until answered. */
   sharing: Schema.optionalKey(
     Schema.Struct({
       errorReports: Schema.optionalKey(Schema.Boolean),
@@ -32,15 +29,13 @@ const OnboardingDraft = Schema.Struct({
   ),
 });
 
-/** The board page last shown, for the workspace it belongs to. */
 const Page = Schema.Struct({
   workspace: Schema.NonEmptyString,
   hash: Schema.String.check(Schema.isPattern(/^#\//)),
 });
 
-interface Settings {
+interface Saved {
   workspace: string;
-  /** The app's own folder, where its workspaces are; left out for the default. */
   library: string;
   port: number;
   locale: Locale;
@@ -48,17 +43,18 @@ interface Settings {
   license: typeof LicenseRecord.Encoded | undefined;
   window: WindowPlace;
   page: typeof Page.Type;
-  /** Where the first launch got to, while there is no workspace yet. */
   onboarding: OnboardingStep | undefined;
   onboardingDraft: typeof OnboardingDraft.Encoded | undefined;
 }
 
-export function settingsFile(): string {
-  return path.join(app.getPath("userData"), "settings.json");
-}
+export class SettingsNotSaved extends Schema.TaggedError<SettingsNotSaved>()("SettingsNotSaved", {
+  message: Schema.String,
+}) {}
 
-/** Where the Dev Panel keeps the settings while the app runs as a new user. */
-const backupFile = () => path.join(app.getPath("userData"), "settings.dev-backup.json");
+const SETTINGS_BYTES = 1024 * 1024;
+
+const notSaved = (error: { readonly message: string }) =>
+  new SettingsNotSaved({ message: error.message });
 
 const decodeFile = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
@@ -76,170 +72,165 @@ const decodeOnboarding = Schema.decodeUnknownOption(Schema.Literals(ONBOARDING_S
 
 const decodeDraft = Schema.decodeUnknownOption(OnboardingDraft);
 
-/** A draft as the board sends it, to check before it is kept. */
 export const isDraft = Schema.is(OnboardingDraft);
 
+export interface SettingsPlace {
+  readonly dir: string;
+  readonly defaultLibrary: string;
+}
+
 /**
- * Whatever was saved. Each loader decodes only the field it reads, so a value written by another
- * version does not lose the others.
+ * The app's settings.json, which the agent tools read the license from too: replaced whole, one
+ * change at a time, and read a field at a time so a value another version wrote keeps the others.
  */
-async function readSettings(): Promise<Schema.JsonObject> {
-  try {
-    return Option.getOrElse(decodeFile(await readFile(settingsFile(), "utf8")), () => ({}));
-  } catch {
-    return {};
+export class Settings extends Context.Service<
+  Settings,
+  {
+    readonly file: string;
+    readonly defaultLibrary: string;
+    readonly read: Effect.Effect<Schema.JsonObject>;
+    write(patch: Partial<Saved>): Effect.Effect<void, SettingsNotSaved>;
+    /** Done once every save asked for so far is on disk, or has failed. */
+    readonly written: Effect.Effect<void>;
+    readonly setAside: Effect.Effect<void, SettingsNotSaved>;
+    readonly restore: Effect.Effect<boolean, SettingsNotSaved>;
+    readonly isSetAside: Effect.Effect<boolean>;
   }
+>()("cutfac/desktop/Settings") {
+  static readonly layer = (place: SettingsPlace) => Layer.effect(Settings, make(place));
 }
 
-/**
- * The app's agent tools read the license from this file whenever they make a video, so it is
- * replaced whole and never seen half written.
- */
-async function replaceSettings(patch: Partial<Settings>): Promise<void> {
-  const settings = { ...(await readSettings()), ...patch };
-  const file = settingsFile();
-  const draft = `${file}.${randomUUID()}.tmp`;
+const make = Effect.fnUntraced(function* ({ dir, defaultLibrary }: SettingsPlace) {
+  const services = yield* Effect.context<FileSystem.FileSystem | Path | Crypto>();
+  const lock = yield* Semaphore.make(1);
+  const file = path.join(dir, "settings.json");
+  const backup = path.join(dir, "settings.dev-backup.json");
 
-  await mkdir(app.getPath("userData"), { recursive: true });
-  await writeFile(draft, `${JSON.stringify(settings, null, 2)}\n`);
-  await rename(draft, file);
-}
-
-let writing = Promise.resolve();
-
-/** One change at a time, so two close together, such as a move and a page change, keep both. */
-function queued<T>(change: () => Promise<T>): Promise<T> {
-  const next = writing.then(change);
-  writing = next.then(
-    () => undefined,
-    () => undefined,
+  const read = readAppFile(file, SETTINGS_BYTES).pipe(
+    Effect.map((text) => Option.getOrElse(Option.flatMap(text, decodeFile), () => ({}))),
+    Effect.orElseSucceed((): Schema.JsonObject => ({})),
+    Effect.provideContext(services),
   );
 
-  return next;
-}
+  const queued = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem | Path | Crypto>) =>
+    lock.withPermits(1)(Effect.provideContext(effect, services));
 
-const writeSettings = (patch: Partial<Settings>) => queued(() => replaceSettings(patch));
+  const write = (patch: Partial<Saved>) =>
+    queued(
+      Effect.gen(function* () {
+        const settings = { ...(yield* read), ...patch };
 
-/** Settles once every save asked for so far is on disk, or has failed. */
-export const settingsWritten = (): Promise<void> => writing;
+        yield* writeAppFile(file, `${JSON.stringify(settings, null, 2)}\n`);
+      }),
+    ).pipe(Effect.mapError(notSaved));
 
-/** The last workspace the user opened, or undefined if none is saved or its folder is gone. */
-export async function loadWorkspace(): Promise<string | undefined> {
-  const workspace = Option.getOrUndefined(decodeText((await readSettings()).workspace));
+  return Settings.of({
+    file,
+    defaultLibrary,
+    read,
+    write,
+    written: queued(Effect.void),
+    setAside: queued(setAside(file, backup)).pipe(Effect.mapError(notSaved)),
+    restore: queued(restore(file, backup)).pipe(Effect.mapError(notSaved)),
+    isSetAside: Effect.provideContext(isSetAside(backup), services),
+  });
+});
 
-  if (workspace === undefined) return undefined;
+const saved = (key: keyof Saved) =>
+  Effect.flatMap(Settings, (settings) => Effect.map(settings.read, (read) => read[key]));
 
-  try {
-    return (await stat(workspace)).isDirectory() ? workspace : undefined;
-  } catch {
-    return undefined;
-  }
-}
+const save = (patch: Partial<Saved>) =>
+  Effect.flatMap(Settings, (settings) => settings.write(patch));
 
-/**
- * The app's folder when none was chosen: `~/Movies/Cutfac`, or `Cutfac Dev` for the dev build, as
- * macOS's video apps keep their libraries in Movies.
- */
-const defaultLibrary = () => path.join(app.getPath("videos"), app.getName());
+export const settingsWritten = Effect.flatMap(Settings, (settings) => settings.written);
 
-/** The app's own folder, where new workspaces go: the one chosen, or `~/Movies/Cutfac`. */
-export async function loadLibrary(): Promise<string> {
-  return Option.getOrElse(decodeText((await readSettings()).library), defaultLibrary);
-}
+/** The last workspace the user opened, while its folder is still there. */
+export const loadWorkspace = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const workspace = decodeText(yield* saved("workspace"));
 
-export const saveLibrary = (library: string) => writeSettings({ library });
+  if (Option.isNone(workspace)) return workspace;
 
-/** Saves the workspace just opened, which ends the first launch. */
-export const saveWorkspace = (workspace: string) =>
-  writeSettings({ workspace, onboarding: undefined });
+  const info = yield* Effect.option(fs.stat(workspace.value));
 
-/**
- * The port the board last ran on. The board keeps its preferences in storage keyed by its origin,
- * so reusing the port keeps them across launches.
- */
-export async function loadPort(): Promise<number | undefined> {
-  return Option.getOrUndefined(decodePort((await readSettings()).port));
-}
+  return Option.isSome(info) && info.value.type === "Directory" ? workspace : Option.none<string>();
+});
 
-export const savePort = (port: number) => writeSettings({ port });
+export const loadLibrary = Effect.gen(function* () {
+  const { defaultLibrary } = yield* Settings;
 
-/** The board's last language, so menus and dialogs shown before it loads already match. */
-export async function loadLocale(): Promise<Locale | undefined> {
-  return Option.getOrUndefined(decodeLocale((await readSettings()).locale));
-}
+  return Option.getOrElse(decodeText(yield* saved("library")), () => defaultLibrary);
+});
 
-export const saveLocale = (locale: Locale) => writeSettings({ locale });
+export const saveLibrary = (library: string) => save({ library });
+
+export const saveWorkspace = (workspace: string) => save({ workspace, onboarding: undefined });
+
+/** The board keeps its preferences in storage keyed by its origin, so the port is kept too. */
+export const loadPort = Effect.map(saved("port"), decodePort);
+
+export const savePort = (port: number) => save({ port });
+
+export const loadLocale = Effect.map(saved("locale"), decodeLocale);
+
+export const saveLocale = (locale: Locale) => save({ locale });
 
 const encodeLicense = Schema.encodeEffect(Schema.UndefinedOr(LicenseRecord));
 
-/**
- * The license key and cutfac.com's last answer about it, which the app's agent tools read too. The
- * key stays on this computer and goes only to cutfac.com.
- */
-export const licenseSettings = Layer.succeed(
+export const licenseSettings = Layer.effect(
   LicenseSettings,
-  LicenseSettings.of({
-    load: Effect.promise(readSettings).pipe(Effect.map(savedLicenseOf)),
-    save: (licenseKey, record) =>
-      encodeLicense(Option.getOrUndefined(record)).pipe(
-        Effect.flatMap((license) =>
-          Effect.tryPromise(() => writeSettings({ licenseKey, license })),
+  Effect.gen(function* () {
+    const settings = yield* Settings;
+
+    return LicenseSettings.of({
+      load: Effect.map(settings.read, savedLicenseOf),
+      save: (licenseKey, record) =>
+        encodeLicense(Option.getOrUndefined(record)).pipe(
+          Effect.flatMap((license) => settings.write({ licenseKey, license })),
+          Effect.mapError((cause) => new LicenseNotSaved({ cause })),
         ),
-        Effect.mapError((cause) => new LicenseNotSaved({ cause })),
-      ),
+    });
   }),
 );
 
-/** Where the window last was, at its normal size, and whether it filled the screen. */
-export async function loadWindowPlace(): Promise<WindowPlace | undefined> {
-  return Option.getOrUndefined(decodeWindowPlace((await readSettings()).window));
-}
+export const loadWindowPlace = Effect.map(saved("window"), decodeWindowPlace);
 
-export const saveWindowPlace = (place: WindowPlace) => writeSettings({ window: place });
+export const saveWindowPlace = (place: WindowPlace) => save({ window: place });
 
-/** The page last shown in `workspace`, such as `#/item/…`, or undefined if that was elsewhere. */
-export async function loadPage(workspace: string): Promise<string | undefined> {
-  const page = Option.getOrUndefined(decodePage((await readSettings()).page));
+export const loadPage = (workspace: string) =>
+  Effect.map(saved("page"), (page) =>
+    Option.flatMap(decodePage(page), (found) =>
+      found.workspace === workspace ? Option.some(found.hash) : Option.none(),
+    ),
+  );
 
-  return page?.workspace === workspace ? page.hash : undefined;
-}
+export const savePage = (workspace: string, hash: string) => save({ page: { workspace, hash } });
 
-export const savePage = (workspace: string, hash: string) =>
-  writeSettings({ page: { workspace, hash } });
+export const loadOnboarding = Effect.map(saved("onboarding"), decodeOnboarding);
 
-/** The first-launch step to open on, if the user quit before there was a workspace. */
-export async function loadOnboarding(): Promise<OnboardingStep | undefined> {
-  return Option.getOrUndefined(decodeOnboarding((await readSettings()).onboarding));
-}
+export const saveOnboarding = (onboarding: OnboardingStep) => save({ onboarding });
 
-/** Saves the first-launch step the window shows, to pick up there next time. */
-export const saveOnboarding = (onboarding: OnboardingStep) => writeSettings({ onboarding });
+export const loadDraft = Effect.map(saved("onboardingDraft"), (value) =>
+  Option.map(decodeDraft(value), (draft) => {
+    const copy: Draft = {
+      brief: { ...draft.brief, platforms: [...draft.brief.platforms] },
+      sources: [...draft.sources],
+    };
 
-/** What the first launch asked about the user so far, if it asked. */
-export async function loadDraft(): Promise<Draft | undefined> {
-  const draft = Option.getOrUndefined(decodeDraft((await readSettings()).onboardingDraft));
+    if (draft.sharing !== undefined) copy.sharing = { ...draft.sharing };
 
-  if (draft === undefined) return undefined;
+    return copy;
+  }),
+);
 
-  const copy: Draft = {
-    brief: { ...draft.brief, platforms: [...draft.brief.platforms] },
-    sources: [...draft.sources],
-  };
+export const saveDraft = (draft: Draft) => save({ onboardingDraft: draft });
 
-  if (draft.sharing !== undefined) copy.sharing = { ...draft.sharing };
+export const clearDraft = save({ onboardingDraft: undefined });
 
-  return copy;
-}
+export const settingsFile = Effect.map(Settings, (settings) => settings.file);
 
-export const saveDraft = (draft: Draft) => writeSettings({ onboardingDraft: draft });
+export const setSettingsAside = Effect.flatMap(Settings, (settings) => settings.setAside);
 
-export const clearDraft = () => writeSettings({ onboardingDraft: undefined });
+export const restoreSettings = Effect.flatMap(Settings, (settings) => settings.restore);
 
-/** Dev Panel: sets the settings aside, so the app runs as on a new Mac until they are restored. */
-export const setSettingsAside = () =>
-  queued(() => runInMain(setAside(settingsFile(), backupFile())));
-
-/** Dev Panel: brings back the settings set aside. Resolves false if none were. */
-export const restoreSettings = () => queued(() => runInMain(restore(settingsFile(), backupFile())));
-
-export const settingsSetAside = () => runInMain(isSetAside(backupFile()));
+export const settingsSetAside = Effect.flatMap(Settings, (settings) => settings.isSetAside);

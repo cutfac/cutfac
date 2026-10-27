@@ -1,3 +1,6 @@
+import { Option } from "effect";
+
+import { runInMain } from "./runtime.ts";
 import { loadPort, savePort } from "./settings.ts";
 import { startSidecar, type Sidecar } from "./sidecarRuntime.ts";
 
@@ -35,7 +38,10 @@ export function workspaceServer({ devPort, quitting, onCrash }: WorkspaceServerO
       const started = await startSidecar({
         workspace,
         // A fixed dev port held by a stale server fails here instead of passing the health check.
-        port: devPort === undefined ? { last: await loadPort() } : { fixed: devPort },
+        port:
+          devPort === undefined
+            ? { last: Option.getOrUndefined(await runInMain(loadPort)) }
+            : { fixed: devPort },
         onCrash: (message) => {
           forget();
           onCrash(message);
@@ -52,7 +58,7 @@ export function workspaceServer({ devPort, quitting, onCrash }: WorkspaceServerO
       sidecar = started;
       served = workspace;
 
-      if (devPort === undefined) await savePort(started.port);
+      if (devPort === undefined) await runInMain(savePort(started.port));
 
       return started;
     },

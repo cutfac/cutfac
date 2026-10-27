@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Effect, Option } from "effect";
 import {
   app,
   BrowserWindow,
@@ -43,6 +44,7 @@ import { keepInsideApp } from "./navigation.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions, sandboxed } from "./permissions.ts";
 import { guardQuit, guardWindow } from "./quitGuard.ts";
+import { forkInMain, runInMain } from "./runtime.ts";
 import {
   loadLocale,
   loadOnboarding,
@@ -145,7 +147,7 @@ if (!app.requestSingleInstanceLock()) {
     // Hold the quit until the server is gone and the settings saved, the first launch's step too,
     // then quit again with nothing left to stop.
     event.preventDefault();
-    void Promise.allSettled([server.stop(), settingsWritten()]).then(() => {
+    void Promise.allSettled([server.stop(), runInMain(settingsWritten)]).then(() => {
       quitReady = true;
       app.quit();
     });
@@ -199,7 +201,7 @@ if (!app.requestSingleInstanceLock()) {
 
     locale = next;
     setMenu();
-    void saveLocale(next);
+    forkInMain(Effect.ignore(saveLocale(next)));
   });
   handleAttention({ isFromApp, bringToFront, sendAppCommand, locale: () => locale });
   links = handleLinks({ isFromApp, bringToFront, window: () => window });
@@ -243,7 +245,9 @@ async function boot(): Promise<void> {
   limitPermissions(isAppUrl);
   // The board is dark only; this keeps the title bar, menus and dialogs dark with it.
   nativeTheme.themeSource = "dark";
-  locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
+  locale =
+    Option.getOrUndefined(await runInMain(loadLocale)) ??
+    resolveLocale(undefined, app.getPreferredSystemLanguages());
 
   if (app.isPackaged) {
     license = await startLicense(() => window?.webContents.send(LICENSE_CHANGE_CHANNEL));
@@ -255,13 +259,15 @@ async function boot(): Promise<void> {
   // In dev, Vite serves the board instead.
   if (!devUrl) serveBoard(boardDir());
 
-  const saved = await loadWorkspace();
+  const saved = Option.getOrUndefined(await runInMain(loadWorkspace));
 
   if ((saved !== undefined && (await activate(saved))) || quitting) return;
 
   // No workspace yet, or the saved one wouldn't start: the first launch, where it was left. Someone
   // who had a workspace already has been through it, so they only choose a folder.
-  const step = (await loadOnboarding()) ?? (saved === undefined ? "welcome" : "folder");
+  const step =
+    Option.getOrUndefined(await runInMain(loadOnboarding)) ??
+    (saved === undefined ? "welcome" : "folder");
 
   try {
     await showOnboarding(step);
@@ -337,9 +343,9 @@ async function open(workspace: string): Promise<boolean> {
     if (started === undefined) return false;
 
     workspaceRoot = workspace;
-    await saveWorkspace(workspace);
+    await runInMain(saveWorkspace(workspace));
 
-    const page = (await loadPage(workspace)) ?? "";
+    const page = Option.getOrElse(await runInMain(loadPage(workspace)), () => "");
 
     await show(new URL(page, devUrl ?? started.url).href, path.basename(workspace));
 
@@ -358,7 +364,7 @@ async function showOnboarding(step: OnboardingStep): Promise<void> {
 
 async function show(url: string, title: string): Promise<void> {
   appOrigin = originOf(url) ?? "";
-  window ??= createWindow(await loadWindowPlace());
+  window ??= createWindow(Option.getOrUndefined(await runInMain(loadWindowPlace)));
   window.setTitle(title);
 
   try {
@@ -445,8 +451,10 @@ function rememberPlace(target: BrowserWindow): void {
 
   if (target.isDestroyed()) return;
 
-  saveWindowPlace({ ...target.getNormalBounds(), maximized: target.isMaximized() }).catch(
-    () => undefined,
+  forkInMain(
+    Effect.ignore(
+      saveWindowPlace({ ...target.getNormalBounds(), maximized: target.isMaximized() }),
+    ),
   );
 }
 
@@ -461,14 +469,14 @@ function rememberPage(url: string): void {
   const { hash } = new URL(url);
 
   if (workspaceRoot !== undefined) {
-    savePage(workspaceRoot, hash).catch(() => undefined);
+    forkInMain(Effect.ignore(savePage(workspaceRoot, hash)));
 
     return;
   }
 
   const step = onboardingStep(hash);
 
-  if (step) saveOnboarding(step).catch(() => undefined);
+  if (step) forkInMain(Effect.ignore(saveOnboarding(step)));
 }
 
 function handleCrash(message: string): void {

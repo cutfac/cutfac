@@ -1,47 +1,15 @@
-import { BunChildProcessSpawner } from "@effect/platform-bun";
-import { Effect, Layer, ManagedRuntime, Option } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { app } from "electron";
+import { Effect, Option } from "effect";
 
-import { platform } from "./platform.ts";
-import { appLog, memoMap } from "./runtime.ts";
-import {
-  boardDirOf,
-  Install,
-  runCli as runCommand,
-  ServerEnv,
-  startSidecar as start,
-  type InstallInfo,
-} from "./sidecar.ts";
+import { installInfo, runInMain, runNow } from "./runtime.ts";
+import { boardDirOf, runCli as runCommand, ServerEnv, startSidecar as start } from "./sidecar.ts";
 
-/** Where the app runs from and what it was started with, as Electron reports them. */
-const install = (): InstallInfo => ({
-  packaged: app.isPackaged,
-  appPath: app.getAppPath(),
-  resourcesPath: process.resourcesPath,
-  logsPath: app.getPath("logs"),
-  homePath: app.getPath("home"),
-  launchEnv: process.env,
-});
-
-/** What the server and its commands run with: the install, files, and child processes. */
-const services = BunChildProcessSpawner.layer.pipe(
-  Layer.provideMerge(Layer.mergeAll(Layer.sync(Install, install), platform)),
-);
-
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(ServerEnv.layer, FetchHttpClient.layer, appLog).pipe(Layer.provideMerge(services)),
-  { memoMap },
-);
-
-/** The built board, which the server serves and the first launch loads before there is one. */
-export const boardDir = () => boardDirOf(install());
+export const boardDir = () => boardDirOf(installInfo());
 
 /** The environment the server and the commands it runs get, read once. */
-export const resolveServerEnv = () => runtime.runPromise(ServerEnv);
+export const resolveServerEnv = () => runInMain(ServerEnv);
 
 /** Runs a server command that needs no workspace, such as `agents --json`. */
-export const runCli = (args: ReadonlyArray<string>) => runtime.runPromise(runCommand(args));
+export const runCli = (args: ReadonlyArray<string>) => runInMain(runCommand(args));
 
 /** The local server as the app's main process uses it, outside Effect. */
 export interface Sidecar {
@@ -69,7 +37,7 @@ export async function startSidecar({
   onCrash,
   ...options
 }: SidecarOptions): Promise<Sidecar> {
-  const sidecar = await runtime.runPromise(
+  const sidecar = await runInMain(
     start({
       ...options,
       port: "fixed" in port ? port : { last: Option.fromNullishOr(port.last) },
@@ -80,7 +48,7 @@ export async function startSidecar({
   return {
     url: sidecar.url,
     port: sidecar.port,
-    stop: () => runtime.runPromise(sidecar.stop),
-    kill: () => runtime.runSync(sidecar.kill),
+    stop: () => runInMain(sidecar.stop),
+    kill: () => runNow(sidecar.kill),
   };
 }

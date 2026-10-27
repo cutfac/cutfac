@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { Effect, Layer, ManagedRuntime, Option, Predicate } from "effect";
 import { FetchHttpClient } from "effect/http";
 import type { PlatformError } from "effect/PlatformError";
@@ -7,33 +9,58 @@ import { AppData } from "../src/core/appData.ts";
 import { LogDir, logToFile } from "../src/core/logFile.ts";
 import { errorReports } from "../src/errorReports.ts";
 import { platform } from "./platform.ts";
+import { Settings } from "./settings.ts";
+import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
 
-/** Reports the main process's failures, reading the person's choice from the app's data folder. */
+export const installInfo = (): InstallInfo => ({
+  packaged: app.isPackaged,
+  appPath: app.getAppPath(),
+  resourcesPath: process.resourcesPath,
+  logsPath: app.getPath("logs"),
+  homePath: app.getPath("home"),
+  launchEnv: process.env,
+});
+
+const appData = Layer.sync(AppData, () => Option.some(app.getPath("userData")));
+
 const appReports = errorReports("app").pipe(
-  Layer.provide([
-    Layer.sync(AppData, () => Option.some(app.getPath("userData"))),
-    FetchHttpClient.layer,
-    platform,
-  ]),
+  Layer.provide([appData, FetchHttpClient.layer, platform]),
 );
 
-/**
- * The app's own log, in Electron's logs folder: `~/Library/Logs/Cutfac`, or `Cutfac Dev`, with its
- * error reports when the person allows them.
- */
+/** `~/Library/Logs/Cutfac`, or `Cutfac Dev`, with error reports when the person allows them. */
 export const appLog = logToFile("app").pipe(
   Layer.provide([Layer.sync(LogDir, () => Option.some(app.getPath("logs"))), appReports, platform]),
 );
 
-/** Shared by the main process's runtimes, so they build the app's log once between them. */
+/** New workspaces go in `~/Movies/Cutfac` unless the user chose a folder, as video apps do. */
+const settings = Layer.unwrap(
+  Effect.sync(() =>
+    Settings.layer({
+      dir: app.getPath("userData"),
+      defaultLibrary: path.join(app.getPath("videos"), app.getName()),
+    }),
+  ),
+);
+
+const base = Layer.mergeAll(platform, Layer.sync(Install, installInfo), appData);
+
+export const appServices = Layer.mergeAll(
+  settings,
+  ServerEnv.layer,
+  FetchHttpClient.layer,
+  appLog,
+).pipe(Layer.provideMerge(base));
+
+export type AppServices = Layer.Success<typeof appServices>;
+
+/** Shared by the main process's runtimes, so they build the app's services once between them. */
 export const memoMap = Layer.makeMemoMapUnsafe();
 
-const runtime = ManagedRuntime.make(Layer.merge(platform, appLog), { memoMap });
+const runtime = ManagedRuntime.make(appServices, { memoMap });
 
 /**
- * The error a handler rejects with, as it did before it ran Effect: Node's own for a file system
- * call, else a plain `Error`. Electron prefixes the message with the error's name, which the board
- * shows, so a tagged error would read differently.
+ * The error a handler rejects with: Node's own for a file system call, else a plain `Error`.
+ * Electron prefixes the message with the error's name, which the board shows.
  */
 const plainError = (error: PlatformError | { readonly message: string }) =>
   Predicate.isTagged(error, "PlatformError") && error.cause instanceof Error
@@ -42,5 +69,12 @@ const plainError = (error: PlatformError | { readonly message: string }) =>
 
 /** Runs `effect` from one of Electron's callbacks, which waits on a promise. */
 export const runInMain = <A, E extends PlatformError | { readonly message: string }>(
-  effect: Effect.Effect<A, E, Layer.Success<typeof platform>>,
+  effect: Effect.Effect<A, E, AppServices>,
 ) => runtime.runPromise(Effect.mapError(effect, plainError));
+
+/** Starts `effect` from one of Electron's callbacks, which doesn't wait on it. */
+export const forkInMain = <A, E>(effect: Effect.Effect<A, E, AppServices>) =>
+  void runtime.runFork(effect);
+
+/** Runs `effect` at once, for Electron's process-exit hook, which can't wait. */
+export const runNow = <A>(effect: Effect.Effect<A, never, AppServices>) => runtime.runSync(effect);

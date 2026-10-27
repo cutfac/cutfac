@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import {
   app,
   ipcMain,
@@ -35,6 +35,7 @@ import {
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
 import { decodeWorkspaceName } from "./library.ts";
+import { runInMain } from "./runtime.ts";
 import { clearDraft, isDraft, loadDraft, loadLibrary, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
 import {
@@ -73,7 +74,7 @@ export const macChecks: OnboardingChecks = {
   agentSetups,
   fixAgent,
   hasPermission,
-  suggestion: async () => ({ library: await loadLibrary(), name: undefined }),
+  suggestion: async () => ({ library: await runInMain(loadLibrary), name: undefined }),
 };
 
 export interface OnboardingHost {
@@ -107,7 +108,7 @@ export function handleOnboarding(host: OnboardingHost): void {
    * or as the board suggests; the main process picks the place, never a page.
    */
   const start = async (given: Option.Option<string>) => {
-    const draft = await loadDraft();
+    const draft = Option.getOrUndefined(await runInMain(loadDraft));
     const suggested = await checks.suggestion();
     const name = suggested.name ?? Option.getOrUndefined(given);
 
@@ -141,19 +142,19 @@ export function handleOnboarding(host: OnboardingHost): void {
   ipcMain.handle(DRAFT_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return loadDraft();
+    return runInMain(Effect.map(loadDraft, Option.getOrUndefined));
   });
   ipcMain.handle(SAVE_DRAFT_CHANNEL, (event, draft) => {
     assertFromApp(event);
 
     if (!isDraft(draft)) throw new Error("Unknown draft");
 
-    return saveDraft(draft);
+    return runInMain(saveDraft(draft));
   });
   ipcMain.handle(CLEAR_DRAFT_CHANNEL, (event) => {
     assertFromApp(event);
 
-    return clearDraft();
+    return runInMain(clearDraft);
   });
   ipcMain.handle(SHARING_CHANNEL, (event) => {
     assertFromApp(event);
