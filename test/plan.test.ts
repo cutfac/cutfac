@@ -187,11 +187,13 @@ describe("plan", () => {
 
   it.effect("agents hear about the free version, and about upgrading once it is used up", () =>
     Effect.sync(() => {
-      const usedUp = freeVersionNote(free(3));
+      const usedUp = Option.getOrThrow(freeVersionNote(free(3)));
 
-      expect(freeVersionNote({ edition: "open-source" })).toBeUndefined();
-      expect(freeVersionNote({ edition: "desktop", paid: true })).toBeUndefined();
-      expect(freeVersionNote(free(1))).toBe("Cutfac free version: 1 of 3 videos used on this Mac.");
+      expect(freeVersionNote({ edition: "open-source" })).toEqual(Option.none());
+      expect(freeVersionNote({ edition: "desktop", paid: true })).toEqual(Option.none());
+      expect(freeVersionNote(free(1))).toEqual(
+        Option.some("Cutfac free version: 1 of 3 videos used on this Mac."),
+      );
       expect(usedUp).toContain("3 of 3 videos used");
       expect(usedUp).toContain(PRICING_URL);
       expect(usedUp).toContain("existing ones stay editable");

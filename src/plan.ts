@@ -141,15 +141,17 @@ const LIMIT_MESSAGE =
 
 /**
  * What agent tools add on the free version, so the agent knows how many videos are left before the
- * limit stops it. Undefined on the open-source CLI and a paid plan.
+ * limit stops it. None on the open-source CLI and a paid plan.
  */
-export function freeVersionNote(plan: Plan): string | undefined {
-  if (plan.edition === "open-source" || plan.paid) return undefined;
+export function freeVersionNote(plan: Plan): Option.Option<string> {
+  if (plan.edition === "open-source" || plan.paid) return Option.none();
   const used = `Cutfac free version: ${plan.used} of ${plan.limit} videos used on this Mac.`;
 
-  return plan.used < plan.limit
-    ? used
-    : `${used} New videos need a paid plan (${PRICING_URL}); existing ones stay editable.`;
+  return Option.some(
+    plan.used < plan.limit
+      ? used
+      : `${used} New videos need a paid plan (${PRICING_URL}); existing ones stay editable.`,
+  );
 }
 
 /**

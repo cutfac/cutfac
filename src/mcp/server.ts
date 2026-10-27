@@ -615,7 +615,7 @@ const handlers = WorkspaceToolkit.toLayer(
                 ...(yield* trustNotices()),
                 ...(yield* mcpNotices()),
               ],
-              freeVersion: freeVersionNote(plan),
+              freeVersion: Option.getOrUndefined(freeVersionNote(plan)),
             };
           }),
         ),
@@ -686,7 +686,7 @@ const handlers = WorkspaceToolkit.toLayer(
             return {
               id: item.id,
               absDir: yield* ws.abs(item.dir),
-              freeVersion: freeVersionNote(yield* planStatus()),
+              freeVersion: Option.getOrUndefined(freeVersionNote(yield* planStatus())),
             };
           }),
         ),
