@@ -14,3 +14,4 @@ Closes #
 
 - [ ] I read the whole diff and can explain every line of it.
 - [ ] `bun test`, `bun run typecheck`, `bun run lint`, `bun run format:check` and `bun run build` pass.
+- [ ] I agree to the [Contributor License Agreement](https://github.com/wyverselabs/cutfac/blob/main/CLA.md) for this and my future contributions.

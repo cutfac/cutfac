@@ -71,6 +71,10 @@ every user's agent. Change them only when the issue calls for it, and expect a c
 
 ## License
 
-Cutfac is licensed under the [GNU Affero General Public License v3.0](LICENSE) only. By opening a
-pull request you agree that your contribution is licensed under the same terms. The Mac app is
-built from this repository under that license too.
+Cutfac is licensed under the [GNU Affero General Public License v3.0](LICENSE) only. Before we can
+merge your first pull request, agree to the [Contributor License Agreement](CLA.md) by ticking its
+box in the pull request. You keep the copyright to your work; the agreement lets Wyverse Labs ship
+it under the AGPL and under other terms, such as in the signed Mac app.
+
+The license doesn't cover the Cutfac name, logo or icon. [TRADEMARKS.md](TRADEMARKS.md) says how to
+use them and what a fork you distribute should change.

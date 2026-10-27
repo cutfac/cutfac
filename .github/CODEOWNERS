@@ -10,6 +10,11 @@
 /src/core/skill.ts      @w00ing
 /src/core/importPrompts.ts @w00ing
 
+# The terms contributors agree to and forks follow.
+/LICENSE                @w00ing
+/CLA.md                 @w00ing
+/TRADEMARKS.md          @w00ing
+
 # What runs on a contributor's or maintainer's machine, and what builds the signed app.
 /package.json           @w00ing
 /bun.lock               @w00ing

@@ -124,4 +124,6 @@ Built with Bun, Effect v4, React 19, Vite, Tailwind CSS v4, shadcn/ui and Electr
 
 ## License
 
-[GNU Affero General Public License v3.0](LICENSE)
+[GNU Affero General Public License v3.0](LICENSE). The Cutfac name, logo and icon are trademarks of
+Wyverse Labs and aren't covered by the license, so a build you distribute needs its own name and
+icon. [TRADEMARKS.md](TRADEMARKS.md) says what's fine and how to make a fork.
