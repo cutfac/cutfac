@@ -349,25 +349,28 @@ describe("a Codex run that asks", () => {
       const fakes = yield* FakeAgentDir;
       const fs = yield* FileSystem.FileSystem;
       const asked = join(fakes.dir, "asked");
-      const interrupted = yield* Ref.make(false);
+      const interrupted = join(fakes.dir, "interrupted");
 
+      // Codex finishes the turn only once the wait is over, so a run that kept waiting is seen.
       const { result } = yield* turn(
         [
           request(7, "item/fileChange/requestApproval", { itemId: "c1" }),
           `while [ ! -f "${asked}" ]; do sleep 0.02; done`,
           `echo '${notify("serverRequest/resolved", { threadId: FAKE_THREAD, requestId: 7 })}'`,
-          codexItem({ type: "agentMessage", id: "m1", text: "Done." }),
+          `for _ in $(seq 100); do [ -f "${interrupted}" ] && break; sleep 0.02; done`,
+          `if [ -f "${interrupted}" ]; then ${codexItem({ type: "agentMessage", id: "m1", text: "Done." })}`,
+          `else ${codexItem({ type: "agentMessage", id: "m1", text: "Still waiting." })}; fi`,
         ].join("\n"),
         () =>
           fs.writeFileString(asked, "").pipe(
             Effect.orDie,
             Effect.andThen(Effect.never),
-            Effect.onInterrupt(() => Ref.set(interrupted, true)),
+            Effect.onInterrupt(() => Effect.orDie(fs.writeFileString(interrupted, ""))),
           ),
       );
 
       expect(result.reply).toBe("Done.");
-      expect(yield* Ref.get(interrupted)).toBe(true);
+      expect(yield* fs.exists(interrupted)).toBe(true);
       expect(yield* answer(7)).toBeUndefined();
     }),
   );
