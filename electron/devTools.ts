@@ -124,7 +124,11 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     defaultFolder: () => {
       if (!fakes.freshFolder) return macChecks.defaultFolder();
 
-      freshFolder ??= path.join(app.getPath("documents"), "Cutfac QA", freshFolderName(new Date()));
+      freshFolder ??= path.join(
+        app.getPath("documents"),
+        "Cutfac Dev",
+        freshFolderName(new Date()),
+      );
 
       return freshFolder;
     },
