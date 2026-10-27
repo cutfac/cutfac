@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 
 import { Workspace } from "../src/core/workspace.ts";
 import { parseRange } from "../src/server/app.ts";
 import { testEffect } from "./effect.ts";
-import { boardServer, jsonOf } from "./routeSupport.ts";
+import { boardServer, decodedOf, jsonOf } from "./routeSupport.ts";
 import { fakeAgents, tempWorkspace } from "./support.ts";
 
 const it = testEffect(Layer.merge(tempWorkspace("Routes"), fakeAgents));
@@ -95,8 +95,7 @@ describe("routes", () => {
           attachments: ["references/logo.png"],
         });
 
-        // SAFETY: the edit route answers with this field.
-        const { prompt } = (yield* jsonOf(edit)) as { prompt: string };
+        const { prompt } = yield* decodedOf(Schema.Struct({ prompt: Schema.String }), edit);
 
         expect(prompt).toContain(`${ws.root}/items/clip/references/logo.png`);
 

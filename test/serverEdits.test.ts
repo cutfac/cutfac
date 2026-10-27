@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { Effect, Fiber, FileSystem, Layer, Queue, Schema, Stream } from "effect";
 
 import type { RunEvent } from "../src/core/agentParse.ts";
-import type { Feedback } from "../src/core/schema.ts";
+import { Feedback } from "../src/core/schema.ts";
 import { testEffect } from "./effect.ts";
-import { type BoardServer, boardServer, jsonOf } from "./routeSupport.ts";
+import { type BoardServer, boardServer, decodedOf, jsonOf } from "./routeSupport.ts";
 import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
 
 const it = testEffect(Layer.merge(tempWorkspace("Line"), fakeAgents));
@@ -32,12 +32,10 @@ describe("routes", () => {
 
       expect(edit.status).toBe(200);
 
-      // SAFETY: the edit route answers with these fields.
-      const queued = (yield* jsonOf(edit)) as {
-        feedbackId: string;
-        sent: string;
-        prompt: string;
-      };
+      const queued = yield* decodedOf(
+        Schema.Struct({ feedbackId: Schema.String, sent: Schema.String, prompt: Schema.String }),
+        edit,
+      );
 
       expect(queued.sent).toBe("queue");
       expect(queued.prompt).toContain("Request: Make the first second punchier");
@@ -138,8 +136,10 @@ const ask = Effect.fnUntraced(function* (
     ...settings,
   });
 
-  // SAFETY: the edit route answers with these fields.
-  return (yield* jsonOf(response)) as { feedbackId: string; sent: string; item: unknown };
+  return yield* decodedOf(
+    Schema.Struct({ feedbackId: Schema.String, sent: Schema.String, item: Schema.Unknown }),
+    response,
+  );
 });
 
 describe("an item's waiting line", () => {
@@ -273,8 +273,11 @@ describe("an item's waiting line", () => {
         },
       });
 
-      // SAFETY: the item route answers with the item's document.
-      const waited = (item as { doc: { feedback: ReadonlyArray<Feedback> } }).doc.feedback[1];
+      const { doc } = yield* Schema.decodeUnknownEffect(
+        Schema.Struct({ doc: Schema.Struct({ feedback: Schema.Array(Feedback) }) }),
+      )(item);
+
+      const waited = doc.feedback[1];
 
       expect([waited?.waiting, waited?.model, waited?.effort]).toEqual([
         undefined,

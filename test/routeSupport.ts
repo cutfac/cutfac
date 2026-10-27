@@ -1,6 +1,6 @@
 // @effect-diagnostics strictEffectProvide:off
 import { BunHttpPlatform, type BunServices } from "@effect/platform-bun";
-import { Context, Effect, Layer, Option, type Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 
 import { RunRegistry } from "../src/core/agentRun.ts";
@@ -12,10 +12,9 @@ import { routes } from "../src/server/app.ts";
 export const jsonOf = (response: Response) =>
   Effect.promise((): Promise<Schema.Json> => response.json());
 
-/**
- * Requests to routes handled in this process, as `fetch` makes them; `dispose` runs when the test
- * ends.
- */
+export const decodedOf = <A>(schema: Schema.Decoder<A>, response: Response) =>
+  Effect.flatMap(jsonOf(response), Schema.decodeUnknownEffect(schema));
+
 export const requester = (
   handle: (request: Request) => Promise<Response>,
   dispose: () => Promise<void>,

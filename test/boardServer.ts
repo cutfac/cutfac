@@ -123,8 +123,8 @@ export class StreamSource {
           this.emit(field("event") ?? "message", field("data") ?? "");
         }
       }
-    } catch {
-      // Closing the source aborts the read.
+    } catch (error) {
+      if (!this.abort.signal.aborted) throw error;
     }
   }
 }
