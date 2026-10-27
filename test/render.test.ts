@@ -1,6 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
 
 import { Duration, Effect, Option } from "effect";
 
@@ -20,7 +18,11 @@ import {
   START_PROGRESS,
   type RenderProgress,
 } from "../src/core/renderProgress.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { eventually, testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace());
 
 const fold = (lines: ReadonlyArray<string>, from: RenderProgress = START_PROGRESS) =>
   lines.map(plainLine).reduce(readProgress, from);
@@ -102,155 +104,156 @@ describe("keeping a render's log", () => {
 
 /** Render `command` on a new item and wait for it. */
 const render = (command: string, wait: Duration.Input = "5 seconds") =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const item = yield* createItem({ title: "Clip" });
-      const renders = yield* makeRenders;
-      yield* renders.start({ item: item.id, command, label: "v2" });
+  Effect.gen(function* () {
+    const item = yield* createItem({ title: "Clip" });
+    const renders = yield* makeRenders;
+    yield* renders.start({ item: item.id, command, label: "v2" });
 
-      return Option.getOrThrow(yield* renders.wait(item.id, wait));
-    }),
-  );
-
-describe("running a render", () => {
-  let ws: TestWorkspace;
-
-  beforeEach(async () => {
-    ws = await makeWorkspace();
+    return Option.getOrThrow(yield* renders.wait(item.id, wait));
   });
 
-  afterEach(() => ws.remove());
-
-  test("runs to the end and saves how far it got", async () => {
-    const state = await ws.run(
-      render("printf 'Codec h264\\nRendered 1/2\\r\\nRendered 2/2\\rEncoded 2/2'"),
-    );
-
-    expect(state).toMatchObject({
-      status: "done",
-      code: 0,
-      label: "v2",
-      progress: { stage: "encoding", done: 2, total: 2 },
-      log: ["Codec h264", "Rendered 2/2", "Encoded 2/2"],
-    });
-    expect(state?.endedAt).toBeNumber();
-
-    const saved = Option.getOrThrow(await ws.run(readRender("clip")));
-
-    expect(saved).toEqual(state);
-  });
-
-  test("a failing command fails with what it printed", async () => {
-    const state = await ws.run(render("echo 'Error: no composition named Foo' >&2; exit 3"));
-
-    expect(state).toMatchObject({ status: "failed", code: 3 });
-    expect(state?.log).toEqual(["Error: no composition named Foo"]);
-  });
-
-  test("hands back where it stands when the wait runs out", async () => {
-    const state = await ws.run(render("echo 'Rendered 1/9'; sleep 5", "1500 millis"));
-
-    expect(state).toMatchObject({ status: "running", progress: { done: 1, total: 9 } });
-  });
-
-  test("stops when the board asks", async () => {
-    const state = await ws.run(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const item = yield* createItem({ title: "Clip" });
-          const renders = yield* makeRenders;
-          yield* renders.start({ item: item.id, command: "echo started; sleep 30" });
-          yield* Effect.sleep("300 millis");
-          yield* requestStop(item.id);
-
-          return Option.getOrThrow(yield* renders.wait(item.id, "5 seconds"));
-        }),
-      ),
-    );
-
-    expect(state?.status).toBe("stopped");
-  });
-
-  test("won't start a second render of the same item", async () => {
-    const error = await ws.fail(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const item = yield* createItem({ title: "Clip" });
-          const renders = yield* makeRenders;
-          yield* renders.start({ item: item.id, command: "sleep 30" });
-
-          return yield* renders.start({ item: item.id, command: "sleep 30" });
-        }),
-      ),
-    );
-
-    expect(error).toBeInstanceOf(Conflict);
-  });
-
-  test("of two starts at once, only one runs", async () => {
-    const error = await ws.fail(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const item = yield* createItem({ title: "Clip" });
-          const renders = yield* makeRenders;
-          const start = renders.start({ item: item.id, command: "sleep 30" });
-
-          return yield* Effect.all([start, start], { concurrency: 2 });
-        }),
-      ),
-    );
-
-    expect(error).toBeInstanceOf(Conflict);
-  });
-
-  test("a render whose process is gone reads as stopped", async () => {
-    await ws.run(createItem({ title: "Clip" }));
-    await mkdir(join(ws.root, RENDERS_DIR), { recursive: true });
-    await writeFile(
-      join(ws.root, RENDERS_DIR, "clip.json"),
+/** A render state as an earlier process saved it, for `owner` to be running or gone. */
+const savedRender = (item: string, status: string, owner: number) =>
+  Effect.flatMap(Workspace, (ws) =>
+    ws.writeText(
+      `${RENDERS_DIR}/${encodeURIComponent(item)}.json`,
       JSON.stringify({
-        item: "clip",
-        command: "npx remotion render",
+        item,
+        command: "x",
         cwd: "",
-        status: "running",
+        status,
         progress: { stage: "frames" },
         startedAt: 1,
         log: [],
-        // Past the highest pid macOS and Linux hand out.
-        owner: 99_999_999,
+        owner,
       }),
-    );
+    ),
+  );
 
-    const state = Option.getOrThrow(await ws.run(readRender("clip")));
+// Past the highest pid macOS and Linux hand out.
+const GONE_PID = 99_999_999;
 
-    expect(state?.status).toBe("stopped");
-    expect(state?.endedAt).toBeNumber();
-  });
+describe("running a render", () => {
+  it.live("runs to the end and saves how far it got", () =>
+    Effect.gen(function* () {
+      const state = yield* render(
+        "printf 'Codec h264\\nRendered 1/2\\r\\nRendered 2/2\\rEncoded 2/2'",
+      );
 
-  test("lists only the renders still going on", async () => {
-    await mkdir(join(ws.root, RENDERS_DIR), { recursive: true });
+      expect(state).toMatchObject({
+        status: "done",
+        code: 0,
+        label: "v2",
+        progress: { stage: "encoding", done: 2, total: 2 },
+        log: ["Codec h264", "Rendered 2/2", "Encoded 2/2"],
+      });
+      expect(state?.endedAt).toBeNumber();
 
-    const save = (item: string, status: string, owner: number) =>
-      writeFile(
-        join(ws.root, RENDERS_DIR, `${encodeURIComponent(item)}.json`),
+      const saved = Option.getOrThrow(yield* readRender("clip"));
+
+      expect(saved).toEqual(state);
+    }),
+  );
+
+  it.live("a failing command fails with what it printed", () =>
+    Effect.gen(function* () {
+      const state = yield* render("echo 'Error: no composition named Foo' >&2; exit 3");
+
+      expect(state).toMatchObject({ status: "failed", code: 3 });
+      expect(state?.log).toEqual(["Error: no composition named Foo"]);
+    }),
+  );
+
+  it.live("hands back where it stands when the wait runs out", () =>
+    Effect.gen(function* () {
+      const state = yield* render("echo 'Rendered 1/9'; sleep 5", "1500 millis");
+
+      expect(state).toMatchObject({ status: "running", progress: { done: 1, total: 9 } });
+    }),
+  );
+
+  it.live("stops when the board asks", () =>
+    Effect.gen(function* () {
+      const item = yield* createItem({ title: "Clip" });
+      const renders = yield* makeRenders;
+
+      yield* renders.start({ item: item.id, command: "echo started; sleep 30" });
+      yield* eventually(
+        Effect.map(
+          renders.current(item.id),
+          Option.exists((now) => now.log.includes("started")),
+        ),
+      );
+      yield* requestStop(item.id);
+
+      const state = Option.getOrThrow(yield* renders.wait(item.id, "5 seconds"));
+
+      expect(state?.status).toBe("stopped");
+    }),
+  );
+
+  it.live("won't start a second render of the same item", () =>
+    Effect.gen(function* () {
+      const item = yield* createItem({ title: "Clip" });
+      const renders = yield* makeRenders;
+
+      yield* renders.start({ item: item.id, command: "sleep 30" });
+
+      const error = yield* Effect.flip(renders.start({ item: item.id, command: "sleep 30" }));
+
+      expect(error).toBeInstanceOf(Conflict);
+    }),
+  );
+
+  it.live("of two starts at once, only one runs", () =>
+    Effect.gen(function* () {
+      const item = yield* createItem({ title: "Clip" });
+      const renders = yield* makeRenders;
+      const start = renders.start({ item: item.id, command: "sleep 30" });
+
+      const error = yield* Effect.flip(Effect.all([start, start], { concurrency: 2 }));
+
+      expect(error).toBeInstanceOf(Conflict);
+    }),
+  );
+
+  it.live("a render whose process is gone reads as stopped", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+
+      yield* createItem({ title: "Clip" });
+      yield* ws.writeText(
+        `${RENDERS_DIR}/clip.json`,
         JSON.stringify({
-          item,
-          command: "x",
+          item: "clip",
+          command: "npx remotion render",
           cwd: "",
-          status,
+          status: "running",
           progress: { stage: "frames" },
           startedAt: 1,
           log: [],
-          owner,
+          owner: GONE_PID,
         }),
       );
 
-    await save("b clip", "running", process.pid);
-    await save("a clip", "running", process.pid);
-    await save("done", "done", process.pid);
-    await save("gone", "running", 99_999_999);
-    await writeFile(join(ws.root, RENDERS_DIR, "a clip.stop"), "");
+      const state = Option.getOrThrow(yield* readRender("clip"));
 
-    expect(await ws.run(runningRenders())).toEqual(["a clip", "b clip"]);
-  });
+      expect(state?.status).toBe("stopped");
+      expect(state?.endedAt).toBeNumber();
+    }),
+  );
+
+  it.live("lists only the renders still going on", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+
+      yield* savedRender("b clip", "running", process.pid);
+      yield* savedRender("a clip", "running", process.pid);
+      yield* savedRender("done", "done", process.pid);
+      yield* savedRender("gone", "running", GONE_PID);
+      yield* ws.writeText(`${RENDERS_DIR}/a clip.stop`, "");
+
+      expect(yield* runningRenders()).toEqual(["a clip", "b clip"]);
+    }),
+  );
 });
