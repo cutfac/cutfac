@@ -53,8 +53,17 @@ const run = <A, E, R, E2>(
 
 const make = <R, E>(testLayer: Layer.Layer<R, E>, liveLayer: Layer.Layer<R, E>) => ({
   /** A test on a test clock, which only moves when the test moves it with `TestClock`. */
-  effect: <A, E2>(name: string, body: () => Effect.Effect<A, E2, R | Scope.Scope>) =>
-    test(name, () => run(body, testLayer)),
+  effect: Object.assign(
+    <A, E2>(name: string, body: () => Effect.Effect<A, E2, R | Scope.Scope>) =>
+      test(name, () => run(body, testLayer)),
+    {
+      /** One test on the test clock for each of `cases`, named with `$field`, as test.each is. */
+      each:
+        <T extends object>(cases: ReadonlyArray<T>) =>
+        <A, E2>(name: string, body: (row: T) => Effect.Effect<A, E2, R | Scope.Scope>) =>
+          test.each([...cases])(name, (row) => run(() => body(row), testLayer)),
+    },
+  ),
   /**
    * A test on the real clock, for code that waits on the file system or other processes; `timeout`
    * in milliseconds, for one that waits longer than bun's default allows.

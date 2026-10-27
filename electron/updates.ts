@@ -1,107 +1,98 @@
-import { app, dialog, type BrowserWindow, type MessageBoxOptions } from "electron";
-import electronUpdater from "electron-updater";
+import { Context, Effect, Option, Ref, Schedule, Schema, Stream } from "effect";
 
-import type { Messages } from "./messages.ts";
+const CHECK_EVERY = "4 hours";
 
-const CHECK_EVERY_MS = 4 * 60 * 60 * 1_000;
+export class UpdateCheckFailed extends Schema.TaggedError<UpdateCheckFailed>()(
+  "UpdateCheckFailed",
+  { message: Schema.String },
+) {}
 
-interface UpdatesOptions {
-  /** The strings in the board's current language. */
-  messages: () => Messages;
-  /** The window dialogs attach to, when there is one. */
-  window: () => BrowserWindow | undefined;
+export interface FoundUpdate {
+  readonly available: boolean;
+  readonly version: string;
+}
+
+/** The feed the released app updates from. Runs from source have none. */
+export class UpdateFeed extends Context.Service<
+  UpdateFeed,
+  {
+    readonly enabled: boolean;
+    /** A check already running hands its result to this one too. */
+    readonly check: Effect.Effect<Option.Option<FoundUpdate>, UpdateCheckFailed>;
+    /** Each version as it finishes downloading. */
+    readonly downloaded: Stream.Stream<string>;
+    readonly quitAndInstall: Effect.Effect<void>;
+  }
+>()("cutfac/desktop/UpdateFeed") {}
+
+/** What the app says about updates, in the person's language. */
+export interface UpdatePrompts {
+  /** A version is ready to install: whether to restart now. */
+  readonly ready: (version: string) => Effect.Effect<boolean>;
+  readonly upToDate: Effect.Effect<void>;
+  readonly downloading: (version: string) => Effect.Effect<void>;
+  readonly failed: (message: string) => Effect.Effect<void>;
 }
 
 export interface Updates {
-  /** Only the packaged app has a feed to update from. */
   readonly enabled: boolean;
   /** Checks now and says what it found, for the menu item. */
-  checkNow: () => Promise<void>;
+  readonly checkNow: Effect.Effect<void>;
 }
 
 /**
  * Downloads new versions in the background and offers a restart once one is ready. Declining
  * installs it the next time the app quits. The free version gets updates as a paid plan does.
  */
-export function startUpdates({ messages, window }: UpdatesOptions): Updates {
-  if (!app.isPackaged) return { enabled: false, checkNow: async () => {} };
+export const startUpdates = Effect.fn("updates.start")(function* (prompts: UpdatePrompts) {
+  const feed = yield* UpdateFeed;
 
-  // Read lazily: the first read creates the platform updater.
-  const { autoUpdater } = electronUpdater;
+  if (!feed.enabled) return { enabled: false, checkNow: Effect.void } satisfies Updates;
 
-  let offered: string | undefined;
+  const offered = yield* Ref.make(Option.none<string>());
 
-  const show = (options: MessageBoxOptions) => {
-    const parent = window();
+  const ask = (version: string) =>
+    Effect.flatMap(prompts.ready(version), (restart) =>
+      restart ? feed.quitAndInstall : Effect.void,
+    );
 
-    return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options);
-  };
+  const offer = (version: string) =>
+    Effect.andThen(Ref.set(offered, Option.some(version)), ask(version));
 
-  const offer = async (version: string) => {
-    offered = version;
+  const offeredAlready = (version: string) =>
+    Effect.map(Ref.get(offered), (last) => Option.contains(last, version));
 
-    const t = messages();
+  // Later checks report the same download again; it is offered once unless asked from the menu.
+  yield* feed.downloaded.pipe(
+    Stream.runForEach((version) =>
+      Effect.flatMap(offeredAlready(version), (already) =>
+        already
+          ? Effect.void
+          : Effect.andThen(Ref.set(offered, Option.some(version)), Effect.forkDetach(ask(version))),
+      ),
+    ),
+    Effect.forkDetach,
+  );
 
-    const { response } = await show({
-      type: "info",
-      message: t.updateReady(version),
-      detail: t.updateReadyDetail,
-      buttons: [t.restartNow, t.later],
-      defaultId: 0,
-      cancelId: 1,
-    });
+  // The updater logs a failure itself; the next check tries again.
+  yield* feed.check.pipe(
+    Effect.ignore,
+    Effect.repeat(Schedule.spaced(CHECK_EVERY)),
+    Effect.forkDetach,
+  );
 
-    if (response === 0) autoUpdater.quitAndInstall();
-  };
+  const checkNow = feed.check.pipe(
+    Effect.flatMap((found) => {
+      if (Option.isNone(found) || !found.value.available) return prompts.upToDate;
 
-  // Later checks report the same download again; ask once per version unless asked from the menu.
-  autoUpdater.on("update-downloaded", ({ version }) => {
-    if (version !== offered) void offer(version);
-  });
+      const { version } = found.value;
 
-  // The updater logs the failure itself; the next check tries again.
-  const checkQuietly = () => void autoUpdater.checkForUpdates().catch(() => {});
+      return Effect.flatMap(offeredAlready(version), (already) =>
+        already ? offer(version) : prompts.downloading(version),
+      );
+    }),
+    Effect.catch((error) => prompts.failed(error.message)),
+  );
 
-  checkQuietly();
-  setInterval(checkQuietly, CHECK_EVERY_MS).unref();
-
-  return {
-    enabled: true,
-    checkNow: async () => {
-      const t = messages();
-
-      try {
-        // A check already running hands its result to this one too.
-        const result = await autoUpdater.checkForUpdates();
-
-        if (!result?.isUpdateAvailable) {
-          await show({
-            type: "info",
-            message: t.upToDate,
-            detail: t.upToDateDetail(app.getVersion()),
-          });
-
-          return;
-        }
-
-        const { version } = result.updateInfo;
-
-        if (version === offered) {
-          await offer(version);
-        } else {
-          await show({
-            type: "info",
-            message: t.updateDownloading(version),
-            detail: t.updateDownloadingDetail,
-          });
-        }
-      } catch (error) {
-        await show({
-          type: "error",
-          message: t.updateCheckFailed,
-          detail: error instanceof Error ? error.message : String(error),
-        });
-      }
-    },
-  };
-}
+  return { enabled: true, checkNow } satisfies Updates;
+});

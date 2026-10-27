@@ -14,6 +14,7 @@ import { platform } from "./platform.ts";
 import { Settings } from "./settings.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
 import { SystemAccess } from "./systemAccess.ts";
+import { updateFeed } from "./updateFeed.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
 
 export const installInfo = (): InstallInfo => ({
@@ -52,9 +53,13 @@ const settings = Layer.unwrap(
 
 const base = Layer.mergeAll(platform, Layer.sync(Install, installInfo), appData, AppState.layer);
 
-const services = Layer.mergeAll(settings, ServerEnv.layer, FetchHttpClient.layer, appLog).pipe(
-  Layer.provideMerge(base),
-);
+const services = Layer.mergeAll(
+  settings,
+  ServerEnv.layer,
+  FetchHttpClient.layer,
+  appLog,
+  updateFeed,
+).pipe(Layer.provideMerge(base));
 
 export const appServices = Layer.mergeAll(
   WorkspaceServer.layer,

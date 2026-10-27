@@ -67,6 +67,7 @@ import {
   watchServerCrashes,
 } from "./sidecarRuntime.ts";
 import { SystemAccess } from "./systemAccess.ts";
+import { updatePrompts } from "./updateFeed.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
@@ -253,7 +254,14 @@ async function boot(): Promise<void> {
     license = await startLicense(() => window?.webContents.send(LICENSE_CHANGE_CHANNEL));
   }
 
-  updates = startUpdates({ messages: () => MESSAGES[locale], window: () => window });
+  updates = await runInMain(
+    startUpdates(
+      updatePrompts(
+        () => MESSAGES[locale],
+        () => window,
+      ),
+    ),
+  );
   setMenu();
 
   // In dev, Vite serves the board instead.
@@ -281,7 +289,9 @@ function setMenu(): void {
   const template = menuTemplate({
     messages: MESSAGES[locale],
     updatesEnabled: updates?.enabled ?? false,
-    checkForUpdates: () => void updates?.checkNow(),
+    checkForUpdates: () => {
+      if (updates) forkInMain(updates.checkNow);
+    },
     requestLicenseKey,
     openWorkspace: () => void workspaces?.choose(),
     appCommand: sendAppCommand,
