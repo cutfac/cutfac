@@ -40,6 +40,7 @@ export const ko: Messages = {
     templates: "템플릿",
     setup: "설정",
     sendFeedback: "피드백 보내기",
+    resize: "사이드바 너비 조절",
     videos: "영상",
     inProgress: "진행 중",
     allVideos: "모든 영상",

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { type CSSProperties, useEffect } from "react";
 
 import { AnnouncementDialog } from "@/components/announcement-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { api } from "./api.ts";
 import { briefApi } from "./briefApi.ts";
 import { desktop, insetTitleBar } from "./desktop.ts";
-import { href, useHashRoute, useLive, usePlan, useSidebarOpen } from "./hooks.ts";
+import { href, useHashRoute, useLive, usePlan, useSidebarOpen, useSidebarWidth } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
 import { agentsToConnect, needsStart, startSkipped } from "./lib/onboarding.ts";
 import { Board } from "./views/Board.tsx";
@@ -53,6 +53,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
   useConnectAgents();
   const editing = view === "item" && id ? id : undefined;
   const [sidebarOpen, setSidebarOpen] = useSidebarOpen();
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
 
   // Opened with no page in mind, a workspace with no template yet starts on making one. Unknown
   // until both have loaded; a brief that can't be read doesn't hold that up.
@@ -78,10 +79,19 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
     <SidebarProvider
       open={sidebarOpen}
       onOpenChange={setSidebarOpen}
+      // SAFETY: CSSProperties has no index signature for custom properties; the value is a plain length.
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       // On macOS the title bar runs across the window above the sidebar and the content.
       className={cn("min-h-0", insetTitleBar ? "mt-10 h-[calc(100dvh-2.5rem)]" : "h-dvh")}
     >
-      <AppSidebar ws={ws} plan={plan} view={view} id={id} />
+      <AppSidebar
+        ws={ws}
+        plan={plan}
+        view={view}
+        id={id}
+        width={sidebarWidth}
+        onWidth={setSidebarWidth}
+      />
       <SidebarInset className="min-h-0 min-w-0 [view-transition-name:page]">
         <TitleBar>
           {error ? (

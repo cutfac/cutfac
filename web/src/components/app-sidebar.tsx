@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
+import { SidebarResizer } from "@/components/sidebar-resizer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -303,9 +304,12 @@ interface AppSidebarProps {
   view: string;
   /** The open item or template, from the second part of the route. */
   id: string | undefined;
+  /** The sidebar's width in pixels, which its right edge drags. */
+  width: number;
+  onWidth: (width: number) => void;
 }
 
-export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
+export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarProps) {
   const t = useMessages();
   const items = useLive("items", api.items).data ?? [];
   const videos = inProgress(items, failureSeen).slice(0, MAX_VIDEOS);
@@ -424,6 +428,7 @@ export function AppSidebar({ ws, plan, view, id }: AppSidebarProps) {
           ) : null}
         </SidebarMenu>
       </SidebarFooter>
+      <SidebarResizer width={width} onWidth={onWidth} />
     </Sidebar>
   );
 }

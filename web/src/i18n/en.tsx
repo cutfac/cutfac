@@ -51,6 +51,7 @@ export const en = {
     templates: "Templates",
     setup: "Setup",
     sendFeedback: "Send feedback",
+    resize: "Resize the sidebar",
     videos: "Videos",
     inProgress: "In progress",
     allVideos: "All videos",

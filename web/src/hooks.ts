@@ -250,3 +250,45 @@ export function useSidebarOpen(): SidebarOpen {
     },
   ];
 }
+
+/** The sidebar's width in pixels when nobody has dragged it: the sidebar's own 14rem. */
+export const SIDEBAR_WIDTH = 224;
+
+const SIDEBAR_MIN_WIDTH = 192;
+
+const SIDEBAR_MAX_WIDTH = 400;
+
+const SIDEBAR_WIDTH_KEY = "cutfac.sidebar.width";
+
+/** A width the sidebar can take, whole pixels between the narrowest and the widest. */
+export function clampSidebarWidth(width: number): number {
+  return Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)));
+}
+
+function readSidebarWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+
+    return saved > 0 ? clampSidebarWidth(saved) : SIDEBAR_WIDTH;
+  } catch {
+    return SIDEBAR_WIDTH;
+  }
+}
+
+/** The sidebar's width: what the user dragged it to, the same on every page. */
+export function useSidebarWidth(): readonly [width: number, setWidth: (width: number) => void] {
+  const [width, setWidth] = useState(readSidebarWidth);
+
+  return [
+    width,
+    (next) => {
+      setWidth(next);
+
+      try {
+        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next));
+      } catch {
+        // The width just won't survive a reload.
+      }
+    },
+  ];
+}
