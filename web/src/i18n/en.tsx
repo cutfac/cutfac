@@ -722,11 +722,14 @@ export const en = {
     /** Shows under a message box while its text starts with `/feedback`. */
     slashHint: "/feedback sends the rest of the message to the Cutfac team, not to your agent.",
     slashEmpty: "Write what to tell us after /feedback.",
-    logsLabel: "Send the app's log with it",
     logsHint:
-      "What the app did lately and any errors, to help us find the cause. Never a video, a prompt, a chat or a key.",
+      "The log is what the app did lately and any errors, which helps us find the cause. Never a video, a prompt, a chat or a key.",
     showLogs: "See what's sent",
-    noLogs: "The app hasn't logged anything yet.",
+    /** Only says what the log holds; it picks nothing. */
+    recentErrors: (count: number) =>
+      `The app hit ${count === 1 ? "an error" : `${count} errors`} lately. Sending the log with it helps us find the cause much faster.`,
+    sendWithLog: "Send with log",
+    sendWithoutLog: "Send without log",
   },
   onboarding: onboardingEn,
   start: startEn,

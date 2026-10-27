@@ -808,8 +808,12 @@ export const api = {
   /** Feedback for the Cutfac team, which the server passes on to cutfac.com. */
   teamFeedback: (feedback: TeamFeedback) =>
     send<{ ok: true }, TeamFeedback>("POST", "/api/team-feedback", feedback),
-  /** The log feedback would carry, for the person to read first; null outside the desktop app. */
-  teamFeedbackLogs: () => request<{ logs: string | null }>("/api/team-feedback/logs"),
+  /**
+   * The log feedback would carry, for the person to read first, and how many errors it holds;
+   * no log outside the desktop app.
+   */
+  teamFeedbackLogs: () =>
+    request<{ logs: string | null; errors: number }>("/api/team-feedback/logs"),
   errorReports: () => request<ErrorReports>("/api/error-reports"),
   setErrorReports: (on: boolean) =>
     send<ErrorReports, { on: boolean }>("POST", "/api/error-reports", { on }),

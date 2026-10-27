@@ -84,11 +84,13 @@ agent shows them the exact text and sends it only once they agree. The board pos
 platform and language, which way it came, and the agent, if one was involved.
 
 In the desktop app, feedback can also carry the app's recent log (see Logs): the newest days, up to
-1 MB, gzipped as `cutfac-logs.txt.gz`, which cutfac.com attaches to the mail. "Send feedback" asks
-with a switch that starts on and shows what would go; the agent passes `logs: true` and says so in
-the text it shows first, leaving it off if the person says no. A `/feedback` message sends no log.
-While the person sends error reports, feedback also carries the install ID, so the team can find
-that install's reports. Nothing else is sent.
+1 MB, gzipped as `cutfac-logs.txt.gz`, which cutfac.com attaches to the mail. With a log to send,
+"Send feedback" ends with two buttons, "Send with log" and "Send without log", and picks neither;
+Enter sends without it. Above them it says what the log holds, shows it on request, and says how
+many errors it has had lately. Without a log there is one "Send". The agent asks first and passes
+`logs: true` only if the person agrees. A `/feedback` message sends no log. Feedback sent with its
+log, while the person sends error reports, also carries the install ID, so the team can find that
+install's reports; other feedback never does. Nothing else is sent.
 
 ## Logs
 

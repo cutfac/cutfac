@@ -669,11 +669,13 @@ export const ko: Messages = {
     sent: "고마워요! 피드백이 컷팩 팀에 전달됐어요.",
     slashHint: "/feedback 뒤의 내용은 에이전트가 아니라 컷팩 팀에 전달돼요.",
     slashEmpty: "/feedback 뒤에 전할 내용을 적어주세요.",
-    logsLabel: "앱 로그 함께 보내기",
     logsHint:
-      "원인을 찾는 데 쓰도록 앱이 최근에 한 일과 오류를 함께 보내요. 영상, 프롬프트, 대화, 키는 들어가지 않아요.",
+      "로그에는 앱이 최근에 한 일과 오류가 담겨 원인을 찾는 데 도움이 돼요. 영상, 프롬프트, 대화, 키는 들어가지 않아요.",
     showLogs: "보내는 내용 보기",
-    noLogs: "아직 앱이 남긴 로그가 없어요.",
+    recentErrors: (count: number) =>
+      `최근에 오류가 ${count}번 있었어요. 로그를 함께 보내면 원인을 훨씬 빨리 찾을 수 있어요.`,
+    sendWithLog: "로그와 함께 보내기",
+    sendWithoutLog: "로그 없이 보내기",
   },
   onboarding: onboardingKo,
   start: startKo,

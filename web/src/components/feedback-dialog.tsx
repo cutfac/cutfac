@@ -13,20 +13,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 import { api, type AgentChoice, type TeamFeedback } from "../api.ts";
 import { desktop } from "../desktop.ts";
+import { useLive } from "../hooks.ts";
 import { currentLocale, messages, useMessages } from "../i18n/index.ts";
 import { SelectionArea } from "./selection-area.tsx";
 
@@ -80,41 +74,16 @@ export function SlashFeedbackHint() {
   return <p className="px-1 text-xs text-muted-foreground">{t.teamFeedback.slashHint}</p>;
 }
 
+/** What the desktop app's log holds now; the web board has none. */
+const noLogs = () => Promise.resolve({ logs: null, errors: 0 });
+
 /** Tell the Cutfac team something, with an optional address to reply to. */
 export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
   const t = useMessages();
   const [open, setOpen] = useState(false);
+  // Kept while the dialog is closed, so a draft survives closing it.
   const [message, setMessage] = useState("");
   const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  // Only the desktop app keeps a log, and the person sends it unless they turn it off.
-  const [withLogs, setWithLogs] = useState(desktop !== undefined);
-  const [logs, setLogs] = useState<string | null>();
-
-  function showLogs() {
-    api
-      .teamFeedbackLogs()
-      .then((shown) => setLogs(shown.logs))
-      .catch((cause: Error) => setError(cause.message));
-  }
-
-  function submit(event: SubmitEvent) {
-    event.preventDefault();
-
-    if (!message.trim() || busy) return;
-
-    setBusy(true);
-    setError(undefined);
-    sendTeamFeedback(message, "board", { email, logs: withLogs })
-      .then(() => {
-        toast.success(t.teamFeedback.sent);
-        setOpen(false);
-        setMessage("");
-      })
-      .catch((cause: Error) => setError(cause.message))
-      .finally(() => setBusy(false));
-  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -124,67 +93,140 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
           <DialogTitle>{t.teamFeedback.title}</DialogTitle>
           <DialogDescription>{t.teamFeedback.description}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-6">
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="team-feedback-message">{t.teamFeedback.messageLabel}</FieldLabel>
-              <Textarea
-                id="team-feedback-message"
-                required
-                rows={5}
-                maxLength={5000}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={t.teamFeedback.placeholder}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="team-feedback-email">{t.teamFeedback.emailLabel}</FieldLabel>
-              <Input
-                id="team-feedback-email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <FieldDescription>{t.teamFeedback.emailHint}</FieldDescription>
-            </Field>
-            {desktop ? (
-              <Field orientation="horizontal">
-                <Switch id="team-feedback-logs" checked={withLogs} onCheckedChange={setWithLogs} />
-                <FieldContent>
-                  <FieldLabel htmlFor="team-feedback-logs">{t.teamFeedback.logsLabel}</FieldLabel>
-                  <FieldDescription>
-                    {t.teamFeedback.logsHint}{" "}
-                    <Button type="button" variant="link" size="xs" onClick={showLogs}>
-                      {t.teamFeedback.showLogs}
-                    </Button>
-                  </FieldDescription>
-                </FieldContent>
-              </Field>
+        <FeedbackForm
+          message={message}
+          email={email}
+          onMessage={setMessage}
+          onEmail={setEmail}
+          onSent={() => {
+            setOpen(false);
+            setMessage("");
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface FeedbackFormProps {
+  message: string;
+  email: string;
+  onMessage: (message: string) => void;
+  onEmail: (email: string) => void;
+  onSent: () => void;
+}
+
+/**
+ * The feedback form, read when the dialog opens. With a log to send, the person picks one of two
+ * buttons, with it or without; nothing is chosen for them, and Enter sends without it.
+ */
+function FeedbackForm({ message, email, onMessage, onEmail, onSent }: FeedbackFormProps) {
+  const t = useMessages();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [showLogs, setShowLogs] = useState(false);
+  const { data: log } = useLive("team-feedback-logs", desktop ? api.teamFeedbackLogs : noLogs);
+  const logs = log?.logs ?? null;
+
+  function send(withLogs: boolean) {
+    if (!message.trim() || busy) return;
+
+    setBusy(true);
+    setError(undefined);
+    sendTeamFeedback(message, "board", { email, logs: withLogs })
+      .then(() => {
+        toast.success(t.teamFeedback.sent);
+        onSent();
+      })
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() => setBusy(false));
+  }
+
+  function submit(event: SubmitEvent) {
+    event.preventDefault();
+    send(false);
+  }
+
+  const disabled = !message.trim() || busy;
+
+  return (
+    <form onSubmit={submit} className="grid gap-6">
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="team-feedback-message">{t.teamFeedback.messageLabel}</FieldLabel>
+          <Textarea
+            id="team-feedback-message"
+            required
+            rows={5}
+            maxLength={5000}
+            value={message}
+            onChange={(e) => onMessage(e.target.value)}
+            placeholder={t.teamFeedback.placeholder}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="team-feedback-email">{t.teamFeedback.emailLabel}</FieldLabel>
+          <Input
+            id="team-feedback-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => onEmail(e.target.value)}
+          />
+          <FieldDescription>{t.teamFeedback.emailHint}</FieldDescription>
+        </Field>
+        {logs === null ? null : (
+          <Field>
+            {log !== undefined && log.errors > 0 ? (
+              <FieldDescription>{t.teamFeedback.recentErrors(log.errors)}</FieldDescription>
             ) : null}
-            {logs === undefined ? null : (
+            <FieldDescription>
+              {t.teamFeedback.logsHint}{" "}
+              <Button
+                type="button"
+                variant="link"
+                size="xs"
+                onClick={() => setShowLogs((shown) => !shown)}
+              >
+                {t.teamFeedback.showLogs}
+              </Button>
+            </FieldDescription>
+            {showLogs ? (
               <SelectionArea
                 render={
                   <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap" />
                 }
               >
-                {logs ?? t.teamFeedback.noLogs}
+                {logs}
               </SelectionArea>
-            )}
-          </FieldGroup>
-          {error ? <ErrorAlert title={t.teamFeedback.failed} message={error} /> : null}
-          <DialogFooter>
+            ) : null}
+          </Field>
+        )}
+      </FieldGroup>
+      {error ? <ErrorAlert title={t.teamFeedback.failed} message={error} /> : null}
+      <DialogFooter>
+        {logs === null ? (
+          <>
             <DialogClose render={<Button type="button" variant="outline" />}>
               {t.common.cancel}
             </DialogClose>
-            <Button type="submit" disabled={!message.trim() || busy}>
+            <Button type="submit" disabled={disabled}>
               {busy ? <Spinner data-icon="inline-start" /> : null}
               {t.teamFeedback.send}
             </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </>
+        ) : (
+          <>
+            <Button type="submit" variant="outline" disabled={disabled}>
+              {t.teamFeedback.sendWithoutLog}
+            </Button>
+            <Button type="button" disabled={disabled} onClick={() => send(true)}>
+              {busy ? <Spinner data-icon="inline-start" /> : null}
+              {t.teamFeedback.sendWithLog}
+            </Button>
+          </>
+        )}
+      </DialogFooter>
+    </form>
   );
 }
