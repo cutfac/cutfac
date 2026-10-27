@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, utimes, writeFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Clock, Effect, FileSystem, Ref } from "effect";
 
 import { requestEdit, resolveEdit, restoreBefore } from "../src/core/edits.ts";
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
@@ -18,7 +17,11 @@ import {
 } from "../src/core/history.ts";
 import { createItem, getItem, updateItem } from "../src/core/items.ts";
 import type { HistoryDoc, HistoryEntry } from "../src/core/schema.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace());
 
 const VIDEO = "[9x16] video.mp4";
 
@@ -52,183 +55,216 @@ describe("pushEntry", () => {
   });
 });
 
-describe("item history", () => {
-  let t: TestWorkspace;
-  let id: string;
-  let video: string;
-  let clock: number;
+/** An item with a video, and ways to edit it as an agent would and to see what history made of it. */
+const fixture = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const ws = yield* Workspace;
+  const { id } = yield* createItem({ title: "Clip" });
+  const video = join(ws.root, "items", id, VIDEO);
+  const clock = yield* Ref.make((yield* Clock.currentTimeMillis) - 60_000);
 
   /** Write the video with a later mtime each time, as an agent's edit would have. */
-  const write = async (content: string) => {
-    await writeFile(video, content);
-    clock += 1000;
-    const at = new Date(clock);
-    await utimes(video, at, at);
-  };
+  const write = Effect.fnUntraced(function* (content: string) {
+    yield* fs.writeFileString(video, content);
+    const at = new Date(yield* Ref.updateAndGet(clock, (millis) => millis + 1000));
+    yield* fs.utimes(video, at, at);
+  });
 
-  const content = () => readFile(video, "utf8");
-
-  const history = () => t.run(Effect.flatMap(getItem(id), readHistory));
-
-  const decision = async () => (await t.run(getItem(id))).doc.feedback[0]?.decision;
+  yield* write("original");
+  yield* Ref.set(clock, (yield* Clock.currentTimeMillis) + 60_000);
 
   /** Request an edit on the video, change it, and resolve the request. */
-  const edit = async (result: string) => {
-    const { feedback } = await t.run(requestEdit(id, { body: "Brighter", media: VIDEO }));
-    await write(result);
-    await t.run(resolveEdit(id, feedback.id, "Brighter"));
+  const edit = Effect.fnUntraced(function* (result: string) {
+    const { feedback } = yield* requestEdit(id, { body: "Brighter", media: VIDEO });
+    yield* write(result);
+    yield* resolveEdit(id, feedback.id, "Brighter");
 
     return feedback.id;
+  });
+
+  return {
+    id,
+    write,
+    edit,
+    content: fs.readFileString(video),
+    history: Effect.flatMap(getItem(id), readHistory),
+    decision: Effect.map(getItem(id), (item) => item.doc.feedback[0]?.decision),
   };
+});
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-    id = await t.run(Effect.map(createItem({ title: "Clip" }), (item) => item.id));
-    video = join(t.root, "items", id, VIDEO);
-    clock = Date.now() - 60_000;
-    await write("original");
-    clock = Date.now() + 60_000;
-  });
+describe("item history", () => {
+  it.live("undoes and redoes field changes", () =>
+    Effect.gen(function* () {
+      const { id } = yield* fixture;
 
-  afterEach(() => t.remove());
+      yield* updateDetails(id, { title: "Launch", hook: "Wait for it" });
 
-  test("undoes and redoes field changes", async () => {
-    await t.run(updateDetails(id, { title: "Launch", hook: "Wait for it" }));
+      const undone = yield* undo(id);
 
-    const undone = await t.run(undo(id));
+      expect([undone.doc.title, undone.doc.hook]).toEqual(["Clip", undefined]);
+      expect(yield* Effect.flip(undo(id))).toBeInstanceOf(InvalidRequest);
 
-    expect([undone.doc.title, undone.doc.hook]).toEqual(["Clip", undefined]);
-    expect(await t.fail(undo(id))).toBeInstanceOf(InvalidRequest);
+      const redone = yield* redo(id);
 
-    const redone = await t.run(redo(id));
+      expect([redone.doc.title, redone.doc.hook]).toEqual(["Launch", "Wait for it"]);
+      expect(yield* Effect.flip(redo(id))).toBeInstanceOf(InvalidRequest);
+    }),
+  );
 
-    expect([redone.doc.title, redone.doc.hook]).toEqual(["Launch", "Wait for it"]);
-    expect(await t.fail(redo(id))).toBeInstanceOf(InvalidRequest);
-  });
+  it.live("leaves a field that changed since alone", () =>
+    Effect.gen(function* () {
+      const { id } = yield* fixture;
 
-  test("leaves a field that changed since alone", async () => {
-    await t.run(updateDetails(id, { title: "Launch", hook: "Wait for it" }));
-    await t.run(updateItem(id, { title: "Renamed" }));
+      yield* updateDetails(id, { title: "Launch", hook: "Wait for it" });
+      yield* updateItem(id, { title: "Renamed" });
 
-    const undone = await t.run(undo(id));
+      const undone = yield* undo(id);
 
-    expect([undone.doc.title, undone.doc.hook]).toEqual(["Renamed", undefined]);
-  });
+      expect([undone.doc.title, undone.doc.hook]).toEqual(["Renamed", undefined]);
+    }),
+  );
 
-  test("records nothing when the fields stay the same", async () => {
-    await t.run(updateDetails(id, { title: "Clip" }));
+  it.live("records nothing when the fields stay the same", () =>
+    Effect.gen(function* () {
+      const { id, history } = yield* fixture;
 
-    expect((await history()).entries).toEqual([]);
-  });
+      yield* updateDetails(id, { title: "Clip" });
 
-  test("undoes an edit and marks the request rolled back", async () => {
-    const feedbackId = await edit("edited");
-    const doc = await history();
+      expect((yield* history).entries).toEqual([]);
+    }),
+  );
 
-    expect(doc.cursor).toBe(1);
-    expect(doc.entries[0]).toMatchObject({ kind: "media", cause: "edit", feedbackId });
-    expect(doc.versions.map((v) => v.file)).toEqual([
-      `edits/${feedbackId}/before.mp4`,
-      `edits/${feedbackId}/after.mp4`,
-    ]);
+  it.live("undoes an edit and marks the request rolled back", () =>
+    Effect.gen(function* () {
+      const { id, edit, history, content, decision } = yield* fixture;
+      const feedbackId = yield* edit("edited");
+      const doc = yield* history;
 
-    await t.run(undo(id));
+      expect(doc.cursor).toBe(1);
+      expect(doc.entries[0]).toMatchObject({ kind: "media", cause: "edit", feedbackId });
+      expect(doc.versions.map((v) => v.file)).toEqual([
+        `edits/${feedbackId}/before.mp4`,
+        `edits/${feedbackId}/after.mp4`,
+      ]);
 
-    expect(await content()).toBe("original");
-    expect(await decision()).toBe("restored");
+      yield* undo(id);
 
-    await t.run(redo(id));
+      expect(yield* content).toBe("original");
+      expect(yield* decision).toBe("restored");
 
-    expect(await content()).toBe("edited");
-    expect(await decision()).toBe("approved");
-  });
+      yield* redo(id);
 
-  test("saves a change made outside a request before undoing", async () => {
-    await edit("edited");
-    await write("changed by hand");
-    await t.run(undo(id));
+      expect(yield* content).toBe("edited");
+      expect(yield* decision).toBe("approved");
+    }),
+  );
 
-    expect(await content()).toBe("edited");
+  it.live("saves a change made outside a request before undoing", () =>
+    Effect.gen(function* () {
+      const { id, edit, write, history, content } = yield* fixture;
 
-    const doc = await history();
+      yield* edit("edited");
+      yield* write("changed by hand");
+      yield* undo(id);
 
-    expect(doc.entries.map((e) => (e.kind === "media" ? e.cause : e.kind))).toEqual([
-      "edit",
-      "outside",
-    ]);
-    expect(doc.cursor).toBe(1);
+      expect(yield* content).toBe("edited");
 
-    await t.run(redo(id));
+      const doc = yield* history;
 
-    expect(await content()).toBe("changed by hand");
-  });
+      expect(doc.entries.map((e) => (e.kind === "media" ? e.cause : e.kind))).toEqual([
+        "edit",
+        "outside",
+      ]);
+      expect(doc.cursor).toBe(1);
 
-  test("restores a saved version and jumps through the history", async () => {
-    await edit("edited");
-    const [first] = (await history()).versions;
+      yield* redo(id);
 
-    await t.run(restoreVersion(id, first?.id ?? ""));
+      expect(yield* content).toBe("changed by hand");
+    }),
+  );
 
-    expect(await content()).toBe("original");
-    expect((await history()).entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual([
-      "edit",
-      "version",
-    ]);
+  it.live("restores a saved version and jumps through the history", () =>
+    Effect.gen(function* () {
+      const { id, edit, history, content } = yield* fixture;
 
-    await t.run(goTo(id));
+      yield* edit("edited");
+      const [first] = (yield* history).versions;
 
-    expect(await content()).toBe("original");
-    expect((await history()).cursor).toBe(0);
+      yield* restoreVersion(id, first?.id ?? "");
 
-    const entries = (await history()).entries;
-    await t.run(goTo(id, entries[0]?.id));
+      expect(yield* content).toBe("original");
+      expect((yield* history).entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual([
+        "edit",
+        "version",
+      ]);
 
-    expect(await content()).toBe("edited");
-    expect((await history()).cursor).toBe(1);
-    expect(await t.fail(goTo(id, "missing"))).toBeInstanceOf(NotFound);
-    expect(await t.fail(restoreVersion(id, "missing"))).toBeInstanceOf(NotFound);
-  });
+      yield* goTo(id);
 
-  test("a new change drops the undone ones", async () => {
-    await edit("edited");
-    await t.run(undo(id));
-    await t.run(updateDetails(id, { title: "Launch" }));
+      expect(yield* content).toBe("original");
+      expect((yield* history).cursor).toBe(0);
 
-    const doc = await history();
+      const entries = (yield* history).entries;
+      yield* goTo(id, entries[0]?.id);
 
-    expect(doc.entries.map((e) => e.kind)).toEqual(["details"]);
-    expect(doc.cursor).toBe(1);
-    expect(await t.fail(redo(id))).toBeInstanceOf(InvalidRequest);
-  });
+      expect(yield* content).toBe("edited");
+      expect((yield* history).cursor).toBe(1);
+      expect(yield* Effect.flip(goTo(id, "missing"))).toBeInstanceOf(NotFound);
+      expect(yield* Effect.flip(restoreVersion(id, "missing"))).toBeInstanceOf(NotFound);
+    }),
+  );
 
-  test("undoes a rollback", async () => {
-    const feedbackId = await edit("edited");
-    await t.run(restoreBefore(id, feedbackId));
+  it.live("a new change drops the undone ones", () =>
+    Effect.gen(function* () {
+      const { id, edit, history } = yield* fixture;
 
-    expect(await content()).toBe("original");
-    expect((await history()).entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual([
-      "edit",
-      "restore",
-    ]);
+      yield* edit("edited");
+      yield* undo(id);
+      yield* updateDetails(id, { title: "Launch" });
 
-    await t.run(undo(id));
+      const doc = yield* history;
 
-    expect(await content()).toBe("edited");
-    expect(await decision()).toBe("approved");
+      expect(doc.entries.map((e) => e.kind)).toEqual(["details"]);
+      expect(doc.cursor).toBe(1);
+      expect(yield* Effect.flip(redo(id))).toBeInstanceOf(InvalidRequest);
+    }),
+  );
 
-    await t.run(undo(id));
+  it.live("undoes a rollback", () =>
+    Effect.gen(function* () {
+      const { id, edit, history, content, decision } = yield* fixture;
+      const feedbackId = yield* edit("edited");
 
-    expect(await content()).toBe("original");
-    expect(await decision()).toBe("restored");
-  });
+      yield* restoreBefore(id, feedbackId);
 
-  test("tracks a request about the whole item without deciding it", async () => {
-    const { feedback } = await t.run(requestEdit(id, { body: "Tighter cut" }));
-    await write("recut");
-    await t.run(resolveEdit(id, feedback.id, "Recut"));
-    await t.run(undo(id));
+      expect(yield* content).toBe("original");
+      expect((yield* history).entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual([
+        "edit",
+        "restore",
+      ]);
 
-    expect(await content()).toBe("original");
-    expect(await decision()).toBeUndefined();
-  });
+      yield* undo(id);
+
+      expect(yield* content).toBe("edited");
+      expect(yield* decision).toBe("approved");
+
+      yield* undo(id);
+
+      expect(yield* content).toBe("original");
+      expect(yield* decision).toBe("restored");
+    }),
+  );
+
+  it.live("tracks a request about the whole item without deciding it", () =>
+    Effect.gen(function* () {
+      const { id, write, content, decision } = yield* fixture;
+      const { feedback } = yield* requestEdit(id, { body: "Tighter cut" });
+
+      yield* write("recut");
+      yield* resolveEdit(id, feedback.id, "Recut");
+      yield* undo(id);
+
+      expect(yield* content).toBe("original");
+      expect(yield* decision).toBeUndefined();
+    }),
+  );
 });
