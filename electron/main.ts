@@ -213,13 +213,6 @@ if (!app.requestSingleInstanceLock()) {
     preload: preloadPath,
     window: () => window,
     bringToFront,
-    serve: async (folder) => {
-      const url = await serveWorkspace(folder);
-
-      if (url === undefined) throw new Error(MESSAGES[locale].couldNotStart);
-
-      return url;
-    },
     openWorkspace: async (folder) => {
       if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
     },

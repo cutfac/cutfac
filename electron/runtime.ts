@@ -10,6 +10,7 @@ import { LogDir, logToFile } from "../src/core/logFile.ts";
 import { errorReports } from "../src/errorReports.ts";
 import { AgentFixes } from "./agents.ts";
 import { AppState } from "./appState.ts";
+import { FirstWorkspace } from "./firstWorkspace.ts";
 import { platform } from "./platform.ts";
 import { Settings } from "./settings.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
@@ -62,10 +63,10 @@ const services = Layer.mergeAll(
 ).pipe(Layer.provideMerge(base));
 
 export const appServices = Layer.mergeAll(
-  WorkspaceServer.layer,
+  FirstWorkspace.layer,
   AgentFixes.layer,
   SystemAccess.layer,
-).pipe(Layer.provideMerge(services));
+).pipe(Layer.provideMerge(WorkspaceServer.layer), Layer.provideMerge(services));
 
 export type AppServices = Layer.Success<typeof appServices>;
 

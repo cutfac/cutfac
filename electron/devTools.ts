@@ -1,11 +1,11 @@
 import path from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
 
-import { Option, Schema } from "effect";
+import { Duration, Effect, Option, Schema } from "effect";
 import { BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
 
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentFix, DevState, OnboardingStep } from "../web/src/desktop.ts";
+import { NothingToFix } from "./agents.ts";
 import { ONBOARDING_STEPS, originOf } from "./boardPages.ts";
 import { DEV_APP } from "./devApp.ts";
 import {
@@ -43,7 +43,7 @@ import {
   settingsFile,
   settingsSetAside,
 } from "./settings.ts";
-import { agentSetups, fixAgent, stopFixes } from "./sidecarRuntime.ts";
+import { stopFixes } from "./sidecarRuntime.ts";
 import { hasPermission } from "./systemAccess.ts";
 
 const PANEL_SIZE = { width: 420, height: 760 };
@@ -96,51 +96,59 @@ export function handleDevTools(host: DevToolsHost): DevTools {
   let freshName: string | undefined;
 
   /** A faked agent's fix prints a few lines, then fails or leaves the agent ready. */
-  const fix = async (agent: AgentName, onLine: (line: string) => void): Promise<AgentFix> => {
-    const fake = fakes.agents[agent];
+  const fix = (agent: AgentName, onLine: (line: string) => Effect.Effect<void>) =>
+    Effect.gen(function* () {
+      const fake = fakes.agents[agent];
 
-    if (fake === "real") return fixAgent(agent, onLine);
+      if (fake === "real") return yield* macChecks.fixAgent(agent, onLine);
 
-    if (fake === "ready") throw new Error(`Nothing to fix for ${agent}`);
+      if (fake === "ready")
+        return yield* new NothingToFix({ message: `Nothing to fix for ${agent}` });
 
-    for (const line of fakeFixLines(agent, fake)) {
-      onLine(line);
-      await sleep(FAKE_LINE_MS);
-    }
+      for (const line of fakeFixLines(agent, fake)) {
+        yield* onLine(line);
+        yield* Effect.sleep(Duration.millis(FAKE_LINE_MS));
+      }
 
-    const command = fakeFix(agent, fake);
+      const command = fakeFix(agent, fake);
 
-    if (fakes.fixesFail) return { ok: false, command };
+      if (fakes.fixesFail) return { ok: false, command } satisfies AgentFix;
 
-    fakes = { ...fakes, agents: { ...fakes.agents, [agent]: "ready" } };
-    sendState();
+      fakes = { ...fakes, agents: { ...fakes.agents, [agent]: "ready" } };
+      sendState();
 
-    return { ok: true, command };
-  };
+      return { ok: true, command } satisfies AgentFix;
+    });
 
   const checks: OnboardingChecks = {
-    agentSetups: async () =>
-      withFakes(checksAgents(fakes) ? await agentSetups() : [], fakes.agents),
+    agentSetups: Effect.suspend(() =>
+      checksAgents(fakes) ? macChecks.agentSetups : Effect.succeed([]),
+    ).pipe(Effect.map((setups) => withFakes(setups, fakes.agents))),
     fixAgent: fix,
     hasPermission: (permission) =>
       fakes.access === "real"
-        ? runInMain(hasPermission(permission))
-        : Promise.resolve(fakes.access === "granted"),
-    suggestion: async () => {
-      if (!fakes.freshFolder) return macChecks.suggestion();
+        ? hasPermission(permission)
+        : Effect.succeed(fakes.access === "granted"),
+    suggestion: Effect.suspend(() => {
+      if (!fakes.freshFolder) return macChecks.suggestion;
 
       // A new workspace each run, named for when it was made, in the dev build's own folder.
       freshName ??= freshFolderName(new Date());
 
-      return { library: await runInMain(loadLibrary), name: freshName };
-    },
+      const name = freshName;
+
+      return Effect.map(loadLibrary, (library) => ({ library, name: Option.some(name) }));
+    }),
   };
 
   /** Where the first workspace would go now, for the panel to show. */
   const suggestedFolder = async () => {
-    const { library, name } = await checks.suggestion();
+    const { library, name } = await runInMain(checks.suggestion);
 
-    return name === undefined ? library : path.join(library, WORKSPACES, name);
+    return Option.match(name, {
+      onNone: () => library,
+      onSome: (one) => path.join(library, WORKSPACES, one),
+    });
   };
 
   const state = async (): Promise<DevState> => ({

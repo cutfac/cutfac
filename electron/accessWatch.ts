@@ -5,7 +5,9 @@ import type { Frame } from "./settingsWindow.ts";
 
 const PERMISSIONS = ["screen", "accessibility"] as const satisfies ReadonlyArray<Permission>;
 
-export const isPermission = Schema.is(Schema.Literals(PERMISSIONS));
+export const KnownPermission = Schema.Literals(PERMISSIONS);
+
+export const isPermission = Schema.is(KnownPermission);
 
 const POLL = "1 second";
 

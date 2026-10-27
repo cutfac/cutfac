@@ -1,12 +1,23 @@
-import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import {
+  Context,
+  type Crypto,
+  Deferred,
+  Effect,
+  type FileSystem,
+  Layer,
+  Option,
+  type Path,
+  Ref,
+  Schema,
+  Semaphore,
+} from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentSetup, OnboardingDraft } from "../web/src/desktop.ts";
 import { briefPatch } from "../web/src/lib/brief.ts";
 import { candidateNames, prepareWorkspace, readingAgent, sameSource } from "./library.ts";
-import { platform } from "./platform.ts";
-import { appLog, memoMap } from "./runtime.ts";
+import { WorkspaceServer } from "./workspaceServer.ts";
 
 // The first workspace, made as soon as the user said what they make rather than on the last step,
 // so the agent reads their material while they finish setting up: the brief is saved, the material
@@ -113,47 +124,101 @@ const readInto = Effect.fn("firstWorkspace.readInto")(function* (
   yield* call(url, "POST", "/api/imports", { kind: "learn", agent, locale });
 });
 
-export interface FirstWorkspaceHost {
-  /** Starts the server on `workspace`, unless it serves it already. Resolves its address. */
-  serve: (workspace: string) => Promise<string>;
-  agents: () => Promise<ReadonlyArray<Pick<AgentSetup, "agent" | "state">>>;
-  locale: () => string;
+export class FirstWorkspaceFailed extends Schema.TaggedError<FirstWorkspaceFailed>()(
+  "FirstWorkspaceFailed",
+  { message: Schema.String },
+) {}
+
+export interface FirstWorkspaceInput {
+  readonly library: string;
+  readonly name: string;
+  readonly draft: OnboardingDraft;
+  /** The agents on this computer, to pick the one that reads. */
+  readonly agents: Effect.Effect<
+    ReadonlyArray<Pick<AgentSetup, "agent" | "state">>,
+    { readonly message: string }
+  >;
+  /** The board's language, for the agent to write in. */
+  readonly locale: string;
 }
 
 /**
  * Makes the first workspace and starts the reading, one run at a time: answers given again wait
- * for the run before, then add what is new. `ready` resolves the workspace once the latest is
- * done, for the last step to open.
+ * for the run before, then add what is new.
  */
-export function firstWorkspace(host: FirstWorkspaceHost) {
-  // The workspace's folder and `fetch` to its server, beside the app's log.
-  const runtime = ManagedRuntime.make(Layer.mergeAll(platform, FetchHttpClient.layer, appLog), {
-    memoMap,
-  });
-
-  let latest: Promise<string | undefined> = Promise.resolve(undefined);
-
-  const run = async (library: string, name: string, draft: OnboardingDraft) => {
-    const workspace = Option.getOrUndefined(await runtime.runPromise(freeWorkspace(library, name)));
-
-    if (workspace === undefined) throw new Error(`No free name for ${name} in ${library}`);
-
-    const url = await host.serve(workspace);
-    const agent = readingAgent(await host.agents());
-
-    await runtime.runPromise(readInto(url, draft, agent, host.locale()));
-
-    return workspace;
-  };
-
-  return {
-    /** Makes the workspace `name` in `library` from `draft`, after any run before it. */
-    start: (library: string, name: string, draft: OnboardingDraft) => {
-      latest = latest.catch(() => undefined).then(() => run(library, name, draft));
-
-      return latest;
-    },
-    /** The workspace the latest run made, once it is done; undefined if none was started. */
-    ready: () => latest,
-  };
+export class FirstWorkspace extends Context.Service<
+  FirstWorkspace,
+  {
+    /** Makes the workspace from the answers, after any run before it, and is done with its folder. */
+    start(input: FirstWorkspaceInput): Effect.Effect<string, FirstWorkspaceFailed>;
+    /** The workspace the latest run made, once it is done; none if none was started or it failed. */
+    readonly ready: Effect.Effect<Option.Option<string>>;
+  }
+>()("cutfac/desktop/FirstWorkspace") {
+  static readonly layer = Layer.effect(
+    FirstWorkspace,
+    Effect.suspend(() => make),
+  );
 }
+
+const failed = (error: { readonly message: string }) =>
+  new FirstWorkspaceFailed({ message: error.message });
+
+const make = Effect.gen(function* () {
+  const services = yield* Effect.context<
+    WorkspaceServer | HttpClient.HttpClient | FileSystem.FileSystem | Path.Path | Crypto.Crypto
+  >();
+
+  const lock = yield* Semaphore.make(1);
+  const latest = yield* Ref.make(Option.none<Deferred.Deferred<string, FirstWorkspaceFailed>>());
+
+  const run = ({ library, name, draft, agents, locale }: FirstWorkspaceInput) =>
+    Effect.gen(function* () {
+      const workspace = yield* freeWorkspace(library, name);
+
+      if (Option.isNone(workspace)) {
+        return yield* new FirstWorkspaceFailed({
+          message: `No free name for ${name} in ${library}`,
+        });
+      }
+
+      const server = yield* WorkspaceServer;
+      const served = yield* server.serve(workspace.value);
+
+      if (Option.isNone(served)) {
+        return yield* new FirstWorkspaceFailed({ message: "The app is quitting" });
+      }
+
+      const agent = readingAgent(yield* agents);
+
+      yield* readInto(served.value.url, draft, agent, locale);
+
+      return workspace.value;
+    }).pipe(Effect.mapError(failed), Effect.provideContext(services));
+
+  const start = (input: FirstWorkspaceInput) =>
+    Effect.gen(function* () {
+      const done = yield* Deferred.make<string, FirstWorkspaceFailed>();
+
+      yield* Ref.set(latest, Option.some(done));
+      yield* lock
+        .withPermits(1)(run(input))
+        .pipe(
+          Effect.exit,
+          Effect.flatMap((exit) => Deferred.done(done, exit)),
+          Effect.forkDetach,
+        );
+
+      return yield* Deferred.await(done);
+    });
+
+  const ready = Effect.flatMap(
+    Ref.get(latest),
+    Option.match({
+      onNone: () => Effect.succeedNone,
+      onSome: (done) => Effect.option(Deferred.await(done)),
+    }),
+  );
+
+  return FirstWorkspace.of({ start, ready });
+});

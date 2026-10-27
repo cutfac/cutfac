@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Effect, Option } from "effect";
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 
 import type { CreateFailure, LibraryWorkspaces } from "../web/src/desktop.ts";
@@ -9,17 +9,9 @@ import {
   SWITCH_WORKSPACE_CHANNEL,
   WORKSPACES_CHANNEL,
 } from "./ipc.ts";
-import { decodeWorkspaceName, listWorkspaces, prepareWorkspace, type Prepared } from "./library.ts";
+import { decodeWorkspaceName, listWorkspaces, prepareWorkspace } from "./library.ts";
 import { runInMain } from "./runtime.ts";
 import { loadLibrary } from "./settings.ts";
-
-export const workspacesIn = (library: string) => runInMain(listWorkspaces(library));
-
-export const prepareWorkspaceFolder = (
-  library: string,
-  name: string,
-  reuse: boolean,
-): Promise<Prepared> => runInMain(prepareWorkspace(library, name, reuse));
 
 export interface WorkspacesHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
@@ -40,79 +32,97 @@ export interface WorkspacesHost {
  * the workspace that was open.
  */
 export function handleWorkspaces(host: WorkspacesHost) {
-  const assertFromApp = (event: IpcMainInvokeEvent) => {
+  const fromApp = (event: IpcMainInvokeEvent) => {
     if (!host.isFromApp(event)) throw new Error("Untrusted IPC sender");
   };
 
-  const switchTo = async (workspace: string) => {
-    const previous = host.current();
+  const activate = (workspace: string) => Effect.promise(() => host.activate(workspace));
 
-    if (await host.activate(workspace)) return true;
+  const switchTo = (workspace: string) =>
+    Effect.gen(function* () {
+      const previous = host.current();
 
-    if (previous) await host.activate(previous);
+      if (yield* activate(workspace)) return true;
 
-    return false;
-  };
+      if (previous) yield* activate(previous);
 
-  /** Asks for a folder and switches to it. Resolves false if cancelled or if it failed to start. */
-  const choose = async () => {
+      return false;
+    });
+
+  /** Asks for a folder and switches to it. False if cancelled or if it failed to start. */
+  const choose = Effect.gen(function* () {
     if (host.switching()) return false;
 
-    const workspace = await runInMain(
-      pickWorkspace(host.window(), host.chooseMessage(), Option.fromNullishOr(host.current())),
+    const picked = yield* pickWorkspace(
+      host.window(),
+      host.chooseMessage(),
+      Option.fromNullishOr(host.current()),
     );
 
-    return Option.isSome(workspace) ? switchTo(workspace.value) : false;
-  };
+    return Option.isSome(picked) ? yield* switchTo(picked.value) : false;
+  });
+
+  const inLibrary = Effect.flatMap(loadLibrary, listWorkspaces);
 
   ipcMain.handle(OPEN_WORKSPACE_CHANNEL, (event) => {
-    assertFromApp(event);
+    fromApp(event);
 
-    return choose();
+    return runInMain(choose);
   });
-  ipcMain.handle(WORKSPACES_CHANNEL, async (event): Promise<LibraryWorkspaces> => {
-    assertFromApp(event);
+  ipcMain.handle(WORKSPACES_CHANNEL, (event) => {
+    fromApp(event);
 
     const current = host.current();
-    const found = await workspacesIn(await runInMain(loadLibrary));
 
-    return {
-      workspaces: found.map((workspace) => ({ ...workspace, current: workspace.path === current })),
-    };
+    return runInMain(
+      Effect.map(inLibrary, (found): LibraryWorkspaces => ({
+        workspaces: found.map((workspace) => ({
+          ...workspace,
+          current: workspace.path === current,
+        })),
+      })),
+    );
   });
-  ipcMain.handle(SWITCH_WORKSPACE_CHANNEL, async (event, name) => {
-    assertFromApp(event);
+  ipcMain.handle(SWITCH_WORKSPACE_CHANNEL, (event, name) => {
+    fromApp(event);
 
     // Only a workspace the app's folder holds, by name, never a path a page sends.
-    const found = (await workspacesIn(await runInMain(loadLibrary))).find(
-      (one) => one.name === name,
+    return runInMain(
+      Effect.flatMap(inLibrary, (found) => {
+        const named = found.find((one) => one.name === name);
+
+        if (named === undefined || host.switching() || named.path === host.current()) {
+          return Effect.succeed(false);
+        }
+
+        return switchTo(named.path);
+      }),
     );
-
-    if (found === undefined || host.switching() || found.path === host.current()) return false;
-
-    return switchTo(found.path);
   });
-  ipcMain.handle(
-    NEW_WORKSPACE_CHANNEL,
-    async (event, input): Promise<CreateFailure | undefined> => {
-      assertFromApp(event);
+  ipcMain.handle(NEW_WORKSPACE_CHANNEL, (event, input) => {
+    fromApp(event);
 
-      const name = Option.getOrUndefined(decodeWorkspaceName(input));
+    return runInMain(
+      Option.match(decodeWorkspaceName(input), {
+        onNone: () => Effect.succeed<CreateFailure>({ kind: "invalid" }),
+        onSome: (name) =>
+          Effect.gen(function* () {
+            const prepared = yield* prepareWorkspace(yield* loadLibrary, name, false);
 
-      if (name === undefined) return { kind: "invalid" };
+            if (prepared.kind === "taken") return { kind: "taken" } satisfies CreateFailure;
 
-      try {
-        const prepared = await prepareWorkspaceFolder(await runInMain(loadLibrary), name, false);
+            // A switch that fails has said why in a dialog already.
+            return (yield* switchTo(prepared.path))
+              ? undefined
+              : ({ kind: "failed", message: "" } satisfies CreateFailure);
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.succeed<CreateFailure>({ kind: "failed", message: error.message }),
+            ),
+          ),
+      }),
+    );
+  });
 
-        if (prepared.kind === "taken") return { kind: "taken" };
-
-        // A switch that fails has said why in a dialog already.
-        return (await switchTo(prepared.path)) ? undefined : { kind: "failed", message: "" };
-      } catch (error) {
-        return { kind: "failed", message: error instanceof Error ? error.message : String(error) };
-      }
-    },
-  );
-
-  return { choose };
+  return { choose: () => runInMain(choose) };
 }

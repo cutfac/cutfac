@@ -14,7 +14,7 @@ import { LicenseNotSaved, LicenseSettings } from "./license.ts";
 import { isSetAside, restore, setAside } from "./settingsAside.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
 
-const OnboardingDraft = Schema.Struct({
+export const OnboardingDraft = Schema.Struct({
   brief: Schema.Struct({
     purpose: Schema.NullOr(Schema.Literals(PURPOSES)),
     platforms: Schema.Array(Schema.Literals(PLATFORMS)),
@@ -71,8 +71,6 @@ const decodePage = Schema.decodeUnknownOption(Page);
 const decodeOnboarding = Schema.decodeUnknownOption(Schema.Literals(ONBOARDING_STEPS));
 
 const decodeDraft = Schema.decodeUnknownOption(OnboardingDraft);
-
-export const isDraft = Schema.is(OnboardingDraft);
 
 export interface SettingsPlace {
   readonly dir: string;
@@ -223,7 +221,7 @@ export const loadDraft = Effect.map(saved("onboardingDraft"), (value) =>
   }),
 );
 
-export const saveDraft = (draft: Draft) => save({ onboardingDraft: draft });
+export const saveDraft = (draft: typeof OnboardingDraft.Type) => save({ onboardingDraft: draft });
 
 export const clearDraft = save({ onboardingDraft: undefined });
 
