@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 /** Shells Codex wraps a command in, as `/bin/zsh -lc '…'`. */
 const SHELLS = new Set(["sh", "bash", "zsh"]);
 
@@ -10,10 +12,10 @@ const escapesInDouble = (char: string) => char !== "" && '$`"\\\n'.includes(char
 /**
  * `text` split into words as a POSIX shell reads them, with quotes taken off: `'…'` keeps all it
  * holds, a bare word takes a backslash before any character, and `"…"` only before `$`, `` ` ``,
- * `"`, `\\` and a newline. Undefined when a
- * quote is left open, so a command it can't read is shown as it came.
+ * `"`, `\\` and a newline. None when a quote is left open, so a command it can't read is shown as
+ * it came.
  */
-export function shellWords(text: string): ReadonlyArray<string> | undefined {
+export function shellWords(text: string): Option.Option<ReadonlyArray<string>> {
   const words: Array<string> = [];
   let word: string | undefined;
   let quote: "'" | '"' | undefined;
@@ -41,11 +43,11 @@ export function shellWords(text: string): ReadonlyArray<string> | undefined {
     }
   }
 
-  if (quote !== undefined) return undefined;
+  if (quote !== undefined) return Option.none();
 
   if (word !== undefined) words.push(word);
 
-  return words;
+  return Option.some(words);
 }
 
 /**
@@ -53,12 +55,13 @@ export function shellWords(text: string): ReadonlyArray<string> | undefined {
  * `/bin/zsh -lc 'ffmpeg -i a.mp4'`, which is what the user agrees to; any other command as it is.
  */
 export function shellScript(command: string): string {
-  const words = shellWords(command);
+  return shellWords(command).pipe(
+    Option.filter((words) => words.length === 3),
+    Option.flatMap(([shell = "", flag = "", script = ""]) => {
+      const name = shell.slice(shell.lastIndexOf("/") + 1);
 
-  if (words?.length !== 3) return command;
-
-  const [shell = "", flag = "", script = ""] = words;
-  const name = shell.slice(shell.lastIndexOf("/") + 1);
-
-  return SHELLS.has(name) && SCRIPT_FLAG.test(flag) ? script : command;
+      return SHELLS.has(name) && SCRIPT_FLAG.test(flag) ? Option.some(script) : Option.none();
+    }),
+    Option.getOrElse(() => command),
+  );
 }

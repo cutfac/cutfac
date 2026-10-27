@@ -1,28 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import { shellScript, shellWords } from "../src/core/shellWords.ts";
 
 describe("a command line read as a shell reads it", () => {
   test("takes quotes off each word", () => {
-    expect(shellWords(`ffmpeg -i 'my clip.mp4' "out put.mp4" a\\ b`)).toEqual([
-      "ffmpeg",
-      "-i",
-      "my clip.mp4",
-      "out put.mp4",
-      "a b",
-    ]);
+    expect(shellWords(`ffmpeg -i 'my clip.mp4' "out put.mp4" a\\ b`)).toEqual(
+      Option.some(["ffmpeg", "-i", "my clip.mp4", "out put.mp4", "a b"]),
+    );
   });
 
   test("keeps a backslash in double quotes unless it escapes something there", () => {
-    expect(shellWords(String.raw`"a\nb" "say \"hi\"" ''`)).toEqual([
-      String.raw`a\nb`,
-      'say "hi"',
-      "",
-    ]);
+    expect(shellWords(String.raw`"a\nb" "say \"hi\"" ''`)).toEqual(
+      Option.some([String.raw`a\nb`, 'say "hi"', ""]),
+    );
   });
 
   test("can't read a quote left open", () => {
-    expect(shellWords("echo 'open")).toBeUndefined();
+    expect(shellWords("echo 'open")).toEqual(Option.none());
   });
 });
 
