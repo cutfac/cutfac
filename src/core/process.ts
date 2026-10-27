@@ -1,4 +1,4 @@
-import { Config, Effect, FileSystem, Option, Predicate, Stream } from "effect";
+import { Config, Effect, FileSystem, Option, Path, Predicate, Stream } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -20,21 +20,42 @@ export interface CommandResult {
 
 const SearchPath = Config.option(Config.String("PATH"));
 
+const ANYONE_MAY_RUN = 0o111;
+
+/** The absolute path of the program `name` in the folders of `searchPath`, as a shell finds it. */
+export const whichIn = (name: string, searchPath: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const delimiter = path.sep === "\\" ? ";" : ":";
+
+    for (const dir of searchPath.split(delimiter).filter((entry) => entry !== "")) {
+      const candidate = path.join(dir, name);
+      const info = yield* Effect.option(fs.stat(candidate));
+
+      if (
+        Option.isSome(info) &&
+        info.value.type === "File" &&
+        (info.value.mode & ANYONE_MAY_RUN) !== 0
+      ) {
+        return Option.some(candidate);
+      }
+    }
+
+    return Option.none<string>();
+  });
+
 /**
  * The absolute path of `name` on PATH, if it is installed. PATH comes from the config provider, so
  * a test can point it at fake programs.
  */
-export const which = (name: string): Effect.Effect<Option.Option<string>> =>
-  Effect.gen(function* () {
-    const PATH = yield* Effect.orElseSucceed(SearchPath, Option.none);
-
-    return Option.fromNullishOr(
-      Option.match(PATH, {
-        onNone: () => Bun.which(name),
-        onSome: (path) => Bun.which(name, { PATH: path }),
-      }),
-    );
-  });
+export const which = (name: string) =>
+  Effect.flatMap(Effect.orElseSucceed(SearchPath, Option.none), (PATH) =>
+    whichIn(
+      name,
+      Option.getOrElse(PATH, () => ""),
+    ),
+  );
 
 /** Where the program at `bin` really lives, past the links that put it on PATH; `bin` if unreadable. */
 export const realProgram = Effect.fnUntraced(function* (bin: string) {

@@ -85,7 +85,10 @@ export async function makeFakeAgents(): Promise<FakeAgents> {
 
   const layer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { PATH: join(dir, "bin") } }));
   const remove = () => rm(dir, { recursive: true, force: true });
-  const found = Effect.forEach(["claude", "codex"], which).pipe(Effect.provide(layer));
+
+  const found = Effect.forEach(["claude", "codex"], which).pipe(
+    Effect.provide([layer, BunServices.layer]),
+  );
 
   if ((await Effect.runPromise(found)).some(Option.isSome)) {
     await remove();

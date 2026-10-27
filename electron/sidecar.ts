@@ -19,7 +19,7 @@ import { HttpClient } from "effect/http";
 import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { STOP_GRACE } from "../src/core/process.ts";
+import { STOP_GRACE, whichIn } from "../src/core/process.ts";
 import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.ts";
 import { bindPort, freePort, HOST } from "./ports.ts";
 
@@ -116,21 +116,6 @@ interface Launch {
   readonly watchFlags: ReadonlyArray<string>;
 }
 
-const findExecutable = Effect.fnUntraced(function* (name: string, searchPath: string) {
-  const fs = yield* FileSystem.FileSystem;
-
-  for (const dir of searchPath.split(path.delimiter).filter((entry) => entry !== "")) {
-    const candidate = path.join(dir, name);
-    const info = yield* Effect.option(fs.stat(candidate));
-
-    if (Option.isSome(info) && info.value.type === "File") return candidate;
-  }
-
-  return yield* new SidecarFailed({
-    message: `\`${name}\` is not on PATH. Install Bun (https://bun.sh) to run from source.`,
-  });
-});
-
 /**
  * The compiled binary in the packaged app, `bun src/cli.ts` from a checkout. From a checkout,
  * CUTFAC_SIDECAR points at any executable that speaks the sidecar CLI (used to test the shell
@@ -152,8 +137,16 @@ const resolveLaunch = Effect.gen(function* () {
 
   const env = yield* ServerEnv;
 
+  const bun = yield* whichIn("bun", env["PATH"] ?? "");
+
+  if (Option.isNone(bun)) {
+    return yield* new SidecarFailed({
+      message: "`bun` is not on PATH. Install Bun (https://bun.sh) to run from source.",
+    });
+  }
+
   return {
-    command: yield* findExecutable("bun", env["PATH"] ?? ""),
+    command: bun.value,
     args: [path.join(install.appPath, "src", "cli.ts")],
     webDir,
     // Bun re-executes in place, so the process (and the app's handle on it) survives a reload.
