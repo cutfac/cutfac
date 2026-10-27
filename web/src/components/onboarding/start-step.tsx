@@ -36,7 +36,7 @@ async function startAgent(preferred: AgentChoice): Promise<AgentName | undefined
 }
 
 /** The parts of what to make, asked one at a time. A browser can't pick a folder, so skips it. */
-const PARTS = ["purpose", "platforms", "website", "folder", "details"] as const;
+const PARTS = ["purpose", "website", "folder", "platforms", "details"] as const;
 
 type Part = (typeof PARTS)[number];
 
@@ -44,9 +44,9 @@ const STEPS: ReadonlyArray<Part> =
   desktop === undefined ? PARTS.filter((part) => part !== "folder") : PARTS;
 
 /**
- * What to make, a part at a time so each screen asks one thing: what the videos are for, where they
- * go, a website and a folder to read, then anything else the agent should know, in the user's own
- * words. Picking a
+ * What to make, a part at a time so each screen asks one thing: what the user does, a website and a
+ * folder about it to read, where the videos go, then anything else the agent should know, in the
+ * user's own words, right after a platform the list doesn't name. Picking a
  * purpose moves on by itself, and a part that can be left out says so on its button. Start, on the
  * last part, saves the brief, learns the material, and has the agent make the first template.
  */

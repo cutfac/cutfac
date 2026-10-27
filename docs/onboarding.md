@@ -119,13 +119,14 @@ writes the template from that. So step 5 asks, a part at a time and in this orde
 
 - **Purpose**: promoting the user's own product or service, information and tips, a personal
   brand, or their own words.
-- **Platforms**: TikTok, YouTube Shorts, Instagram Reels, any of them. They set the aspect ratios and
-  lengths.
 - **Their material**, optional: website links, or local folders to read from (a brand kit, past
-  videos, a product folder). A website and a folder are each a part of their own, so each screen asks
-  for one thing; the browser, which can't pick a folder, asks for the website alone. Start learns each one into the workspace with the Learn the board
-  already has, into `about.md`, so every later run reads it too. A folder is read where it is, not
-  copied.
+  videos, a product folder). A website and a folder are each a part of their own, so each screen
+  asks for one thing; the browser, which can't pick a folder, asks for the website alone. Start
+  learns each one into the workspace with the Learn the board already has, into `about.md`, so every
+  later run reads it too. A folder is read where it is, not copied.
+- **Platforms**: TikTok, YouTube Shorts, Instagram Reels, any of them, each with its logo, or Other
+  for somewhere the list doesn't name, which the next part lets the user say. They set the aspect
+  ratios and lengths.
 - **Anything else**, last and optional: a line or two in the user's own words, for what the choices
   left out. For their own purpose it is required, since it is all the brief says.
 - **A reference**, optional: one card from a gallery of public examples (skills, starter kits,
