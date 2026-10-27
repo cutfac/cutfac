@@ -297,7 +297,11 @@ export function Templates({ selected }: { selected: string | undefined }) {
   const imports = useLive("imports", api.imports);
   const templates = statuses === undefined ? undefined : sortTemplates(statuses);
   const importId = importIdOf(selected);
-  const open = imports.data?.filter((detail) => !detail.doc.closed) ?? [];
+
+  // A learn import reads the user's material into about.md and makes no template; the board says it.
+  const open =
+    imports.data?.filter((detail) => !detail.doc.closed && detail.doc.kind !== "learn") ?? [];
+
   const working = open.some((detail) => isWorking(importState(detail, NO_RUN)));
   const reloadImports = useEffectEvent(imports.reload);
 

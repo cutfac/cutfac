@@ -299,7 +299,7 @@ export const ImportBaseline = Schema.Struct({
 
 export type ImportBaseline = typeof ImportBaseline.Type;
 
-export const IMPORT_KINDS = ["link", "brief"] as const;
+export const IMPORT_KINDS = ["link", "brief", "learn"] as const;
 
 /**
  * .cutfac/imports/<id>.yaml: a template the user's agent brings in from a link, or makes for the
@@ -309,7 +309,7 @@ export const ImportDoc = Schema.Struct({
   kind: Schema.Literals(IMPORT_KINDS)
     .annotate(
       describe(
-        "link: bring in the template a link shows; brief: make one from the workspace brief, starting from the link when there is one",
+        "link: bring in the template a link shows; brief: make one from the workspace brief, starting from the link when there is one; learn: read what about.md hasn't yet and write it in, with no template",
       ),
     )
     .pipe(withDefault("link")),

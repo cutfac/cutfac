@@ -19,6 +19,7 @@ import {
   stopAndCloseImport,
 } from "../src/core/importRun.ts";
 import {
+  allowedFromStart,
   beginTurn,
   closeImport,
   createImport,
@@ -390,6 +391,18 @@ const answered = (
 ): ImportTurn => ({
   ...said(id, kind, body),
   run: { agent: "claude", status: "done", startedAt: AT, reply },
+});
+
+test("a learn import reads about.md's unread sources into it, from the start, with nothing else", () => {
+  const start = said("t1", "start", "");
+  const doc = docWith({ kind: "learn", link: undefined, locale: "ko", turns: [start] });
+  const message = turnMessage(doc, start, FOLDER);
+
+  expect(allowedFromStart(doc)).toBe(true);
+  expect(message).toContain("about.md");
+  expect(message).toContain("Write only about.md");
+  expect(message).toContain("Write to the user in Korean.");
+  expect(message).not.toContain("press Allow");
 });
 
 test("the first message names the link and the user's language, and asks for Allow", () => {

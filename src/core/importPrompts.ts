@@ -62,6 +62,8 @@ const READ_FIRST = [
 function startPrompt(doc: ImportDoc, folder: string): string {
   if (doc.kind === "brief") return briefPrompt(doc, folder);
 
+  if (doc.kind === "learn") return learnPrompt(doc);
+
   const start = doc.turns.find((turn) => turn.kind === "start");
 
   return [
@@ -123,6 +125,23 @@ function briefPrompt(doc: ImportDoc, folder: string): string {
     ...(doc.link === undefined ? WRITE_RULES : READ_FIRST),
     "",
     ...BOARD_BLOCKS,
+    "",
+    ...voiceLines(doc),
+  ].join("\n");
+}
+
+/**
+ * The first message of a learn import, which the first launch starts as soon as the user said what
+ * they make: read what about.md lists but hasn't read yet and write it in, so the agent knows the
+ * product before the first video. Nothing else is made.
+ */
+function learnPrompt(doc: ImportDoc): string {
+  return [
+    "The user is setting up Cutfac. They told you what they make in brief.md and gave you material, which about.md lists. You are running in the background while they finish setting up.",
+    "Read brief.md, then each section of about.md that says it is not read yet: read its link or folder, rewrite the section with what matters for short videos about it (what it is, who it is for, their own words, the claims it can back up, how it looks, how it sounds), and delete the not-read line. Keep each section's `<!-- learned:id -->` line.",
+    "Write only about.md. Make no template, video, or other file, and install nothing.",
+    "If a source can't be read, leave its section as it is and say which one.",
+    "End with one or two short sentences on what you learned.",
     "",
     ...voiceLines(doc),
   ].join("\n");

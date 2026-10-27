@@ -125,9 +125,11 @@ const currentBaseline = Effect.gen(function* () {
 
 /**
  * A brief import with no link brings in nothing from elsewhere: the agent writes its own template,
- * so it may write from the start and its first message carries the rules.
+ * so it may write from the start and its first message carries the rules. A learn import only
+ * reads and writes about.md, so it may too.
  */
-export const allowedFromStart = (doc: ImportDoc) => doc.kind === "brief" && doc.link === undefined;
+export const allowedFromStart = (doc: ImportDoc) =>
+  (doc.kind === "brief" && doc.link === undefined) || doc.kind === "learn";
 
 export interface NewImport {
   /** Where the template comes from. Only a brief import may go without one. */
@@ -143,7 +145,7 @@ export const createImport = Effect.fn("imports.createImport")(function* (input: 
   const kind = input.kind ?? "link";
 
   const link =
-    kind === "brief" && (input.link ?? "").trim() === ""
+    kind !== "link" && (input.link ?? "").trim() === ""
       ? undefined
       : yield* importLink(input.link ?? "");
 

@@ -662,7 +662,7 @@ export interface ImportTurn {
  * with the agent and what it added.
  */
 export interface ImportDoc {
-  kind: "link" | "brief";
+  kind: "link" | "brief" | "learn";
   /** Where the template comes from; a brief import may go without one. */
   link?: string;
   agent: AgentName;
