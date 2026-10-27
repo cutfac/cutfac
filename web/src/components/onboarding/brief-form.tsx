@@ -101,7 +101,8 @@ export function BriefBody({
         ref={field}
         aria-label={own ? t.ownBodyLabel : t.bodyLabel}
         placeholder={value.purpose === null ? undefined : t.purpose[value.purpose].example}
-        className="min-h-20"
+        // Tall enough to invite everything that comes to mind, not a line.
+        className="min-h-40"
         onChange={(event) => onChange({ ...value, body: event.target.value })}
       />
     </Field>

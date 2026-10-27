@@ -70,8 +70,8 @@ export const startEn = {
     body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later under Brief in the sidebar.",
     details: {
       title: "Anything else your agent should know?",
-      body: "A line or two is enough, or leave it empty.",
-      ownBody: "A line or two is enough.",
+      body: "Write down whatever comes to mind. Long and detailed is fine, or leave it empty.",
+      ownBody: "Write down whatever comes to mind. Long and detailed is fine.",
     },
     material: {
       website: {
