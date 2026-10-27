@@ -12,7 +12,6 @@ import {
 
 import { AgentName } from "../src/core/schema.ts";
 import type { CreateFailure, Folder } from "../web/src/desktop.ts";
-import { agentSetups, fixAgent } from "./agents.ts";
 import { firstWorkspace } from "./firstWorkspace.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
@@ -38,6 +37,7 @@ import { decodeWorkspaceName } from "./library.ts";
 import { runInMain } from "./runtime.ts";
 import { clearDraft, isDraft, loadDraft, loadLibrary, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
+import { agentSetups, fixAgent } from "./sidecarRuntime.ts";
 import {
   appBadge,
   dragApp,

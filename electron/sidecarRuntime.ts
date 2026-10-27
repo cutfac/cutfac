@@ -1,5 +1,7 @@
 import { Effect, Option, Queue, Ref } from "effect";
 
+import type { AgentName } from "../src/core/schema.ts";
+import { AgentFixes } from "./agents.ts";
 import { AppState } from "./appState.ts";
 import { forkInMain, installInfo, runInMain, runNow } from "./runtime.ts";
 import { boardDirOf, runCli as runCommand, ServerEnv } from "./sidecar.ts";
@@ -44,3 +46,17 @@ export const watchServerCrashes = (handle: (message: string) => void) =>
 /** The app is quitting: a server that finishes starting now is stopped, not served. */
 export const markQuitting = () =>
   forkInMain(Effect.flatMap(AppState, ({ quitting }) => Ref.set(quitting, true)));
+
+/** Every agent CLI as found on this computer now. */
+export const agentSetups = () => runInMain(Effect.flatMap(AgentFixes, (agents) => agents.check));
+
+/** Runs the agent's fix, passing on each line it prints. */
+export const fixAgent = (agent: AgentName, onLine: (line: string) => void) =>
+  runInMain(
+    Effect.flatMap(AgentFixes, (agents) =>
+      agents.fix(agent, (line) => Effect.sync(() => onLine(line))),
+    ),
+  );
+
+/** Kills every fix still running, as the app quits. */
+export const stopFixes = () => runNow(Effect.flatMap(AgentFixes, (agents) => agents.stopAll));

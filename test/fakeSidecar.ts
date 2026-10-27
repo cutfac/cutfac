@@ -6,8 +6,8 @@ import { HttpClient } from "effect/http";
 import { Install, ServerEnv, startSidecar, type SidecarOptions } from "../electron/sidecar.ts";
 
 /**
- * The server's CLI as far as the app uses it, run by Bun: `init`, `serve`, and two commands for
- * `runCli`. FAKE_SIDECAR in its environment picks how `serve` and `init` misbehave; left out, a
+ * The server's CLI as far as the app uses it, run by Bun: `init`, `serve`, and the commands
+ * `runCli` runs. FAKE_SIDECAR in its environment picks how `serve` and `init` misbehave; left out, a
  * server asked to stop leaves `stopped` in its workspace.
  */
 const FAKE = `
@@ -22,6 +22,8 @@ if (command === "init") {
     process.exit(1);
   }
   await Bun.write(args[0] + "/cutfac.yaml", "");
+} else if (command === "agents") {
+  console.log(process.env.FAKE_AGENTS ?? "not json");
 } else if (command === "env") {
   console.log(JSON.stringify({ cwd: process.cwd(), env: process.env }));
 } else if (command === "hang") {

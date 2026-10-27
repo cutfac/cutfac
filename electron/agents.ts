@@ -1,106 +1,193 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
 import { stripVTControlCharacters } from "node:util";
 
-import { Option, Schema } from "effect";
-import { app } from "electron";
+import {
+  Context,
+  type Crypto,
+  Effect,
+  Fiber,
+  type FileSystem,
+  Layer,
+  Option,
+  type Path,
+  Ref,
+  Schema,
+  Stream,
+  SynchronizedRef,
+} from "effect";
+import type { HttpClient } from "effect/http";
+import type { PlatformError } from "effect/PlatformError";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { AgentSetupJson, type AgentSetup } from "../src/core/agentReadiness.ts";
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentFix } from "../web/src/desktop.ts";
-import { resolveServerEnv, runCli } from "./sidecarRuntime.ts";
+import { Install, runCli, ServerEnv, type SidecarFailed } from "./sidecar.ts";
 
 /** A sign-in waits on the user's browser; one left that long is given up on. */
-const FIX_TIMEOUT_MS = 10 * 60_000;
+const FIX_TIMEOUT = "10 minutes";
 
 const decodeSetups = Schema.decodeUnknownOption(AgentSetupJson);
 
+export class AgentCheckFailed extends Schema.TaggedError<AgentCheckFailed>()("AgentCheckFailed", {
+  message: Schema.String,
+}) {}
+
+export class NothingToFix extends Schema.TaggedError<NothingToFix>()("NothingToFix", {
+  message: Schema.String,
+}) {}
+
 /**
- * What the last check named to fix each agent. A fix runs only a command the app's own check
- * found, never one the page sends.
+ * The agent CLIs on this computer, and the fixes the app's own check named for them. A fix runs
+ * only a command that check found, never one the page sends.
  */
-let fixes = new Map<AgentName, string>();
-
-/** A fix already running, so a second press waits on it instead of starting another. */
-const running = new Map<AgentName, Promise<AgentFix>>();
-
-const children = new Set<ChildProcess>();
-
-/** Every agent CLI as found on this computer now, from `cutfac agents --json`. */
-export async function agentSetups(): Promise<ReadonlyArray<AgentSetup>> {
-  const { stdout } = await runCli(["agents", "--json"]);
-  const setups = Option.getOrUndefined(decodeSetups(stdout.trim()));
-
-  if (setups === undefined) throw new Error("Could not check the agents on this computer");
-
-  fixes = new Map(setups.flatMap((setup) => (setup.fix ? [[setup.agent, setup.fix]] : [])));
-
-  return setups;
+export class AgentFixes extends Context.Service<
+  AgentFixes,
+  {
+    readonly check: Effect.Effect<ReadonlyArray<AgentSetup>, AgentCheckFailed | SidecarFailed>;
+    /** Runs the agent's fix, or joins the one already running, passing on each line it prints. */
+    fix(
+      agent: AgentName,
+      onLine: (line: string) => Effect.Effect<void>,
+    ): Effect.Effect<AgentFix, NothingToFix>;
+    /** Kills every fix with what it started, at once, as the app quits. */
+    readonly stopAll: Effect.Effect<void>;
+  }
+>()("cutfac/desktop/AgentFixes") {
+  static readonly layer = Layer.effect(
+    AgentFixes,
+    Effect.suspend(() => make),
+  );
 }
 
-/** Runs the agent's fix in the user's shell environment, passing on each line it prints. */
-export function fixAgent(agent: AgentName, onLine: (line: string) => void): Promise<AgentFix> {
-  const command = fixes.get(agent);
+const make = Effect.gen(function* () {
+  const services = yield* Effect.context<
+    | ChildProcessSpawner.ChildProcessSpawner
+    | HttpClient.HttpClient
+    | FileSystem.FileSystem
+    | Path.Path
+    | Crypto.Crypto
+    | Install
+    | ServerEnv
+  >();
 
-  if (command === undefined) return Promise.reject(new Error(`Nothing to fix for ${agent}`));
+  const known = yield* Ref.make<ReadonlyMap<AgentName, string>>(new Map());
 
-  const current = running.get(agent);
+  const running = yield* SynchronizedRef.make<ReadonlyMap<AgentName, Fiber.Fiber<AgentFix>>>(
+    new Map(),
+  );
 
-  if (current) return current;
+  const groups = yield* Ref.make<ReadonlySet<number>>(new Set());
+  const scope = yield* Effect.scope;
 
-  const fixing = runFix(command, onLine).finally(() => running.delete(agent));
+  const check = Effect.gen(function* () {
+    const { stdout } = yield* runCli(["agents", "--json"]);
+    const setups = decodeSetups(stdout.trim());
 
-  running.set(agent, fixing);
+    if (Option.isNone(setups)) {
+      return yield* new AgentCheckFailed({
+        message: "Could not check the agents on this computer",
+      });
+    }
 
-  return fixing;
-}
+    yield* Ref.set(
+      known,
+      new Map(setups.value.flatMap((setup) => (setup.fix ? [[setup.agent, setup.fix]] : []))),
+    );
 
-async function runFix(command: string, onLine: (line: string) => void): Promise<AgentFix> {
-  const child = spawn("/bin/sh", ["-c", command], {
-    cwd: app.getPath("home"),
-    env: await resolveServerEnv(),
-    stdio: ["ignore", "pipe", "pipe"],
-    // A group of its own, so stopping it stops the installer its shell runs too.
-    detached: true,
-  });
+    return setups.value;
+  }).pipe(Effect.provideContext(services));
 
-  const timer = setTimeout(() => stop(child), FIX_TIMEOUT_MS);
+  const printed = (
+    stream: Stream.Stream<Uint8Array, PlatformError>,
+    onLine: (line: string) => Effect.Effect<void>,
+  ) =>
+    stream.pipe(
+      Stream.decodeText(),
+      // Installers redraw their progress with carriage returns, which end a line here too.
+      Stream.splitLines,
+      Stream.map((line) => stripVTControlCharacters(line).trim()),
+      Stream.filter((line) => line !== ""),
+      Stream.runForEach(onLine),
+    );
 
-  children.add(child);
+  const runFix = (command: string, onLine: (line: string) => Effect.Effect<void>) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const { homePath } = yield* Install;
 
-  // Installers redraw their progress with carriage returns, which end a line here too.
-  for (const stream of [child.stdout, child.stderr]) {
-    createInterface({ input: stream }).on("line", (line) => {
-      const text = stripVTControlCharacters(line).trim();
+        const handle = yield* spawner.spawn(
+          ChildProcess.make("/bin/sh", ["-c", command], {
+            cwd: homePath,
+            env: yield* ServerEnv,
+            extendEnv: false,
+            stdin: "ignore",
+            // A group of its own, so stopping it stops the installer its shell runs too.
+            detached: true,
+            killSignal: "SIGKILL",
+          }),
+        );
 
-      if (text !== "") onLine(text);
+        yield* Effect.acquireRelease(
+          Ref.update(groups, (pids) => new Set([...pids, handle.pid])),
+          () =>
+            Ref.update(groups, (pids) => new Set([...pids].filter((pid) => pid !== handle.pid))),
+        );
+
+        const output = yield* Effect.all(
+          [printed(handle.stdout, onLine), printed(handle.stderr, onLine)],
+          { concurrency: 2, discard: true },
+        ).pipe(Effect.ignore, Effect.forkScoped);
+
+        const code = yield* handle.exitCode;
+
+        yield* Fiber.await(output);
+
+        return code === 0;
+      }),
+    ).pipe(
+      Effect.timeoutOrElse({ duration: FIX_TIMEOUT, orElse: () => Effect.succeed(false) }),
+      Effect.orElseSucceed(() => false),
+      Effect.map((ok): AgentFix => ({ ok, command })),
+      Effect.provideContext(services),
+    );
+
+  const fix = (agent: AgentName, onLine: (line: string) => Effect.Effect<void>) =>
+    Effect.gen(function* () {
+      const command = (yield* Ref.get(known)).get(agent);
+
+      if (command === undefined) {
+        return yield* new NothingToFix({ message: `Nothing to fix for ${agent}` });
+      }
+
+      const fiber = yield* SynchronizedRef.modifyEffect(running, (fixing) => {
+        const current = fixing.get(agent);
+
+        if (current !== undefined) return Effect.succeed([current, fixing] as const);
+
+        return runFix(command, onLine).pipe(
+          Effect.ensuring(
+            SynchronizedRef.update(running, (now) => {
+              const rest = new Map(now);
+
+              rest.delete(agent);
+
+              return rest;
+            }),
+          ),
+          Effect.forkIn(scope),
+          Effect.map((started) => [started, new Map([...fixing, [agent, started]])] as const),
+        );
+      });
+
+      return yield* Fiber.join(fiber);
     });
-  }
 
-  return new Promise((resolve) => {
-    const settle = (ok: boolean) => {
-      clearTimeout(timer);
-      children.delete(child);
-      resolve({ ok, command });
-    };
+  const stopAll = Effect.flatMap(Ref.get(groups), (pids) =>
+    Effect.forEach(pids, (pid) => Effect.ignore(Effect.try(() => process.kill(-pid, "SIGKILL"))), {
+      discard: true,
+    }),
+  );
 
-    child.once("error", () => settle(false));
-    child.once("close", (code) => settle(code === 0));
-  });
-}
-
-/** Kills a fix with everything it started. */
-function stop(child: ChildProcess): void {
-  if (child.pid === undefined) return;
-
-  try {
-    process.kill(-child.pid, "SIGKILL");
-  } catch {
-    // It has ended already.
-  }
-}
-
-/** Stops every fix still running, as the app quits. */
-export function stopFixes(): void {
-  for (const child of children) stop(child);
-}
+  return AgentFixes.of({ check, fix, stopAll });
+});

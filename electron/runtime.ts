@@ -8,6 +8,7 @@ import { app } from "electron";
 import { AppData } from "../src/core/appData.ts";
 import { LogDir, logToFile } from "../src/core/logFile.ts";
 import { errorReports } from "../src/errorReports.ts";
+import { AgentFixes } from "./agents.ts";
 import { AppState } from "./appState.ts";
 import { platform } from "./platform.ts";
 import { Settings } from "./settings.ts";
@@ -54,7 +55,9 @@ const services = Layer.mergeAll(settings, ServerEnv.layer, FetchHttpClient.layer
   Layer.provideMerge(base),
 );
 
-export const appServices = WorkspaceServer.layer.pipe(Layer.provideMerge(services));
+export const appServices = Layer.mergeAll(WorkspaceServer.layer, AgentFixes.layer).pipe(
+  Layer.provideMerge(services),
+);
 
 export type AppServices = Layer.Success<typeof appServices>;
 

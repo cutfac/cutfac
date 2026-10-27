@@ -6,7 +6,6 @@ import { BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 
 
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentFix, DevState, OnboardingStep } from "../web/src/desktop.ts";
-import { agentSetups, fixAgent, stopFixes } from "./agents.ts";
 import { ONBOARDING_STEPS, originOf } from "./boardPages.ts";
 import { DEV_APP } from "./devApp.ts";
 import {
@@ -44,6 +43,7 @@ import {
   settingsFile,
   settingsSetAside,
 } from "./settings.ts";
+import { agentSetups, fixAgent, stopFixes } from "./sidecarRuntime.ts";
 import { hasPermission } from "./systemAccess.ts";
 
 const PANEL_SIZE = { width: 420, height: 760 };
