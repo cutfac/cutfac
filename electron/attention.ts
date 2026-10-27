@@ -16,6 +16,7 @@ import { MESSAGES } from "./messages.ts";
 const isAttention = Schema.is(
   Schema.Struct({
     waiting: Schema.Finite,
+    busy: Schema.Finite,
     asking: Schema.Array(
       Schema.Struct({
         id: Schema.String,
@@ -25,6 +26,11 @@ const isAttention = Schema.is(
     ),
   }),
 );
+
+/** How many videos have an agent or a render at work, as the board last said. */
+let busy = 0;
+
+export const busyCount = () => busy;
 
 export interface AttentionHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
@@ -67,6 +73,7 @@ export function handleAttention(host: AttentionHost): void {
     if (!host.isFromApp(event) || !isAttention(next)) return;
 
     app.setBadgeCount(next.waiting);
+    busy = next.busy;
 
     const away = BrowserWindow.getFocusedWindow() === null && Notification.isSupported();
     const now = new Set<string>();

@@ -36,7 +36,7 @@ import {
   SET_LOCALE_CHANNEL,
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
-import { startLicense, type License } from "./license.ts";
+import { startLicense, type License } from "./licenseRuntime.ts";
 import { handleLinks, type Links } from "./links.ts";
 import { menuTemplate, showTextMenu } from "./menu.ts";
 import { MESSAGES } from "./messages.ts";
@@ -44,15 +44,14 @@ import { keepInsideApp } from "./navigation.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions, sandboxed } from "./permissions.ts";
 import { freePort, probePort } from "./ports.ts";
+import { guardQuit, guardWindow } from "./quitGuard.ts";
 import {
-  loadLicense,
   loadLocale,
   loadOnboarding,
   loadPage,
   loadPort,
   loadWindowPlace,
   loadWorkspace,
-  saveLicense,
   saveLocale,
   saveOnboarding,
   savePage,
@@ -127,8 +126,9 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", bringToFront);
 
   app.on("window-all-closed", () => app.quit());
+  guardQuit({ window: () => window, locale: () => locale });
   app.on("before-quit", (event) => {
-    if (quitReady) return;
+    if (quitReady || event.defaultPrevented) return;
 
     quitting = true;
 
@@ -230,11 +230,7 @@ async function boot(): Promise<void> {
   locale = (await loadLocale()) ?? resolveLocale(undefined, app.getPreferredSystemLanguages());
 
   if (app.isPackaged) {
-    license = startLicense({
-      ...(await loadLicense()),
-      save: saveLicense,
-      onChange: () => window?.webContents.send(LICENSE_CHANGE_CHANNEL),
-    });
+    license = await startLicense(() => window?.webContents.send(LICENSE_CHANGE_CHANNEL));
   }
 
   updates = startUpdates({ messages: () => MESSAGES[locale], window: () => window });
@@ -431,6 +427,7 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
     placeTimer = setTimeout(() => rememberPlace(created), 500);
   };
 
+  guardWindow(created);
   created.on("move", rememberSoon);
   created.on("resize", rememberSoon);
   created.on("maximize", () => rememberPlace(created));

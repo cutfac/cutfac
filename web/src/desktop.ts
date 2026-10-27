@@ -137,6 +137,8 @@ export interface CutfacDevTools {
 export interface Attention {
   /** How many videos wait for the user. */
   waiting: number;
+  /** How many videos have an agent or a render at work, which quitting the app would stop. */
+  busy: number;
   /** The videos whose agent waits for the user's OK on a tool, or their answer to a question. */
   asking: { id: string; title: string; about: "approval" | "question" }[];
 }

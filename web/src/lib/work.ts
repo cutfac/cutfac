@@ -154,6 +154,7 @@ export const attention = (
   seen?: (render: RenderState) => boolean,
 ): Attention => ({
   waiting: waitingCount(items, seen),
+  busy: items.filter((item) => item.running || item.render?.status === "running").length,
   asking: items.flatMap((item) => {
     const { kind } = itemWork(item, seen);
 

@@ -55,6 +55,11 @@ const en = {
   licenseKey: "License Key…",
   asking: "An agent is waiting for your OK",
   question: "An agent is waiting for your answer",
+  quitBusy: (count: number) =>
+    count === 1 ? "A video is still being worked on" : `${count} videos are still being worked on`,
+  quitBusyDetail: "Quitting stops your agent and any render now. You can start them again later.",
+  quitAnyway: "Quit",
+  keepWorking: "Keep Working",
 };
 
 export type Messages = typeof en;
@@ -117,5 +122,9 @@ export const MESSAGES: Record<Locale, Messages> = {
     licenseKey: "라이선스 키…",
     asking: "에이전트가 허락을 기다려요",
     question: "에이전트가 답을 기다려요",
+    quitBusy: (count) => `작업 중인 영상이 ${count}개 있어요`,
+    quitBusyDetail: "지금 종료하면 에이전트 작업과 렌더링이 멈춰요. 나중에 다시 시작할 수 있어요.",
+    quitAnyway: "종료",
+    keepWorking: "계속 작업하기",
   },
 };
