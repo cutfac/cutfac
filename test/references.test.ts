@@ -131,7 +131,14 @@ test("removes one file or folder, and nothing outside the references", async () 
 
   expect(await t.run(list(item.id))).toEqual([]);
 
-  for (const path of ["references/../item.yaml", "item.yaml", "references/photos/a.jpg"]) {
+  const outside = [
+    "references/../item.yaml",
+    "item.yaml",
+    "edits/frame.png",
+    "references/photos/a.jpg",
+  ];
+
+  for (const path of outside) {
     const error = await t.fail(Effect.flatMap(getItem(item.id), (it) => removeReference(it, path)));
 
     expect(error).toBeInstanceOf(InvalidRequest);
@@ -157,15 +164,16 @@ test("a request keeps the files attached to it, which must be references of the 
     "references/logo.png",
   ]);
 
-  const outsideRefs = await t.fail(
-    addFeedback(item.id, { body: "Use this", attachments: ["item.yaml"] }),
-  );
+  for (const outside of ["item.yaml", "edits/frame.png"]) {
+    const error = await t.fail(addFeedback(item.id, { body: "Use this", attachments: [outside] }));
+
+    expect(error).toBeInstanceOf(InvalidRequest);
+  }
 
   const missing = await t.fail(
     addFeedback(item.id, { body: "Use this", attachments: ["references/gone.png"] }),
   );
 
-  expect(outsideRefs).toBeInstanceOf(InvalidRequest);
   expect(missing).toBeInstanceOf(NotFound);
 });
 

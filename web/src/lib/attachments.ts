@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import type { Upload } from "../api.ts";
 
 /**
@@ -20,12 +22,12 @@ interface Inner {
   rest: string;
 }
 
-/** `/photos/./a.jpg` → `["photos", "a.jpg"]`; undefined for a path that climbs out with `..`. */
-function segmentsOf(path: string): ReadonlyArray<string> | undefined {
-  const segments = path.split(/[/\\]/).filter((segment) => segment !== "" && segment !== ".");
-
-  return segments.includes("..") ? undefined : segments;
-}
+/** `/photos/./a.jpg` → `["photos", "a.jpg"]`; none for a path that climbs out with `..`. */
+const segmentsOf = (path: string) =>
+  Option.liftPredicate(
+    path.split(/[/\\]/).filter((segment) => segment !== "" && segment !== "."),
+    (segments) => !segments.includes(".."),
+  );
 
 /** `logo.png` → `logo-2.png`, `photos` → `photos-2`, as the server names a taken name. */
 function freeName(name: string, dir: boolean, taken: ReadonlySet<string>): string {
@@ -62,7 +64,7 @@ export function heldEntries(
   const folders = new Map<string, Inner[]>();
 
   for (const { file, path } of files) {
-    const segments = segmentsOf(path) ?? [];
+    const segments = Option.getOrElse(segmentsOf(path), () => []);
     const [top, ...rest] = segments;
 
     if (top === undefined || segments.some((segment) => segment.startsWith("."))) continue;

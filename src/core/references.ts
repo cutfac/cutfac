@@ -49,12 +49,12 @@ export interface ReferenceUpload {
   readonly path: string;
 }
 
-/** `/photos/./a.jpg` → `["photos", "a.jpg"]`; undefined for a path that climbs out with `..`. */
-function segmentsOf(path: string): ReadonlyArray<string> | undefined {
-  const segments = path.split(/[/\\]/).filter((segment) => segment !== "" && segment !== ".");
-
-  return segments.includes("..") ? undefined : segments;
-}
+/** `/photos/./a.jpg` → `["photos", "a.jpg"]`; none for a path that climbs out with `..`. */
+const segmentsOf = (path: string) =>
+  Option.liftPredicate(
+    path.split(/[/\\]/).filter((segment) => segment !== "" && segment !== "."),
+    (segments) => !segments.includes(".."),
+  );
 
 /** Files and bytes in a folder, all the way down. */
 const tally = (
@@ -143,13 +143,13 @@ export const addReferences = Effect.fn("references.addReferences")(function* (
   for (const upload of uploads) {
     const segments = segmentsOf(upload.path);
 
-    if (segments === undefined) {
+    if (Option.isNone(segments)) {
       return yield* new InvalidRequest({ message: `Not a path inside the drop: ${upload.path}` });
     }
 
-    const [top, ...rest] = segments;
+    const [top, ...rest] = segments.value;
 
-    if (top === undefined || segments.some((segment) => segment.startsWith("."))) continue;
+    if (top === undefined || segments.value.some((segment) => segment.startsWith("."))) continue;
 
     if (rest.length === 0) {
       entries.push({ name: top, dir: false, files: [{ ...upload, path: "" }] });
@@ -191,14 +191,11 @@ export const addReferences = Effect.fn("references.addReferences")(function* (
   );
 });
 
-/** `references/logo.png` → `logo.png`; undefined for anything that is not one entry of the folder. */
-function topLevelName(path: string): string | undefined {
-  const segments = segmentsOf(path);
-
-  if (segments?.length !== 2 || segments[0] !== REFERENCES) return undefined;
-
-  return segments[1];
-}
+/** `references/logo.png` → `logo.png`; none for anything that is not one entry of the folder. */
+const topLevelName = (path: string) =>
+  Option.flatMap(segmentsOf(path), ([folder, name, ...rest]) =>
+    folder === REFERENCES && rest.length === 0 ? Option.fromUndefinedOr(name) : Option.none(),
+  );
 
 /** Delete one file or folder from an item's references. */
 export const removeReference = Effect.fn("references.removeReference")(function* (
@@ -208,11 +205,11 @@ export const removeReference = Effect.fn("references.removeReference")(function*
   const ws = yield* Workspace;
   const name = topLevelName(path);
 
-  if (name === undefined) {
+  if (Option.isNone(name)) {
     return yield* new InvalidRequest({ message: `Not a reference of the item: ${path}` });
   }
 
-  const rel = `${item.dir}/${REFERENCES}/${name}`;
+  const rel = `${item.dir}/${REFERENCES}/${name.value}`;
 
   if (!(yield* ws.exists(rel))) {
     return yield* new NotFound({ message: `No ${path} in ${item.id}` });
@@ -235,13 +232,16 @@ export const checkAttachments = Effect.fn("references.checkAttachments")(functio
   const checked: string[] = [];
 
   for (const path of paths) {
-    const segments = segmentsOf(path);
+    const segments = Option.filter(
+      segmentsOf(path),
+      (inside) => inside.length >= 2 && inside[0] === REFERENCES,
+    );
 
-    if (segments === undefined || segments.length < 2 || segments[0] !== REFERENCES) {
+    if (Option.isNone(segments)) {
       return yield* new InvalidRequest({ message: `Attachments live in references/: ${path}` });
     }
 
-    const clean = segments.join("/");
+    const clean = segments.value.join("/");
 
     if (!(yield* ws.exists(`${dir}/${clean}`))) {
       return yield* new NotFound({ message: `Attached file not found: ${path}` });
