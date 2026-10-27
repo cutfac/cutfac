@@ -201,7 +201,6 @@ const turn = (bin: string, ask: Ask) =>
     ask,
   });
 
-/** What the fake read back after its `n`th request. */
 const readBack = (n: number) =>
   Effect.gen(function* () {
     const fakes = yield* FakeAgentDir;
@@ -248,7 +247,6 @@ echo '{"type":"result","subtype":"success","session_id":"${session}","result":"o
       );
 
       expect(result).toMatchObject({ reply: "ok", failure: undefined });
-      // Only the tool the board can answer is put to it.
       expect((yield* Ref.get(asked)).map((approval) => approval.id)).toEqual(["r1"]);
 
       const question = yield* readBack(0);
@@ -272,7 +270,6 @@ echo '{"type":"result","subtype":"success","session_id":"${session}","result":"o
       const interrupted = join(fakes.dir, "interrupted");
       const cancel = JSON.stringify({ type: "control_cancel_request", request_id: "r1" });
 
-      // Claude ends the turn only once the wait is over, so a run that kept waiting is seen.
       const bin = yield* asking(
         [canUse("r1", ffmpeg)],
         () => `while [ ! -f "${asked}" ]; do sleep 0.02; done
@@ -350,7 +347,6 @@ describe("the board's answer", () => {
         Effect.all([
           registry.answer("other", "r1", "allow"),
           registry.answer("item", "r2", "allow"),
-          // Answers to questions don't answer a tool.
           registry.answer("item", "r1", { answers: { q: ["yes"] } }),
           registry.answer("item", "r1", "always"),
           registry.answer("item", "r1", "deny"),

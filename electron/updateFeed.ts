@@ -5,7 +5,6 @@ import electronUpdater, { type UpdateDownloadedEvent } from "electron-updater";
 import type { Messages } from "./messages.ts";
 import { UpdateCheckFailed, UpdateFeed, type UpdatePrompts } from "./updates.ts";
 
-/** The released app's feed, from electron-updater. */
 export const updateFeed = Layer.sync(UpdateFeed, () => {
   if (!app.isPackaged) {
     return UpdateFeed.of({
@@ -50,7 +49,6 @@ export const updateFeed = Layer.sync(UpdateFeed, () => {
   });
 });
 
-/** The dialogs about updates, over `window` when there is one, in the board's language. */
 export const updatePrompts = (
   messages: () => Messages,
   window: () => BrowserWindow | undefined,

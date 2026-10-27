@@ -1,18 +1,13 @@
 import { Effect, Fiber, Option, Ref, SynchronizedRef } from "effect";
 
-/** How many videos have an agent or a render at work, as the board last said. */
 export const busyWork = Ref.makeUnsafe(0);
 
 export interface QuitQuestion {
-  /** Whether quitting now waits on the person: work goes on, and nothing has settled it. */
   readonly mustAsk: Effect.Effect<boolean>;
-  /** Asks, or waits on the question already up; true to quit anyway, which settles it. */
   readonly ask: Effect.Effect<boolean>;
-  /** Something other than the person quits the app, such as a signal or the Mac shutting down. */
   readonly settle: Effect.Effect<void>;
 }
 
-/** Asking before quitting while `busy` work goes on, with `confirm` asking the person. */
 export const quitQuestion = (busy: Effect.Effect<number>, confirm: Effect.Effect<boolean>) =>
   Effect.gen(function* () {
     const settled = yield* Ref.make(false);

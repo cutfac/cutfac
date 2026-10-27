@@ -11,7 +11,6 @@ import { tempWorkspace } from "./support.ts";
 
 const it = testEffect(tempWorkspace("Brief routes"));
 
-/** The brief routes on the test's workspace. */
 const briefServer = Effect.gen(function* () {
   const { send, sendJson } = yield* workspaceRoutes(briefRoutes);
 

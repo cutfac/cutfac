@@ -290,7 +290,6 @@ const Names = lenient(Schema.Record(Schema.String, Schema.Json));
 
 const Words = lenient(Schema.Array(Schema.Json));
 
-/** How a server starts and what it is given, as the user sees it; any part may be off or missing. */
 const ServerLaunch = Schema.Struct({
   command: Text,
   args: Words,

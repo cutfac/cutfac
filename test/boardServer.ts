@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// The web handler is the test's entry point, so it provides every layer the routes need.
 // @effect-diagnostics strictEffectProvide:off
 import { BunHttpPlatform, BunServices } from "@effect/platform-bun";
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Option } from "effect";
@@ -16,7 +15,6 @@ import { routes } from "../src/server/app.ts";
 import { setUpClaudePlugins } from "./pluginFixtures.ts";
 import { testLicenseKey, type FakeAgents, type TestWorkspace } from "./support.ts";
 
-// The board reads its server's address when it loads, and has no browser to ask here.
 Object.assign(globalThis, { location: { search: "?api=http://cutfac.test" } });
 
 export const { api, onAgentRun } = await import("../web/src/api.ts");
@@ -80,7 +78,6 @@ echo '{"type":"system","subtype":"init","session_id":"sess-1"}'
 echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done."}'
 `;
 
-/** An EventSource that reads the server's streams in process, as a browser's would over HTTP. */
 export class StreamSource {
   static readonly opened: StreamSource[] = [];
 
@@ -132,7 +129,6 @@ export class StreamSource {
   }
 }
 
-/** Waits for `condition`, which the server's streams make true on their own time. */
 export async function until(condition: () => boolean) {
   for (let tries = 0; !condition(); tries++) {
     if (tries > 200) throw new Error("The stream never said what the test waits for");
@@ -142,17 +138,11 @@ export async function until(condition: () => boolean) {
 }
 
 export interface BoardServer {
-  /** A new folder, removed when the server stops. */
   readonly tempFolder: (prefix: string) => Promise<string>;
-  /** `during` with the board talking to the desktop app's server, whose data folder is `data`. */
   readonly onDesktop: <A>(data: string, during: () => Promise<A>) => Promise<A>;
   readonly stop: () => Promise<void>;
 }
 
-/**
- * The server's routes on the test workspace `t`, which the board's own API client talks to: fake
- * agents, a format, and the agents' settings and servers for the board to read.
- */
 export async function startBoardServer(t: TestWorkspace, fakes: FakeAgents): Promise<BoardServer> {
   const folders: string[] = [];
 
@@ -212,7 +202,6 @@ export async function startBoardServer(t: TestWorkspace, fakes: FakeAgents): Pro
   await fakes.bin("claude", CLAUDE);
   await fakes.bin("codex", CODEX);
   await fakes.bin("ffprobe", `cat <<'EOF'\n${PROBED}\nEOF\n`);
-  // Child processes find programs on the real PATH, so the fake ffprobe goes first on it.
   process.env["PATH"] = `${join(fakes.dir, "bin")}:${realPath}`;
 
   await mkdir(join(t.root, "formats/art"), { recursive: true });

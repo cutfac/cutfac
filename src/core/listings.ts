@@ -284,7 +284,6 @@ function playApp(html: string): Option.Option<PlayApp> {
   return Option.none();
 }
 
-/** `value` trimmed, unless it is blank. */
 const filled = (value: Option.Option<string>) =>
   value.pipe(
     Option.map((text) => text.trim()),

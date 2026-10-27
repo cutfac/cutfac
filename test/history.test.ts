@@ -55,7 +55,6 @@ describe("pushEntry", () => {
   });
 });
 
-/** An item with a video, and ways to edit it as an agent would and to see what history made of it. */
 const fixture = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const ws = yield* Workspace;

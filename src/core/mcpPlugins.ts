@@ -63,12 +63,10 @@ function inside(path: Path.Path, root: string, rel: string) {
 
 const Text = lenient(Schema.String);
 
-/** A plugin's server file, which keeps them under `mcpServers` or at the top. */
 const decodeServerFile = Schema.decodeUnknownOption(
   Schema.Struct({ mcpServers: lenient(Schema.JsonObject) }),
 );
 
-/** The servers in a plugin's server file. */
 const serversIn = (config: Schema.JsonObject) =>
   entriesIn(Option.getOrUndefined(decodeServerFile(config))?.mcpServers ?? config);
 
@@ -76,7 +74,6 @@ const decodeText = Schema.decodeUnknownOption(Schema.String);
 
 const decodeObject = Schema.decodeUnknownOption(Schema.JsonObject);
 
-/** What a plugin's manifest says of it; any part may be missing or something else. */
 const Manifest = Schema.Struct({
   name: Text,
   description: Text,
@@ -88,7 +85,6 @@ type Manifest = typeof Manifest.Type;
 
 const decodeManifest = Schema.decodeUnknownOption(Manifest);
 
-/** The manifest in the first of `files` that holds one. */
 const manifestOf = <E, R>(found: Effect.Effect<Option.Option<Schema.JsonObject>, E, R>) =>
   Effect.map(found, (manifest) =>
     Option.getOrElse(Option.flatMap(manifest, decodeManifest), (): Manifest => ({})),

@@ -133,25 +133,17 @@ export interface FirstWorkspaceInput {
   readonly library: string;
   readonly name: string;
   readonly draft: OnboardingDraft;
-  /** The agents on this computer, to pick the one that reads. */
   readonly agents: Effect.Effect<
     ReadonlyArray<Pick<AgentSetup, "agent" | "state">>,
     { readonly message: string }
   >;
-  /** The board's language, for the agent to write in. */
   readonly locale: string;
 }
 
-/**
- * Makes the first workspace and starts the reading, one run at a time: answers given again wait
- * for the run before, then add what is new.
- */
 export class FirstWorkspace extends Context.Service<
   FirstWorkspace,
   {
-    /** Makes the workspace from the answers, after any run before it, and is done with its folder. */
     start(input: FirstWorkspaceInput): Effect.Effect<string, FirstWorkspaceFailed>;
-    /** The workspace the latest run made, once it is done; none if none was started or it failed. */
     readonly ready: Effect.Effect<Option.Option<string>>;
   }
 >()("cutfac/desktop/FirstWorkspace") {

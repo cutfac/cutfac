@@ -146,7 +146,6 @@ export class License extends Context.Service<
    */
   static readonly layer = (changed: Effect.Effect<void>) => Layer.effect(License, make(changed));
 
-  /** A build that doesn't check a license: no key is taken, and none is saved. */
   static readonly unavailable = Layer.succeed(
     License,
     License.of({

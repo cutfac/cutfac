@@ -25,7 +25,6 @@ const it = testEffect(Layer.merge(tempWorkspace("Test"), fakeAgents));
 const writeMcp = (record: Schema.JsonObject) =>
   Effect.flatMap(Workspace, (ws) => ws.writeText(".mcp.json", JSON.stringify(record)));
 
-/** The `.mcp.json` the workspace holds now. */
 const mcpJson = Effect.flatMap(Workspace, (ws) => ws.readText(".mcp.json")).pipe(
   Effect.map((text) => JSON.parse(text)),
 );
@@ -82,7 +81,6 @@ describe("connectCodex", () => {
       const fakes = yield* FakeAgentDir;
       const fs = yield* FileSystem.FileSystem;
 
-      // Only the registration from before the rename exists.
       yield* fakes.bin(
         "codex",
         `echo "$*" >> "${fakes.calls}/log"
@@ -143,7 +141,6 @@ const writeEntries = (root: string) =>
     },
   });
 
-/** A fake codex whose registration starts the server for `root`. */
 const codexRegisteredFor = (root: string) =>
   Effect.flatMap(FakeAgentDir, (fakes) =>
     fakes.bin(
@@ -157,7 +154,6 @@ exit 1
     ),
   );
 
-/** The servers a Claude run loads, from its `--mcp-config`. */
 const runServers = (server: McpLaunch | undefined) =>
   Effect.map(runMcpConfig(server), (config) =>
     config === undefined ? undefined : JSON.parse(config).mcpServers,

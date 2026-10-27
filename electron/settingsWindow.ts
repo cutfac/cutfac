@@ -52,10 +52,6 @@ function run() {
 }
 `;
 
-/**
- * The System Settings window's frame as it opens, moves and resizes; none while it has no window
- * on screen. Following it ends when the stream does, and with nothing if the script can't run.
- */
 export const settingsWindowFrames = Stream.unwrap(
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -68,7 +64,6 @@ export const settingsWindowFrames = Stream.unwrap(
       }),
     );
 
-    // A line cut off as the script stops doesn't read and is skipped; the next one says where.
     return script.stdout.pipe(
       Stream.decodeText(),
       Stream.splitLines,

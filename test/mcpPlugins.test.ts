@@ -18,10 +18,6 @@ import { tempWorkspace } from "./support.ts";
 
 const it = testEffect(tempWorkspace("Plugins"));
 
-/**
- * The test's workspace and a folder that is Claude Code's and Codex's config at once, as
- * `CLAUDE_CONFIG_DIR` and `CODEX_HOME`; `read` runs an effect that finds the agents' config there.
- */
 const pluginsSetup = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const ws = yield* Workspace;
@@ -42,7 +38,6 @@ const SEARCH = {
   args: ["--cache", "${CLAUDE_PLUGIN_DATA}"],
 };
 
-/** The set-up of `pluginsSetup`, with the plugins Claude Code has installed here. */
 const claudeSetup = Effect.gen(function* () {
   const setup = yield* pluginsSetup;
   const { ws, config } = setup;
@@ -108,9 +103,7 @@ describe("Claude Code's plugins", () => {
         ["docs@market", "Docs", "Search the docs"],
         ["mine@market", "mine", undefined],
       ]);
-      // A server that asks the user for a value when the plugin is turned on can't start in a run.
       expect(serverNames(plugins[0])).toEqual(["search"]);
-      // Nor is a file outside the plugin read.
       expect(serverNames(plugins[1])).toEqual(["inline"]);
     }),
   );
@@ -176,7 +169,6 @@ describe("Claude Code's plugins", () => {
   );
 });
 
-/** The set-up of `pluginsSetup`, with the plugins Codex's config turns on and off. */
 const codexSetup = Effect.gen(function* () {
   const setup = yield* pluginsSetup;
   const { config } = setup;
@@ -249,7 +241,6 @@ describe("Codex's plugins", () => {
         ["notes@local", "Notes", "Your notes"],
         ["old@local", "old", undefined],
       ]);
-      // A server of the config's own is offered on its own, and one the plugin turns off isn't.
       expect(serverNames(plugins[0])).toEqual(["notes"]);
       expect(serverNames(plugins[1])).toEqual(["later"]);
     }),

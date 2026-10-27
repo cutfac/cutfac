@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test";
 import path from "node:path";
 
-// Each check builds the fixes for its own folder and agents.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import { Effect, Fiber, FileSystem, Layer, Option, Ref } from "effect";
@@ -16,7 +15,6 @@ import { alive } from "./support.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
 
-/** The fixes, as a run from a checkout whose server's check names `fixes`. */
 const fixesFor = (
   dir: string,
   fake: string,
@@ -52,7 +50,6 @@ const fixesFor = (
     ),
   );
 
-/** Runs `fix` for `agent` after a check, keeping the lines it printed. */
 const fixWithLines = (agent: "claude" | "codex") =>
   Effect.gen(function* () {
     const agents = yield* AgentFixes;

@@ -55,7 +55,6 @@ const bundleIcon = Effect.promise(() =>
     .catch(() => app.getFileIcon(appBundle(), { size: "normal" })),
 );
 
-/** The app as a list in System Settings shows it: its icon and its name. */
 export const appBadge = Effect.map(bundleIcon, (icon) => ({
   icon: icon.toDataURL(),
   name: path.basename(appBundle(), ".app"),
@@ -70,27 +69,14 @@ export interface AccessWatch {
   readonly onGranted: Effect.Effect<void>;
 }
 
-/**
- * Opening a permission's list in System Settings with a small window beside it to drag the app
- * from, and watching for the permission until it is granted, the user comes back, or it has
- * waited long enough.
- */
 export class SystemAccess extends Context.Service<
   SystemAccess,
   {
     openSettings(watch: AccessWatch): Effect.Effect<void>;
-    /** Closes the helper window and stops checking, as when the user comes back to the app. */
     readonly stopWatching: Effect.Effect<void>;
-    /**
-     * Drags the app bundle out of the helper window, into the list. It runs while the page's drag
-     * is starting, so it can't wait for anything, the drag's picture included.
-     */
+    /** Runs as the page's drag starts, so it can't wait on anything, the drag's icon included. */
     dragApp(sender: WebContents): Effect.Effect<void>;
-    /**
-     * Makes the helper the key window as the pointer reaches it: macOS shows a page's cursor only
-     * in the key window, and the helper is a panel, which becomes key without bringing the app to
-     * the front over System Settings.
-     */
+    /** macOS shows a page's cursor only in the key window. */
     readonly focusHelper: Effect.Effect<void>;
   }
 >()("cutfac/desktop/SystemAccess") {
@@ -111,14 +97,10 @@ const make = Effect.gen(function* () {
     Option.match({ onNone: () => Effect.void, onSome: (scope) => Scope.close(scope, Exit.void) }),
   );
 
-  /** The helper window, closed with the watch, following the System Settings window. */
   const showHelper = Effect.fnUntraced(function* ({ boardUrl, preload }: AccessWatch) {
     const area = screen.getPrimaryDisplay().workArea;
     const closed = yield* Deferred.make<void>();
 
-    // A panel floats over System Settings and takes the drag without bringing the app's own window
-    // to the front, over the list it is dragged into. Until System Settings has a window, it waits
-    // at the screen's right.
     const created = yield* Effect.acquireRelease(
       Effect.sync(
         () =>
@@ -127,6 +109,7 @@ const make = Effect.gen(function* () {
             height: HELPER.height,
             x: area.x + area.width - HELPER.width - 32,
             y: Math.round(area.y + (area.height - HELPER.height) / 2),
+            // A panel takes the drag without bringing the app's window over System Settings.
             type: "panel",
             frame: false,
             resizable: false,
@@ -151,13 +134,11 @@ const make = Effect.gen(function* () {
     );
 
     created.once("ready-to-show", () => created.showInactive());
-    // Its page closes it with window.close(); the app's own window carries on watching.
     created.on("closed", () => Deferred.doneUnsafe(closed, Exit.void));
     lockNavigation(created.webContents);
     void created.loadURL(new URL("#/drag-helper", boardUrl).href);
     yield* Ref.set(helper, Option.some(created));
 
-    // It follows the window as the user moves it, and stays where it was while the window is away.
     yield* settingsWindowFrames.pipe(
       Stream.interruptWhen(Deferred.await(closed)),
       Stream.runForEach((frame) =>

@@ -24,7 +24,6 @@ import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { fakeAgents, tempWorkspace } from "./support.ts";
 
-// A PATH of only fakes: yt-dlp and whisper are never found, so nothing is downloaded or run.
 const it = testEffect(Layer.merge(tempWorkspace(), fakeAgents));
 
 const LANDING = `<html><head>
@@ -74,7 +73,6 @@ const svgIcon = (url: string) =>
     ? new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } })
     : respond(url);
 
-/** A web that answers from `answer`, to run an effect on, and the URLs it was asked for. */
 const fakeWeb = (answer: (url: string) => Response = respond) =>
   Effect.gen(function* () {
     const asked = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -89,15 +87,12 @@ const fakeWeb = (answer: (url: string) => Response = respond) =>
     return { online: Effect.provideService(HttpClient.HttpClient, client), asked: Ref.get(asked) };
   });
 
-/** A folder outside the workspace, for what the user points at. */
 const outsideFolder = Effect.flatMap(FileSystem.FileSystem, (fs) =>
   fs.makeTempDirectoryScoped({ prefix: "cutfac-learn-" }),
 );
 
-/** The workspace's about.md. */
 const about = Effect.flatMap(Workspace, (ws) => ws.readText(ABOUT_FILE));
 
-/** The names in a folder of the workspace, sorted. */
 const listing = (rel: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -181,7 +176,6 @@ describe("learn", () => {
         images: ["image.png"],
         links: ["https://apps.apple.com/us/app/fernly/id123456"],
       });
-      // Store links on the page are noted, not followed.
       expect((yield* web.asked).toSorted()).toEqual([
         "https://fernly.app/",
         "https://fernly.app/favicon.png",
@@ -375,7 +369,6 @@ describe("learn", () => {
 
       expect(yield* unread).toEqual({ first: true, second: true });
 
-      // An agent rewrites the first section and a person adds one of their own.
       const read = (yield* about).replace(/(<!-- learned:first -->\n)> Not read yet[^\n]*\n/, "$1");
       yield* ws.writeText(ABOUT_FILE, `${read}\n## Voice\n\nPlayful.\n`);
 

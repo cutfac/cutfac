@@ -22,7 +22,6 @@ const SearchPath = Config.option(Config.String("PATH"));
 
 const ANYONE_MAY_RUN = 0o111;
 
-/** The absolute path of the program `name` in the folders of `searchPath`, as a shell finds it. */
 export const whichIn = (name: string, searchPath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

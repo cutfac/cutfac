@@ -21,10 +21,6 @@ export const originOf = (url: string) =>
 
 const pathnameOf = Option.liftThrowable((url: string) => decodeURIComponent(new URL(url).pathname));
 
-/**
- * The file a request names inside `root`, while it stays inside. A folder names its index.html;
- * the board routes by the hash, so nothing else needs to fall back to it.
- */
 export const boardFile = (root: string, url: string) =>
   pathnameOf(url).pipe(
     Option.map((pathname) =>
@@ -53,7 +49,6 @@ const ONBOARDING_HASH = /^#\/welcome(?:\/(make|agent|access|folder))?$/;
 
 const decodeStep = Schema.decodeUnknownOption(Schema.Literals(ONBOARDING_STEPS));
 
-/** The first-launch step a board page shows, from its hash; none for any other page. */
 export const onboardingStep = (hash: string) =>
   Option.flatMap(Option.fromNullishOr(ONBOARDING_HASH.exec(hash)), (match) =>
     decodeStep(match[1] ?? "welcome"),

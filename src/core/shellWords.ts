@@ -9,12 +9,6 @@ const SCRIPT_FLAG = /^-l?c$/;
 /** Whether a backslash before `char` inside double quotes escapes it; else it stays a backslash. */
 const escapesInDouble = (char: string) => char !== "" && '$`"\\\n'.includes(char);
 
-/**
- * `text` split into words as a POSIX shell reads them, with quotes taken off: `'…'` keeps all it
- * holds, a bare word takes a backslash before any character, and `"…"` only before `$`, `` ` ``,
- * `"`, `\\` and a newline. None when a quote is left open, so a command it can't read is shown as
- * it came.
- */
 export function shellWords(text: string): Option.Option<ReadonlyArray<string>> {
   const words: Array<string> = [];
   let word: string | undefined;

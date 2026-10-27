@@ -22,7 +22,6 @@ interface Inner {
   rest: string;
 }
 
-/** `/photos/./a.jpg` → `["photos", "a.jpg"]`; none for a path that climbs out with `..`. */
 const segmentsOf = (path: string) =>
   Option.liftPredicate(
     path.split(/[/\\]/).filter((segment) => segment !== "" && segment !== "."),

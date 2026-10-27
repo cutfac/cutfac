@@ -36,11 +36,6 @@ const asHostname = (listen: string) => {
 
 const sameHost = (origin: string, host: string) => URL.parse(origin)?.host === host.toLowerCase();
 
-/**
- * Why a request may not reach the server, or none when it may. The board itself and
- * clients that are not browsers (agents, curl) get through; a page on another site can neither
- * call the API, which runs agents and writes files, nor reach it under a DNS name it controls.
- */
 export function requestProblem(request: RequestFacts, listen: string): Option.Option<string> {
   const { method, host, origin, fetchSite, fetchMode, fetchDest } = request;
 

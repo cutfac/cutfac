@@ -125,11 +125,6 @@ sandbox_approval = true
   });
 });
 
-/**
- * The test's workspace and fake agents, the user's agent config in a folder of its own (Claude
- * Code's `settings.json` and Codex's `config.toml`), and the app's records in another. `inApp`
- * runs an effect with the agents found only among the fakes and the app and the config there.
- */
 const permissionsSetup = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const ws = yield* Workspace;
@@ -226,7 +221,6 @@ describe("the user's choice", () => {
 /** The value after `flag` in `argv`. */
 const after = (argv: ReadonlyArray<string>, flag: string) => argv[argv.indexOf(flag) + 1];
 
-/** The workspace's set-up, with fake agents that note how they were started. */
 const editSetup = Effect.gen(function* () {
   const setup = yield* permissionsSetup;
   const { fs, fakes, inApp } = setup;
@@ -254,7 +248,6 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
       }),
     );
 
-  /** What the fake Codex was asked to start the thread with. */
   const threadParams = Effect.map(codexReceived(fakes.calls), (received) =>
     codexParams(received, "thread/start"),
   );

@@ -41,12 +41,10 @@ const appReports = errorReports("app").pipe(
   Layer.provide([appData, FetchHttpClient.layer, platform]),
 );
 
-/** `~/Library/Logs/Cutfac`, or `Cutfac Dev`, with error reports when the person allows them. */
 export const appLog = logToFile("app").pipe(
   Layer.provide([Layer.sync(LogDir, () => Option.some(app.getPath("logs"))), appReports, platform]),
 );
 
-/** New workspaces go in `~/Movies/Cutfac` unless the user chose a folder, as video apps do. */
 const settings = Layer.unwrap(
   Effect.sync(() =>
     Settings.layer({
@@ -56,13 +54,10 @@ const settings = Layer.unwrap(
   ),
 );
 
-/** The main process's own state, which Electron's callbacks read as they come. */
 export const appState = Effect.runSync(AppState.make);
 
-/** What `ref` of the app's state holds now, for a callback that can't wait. */
 export const readNow = <A>(ref: Ref.Ref<A>) => Effect.runSync(Ref.get(ref));
 
-/** The board's window, if it is open. */
 export const boardWindow = () => Option.getOrUndefined(readNow(appState.window));
 
 const base = Layer.mergeAll(
@@ -80,7 +75,6 @@ const services = Layer.mergeAll(
   updateFeed,
 ).pipe(Layer.provideMerge(base));
 
-/** Only the packaged app checks its license key; a dev build leaves the saved one alone. */
 const license = Layer.unwrap(
   Effect.sync(() =>
     app.isPackaged
@@ -105,10 +99,7 @@ export type AppServices = Layer.Success<typeof appServices>;
 
 const runtime = ManagedRuntime.make(appServices);
 
-/**
- * The error a handler rejects with: Node's own for a file system call, else a plain `Error`.
- * Electron prefixes the message with the error's name, which the board shows.
- */
+// Electron prefixes the message with the error's name, which the board shows.
 const plainError = (error: PlatformError | { readonly message: string }) =>
   Predicate.isTagged(error, "PlatformError") && error.cause instanceof Error
     ? error.cause
@@ -119,14 +110,9 @@ export const runInMain = <A, E extends PlatformError | { readonly message: strin
   effect: Effect.Effect<A, E, AppServices>,
 ) => runtime.runPromise(Effect.mapError(effect, plainError));
 
-/** Starts `effect` from one of Electron's callbacks, which doesn't wait on it. */
 export const forkInMain = <A, E>(effect: Effect.Effect<A, E, AppServices>) =>
   void runtime.runFork(effect);
 
-/**
- * Runs `effect` at once, for Electron's process-exit hook, which can't wait; nothing before the
- * app's services exist, as there is nothing of theirs to clean up.
- */
 export const runNow = (effect: Effect.Effect<void, never, AppServices>) => {
   if (runtime.cachedContext !== undefined) runtime.runSync(effect);
 };

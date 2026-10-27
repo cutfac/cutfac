@@ -5,7 +5,6 @@ import { Deferred, Effect, Fiber, Ref } from "effect";
 import { quitQuestion } from "../electron/quitQuestion.ts";
 import { it } from "./effect.ts";
 
-/** A question with `work` going on, whose person answers with `answer` once it is set. */
 const asked = Effect.fnUntraced(function* (work: number) {
   const busy = yield* Ref.make(work);
   const asks = yield* Ref.make(0);

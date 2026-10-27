@@ -36,20 +36,14 @@ export class NothingToFix extends Schema.TaggedError<NothingToFix>()("NothingToF
   message: Schema.String,
 }) {}
 
-/**
- * The agent CLIs on this computer, and the fixes the app's own check named for them. A fix runs
- * only a command that check found, never one the page sends.
- */
 export class AgentFixes extends Context.Service<
   AgentFixes,
   {
     readonly check: Effect.Effect<ReadonlyArray<AgentSetup>, AgentCheckFailed | SidecarFailed>;
-    /** Runs the agent's fix, or joins the one already running, passing on each line it prints. */
     fix(
       agent: AgentName,
       onLine: (line: string) => Effect.Effect<void>,
     ): Effect.Effect<AgentFix, NothingToFix>;
-    /** Kills every fix with what it started, at once, as the app quits. */
     readonly stopAll: Effect.Effect<void>;
   }
 >()("cutfac/desktop/AgentFixes") {
@@ -122,7 +116,6 @@ const make = Effect.gen(function* () {
             env: yield* ServerEnv,
             extendEnv: false,
             stdin: "ignore",
-            // A group of its own, so stopping it stops the installer its shell runs too.
             detached: true,
             killSignal: "SIGKILL",
           }),

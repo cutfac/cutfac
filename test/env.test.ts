@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { userInfo } from "node:os";
 import { join } from "node:path";
 
-// Each check runs its shell to the end, so it is the entry point that provides layers.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import { Effect, Fiber, FileSystem, Option } from "effect";
@@ -143,21 +142,18 @@ describe("reading the account", () => {
       expect(account.home).toBe(user.homedir);
       expect(account.home).not.toBe("/tmp/evil");
       expect(account.user).toBe(user.username);
-      // macOS reports a per-user temporary folder; elsewhere there is none to give.
       expect(Option.isSome(account.tmpdir)).toBe(process.platform === "darwin");
     }),
   );
 });
 
 describe("reading the login shell", () => {
-  /** A folder for the test, as the shell reports it, with symlinks resolved. */
   const home = Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
 
     return yield* fs.realPath(yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-env-" }));
   });
 
-  /** A shell in `dir` that runs `body`, with the command it is given after `-ilc` as `$2`. */
   const fakeShell = Effect.fnUntraced(function* (dir: string, name: string, body: string) {
     const fs = yield* FileSystem.FileSystem;
     const file = join(dir, name);
@@ -178,7 +174,6 @@ describe("reading the login shell", () => {
         'echo "welcome"\n[ "$1" = "-ilc" ] && eval "$2"',
       );
 
-      // Set on this process, which the shell would see if it inherited the app's environment.
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           process.env["CUTFAC_LAUNCH_PROBE"] = "1";
@@ -202,7 +197,6 @@ describe("reading the login shell", () => {
 
       const read = (shell: string) => readShellEnv(shell, clean);
 
-      // It prints its environment, then fails: what it printed doesn't count.
       const fails = yield* fakeShell(dir, "fails", 'eval "$2"\nexit 3');
 
       expect(yield* read(fails)).toEqual(Option.none());
@@ -230,7 +224,6 @@ describe("reading the login shell", () => {
       const pid = Number((yield* fs.readFileString(pidFile)).trim());
 
       yield* killedAfter(pid);
-      // A brief wait, as the spawner signals a process group as the shell's scope closes.
       yield* Effect.sleep("100 millis");
 
       expect(yield* alive(pid)).toBe(true);

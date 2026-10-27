@@ -13,7 +13,6 @@ import { tempWorkspace } from "./support.ts";
 
 const it = testEffect(tempWorkspace("Render routes"));
 
-/** The render routes on the test's workspace, with an item to render. */
 const renderServer = Effect.gen(function* () {
   const server = yield* workspaceRoutes(renderRoutes);
 
@@ -43,7 +42,6 @@ const saveRunning = Effect.gen(function* () {
 
 const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Json));
 
-/** The first `render` event the stream sends. */
 const firstRender = (response: Response) =>
   Stream.fromReadableStream({
     evaluate: () => response.body ?? new ReadableStream(),

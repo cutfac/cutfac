@@ -5,7 +5,6 @@
  */
 import path from "node:path";
 
-// The runner is the entry point, so it provides the platform's services itself.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import {
@@ -41,13 +40,11 @@ const bin = (name: string) => path.join(root, "node_modules", ".bin", name);
 
 const log = (message: string) => Console.log(`[desktop:dev] ${message}`);
 
-// The app does not run these, so a change to them is no reason to restart it.
 const DEV_SCRIPTS = new Set([path.basename(import.meta.path), "devApp.ts", "devLaunch.ts"]);
 
 const reloadsPage = (files: ReadonlySet<string>) =>
   process.platform !== "win32" && [...files].every((file) => file === "preload.ts");
 
-/** The app running now, and the scope that stops it. */
 interface Running {
   readonly app: AppProcess;
   readonly scope: Scope.Closeable;
@@ -57,7 +54,6 @@ const program = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const fs = yield* FileSystem.FileSystem;
 
-  /** The exit code everything stops with; the first reason to stop wins. */
   const stopped = yield* Deferred.make<number>();
   const stop = (code: number) => Deferred.succeed(stopped, code);
 
@@ -72,7 +68,6 @@ const program = Effect.gen(function* () {
     process.on(name, () => runSync(stop(code)));
   }
 
-  // Never a fixed default: 4317 is what `cutfac serve` uses, and it may be someone's real board.
   const serverPort = yield* Option.match(yield* Config.option(Config.Int("CUTFAC_PORT")), {
     onNone: () => freePort(Option.none()),
     onSome: Effect.succeed,
@@ -84,11 +79,8 @@ const program = Effect.gen(function* () {
 
   const devUrl = `http://localhost:${vitePort}`;
 
-  // The app's Chrome DevTools Protocol, on localhost, so an agent's tools can drive the dev app: on
-  // 9222 when it is free, the port they look at first.
   const cdpPort = yield* bindPort(9222).pipe(Effect.catch(() => freePort(Option.none())));
 
-  /** What the app needs from this script; it finds the rest of its environment as a released app does. */
   const appEnv = { CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
 
   const spawnLogged = (command: string, args: ReadonlyArray<string>) =>
@@ -122,7 +114,6 @@ const program = Effect.gen(function* () {
     ),
   );
 
-  // A failed copy is no reason to stop working: run stock Electron instead.
   const electronExecutable =
     process.platform === "darwin"
       ? devElectron(root).pipe(
@@ -135,7 +126,6 @@ const program = Effect.gen(function* () {
         )
       : Effect.succeed(bin("electron"));
 
-  // Built while Vite starts.
   const executable = yield* Effect.forkScoped(electronExecutable);
 
   const running = yield* Ref.make(Option.none<Running>());
@@ -156,7 +146,6 @@ const program = Effect.gen(function* () {
 
   yield* Effect.addFinalizer(() => stopApp);
 
-  /** Starts the app; a restart opens it behind what the developer works in, and its window too. */
   const launch = (again: boolean) =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
@@ -182,7 +171,6 @@ const program = Effect.gen(function* () {
         Effect.forkScoped,
       );
 
-      // The app quit by itself (window closed or Cmd+Q), not for a restart: wind everything down.
       yield* app.exited.pipe(
         Effect.flatMap((code) =>
           Effect.flatMap(isRunning(app), (current) => (current ? stop(code) : Effect.void)),
@@ -194,15 +182,12 @@ const program = Effect.gen(function* () {
   const restart = Effect.gen(function* () {
     yield* log("electron/ changed, rebuilding.");
 
-    // A broken build keeps the running app; the next save tries again.
     if (!(yield* buildElectron)) return;
 
     yield* stopApp;
     yield* launch(true);
   });
 
-  // The preload script runs in the page, so a new one needs only the page reloaded, which the app
-  // does on SIGUSR2. Windows has no such signal, so the app restarts there.
   const reloadPage = Effect.gen(function* () {
     yield* log("electron/preload.ts changed, rebuilding and reloading the page.");
 
@@ -214,7 +199,6 @@ const program = Effect.gen(function* () {
     });
   });
 
-  /** The files changed since the last rebuild, so a burst of saves rebuilds once. */
   const changed = yield* Ref.make<ReadonlySet<string>>(new Set());
 
   const start = Effect.gen(function* () {

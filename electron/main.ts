@@ -98,7 +98,6 @@ const devTools = app.isPackaged
 // its own, so it runs beside the released app and the Dev Panel never resets the user's settings.
 app.setName(app.isPackaged ? "Cutfac" : DEV_APP.name);
 
-/** Set up by `start`, as the window's close is guarded with the quit. */
 const guardWindow = Ref.makeUnsafe<(window: BrowserWindow) => void>(() => undefined);
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -116,13 +115,11 @@ function start(): void {
     ),
   );
 
-  /** The server is stopped and the settings saved, so the quit may go ahead. */
   const quitReady = Ref.makeUnsafe(false);
 
   app.on("before-quit", (event) => {
     if (readNow(quitReady) || event.defaultPrevented) return;
 
-    // A server that finishes starting now is stopped, not served.
     Effect.runSync(Ref.set(appState.quitting, true));
 
     // The window closes only after this, too late for its place to reach the disk.
@@ -305,7 +302,6 @@ function requestLicenseKey(): void {
   );
 }
 
-/** Opens `workspace`, or says why it couldn't. False if it didn't open. */
 const activate = (workspace: string) =>
   open(workspace).pipe(
     Effect.catch((error) =>
@@ -313,10 +309,6 @@ const activate = (workspace: string) =>
     ),
   );
 
-/**
- * Replaces the running server with one on `workspace`, then points the window at the page last
- * shown there. False if the app quit meanwhile; fails with why it couldn't start.
- */
 const open = Effect.fn("main.open")(
   function* (workspace: string) {
     yield* Ref.set(appState.switching, true);
@@ -344,7 +336,6 @@ const showOnboarding = Effect.fn("main.showOnboarding")(function* (step: Onboard
   yield* show(new URL(onboardingPage(step), boardUrl).href, "Cutfac");
 });
 
-/** The board's window, opened where it was last time when there is none yet. */
 const windowNow = Effect.gen(function* () {
   const shown = yield* Ref.get(appState.window);
 
@@ -378,7 +369,6 @@ const show = Effect.fn("main.show")(function* (url: string, title: string) {
       new BoardNotShown({ message: `Could not load ${url}: ${describeError(cause)}` }),
   }).pipe(Effect.tapError(() => Effect.sync(() => window.show())));
 
-  // Back never leaves the workspace just opened for the one before it, or for the first launch.
   window.webContents.navigationHistory.clear();
 });
 

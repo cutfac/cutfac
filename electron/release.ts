@@ -8,7 +8,6 @@
  * no license key. Last, it pushes main with a `v<version>` tag and publishes a source-only GitHub
  * release. Credentials come from .env.release; nothing here prints their values.
  */
-// The script is its own entry point, so it provides the platform's services itself.
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
@@ -86,7 +85,6 @@ const setting = (name: ReleaseSetting) =>
     ),
   );
 
-/** Runs `command` in the repository with this terminal's input and output, failing unless it exits 0. */
 const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const [program = "", ...args] = command;
@@ -112,7 +110,6 @@ const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
     return yield* new ReleaseFailed({ message: `\`${shown}\` exited with code ${code}.` });
 });
 
-/** What `command` prints, without the final newline, or none when it fails. */
 const output = (command: ReadonlyArray<string>) => {
   const [program = "", ...args] = command;
 
@@ -125,7 +122,6 @@ const output = (command: ReadonlyArray<string>) => {
   );
 };
 
-/** The private bucket builds are served from, with the feed that makes a version live. */
 const releaseBucket = Effect.gen(function* () {
   const s3 = new Bun.S3Client({
     bucket: yield* setting("CUTFAC_RELEASES_BUCKET"),
@@ -139,7 +135,6 @@ const releaseBucket = Effect.gen(function* () {
       message: `${what}: ${cause instanceof Error ? cause.message : String(cause)}`,
     });
 
-  /** The version the bucket's feed hands out now, if it has one. */
   const published = Effect.tryPromise({
     try: async () => {
       const feed = s3.file(`${FOLDER}/${FEED_FILE}`);
@@ -317,11 +312,6 @@ const checkedVersion = Effect.fnUntraced(function* (
 /** Where the GitHub release's notes are written. */
 const notesPath = (version: string) => path.join(outputDir, `notes-${version}.md`);
 
-/**
- * Tag the commit that was built, push it to main with the tag, and publish a source-only GitHub
- * release. The builds are live by now, so a failure here only leaves the remaining steps to run by
- * hand, and the release exits with 1.
- */
 const publishSource = Effect.fnUntraced(function* (version: string, commit: string, notes: string) {
   const fs = yield* FileSystem.FileSystem;
   const tag = tagName(version);
@@ -365,7 +355,6 @@ const publishSource = Effect.fnUntraced(function* (version: string, commit: stri
   return 0;
 });
 
-/** Runs the release `args` ask for, as the process exit code. */
 export const release = Effect.fn("release")(function* (args: ReadonlyArray<string>) {
   const fs = yield* FileSystem.FileSystem;
   const asked = releaseArgs(args);
@@ -418,7 +407,6 @@ export const release = Effect.fn("release")(function* (args: ReadonlyArray<strin
 
   yield* Effect.forEach(builds.success, bucket.upload, { discard: true });
 
-  // Last, so no app or download page sees the version before its files are there.
   yield* bucket.upload({ name: FEED_FILE, type: "text/yaml" });
   yield* log(`Published ${version}. cutfac.com/download now hands it out.`);
 

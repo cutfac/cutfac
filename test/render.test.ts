@@ -112,7 +112,6 @@ const render = (command: string, wait: Duration.Input = "5 seconds") =>
     return Option.getOrThrow(yield* renders.wait(item.id, wait));
   });
 
-/** A render state as an earlier process saved it, for `owner` to be running or gone. */
 const savedRender = (item: string, status: string, owner: number) =>
   Effect.flatMap(Workspace, (ws) =>
     ws.writeText(
@@ -130,7 +129,6 @@ const savedRender = (item: string, status: string, owner: number) =>
     ),
   );
 
-// Past the highest pid macOS and Linux hand out.
 const GONE_PID = 99_999_999;
 
 describe("running a render", () => {

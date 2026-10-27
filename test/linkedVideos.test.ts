@@ -18,7 +18,6 @@ const folder: ReferenceFolder = {
   lock: "references:rice",
 };
 
-/** What the rice item's folder holds at `path`, from inside it. */
 const listed = (...path: string[]) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

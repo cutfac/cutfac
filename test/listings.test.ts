@@ -66,7 +66,6 @@ const fakeHttp = (requested: string[]) =>
     }),
   );
 
-/** `effect` reading the stores through `fakeHttp`. */
 const offline = <A, E, R>(requested: string[], effect: Effect.Effect<A, E, R>) =>
   Effect.provideService(effect, HttpClient.HttpClient, fakeHttp(requested));
 

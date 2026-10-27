@@ -29,10 +29,6 @@ export const AGENT_TITLE: Readonly<Record<AgentName, string>> = {
 /** A three-part release number on its own, not a piece of an address or a longer number. */
 const VERSION = /(?<![\d.])(\d+\.\d+\.\d+)(?!\d|\.\d)/;
 
-/**
- * The release number in what an agent prints for `--version`, such as `2.1.301 (Claude Code)` or
- * `codex-cli 0.163.0`. A suffix such as `-beta.1` is dropped. Anything else is none.
- */
 export const parseAgentVersion = (output: string) =>
   Option.fromNullishOr(VERSION.exec(output)?.[1]);
 
@@ -47,7 +43,6 @@ export interface AgentRelease {
   readonly installedAt: string;
 }
 
-/** The version of `release` for a status the board reads, undefined when it is unknown. */
 export const versionOf = (release: Option.Option<AgentRelease>) =>
   Option.getOrUndefined(Option.map(release, (known) => known.version));
 
@@ -93,7 +88,6 @@ export interface OutdatedAgent {
   readonly update: string;
 }
 
-/** Where `release` falls short of the minimum for `agent`. None when it does not, or is unknown. */
 export function outdatedAgent(
   agent: AgentName,
   release: Option.Option<AgentRelease>,
@@ -124,7 +118,6 @@ const reportedVersion = (bin: string) =>
     Effect.orElseSucceed(Option.none<string>),
   );
 
-/** The CLI at `bin`, or none when it does not say its version. Never fails. */
 export const detectAgentRelease = (bin: string) =>
   Effect.zipWith(
     reportedVersion(bin),
@@ -134,7 +127,6 @@ export const detectAgentRelease = (bin: string) =>
     { concurrent: true },
   );
 
-/** `agent` on PATH, or none when it is not installed or does not say its version. */
 export const installedRelease = (agent: AgentName) =>
   Effect.flatMap(which(agent), (bin) =>
     Option.match(bin, { onNone: () => Effect.succeedNone, onSome: detectAgentRelease }),

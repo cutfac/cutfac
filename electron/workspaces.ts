@@ -16,7 +16,6 @@ import { loadLibrary } from "./settings.ts";
 
 export interface WorkspacesHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
-  /** Opens a workspace, saying why it couldn't. False if it didn't open. */
   activate: (workspace: string) => Effect.Effect<boolean, never, AppServices>;
 }
 
@@ -43,7 +42,6 @@ export function handleWorkspaces(host: WorkspacesHost) {
       return false;
     });
 
-  /** Asks for a folder and switches to it. False if cancelled or if it failed to start. */
   const choose = Effect.gen(function* () {
     if (yield* Ref.get(switching)) return false;
 
@@ -114,7 +112,6 @@ export function handleWorkspaces(host: WorkspacesHost) {
 
             if (prepared.kind === "taken") return { kind: "taken" } satisfies CreateFailure;
 
-            // A switch that fails has said why in a dialog already.
             return (yield* switchTo(prepared.path))
               ? undefined
               : ({ kind: "failed", message: "" } satisfies CreateFailure);

@@ -220,7 +220,6 @@ function turnProblem(doc: ImportDoc, kind: ImportTurnKind): Option.Option<string
   return Option.none();
 }
 
-/** Fails with why `kind` cannot be the next turn of `doc`, if it cannot. */
 export const requireTurn = (doc: ImportDoc, kind: ImportTurnKind) =>
   Option.match(turnProblem(doc, kind), {
     onNone: () => Effect.void,

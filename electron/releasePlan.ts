@@ -4,7 +4,6 @@ import { Option, Result, Schema } from "effect";
 
 import { fromYamlString } from "../src/core/configText.ts";
 
-/** The branch releases are made from, and pushed to with their tag. */
 export const BRANCH = "main";
 
 export const USAGE =
@@ -37,14 +36,11 @@ const decodeFeed = Schema.decodeUnknownOption(
   fromYamlString(Schema.Struct({ version: Schema.NonEmptyString })),
 );
 
-/** What `bun run release` was asked to do: the version bump, and whether to check the agent CLIs. */
 export interface ReleaseArgs {
-  /** The bump `bun pm version` checks; none releases the version package.json is at. */
   readonly increment: Option.Option<string>;
   readonly checkAgents: boolean;
 }
 
-/** What `args` ask of a release once `--skip-agent-check` is taken out; none for a misuse. */
 export function releaseArgs(args: ReadonlyArray<string>): Option.Option<ReleaseArgs> {
   const [increment, ...rest] = args.filter((arg) => arg !== SKIP_AGENT_CHECK);
 
@@ -56,15 +52,12 @@ export function releaseArgs(args: ReadonlyArray<string>): Option.Option<ReleaseA
   });
 }
 
-/** The names in `REQUIRED_ENV` that are unset or empty. */
 export function missingEnv(env: Readonly<Record<string, string | undefined>>): Array<string> {
   return REQUIRED_ENV.filter((name) => !env[name]);
 }
 
-/** The version a feed file announces, if it names one. */
 export const feedVersion = (feed: string) => Option.map(decodeFeed(feed), ({ version }) => version);
 
-/** Why `version` cannot be released over `published`, if it cannot. */
 export function versionProblem(
   version: string,
   published: Option.Option<string>,
@@ -75,15 +68,10 @@ export function versionProblem(
   );
 }
 
-/** Folders a build never reads, so an untracked file there, like a note in docs/, cannot change it. */
 const OUTSIDE_BUILD = ["docs/", ".github/", "test/"];
 
 const inBuild = (file: string) => !OUTSIDE_BUILD.some((dir) => file.startsWith(dir));
 
-/**
- * Why the working tree cannot be released, from `git status --porcelain`, if it cannot. The
- * release is tagged at HEAD, so the build must be exactly that commit.
- */
 export function treeProblem(status: string): Option.Option<string> {
   const dirty = status
     .split("\n")
@@ -99,7 +87,6 @@ export function treeProblem(status: string): Option.Option<string> {
     : Option.some(`Commit or stash ${dirty.join(", ")} first, so the release matches a commit.`);
 }
 
-/** Why the checkout cannot be released from, given its branch and how far it is behind origin. */
 export function branchProblem(branch: string, behind: number): Option.Option<string> {
   if (branch !== BRANCH) {
     return Option.some(`Release from ${BRANCH}, not ${branch || "a detached HEAD"}.`);
@@ -112,10 +99,6 @@ export function branchProblem(branch: string, behind: number): Option.Option<str
   return Option.none();
 }
 
-/**
- * Why the keychain cannot sign the app, from `security find-identity -v -p codesigning`, unless it
- * holds a valid Developer ID Application certificate for `team`.
- */
 export function signingProblem(identities: string, team: string): Option.Option<string> {
   const signs = identities
     .split("\n")
@@ -142,10 +125,6 @@ const SECTIONS = [
 const FOOTER =
   "The signed Mac app is at https://cutfac.com and updates itself. To build it yourself, see the README.";
 
-/**
- * Release notes from the subjects of the commits since the last release, in Conventional Commits.
- * Only changes people notice make the list; docs, tests, and chores stay out.
- */
 export function releaseNotes(subjects: ReadonlyArray<string>): string {
   const entries = subjects.flatMap((subject) => {
     const groups = COMMIT.exec(subject)?.groups;
@@ -170,16 +149,11 @@ export function releaseNotes(subjects: ReadonlyArray<string>): string {
   return `${body}\n\n${FOOTER}\n`;
 }
 
-/** A build to upload and the type the bucket serves it with. */
 export interface BuildFile {
   readonly name: string;
   readonly type: string;
 }
 
-/**
- * The builds of `version` among `files`, in upload order: the disk image people install, the zip
- * apps update from, and their blockmaps. Fails with the build that is missing, if one is.
- */
 export function buildFiles(
   version: string,
   files: ReadonlyArray<string>,

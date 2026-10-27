@@ -18,7 +18,6 @@ import { saveOnboarding, savePage, saveWindowPlace } from "./settings.ts";
 import { SystemAccess } from "./systemAccess.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 
-/** Whether `url` is on the board shown now, as opposed to a page it linked to. */
 export const isAppUrl = (url: string) => Option.contains(originOf(url), readNow(appState.origin));
 
 export function isFromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
@@ -38,7 +37,6 @@ export function bringToFront(): void {
   window.focus();
 }
 
-/** A save of the window's place waiting for a move or resize to stop. */
 const pendingPlace = SynchronizedRef.makeUnsafe(Option.none<Fiber.Fiber<void>>());
 
 const replacePending = <R>(next: Effect.Effect<Option.Option<Fiber.Fiber<void>>, never, R>) =>
@@ -58,11 +56,9 @@ const savePlace = (target: BrowserWindow) =>
         ),
   );
 
-/** Saves where the window is, so the next launch opens it there; one that fails is just forgotten. */
 export const rememberPlace = (target: BrowserWindow) =>
   forkInMain(Effect.andThen(savePlace(target), replacePending(Effect.succeedNone)));
 
-/** Saves where the window is once it stops moving, so a drag saves once. */
 const rememberSoon = (target: BrowserWindow) =>
   forkInMain(
     replacePending(
@@ -72,13 +68,8 @@ const rememberSoon = (target: BrowserWindow) =>
     ),
   );
 
-/**
- * Saves the board page just opened, so the workspace opens on it next time; before there is one,
- * the first-launch step, so it picks up there.
- */
 const rememberPage = (url: string) =>
   Effect.gen(function* () {
-    // While switching, the page still shown belongs to the other workspace.
     if (!isAppUrl(url) || (yield* Ref.get(appState.switching))) return;
 
     const { hash } = new URL(url);
@@ -96,15 +87,11 @@ const stopWatchingAccess = Effect.flatMap(SystemAccess, (access) => access.stopW
 
 export interface BoardWindowOptions {
   readonly preload: string;
-  /** What the board's page is started with, such as the dev build's flag. */
   readonly boardArguments: Array<string> | undefined;
-  /** Shown without taking focus, as after the dev runner restarted the app. */
   readonly inactive: boolean;
-  /** Asks before the window closes while work goes on. */
   readonly guard: (window: BrowserWindow) => void;
 }
 
-/** The board's window, where `place` says it was, kept on the board and remembered as it moves. */
 export function createBoardWindow(
   place: Option.Option<WindowPlace>,
   options: BoardWindowOptions,
@@ -117,13 +104,8 @@ export function createBoardWindow(
     minWidth: 960,
     minHeight: 640,
     show: false,
-    // On macOS the board draws to the top edge and leaves a strip for the window controls, as
-    // Finder and Notes do, instead of sitting under a separate gray title bar.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // macOS only; elsewhere the system title bar stays. Centred in the board's 48px title bar.
     trafficLightPosition: { x: 18, y: 18 },
-    // macOS: the system's sidebar material behind the whole window, as Finder's has. The board
-    // leaves its own background off there, so its sidebar shows the desktop through it, blurred.
     ...(process.platform === "darwin" && {
       vibrancy: "sidebar",
       backgroundColor: "#00000000",
@@ -141,7 +123,6 @@ export function createBoardWindow(
   });
   created.on("focus", () => {
     forkInMain(Effect.flatMap(License, (license) => license.refresh));
-    // Back from System Settings: the board checks the access itself.
     forkInMain(stopWatchingAccess);
   });
 
@@ -150,7 +131,6 @@ export function createBoardWindow(
   created.on("resize", () => rememberSoon(created));
   created.on("maximize", () => rememberPlace(created));
   created.on("unmaximize", () => rememberPlace(created));
-  // Quitting saved it already, before the window closed.
   created.on("close", () => {
     if (!readNow(appState.quitting)) rememberPlace(created);
   });
@@ -158,7 +138,6 @@ export function createBoardWindow(
     Effect.runSync(Ref.set(appState.window, Option.none()));
     forkInMain(stopWatchingAccess);
   });
-  // The title is the workspace folder, not whatever the board's <title> says.
   created.on("page-title-updated", (event) => event.preventDefault());
 
   keepInsideApp(webContents, isAppUrl);

@@ -6,7 +6,6 @@
  * resume the first one. It makes real model calls. Passing, it saves the raw output as fixtures
  * in test/fixtures/, which the unit tests parse; `--no-save` leaves them alone.
  */
-// The script is its own entry point, so it provides the platform's services itself.
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
@@ -82,7 +81,6 @@ export interface CheckArgs {
 
 const isAgent = (name: string): name is AgentName => AGENTS.some((agent) => agent === name);
 
-/** Which agents to check (all, unless named) and whether to save fixtures; none for a misuse. */
 export function checkArgs(args: ReadonlyArray<string>): Option.Option<CheckArgs> {
   const named = args.filter((arg) => !arg.startsWith("-"));
   const flags = args.filter((arg) => arg.startsWith("-"));
@@ -274,7 +272,6 @@ const runTurn = Effect.fnUntraced(function* (invocation: AgentInvocation, cwd: s
 
       const [, stderr, code] = yield* Effect.all(
         [
-          // Claude reads its message and stops; a turn that never ended still lets the process go.
           handle.stdout.pipe(
             Stream.decodeText(),
             Stream.splitLines,
@@ -440,7 +437,6 @@ const checkAgent = Effect.fnUntraced(function* (agent: AgentName, save: boolean)
       const first = yield* checkTurn(agent, bin, workspace, "first", undefined);
       const resumed = first.problems.length === 0 ? first.reading.sessionId : undefined;
 
-      // A resume needs the session the first turn reported.
       if (resumed === undefined) {
         yield* log("  resume turn skipped: the first turn failed");
 
@@ -466,7 +462,6 @@ const checkAgent = Effect.fnUntraced(function* (agent: AgentName, save: boolean)
   );
 });
 
-/** Runs the check for the agents `args` name, as the process exit code. */
 export const checkAgents = Effect.fn("checkAgents")(function* (args: ReadonlyArray<string>) {
   const parsed = checkArgs(args);
 

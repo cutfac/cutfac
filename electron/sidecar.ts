@@ -23,8 +23,6 @@ import { STOP_GRACE, whichIn } from "../src/core/process.ts";
 import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.ts";
 import { bindPort, freePort, HOST } from "./ports.ts";
 
-// The local server the desktop app runs as a child process, and the server's CLI commands it runs.
-
 const CLI_TIMEOUT = "30 seconds";
 
 const HEALTH_TIMEOUT_SECONDS = 20;
@@ -33,32 +31,23 @@ const HEALTH_POLL = "150 millis";
 
 const PING_TIMEOUT = "1 second";
 
-/** How long a process that ended gets to finish printing, in case a grandchild holds its pipes. */
 const DRAIN_WAIT = "500 millis";
 
 const OUTPUT_TAIL_LINES = 40;
 
-/** A process environment, as Node passes one. */
 export type Env = Readonly<Record<string, string | undefined>>;
 
-/** The server could not be started, or ended before it answered. */
 export class SidecarFailed extends Schema.TaggedError<SidecarFailed>()("SidecarFailed", {
   message: Schema.String,
 }) {}
 
-/** Where the app runs from and what it was started with, as Electron reports them. */
 export interface InstallInfo {
-  /** The released app, as opposed to one run from a checkout. */
   readonly packaged: boolean;
-  /** The checkout, when the app runs from source. */
   readonly appPath: string;
-  /** The packaged app's resources: the server's binary and the built board. */
   readonly resourcesPath: string;
   readonly logsPath: string;
   readonly homePath: string;
-  /** The environment the app was started with. */
   readonly launchEnv: Env;
-  /** The dev runner's fixed port, which Vite proxies to; the packaged app picks a free one. */
   readonly devPort: Option.Option<number>;
 }
 
@@ -97,12 +86,10 @@ const readServerEnv = Effect.gen(function* () {
   };
 });
 
-/** The environment the server and the commands it runs get, read once. */
 export class ServerEnv extends Context.Service<ServerEnv, Env>()("cutfac/desktop/ServerEnv") {
   static readonly layer = Layer.effect(ServerEnv, readServerEnv);
 }
 
-/** The built board, which the server serves and the first launch loads before there is one. */
 export const boardDirOf = (install: InstallInfo) =>
   install.packaged
     ? path.join(install.resourcesPath, "web")
@@ -112,7 +99,6 @@ interface Launch {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
   readonly webDir: string;
-  /** Flags that make the server restart itself when its source changes; empty for a binary. */
   readonly watchFlags: ReadonlyArray<string>;
 }
 
@@ -154,19 +140,15 @@ const resolveLaunch = Effect.gen(function* () {
   } satisfies Launch;
 });
 
-/** The message Node gave for a failure, not the spawner's wrapping of it. */
 const nodeMessage = (error: PlatformError) =>
   error.cause instanceof Error ? error.cause.message : error.message;
 
-/** A server or command running, and the last lines it printed. */
 interface Running {
   readonly handle: ChildProcessSpawner.ChildProcessHandle;
   readonly tail: Ref.Ref<ReadonlyArray<string>>;
-  /** Done once stdout and stderr are drained, so the tail is complete. */
   readonly output: Fiber.Fiber<void>;
 }
 
-/** Prints each of the process's lines as the app's own, and hands it to `keep`. */
 const forward = (
   stream: Stream.Stream<Uint8Array, PlatformError>,
   print: (line: string) => Effect.Effect<void>,
@@ -178,19 +160,15 @@ const forward = (
     Stream.runForEach((line) => Effect.andThen(keep(line), print(`[sidecar] ${line}`))),
   );
 
-/** Command options for the server and its commands: exactly the server's environment. */
 const childOptions = (cwd: string, env: Env): ChildProcess.CommandOptions => ({
   cwd,
   env,
   extendEnv: false,
   stdin: "ignore",
-  // In the app's own process group, as Node spawns it: stopping it signals the server alone, which
-  // stops what it runs itself.
   detached: false,
   forceKillAfter: STOP_GRACE,
 });
 
-/** Starts `args` with `launch` in `cwd`, printing what it prints; `what` names it in a failure. */
 const spawn = Effect.fnUntraced(function* (
   launch: Launch,
   args: ReadonlyArray<string>,
@@ -219,7 +197,6 @@ const spawn = Effect.fnUntraced(function* (
   const keep = (line: string) =>
     Ref.update(tail, (lines) => [...lines, line].slice(-OUTPUT_TAIL_LINES));
 
-  // Left to end with the process's pipes, so what it prints while it stops still shows.
   const output = yield* Effect.all(
     [forward(handle.stdout, Console.log, keep), forward(handle.stderr, Console.error, keep)],
     { concurrency: 2, discard: true },
@@ -228,13 +205,11 @@ const spawn = Effect.fnUntraced(function* (
   return { handle, tail, output } satisfies Running;
 });
 
-/** Whether the process has yet to end. */
 const stillRunning = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   Effect.orElseSucceed(handle.isRunning, () => false);
 
 const KILLED_BY = /signal: '(\w+)'/;
 
-/** How the process ended: its exit code, or the signal that killed it. */
 const endOf = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   handle.exitCode.pipe(
     Effect.match({
@@ -248,7 +223,6 @@ const endOf = (handle: ChildProcessSpawner.ChildProcessHandle) =>
     }),
   );
 
-/** Why a process that ended did, with the last lines it printed. */
 const describeEnd = Effect.fnUntraced(function* (running: Running, what: string) {
   yield* Effect.timeoutOption(Fiber.await(running.output), DRAIN_WAIT);
 
@@ -258,7 +232,6 @@ const describeEnd = Effect.fnUntraced(function* (running: Running, what: string)
   return `${what} ${yield* endOf(running.handle)}.${output}`;
 });
 
-/** Whether `url` answers with success: false while nothing is listening yet. */
 const answers = (url: string) =>
   HttpClient.get(url).pipe(
     Effect.map((response) => response.status >= 200 && response.status < 300),
@@ -266,7 +239,6 @@ const answers = (url: string) =>
     Effect.orElseSucceed(() => false),
   );
 
-/** Waits until the server answers at `url`; one that ends or takes too long fails with why. */
 const untilHealthy = (url: string, server: Running) => {
   const poll = Effect.gen(function* () {
     while (yield* stillRunning(server.handle)) {
@@ -295,7 +267,6 @@ const untilHealthy = (url: string, server: Running) => {
   });
 };
 
-/** Makes `workspace` one with the server's `init`, or fails with why it couldn't. */
 const setUp = (launch: Launch, workspace: string) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -316,25 +287,18 @@ const setUp = (launch: Launch, workspace: string) =>
 
 export interface SidecarOptions {
   readonly workspace: string;
-  /** A port the server must take, as the dev runner's proxy expects; else the last one, if free. */
   readonly port: { readonly fixed: number } | { readonly last: Option.Option<number> };
-  /** Restart the server in place when its source changes, if it runs from source. */
   readonly watch: boolean;
-  /** Told why, with the output tail, if the server ends before it is stopped. */
   readonly onCrash: (message: string) => Effect.Effect<void>;
 }
 
-/** The local server, running on a workspace until it is stopped. */
 export interface Sidecar {
   readonly url: string;
   readonly port: number;
-  /** SIGTERM, then SIGKILL after a grace period; done once the process is gone. */
   readonly stop: Effect.Effect<void>;
-  /** SIGKILL at once, for the process-exit hook, which can't wait. */
   readonly kill: Effect.Effect<void>;
 }
 
-/** Runs on `scope`, which keeps the server until it closes. */
 const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope.Closeable) {
   const fs = yield* FileSystem.FileSystem;
   const choice = options.port;
@@ -390,17 +354,12 @@ const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope
   } satisfies Sidecar;
 });
 
-/** Sets the workspace up if needed, starts the server on it and succeeds once it is healthy. */
 export const startSidecar = Effect.fn("sidecar.start")(function* (options: SidecarOptions) {
   const scope = yield* Scope.make();
 
   return yield* serve(options, scope).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
 });
 
-/**
- * Runs a command that needs no workspace, such as `agents --json`, and returns what it printed and
- * its exit code. One that hangs is killed, and returns what it printed so far, with no code.
- */
 export const runCli = Effect.fn("sidecar.runCli")(function* (args: ReadonlyArray<string>) {
   const install = yield* Install;
   const launch = yield* resolveLaunch;

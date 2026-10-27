@@ -41,7 +41,6 @@ const inItem = (id: string, rel: string) => `items/${id}/${rel}`;
 const writeInItem = (id: string, rel: string, text: string) =>
   Effect.flatMap(Workspace, (ws) => ws.writeText(inItem(id, rel), text));
 
-/** A short test pattern at `path`, in the shape the board's videos have. */
 const makeVideo = (path: string, seconds: number) =>
   runChecked("ffmpeg", [
     "-v",
@@ -55,7 +54,6 @@ const makeVideo = (path: string, seconds: number) =>
     path,
   ]);
 
-/** Backdates `path` so a request made now comes after the file, or the edit would count as done. */
 const backdate = (path: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -197,14 +195,12 @@ describe("edit requests in a workspace", () => {
         expect(prompt).toContain(join(itemDir, editDir, "clip.mp4"));
         expect(prompt).toContain(feedback.id);
 
-        // The agent rewrites the media in place, then resolves.
         yield* fs.writeFileString(video, "edited");
         const resolved = yield* resolveEdit(id, feedback.id, "Larger title");
         const done = resolved.doc.feedback[0];
 
         expect(done?.status).toBe("resolved");
         expect(done?.context?.after).toBe(`${editDir}/after.mp4`);
-        // Resolved, the result still waits for the user to keep it or roll it back.
         expect(done !== undefined && awaitsDecision(done)).toBe(true);
         expect(yield* fs.readFileString(join(itemDir, editDir, "after.mp4"))).toBe("edited");
 
@@ -244,7 +240,6 @@ describe("the waiting line", () => {
       expect(waiting.feedback.context?.before).toBeUndefined();
       expect(waitingLine(waiting.item.doc).map((f) => f.id)).toEqual([waiting.feedback.id]);
 
-      // The request before it changed the media in the meantime.
       yield* writeInItem(id, VIDEO, "second");
       const { feedback } = yield* beginEdit(id, waiting.feedback.id);
       const before = feedback.context?.before ?? "";
@@ -277,7 +272,6 @@ describe("the waiting line", () => {
         InvalidRequest,
       );
 
-      // A file made for the request, such as its frame, goes with it.
       const frame = inItem(id, `edits/${first.feedback.id}/frame.png`);
       yield* ws.writeText(frame, "png");
 
@@ -312,7 +306,6 @@ describe("the waiting line", () => {
         const [first = "", second = "", third = "", fourth = ""] = requests;
         const started = yield* Ref.make<ReadonlyArray<RunInput>>([]);
 
-        // Stands in for the agent: a run leaves the line as it starts, and the third one fails.
         const runner: Runner<RunInput, Workspace | Crypto.Crypto> = (run, emit) =>
           Effect.gen(function* () {
             yield* Ref.update(started, (runs) => [...runs, run]);
@@ -352,7 +345,6 @@ describe("the waiting line", () => {
         ]);
         expect(waitingLine(item.doc).map((f) => f.id)).toEqual([fourth]);
 
-        // A waiting request keeps the model and effort it was sent with until its run takes them.
         expect(runs[1]).toMatchObject({ feedbackId: second, model: "opus", effort: "high" });
         expect(runs[2]?.model).toBeUndefined();
         const ran = item.doc.feedback.find((f) => f.id === second);
@@ -381,7 +373,6 @@ describe("the waiting line", () => {
         expect(waiting.warnings).toEqual([]);
         expect(waiting.feedback.context?.frame).toBeDefined();
 
-        // The request before it rewrote the video after this one was made.
         const later = new Date((yield* Clock.currentTimeMillis) + 60_000);
         yield* fs.utimes(video, later, later);
 

@@ -24,14 +24,11 @@ import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
 class AgentHome extends Context.Service<
   AgentHome,
   {
-    /** Where the user's agents keep their config: Claude Code's `.claude.json` and Codex's `config.toml`. */
     readonly config: string;
-    /** Where the app keeps its records. */
     readonly appDir: string;
   }
 >()("test/AgentHome") {}
 
-/** The user's agent config and the app's folder, which the fake agents and the core look in. */
 const agentHome = Layer.unwrap(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -66,7 +63,6 @@ const setUpClaude = (record: Schema.JsonObject) =>
 const stateOf = (status: McpServersStatus, name: string) =>
   status.servers.find((server) => server.name === name)?.state;
 
-/** The app's record of what the user turned on, as it is on disk. */
 const savedFile = (file: string) =>
   Effect.gen(function* () {
     const { appDir } = yield* AgentHome;
@@ -85,7 +81,6 @@ const decide = Effect.fnUntraced(function* (agent: AgentName, name: string, on: 
 
 const DOCS = { command: "docs-mcp", env: { TOKEN: "t-1" } };
 
-/** A Claude Code the user has set up with a server of their own and one for this workspace. */
 const userServers = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
   const ws = yield* Workspace;
@@ -160,7 +155,6 @@ describe("the MCP servers the user set up", () => {
       const rotated = yield* mcpServersStatus();
 
       expect(stateOf(rotated, "docs")).toBe("on");
-      // Off stays off, whatever it starts.
       expect(stateOf(rotated, "notes")).toBe("off");
 
       yield* setUpClaude({ mcpServers: { docs: { ...DOCS, command: "other-mcp" } } });
@@ -252,7 +246,6 @@ it.live("Codex's servers are told to the agent from its config, without starting
   }),
 );
 
-/** What the fake agent was given, one argument at a time. */
 const given = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
   const fs = yield* FileSystem.FileSystem;
@@ -272,7 +265,6 @@ const edit = (agent: AgentName) =>
     );
   });
 
-/** A fake Codex that lists `servers` as its MCP servers and keeps the arguments of its app-server. */
 const codexListing = (servers: Schema.Json) =>
   Effect.flatMap(FakeAgentDir, (fakes) =>
     fakes.bin(
@@ -315,7 +307,6 @@ echo '{"type":"result","subtype":"success","session_id":"s1","result":"Done."}'
           "CUTFAC_MCP_SECRET_0=t-1\n",
         );
 
-        // Claude asks the board before it uses their tools, as it would ask in a terminal.
         const allowed = (argv[argv.indexOf("--allowedTools") + 1] ?? "").split(",");
 
         for (const tool of allowed) expect(tool).toStartWith("mcp__cutfac__");
@@ -353,7 +344,6 @@ const DOCS_PLUGIN = {
   ".mcp.json": { mcpServers: { search: { command: "${CLAUDE_PLUGIN_ROOT}/bin/search" } } },
 };
 
-/** A Claude Code the user has set up with the docs plugin, turned on in their settings. */
 const docsPlugin = Effect.gen(function* () {
   const { config } = yield* AgentHome;
   const fakes = yield* FakeAgentDir;
@@ -381,7 +371,6 @@ describe("a plugin with MCP servers", () => {
         title: "docs",
         description: "Search the docs",
         state: "new",
-        // Where the plugin is, filled in.
         servers: [{ name: "search", launch: `${pluginFolder(config, "docs@market")}/bin/search` }],
       });
       expect((yield* approvedClaudeServers()).servers).toEqual({});

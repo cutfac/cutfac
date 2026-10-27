@@ -39,7 +39,6 @@ describe("the name of how an MCP server starts", () => {
       const entry = { command: "npx", args: ["-y", "srv"], env: { TOKEN: "a", REGION: "eu" } };
       const first = yield* serverFingerprint(claude("srv", entry));
 
-      // A rotated key, or the same settings in another order, is the same agreement.
       expect(
         yield* serverFingerprint(claude("srv", { ...entry, env: { REGION: "us", TOKEN: "b" } })),
       ).toBe(first);
@@ -230,7 +229,6 @@ describe("the servers a Claude run loads", () => {
 });
 
 describe("the servers Claude Code would load in a workspace", () => {
-  /** The workspace, a folder for Claude Code's config, and the servers Claude Code would load there. */
   const claudeHome = Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const ws = yield* Workspace;

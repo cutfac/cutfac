@@ -270,7 +270,6 @@ describe("what a Codex turn asks", () => {
 const request = (id: number, method: string, params: Schema.JsonObject) =>
   `echo '${send({ id, method, params: { threadId: FAKE_THREAD, turnId: "turn-1", ...params } })}'`;
 
-/** The line the fake read back for its request `id`. */
 const answer = (id: number) =>
   Effect.flatMap(FakeAgentDir, ({ calls }) =>
     Effect.map(codexReceived(calls), (received) =>
@@ -279,7 +278,6 @@ const answer = (id: number) =>
   );
 
 describe("a Codex run that asks", () => {
-  /** One turn through a fake Codex that runs `turnScript`, and the threads the run kept. */
   const turn = Effect.fnUntraced(function* (turnScript: string, ask: Ask) {
     const fakes = yield* FakeAgentDir;
     const saved = yield* Ref.make<ReadonlyArray<string | undefined>>([]);
@@ -329,7 +327,6 @@ describe("a Codex run that asks", () => {
 
       expect(result).toMatchObject({ reply: "Cut.", failure: undefined });
       expect(saved).toEqual([FAKE_THREAD]);
-      // Only what the board can answer is put to it.
       expect((yield* Ref.get(asked)).map((approval) => approval.id)).toEqual(["7"]);
       expect(yield* answer(7)).toEqual({
         id: 7,
@@ -351,7 +348,6 @@ describe("a Codex run that asks", () => {
       const asked = join(fakes.dir, "asked");
       const interrupted = join(fakes.dir, "interrupted");
 
-      // Codex finishes the turn only once the wait is over, so a run that kept waiting is seen.
       const { result } = yield* turn(
         [
           request(7, "item/fileChange/requestApproval", { itemId: "c1" }),

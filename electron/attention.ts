@@ -66,7 +66,6 @@ export function handleAttention(host: AttentionHost): void {
       notice.on("click", () => {
         runSync(forget(notice));
         host.bringToFront();
-        // The gallery puts the videos whose agent asks first.
         host.sendAppCommand("board");
       });
       notice.show();
@@ -82,7 +81,6 @@ export function handleAttention(host: AttentionHost): void {
 
       yield* Effect.forEach(changes.notify, notify, { discard: true });
 
-      // What was answered, wherever, no longer waits in Notification Center.
       for (const [notice, key] of yield* Ref.get(shown)) {
         if (!changes.now.has(key)) notice.close();
       }

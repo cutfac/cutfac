@@ -49,7 +49,6 @@ export interface ReferenceUpload {
   readonly path: string;
 }
 
-/** `/photos/./a.jpg` → `["photos", "a.jpg"]`; none for a path that climbs out with `..`. */
 const segmentsOf = (path: string) =>
   Option.liftPredicate(
     path.split(/[/\\]/).filter((segment) => segment !== "" && segment !== "."),
@@ -191,7 +190,6 @@ export const addReferences = Effect.fn("references.addReferences")(function* (
   );
 });
 
-/** `references/logo.png` → `logo.png`; none for anything that is not one entry of the folder. */
 const topLevelName = (path: string) =>
   Option.flatMap(segmentsOf(path), ([folder, name, ...rest]) =>
     folder === REFERENCES && rest.length === 0 ? Option.fromUndefinedOr(name) : Option.none(),

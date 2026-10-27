@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test";
 import path from "node:path";
 
-// Each check builds the workspace server for its own folder and settings.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import { Effect, FileSystem, Layer, Option, Queue, Ref } from "effect";
@@ -17,7 +16,6 @@ import { answers, fakeSidecar } from "./fakeSidecar.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
 
-/** The app's services around the workspace server, as a run from a checkout with the fake. */
 const serverFor = (dir: string, fake: string, devPort: Option.Option<number> = Option.none()) =>
   WorkspaceServer.layer.pipe(
     Layer.provideMerge(

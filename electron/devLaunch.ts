@@ -16,13 +16,9 @@ const PID_WAIT = "15 seconds";
 
 const PID_POLL = "100 millis";
 
-/** A running dev app, however it was started; it is stopped with the scope it was launched in. */
 export interface AppProcess {
-  /** The app's process once it is up; none if it never showed. */
   readonly pid: Effect.Effect<Option.Option<number>>;
-  /** Its exit code, once it has quit. */
   readonly exited: Effect.Effect<number>;
-  /** Sends `signal` to the app, if it is still there. */
   readonly kill: (signal: NodeJS.Signals) => Effect.Effect<void>;
 }
 
@@ -50,7 +46,6 @@ const signal = (pid: number, name: NodeJS.Signals) =>
 
 const inherited = { stdin: "ignore", stdout: "inherit", stderr: "inherit" } as const;
 
-/** `handle`'s exit code once it exits, watched from now on; a signal that ended it counts as 1. */
 const exitOf = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   Effect.map(
     Effect.forkScoped(
@@ -160,7 +155,6 @@ const outputPipe = Effect.gen(function* () {
   return file;
 });
 
-/** The process whose command line is `command`, once the app has started it; none if it quit. */
 const findPid = (command: string, exited: Effect.Effect<number>) =>
   run("pgrep", ["-n", "-f", `^${escapeRegex(command)}$`]).pipe(
     Effect.map((found): Option.Option<number> =>

@@ -14,7 +14,6 @@ const DAEMON = "CODEX_APP_SERVER_USE_LOCAL_DAEMON";
 
 const it = testEffect(Layer.merge(tempWorkspace("Daemon"), fakeAgents));
 
-/** What the desktop app hands every app the user opens, until the test ends. */
 const withDaemonSetting = Effect.acquireRelease(
   Effect.sync(() => {
     const before = process.env[DAEMON];
@@ -30,7 +29,6 @@ const withDaemonSetting = Effect.acquireRelease(
     }),
 );
 
-/** A fake Codex that notes the setting it saw with each command, and lists no servers of its own. */
 const codexNotingTheSetting = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
   const fs = yield* FileSystem.FileSystem;

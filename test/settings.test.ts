@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test";
 import path from "node:path";
 
-// Each check gives the settings a folder of its own.
 // @effect-diagnostics strictEffectProvide:off
 import { Effect, FileSystem, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -38,7 +37,6 @@ const DEFAULT_LIBRARY = "/Users/ada/Movies/Cutfac";
 
 const decodeSettings = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json));
 
-/** A folder for the app's data, and the settings kept in it. */
 const appData = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-settings-" });

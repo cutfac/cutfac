@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test";
 import path from "node:path";
 
-// Each check starts its own servers, with the fake and the environment that check needs.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import { Deferred, Effect, Fiber, FileSystem, Layer, Option, Schema } from "effect";
@@ -16,14 +15,12 @@ import { holdPort } from "./support.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
 
-/** What the fake's `env` command prints: where it ran, and its environment. */
 const decodePrinted = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
     Schema.Struct({ cwd: Schema.String, env: Schema.Record(Schema.String, Schema.String) }),
   ),
 );
 
-/** Options for a server on `workspace` that ignores a crash, unless the test asks. */
 const on = (workspace: string, more: Partial<SidecarOptions> = {}): SidecarOptions => ({
   workspace,
   port: { last: Option.none() },
@@ -163,7 +160,6 @@ describe("running a server command", () => {
       expect(result.code).toEqual(Option.some(0));
       expect(cwd).toBe(yield* fs.realPath(dir));
       expect(env).toMatchObject({ SERVER_ONLY: "kept" });
-      // This test runs with HOME set, which the command would see if it inherited the app's.
       expect(env).not.toHaveProperty("HOME");
     }),
   );

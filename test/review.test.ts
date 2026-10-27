@@ -95,7 +95,6 @@ const hasFfmpeg = Bun.which("ffmpeg") !== null && Bun.which("ffprobe") !== null;
 
 const liveWithFfmpeg: typeof it.live = hasFfmpeg ? it.live : (name) => test.skip(name, () => {});
 
-/** A 3s 180×320 video: a test pattern, then a hard cut to red at 1.5s. */
 const makeCutVideo = (path: string) =>
   runChecked("ffmpeg", [
     "-v",
@@ -212,7 +211,6 @@ describe("reviewing an item's video", () => {
         const once = (safeZones?: boolean) =>
           reviewMedia(id, file, { times: [2], transitions: [], safeZones });
 
-        // At 2s the video is solid red, so the red channel shows where the frame was dimmed.
         const shaded = yield* once();
         const frame = join(ws.root, shaded.dir, "frames/t002.00.jpg");
         const middle = yield* redAt(frame, 0.5);

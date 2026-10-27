@@ -22,7 +22,6 @@ const docWith = (overrides: Partial<ImportDoc>): ImportDoc => ({
   ...overrides,
 });
 
-/** The import's folder, as the agent is told it. */
 const FOLDER = "/w/.cutfac/imports/x";
 
 const said = (id: string, kind: ImportTurn["kind"], body: string): ImportTurn => ({
@@ -32,7 +31,6 @@ const said = (id: string, kind: ImportTurn["kind"], body: string): ImportTurn =>
   body,
 });
 
-/** A turn the agent already answered with `reply`. */
 const answered = (
   id: string,
   kind: ImportTurn["kind"],

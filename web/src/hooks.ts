@@ -180,7 +180,6 @@ const decodeModel = Schema.decodeUnknownOption(ModelName);
 
 const decodeEffort = Schema.decodeUnknownOption(Effort);
 
-/** What this browser kept of the agent's pick; a part that isn't a model or effort is dropped. */
 function readPick(agent: AgentName): ModelSettings {
   const model = decodeModel(readStored(pickKey(agent, "model")));
   const effort = decodeEffort(readStored(pickKey(agent, "effort")));

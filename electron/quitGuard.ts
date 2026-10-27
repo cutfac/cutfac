@@ -36,14 +36,6 @@ const confirmQuit = (host: QuitGuardHost) =>
     return response === 0;
   });
 
-/**
- * Asks before quitting, or closing the window, while an agent or a render is at work, since either
- * stops them. Nothing is asked when no one could answer: a signal, as the dev runner's restart sends,
- * the Mac shutting down, or an update installing.
- *
- * Call before the app's own `before-quit` listener, which leaves a quit this one held alone. The
- * guard it returns asks before the board's window closes, since closing it quits the app.
- */
 export function guardQuit(host: QuitGuardHost): (window: BrowserWindow) => void {
   const question = Effect.runSync(quitQuestion(Ref.get(busyWork), confirmQuit(host)));
   const settle = () => Effect.runSync(question.settle);
@@ -53,7 +45,6 @@ export function guardQuit(host: QuitGuardHost): (window: BrowserWindow) => void 
   autoUpdater.on("before-quit-for-update", settle);
   void app.whenReady().then(() => powerMonitor.on("shutdown", settle));
 
-  /** Holds `event` for the question when it must be asked, then does `go` if the answer is quit. */
   const hold = (event: Electron.Event, go: () => void) => {
     if (!Effect.runSync(question.mustAsk)) return;
 

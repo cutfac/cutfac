@@ -12,7 +12,6 @@ import {
 } from "../electron/updates.ts";
 import { eventually, it } from "./effect.ts";
 
-/** A feed whose checks answer `answers` in turn, the last one again after that. */
 const fakeFeed = Effect.fnUntraced(function* (
   answers: ReadonlyArray<Option.Option<FoundUpdate> | UpdateCheckFailed>,
 ) {
@@ -39,7 +38,6 @@ const fakeFeed = Effect.fnUntraced(function* (
   return { feed, checks, installs, downloads };
 });
 
-/** Dialogs that keep what they said, answering `restart` when offered one. */
 const fakePrompts = Effect.fnUntraced(function* (restart: boolean) {
   const said = yield* Ref.make<ReadonlyArray<string>>([]);
   const say = (line: string) => Ref.update(said, (all) => [...all, line]);

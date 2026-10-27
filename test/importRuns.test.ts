@@ -30,18 +30,14 @@ const it = testEffect(
 
 const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"] };
 
-/** The id the fake claude gives its conversation, made as Claude Code makes them. */
 const SESSION = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
 
 const turn = (id: string, kind: ImportTurn["kind"], body = "") => ({ id, kind, body });
 
-/** The value after `flag` in an argument list. */
 const valueOf = (args: ReadonlyArray<string>, flag: string) => args[args.indexOf(flag) + 1] ?? "";
 
-/** Where a workspace path is on disk, as the agent is told it. */
 const absolute = (rel: string) => Effect.flatMap(Workspace, (ws) => ws.abs(rel));
 
-/** What a Codex run gave its turn: the prompt, then the pictures. */
 const decodeTurnStart = Schema.decodeUnknownSync(
   Schema.Struct({
     input: Schema.Array(
@@ -57,11 +53,6 @@ const decodeTurnStart = Schema.decodeUnknownSync(
 const turnInput = (received: ReadonlyArray<CodexReceived> | undefined) =>
   decodeTurnStart(codexParams(received, "turn/start")).input;
 
-/**
- * A `claude` that records its arguments, its prompt, and whether it was told to keep credentials
- * from its commands, and answers in stream-json. Given the install tools, it puts a stub skill
- * in the workspace, as an agent that installed one would. It never reaches the network.
- */
 const fakeClaude = Effect.flatMap(FakeAgentDir, (fakes) =>
   fakes.bin(
     "claude",
@@ -80,13 +71,8 @@ echo '{"type":"result","subtype":"success","session_id":"${SESSION}","result":"D
   ),
 );
 
-/** A `claude` that never answers, so its turn stays running until the test stops it. */
 const hangingClaude = Effect.flatMap(FakeAgentDir, (fakes) => fakes.bin("claude", "sleep 30\n"));
 
-/**
- * A `codex app-server` that lists no MCP servers of its own, keeps what each run reads in a
- * folder of its own, and replies to every turn.
- */
 const fakeCodex = Effect.flatMap(FakeAgentDir, (fakes) =>
   fakes.bin(
     "codex",
@@ -96,7 +82,6 @@ ${codexAppServer("$run", codexItem({ type: "agentMessage", id: "m1", text: "Done
   ),
 );
 
-/** Each call the fake agent took, oldest first. */
 const calls = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
   const fs = yield* FileSystem.FileSystem;
@@ -115,7 +100,6 @@ const calls = Effect.gen(function* () {
   );
 }).pipe(Effect.orDie);
 
-/** What each Codex run read, oldest first. */
 const codexRuns = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
   const fs = yield* FileSystem.FileSystem;
@@ -124,7 +108,6 @@ const codexRuns = Effect.gen(function* () {
   return yield* Effect.forEach(names.toSorted(), (name) => codexReceived(join(fakes.calls, name)));
 }).pipe(Effect.orDie);
 
-/** A file outside the workspace, standing in for an upload's temporary copy. */
 const dropped = (path: string, text = path) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -135,7 +118,6 @@ const dropped = (path: string, text = path) =>
     return { source, path };
   }).pipe(Effect.orDie);
 
-/** Wait for the import's current run to end, and return how it ended. */
 const runEnd = (importId: string) =>
   Effect.scoped(
     Effect.gen(function* () {

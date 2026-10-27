@@ -62,7 +62,6 @@ it.live("keeps dropped files and folders, with a folder's structure, and lists t
       { path: "references/photos", dir: true, files: 2, kind: undefined },
     ]);
 
-    // The folder is not the item's media.
     expect((yield* getItem(item.id)).media).toEqual([]);
   }),
 );

@@ -193,7 +193,6 @@ describe("the model an agent picks itself", () => {
   });
 });
 
-/** A Claude Code settings file under `dir`, a home folder or a workspace. */
 const claudeSettings = (dir: string, name: string) => join(dir, ".claude", name);
 
 describe("agent status", () => {
@@ -246,7 +245,6 @@ exit 1
 
       expect(yield* named).toEqual(["Opus 5.5", "GPT-B"]);
 
-      // The workspace's own settings come before the user's, and its local ones before both.
       yield* fs.writeFileString(claudeSettings(ws.root, "settings.json"), '{"model":"sonnet"}');
       expect((yield* named)[0]).toBe("Sonnet 5.5");
       yield* fs.writeFileString(
@@ -255,7 +253,6 @@ exit 1
       );
       expect((yield* named)[0]).toBe("Haiku 4.5");
 
-      // Set nowhere, Claude's pick is unknown and Codex's is the first model it lists.
       yield* fs.remove(join(ws.root, ".claude"), { recursive: true });
       yield* fs.remove(join(home, ".codex/config.toml"));
 

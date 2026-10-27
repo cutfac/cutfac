@@ -117,12 +117,7 @@ export function parseEnv(output: string): Option.Option<Env> {
   return Option.some(env);
 }
 
-/**
- * GUI apps on macOS start with launchd's minimal environment, but agents expect what a terminal
- * gives them: the PATH to claude, codex, ffmpeg and yt-dlp, API keys and tool settings. So the
- * user's login shell starts from `clean` in their home folder, as a terminal would, and prints its
- * environment. None if the shell can't be run or printed nothing readable.
- */
+// GUI apps on macOS start with launchd's minimal environment, not a terminal's.
 export const readShellEnv = Effect.fn("env.readShellEnv")(function* (
   shell: string,
   clean: CleanEnv,
@@ -134,7 +129,6 @@ export const readShellEnv = Effect.fn("env.readShellEnv")(function* (
     cwd: clean.HOME,
     env: { ...clean },
     extendEnv: false,
-    // In the app's own process group, so what the shell's files start in the background stays.
     detached: false,
   });
 

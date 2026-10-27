@@ -3,7 +3,6 @@ import path from "node:path";
 import { Effect, Option } from "effect";
 import { app, dialog, type BrowserWindow, type OpenDialogOptions } from "electron";
 
-/** Shows an open dialog over `owner` when there is one; none if cancelled. */
 const pickOne = (owner: BrowserWindow | undefined, options: OpenDialogOptions) =>
   Effect.map(
     Effect.promise(() =>

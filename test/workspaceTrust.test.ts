@@ -29,10 +29,6 @@ const HOOKS = {
   PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "./check.sh" }] }],
 };
 
-/**
- * The test's workspace with a `.claude` folder, and the app keeping its records in a folder of its
- * own; `inApp` runs an effect against that folder, `failInApp` one that fails.
- */
 const trustSetup = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const ws = yield* Workspace;
@@ -113,7 +109,6 @@ describe("trusting a workspace", () => {
 
       expect(status.needed).toBe(true);
       expect((yield* failInApp(requireTrust("claude")))._tag).toBe("Conflict");
-      // Codex leaves a folder's own settings off by itself.
       yield* inApp(requireTrust("codex"));
 
       expect((yield* failInApp(trustWorkspace("not-these")))._tag).toBe("Conflict");
@@ -121,7 +116,6 @@ describe("trusting a workspace", () => {
       expect(yield* inApp(trustStatus())).toMatchObject({ needed: false });
       yield* inApp(requireTrust("claude"));
 
-      // Settings added since are not trusted.
       yield* settle({ hooks: HOOKS, env: { A: "1" } });
       expect(yield* inApp(trustStatus())).toMatchObject({ needed: true });
     }),
@@ -210,7 +204,6 @@ describe("Always allow on the board", () => {
     rules: ["Bash(ffmpeg:*)"],
   };
 
-  /** The trust set-up, with what a Claude run that asks for ffmpeg does to the settings. */
   const alwaysSetup = Effect.gen(function* () {
     const setup = yield* trustSetup;
     const { ws, inApp } = setup;
@@ -218,10 +211,6 @@ describe("Always allow on the board", () => {
     const write = (file: string, settings: Schema.JsonObject) =>
       ws.writeText(file, JSON.stringify(settings, null, 2));
 
-    /**
-     * A Claude run that asks for ffmpeg, gets `answer`, then leaves the workspace's settings as
-     * `after` has them; whether Claude may still run there afterwards.
-     */
     const run = (answer: ApprovalAnswer, after: Readonly<Record<string, Schema.JsonObject>>) =>
       Effect.gen(function* () {
         yield* inApp(

@@ -9,7 +9,6 @@ import { Conflict } from "../src/core/errors.ts";
 import { type RunSpec, type Runner, makeRunRegistry } from "../src/core/runRegistry.ts";
 import { eventually, it } from "./effect.ts";
 
-/** One run per item, without the item's waiting line, which needs a workspace. */
 const itemRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> => {
   const { key, subject, busy } = editRuns(runner);
 
@@ -19,7 +18,6 @@ const itemRuns = <R>(runner: Runner<RunInput, R>): RunSpec<RunInput, R> => {
 const idle = (isRunning: Effect.Effect<boolean>) =>
   eventually(Effect.map(isRunning, (running) => !running));
 
-/** A runner that reports progress, then holds until `finish` completes. */
 const heldRunner =
   (started: Deferred.Deferred<void>, finish: Deferred.Deferred<void>): Runner<RunInput, never> =>
   (run, emit) =>
@@ -99,7 +97,6 @@ describe("run registry", () => {
       const linger = yield* Deferred.make<void>();
       const lateSent = yield* Deferred.make<void>();
 
-      // The first run is still winding down after it reported its end.
       const registry = yield* makeRunRegistry(
         itemRuns((run, emit) =>
           Effect.gen(function* () {
@@ -151,7 +148,6 @@ describe("run registry", () => {
       const started = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
 
-      // Like an import turn, whose last part always runs to the end once it began.
       const registry = yield* makeRunRegistry(
         itemRuns((run, emit, ask) =>
           Effect.uninterruptible(heldRunner(started, finish)(run, emit, ask)),

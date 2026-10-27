@@ -60,10 +60,6 @@ describe("routes", () => {
   );
 });
 
-/**
- * A `claude` that records its prompt and flags, holds until the test lets it go, then answers in
- * stream-json, or fails partway when the request says so. `release` lets it go.
- */
 const fakeClaude = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
   const fs = yield* FileSystem.FileSystem;
@@ -84,7 +80,6 @@ echo '{"type":"result","subtype":"success","session_id":"sess-'$n'","result":"Do
   return { release: Effect.orDie(fs.writeFileString(join(fakes.dir, "release"), "")) };
 });
 
-/** What each call recorded in its `.kind` file, oldest first. */
 const recorded = (kind: "stdin" | "args") =>
   Effect.gen(function* () {
     const fakes = yield* FakeAgentDir;
@@ -97,7 +92,6 @@ const recorded = (kind: "stdin" | "args") =>
     return yield* Effect.forEach(names, (name) => fs.readFileString(join(fakes.calls, name)));
   }).pipe(Effect.orDie);
 
-/** The request each call was about, oldest first, from the prompt's line on stdin. */
 const asked = Effect.gen(function* () {
   const lines = yield* recorded("stdin");
 
@@ -109,7 +103,6 @@ const asked = Effect.gen(function* () {
   );
 }).pipe(Effect.orDie);
 
-/** The value after `flag` in each call's arguments, oldest first. */
 const flagged = (flag: string) =>
   Effect.map(recorded("args"), (calls) =>
     calls.map((args) => {
@@ -120,7 +113,6 @@ const flagged = (flag: string) =>
     }),
   );
 
-/** The next `total` run endings on the item, in the order they come. */
 const endings = Effect.fnUntraced(function* (server: BoardServer, id: string, total: number) {
   const { events } = yield* server.runs.subscribe(id);
   const seen = yield* Queue.unbounded<RunEvent["type"]>();
@@ -263,7 +255,6 @@ describe("an item's waiting line", () => {
       yield* release;
 
       expect(yield* Queue.takeN(after, 2)).toEqual(["done", "done"]);
-      // The board names the model a run started on while it streams.
       expect(yield* Fiber.join(starts)).toMatchObject([
         { subject: first.feedbackId, model: "sonnet" },
         { subject: second.feedbackId, model: "opus", effort: "high" },

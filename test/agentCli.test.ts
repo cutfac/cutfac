@@ -72,7 +72,6 @@ describe("agent CLIs", () => {
     expect(relativeToRoot(`cd ${root} && bun ${root}/render.ts`, root)).toBe(
       "cd . && bun render.ts",
     );
-    // A sibling folder that only starts with the root's name is left alone.
     expect(relativeToRoot(`ls ${root}-old/a.mp4`, root)).toBe(`ls ${root}-old/a.mp4`);
 
     const claude = parseClaudeLine(

@@ -1,4 +1,3 @@
-/** A video whose agent waits on the person, for an OK or an answer. */
 export interface Asking {
   readonly id: string;
   readonly title: string;
@@ -7,10 +6,6 @@ export interface Asking {
 
 export const askingKey = ({ about, id }: Asking) => `${about} ${id}`;
 
-/**
- * What the agents asking now change: the asks to notify about, those new since `before` while the
- * app is in the background, and the keys of all that ask now.
- */
 export const askingChanges = (
   before: ReadonlySet<string>,
   asking: ReadonlyArray<Asking>,

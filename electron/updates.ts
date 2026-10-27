@@ -12,22 +12,17 @@ export interface FoundUpdate {
   readonly version: string;
 }
 
-/** The feed the released app updates from. Runs from source have none. */
 export class UpdateFeed extends Context.Service<
   UpdateFeed,
   {
     readonly enabled: boolean;
-    /** A check already running hands its result to this one too. */
     readonly check: Effect.Effect<Option.Option<FoundUpdate>, UpdateCheckFailed>;
-    /** Each version as it finishes downloading. */
     readonly downloaded: Stream.Stream<string>;
     readonly quitAndInstall: Effect.Effect<void>;
   }
 >()("cutfac/desktop/UpdateFeed") {}
 
-/** What the app says about updates, in the person's language. */
 export interface UpdatePrompts {
-  /** A version is ready to install: whether to restart now. */
   readonly ready: (version: string) => Effect.Effect<boolean>;
   readonly upToDate: Effect.Effect<void>;
   readonly downloading: (version: string) => Effect.Effect<void>;
@@ -68,7 +63,6 @@ export const startUpdates = Effect.fn("updates.start")(function* (prompts: Updat
     Effect.forkScoped,
   );
 
-  // The updater logs a failure itself; the next check tries again.
   yield* feed.check.pipe(
     Effect.ignore,
     Effect.repeat(Schedule.spaced(CHECK_EVERY)),
@@ -91,12 +85,10 @@ export const startUpdates = Effect.fn("updates.start")(function* (prompts: Updat
   return Updates.of({ enabled: true, checkNow });
 });
 
-/** Updating the app, for the menu: started with the app's services, on the feed it has. */
 export class Updates extends Context.Service<
   Updates,
   {
     readonly enabled: boolean;
-    /** Checks now and says what it found, for the menu item. */
     readonly checkNow: Effect.Effect<void>;
   }
 >()("cutfac/desktop/Updates") {

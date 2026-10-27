@@ -138,7 +138,6 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
       const link = "https://example.com/pack";
       const started = yield* startImport({ link, agent: "claude" }, SERVER);
 
-      // The stream replays the run from its start, so nothing it said before this is missed.
       const { events: stream } = yield* (yield* ImportRuns).subscribe(started.id);
 
       const events = yield* stream.pipe(

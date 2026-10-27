@@ -12,7 +12,6 @@ export const McpState = Schema.Literals(["on", "off", "new", "changed"]);
 
 export type McpState = typeof McpState.Type;
 
-/** How a server starts, as the user looks it over. */
 export const McpLaunchView = Schema.Struct({
   /** Whether it is reached at an address or started by a command. */
   kind: Schema.Literals(["url", "command"]),
@@ -27,13 +26,11 @@ export const McpLaunchView = Schema.Struct({
 
 export type McpLaunchView = typeof McpLaunchView.Type;
 
-/** An MCP server the user set up for their agent, as they decide on it. */
 export const McpServerView = Schema.Struct({
   agent: AgentName,
   name: Schema.String,
   source: McpSource,
   state: McpState,
-  /** Names how it starts as shown, so turning it on doesn't agree to a change since. */
   fingerprint: Schema.String,
   ...McpLaunchView.fields,
 });

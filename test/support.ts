@@ -106,22 +106,15 @@ export async function makeFakeAgents(): Promise<FakeAgents> {
   return { dir, calls, layer, bin, remove };
 }
 
-/** The folder of fake agent CLIs `fakeAgents` made, for a test to put programs in. */
 export class FakeAgentDir extends Context.Service<
   FakeAgentDir,
   {
     readonly dir: string;
-    /** Where a fake can record what it was given: `calls` in `dir`. */
     readonly calls: string;
-    /** Put an executable `name` on the fakes' PATH that runs `script` with sh. */
     readonly bin: (name: string, script: string) => Effect.Effect<string>;
   }
 >()("test/FakeAgentDir") {}
 
-/**
- * Fake agent CLIs and a PATH of only them, removed when the test ends, so a real `claude` or
- * `codex` on this machine is never found or run. Dies if one still is.
- */
 export const fakeAgents = Layer.unwrap(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -154,7 +147,6 @@ export const fakeAgents = Layer.unwrap(
   }),
 ).pipe(Layer.provide(BunServices.layer), Layer.orDie);
 
-/** Listens on `port` on loopback until the scope closes, as another program holding it would. */
 export const holdPort = (port: number) =>
   Effect.acquireRelease(
     Effect.callback<Server>((resume) => {
@@ -165,14 +157,12 @@ export const holdPort = (port: number) =>
     (server) => Effect.callback<void>((resume) => void server.close(() => resume(Effect.void))),
   );
 
-/** Whether process `pid` is still there. */
 export const alive = (pid: number) =>
   Effect.try(() => process.kill(pid, 0)).pipe(
     Effect.as(true),
     Effect.orElseSucceed(() => false),
   );
 
-/** Kills process `pid` when the test ends, if it is still there then. */
 export const killedAfter = (pid: number) =>
   Effect.addFinalizer(() => Effect.ignore(Effect.try(() => process.kill(pid, "SIGKILL"))));
 

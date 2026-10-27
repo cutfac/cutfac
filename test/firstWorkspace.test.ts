@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test";
 import path from "node:path";
 
-// Each check gives the first workspace a library folder and a fake server of its own.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import { Effect, Fiber, FileSystem, Layer, Option, Predicate, Queue, Ref, Schema } from "effect";
@@ -18,18 +17,15 @@ const URL_BASE = "http://127.0.0.1:4317/";
 
 const decodeBody = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json));
 
-/** What the workspace's server was told, and what it has learned and is reading. */
 interface Api {
   readonly calls: ReadonlyArray<string>;
   readonly learned: ReadonlyArray<{ readonly source: string; readonly unread: boolean }>;
   readonly reading: boolean;
 }
 
-/** The workspace's API as far as the first launch uses it, keeping what it is told in `api`. */
 const fakeApi = (api: Ref.Ref<Api>) =>
   HttpClient.make((request, url) =>
     Effect.gen(function* () {
-      // A server answers later, as other work goes on meanwhile.
       yield* Effect.sleep("1 millis");
 
       const body = Predicate.isTagged(request.body, "Uint8Array")
@@ -74,7 +70,6 @@ const fakeApi = (api: Ref.Ref<Api>) =>
     }),
   );
 
-/** A server that is always up, at URL_BASE, for whichever workspace. */
 const alwaysServing = Effect.gen(function* () {
   const crashes = yield* Queue.unbounded<string>();
 

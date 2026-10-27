@@ -47,7 +47,6 @@ export function devIconManifest({ groups: [front, ...back], ...rest }: IconManif
 
 const devLog = (message: string) => Console.log(`[desktop:dev] ${message}`);
 
-/** Runs `command`, failing with all it printed when it exits with anything but 0. */
 const runOrFail = Effect.fnUntraced(function* (command: string, ...args: Array<string>) {
   const shown = [command, ...args].join(" ");
 
@@ -141,7 +140,6 @@ const hashIcon = Effect.fnUntraced(function* ({ source, band }: IconSources) {
     (file) => Effect.map(fs.stat(file), (info) => info.type === "File"),
   );
 
-  // Each file's path from the icon, then its bytes, in one stream.
   const parts = yield* Effect.forEach([...files, band], (file) =>
     Effect.map(fs.readFile(file), (bytes) => [encoder.encode(path.relative(source, file)), bytes]),
   );

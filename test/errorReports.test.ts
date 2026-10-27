@@ -64,10 +64,6 @@ const dataFolder = Effect.flatMap(FileSystem.FileSystem, (fs) =>
   fs.makeTempDirectoryScoped({ prefix: "cutfac-reports-" }),
 );
 
-/**
- * Runs `effect` as a desktop process with `key` built in, its data in `data`, posting to `sent`,
- * or to a PostHog nobody checks.
- */
 const asApp = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   data: string,

@@ -1,4 +1,3 @@
-// Each test opens a workspace it made by hand, so it provides the layer itself.
 // @effect-diagnostics strictEffectProvide:off
 import { expect } from "bun:test";
 import { dirname, join } from "node:path";
@@ -11,7 +10,6 @@ import { testEffect } from "./effect.ts";
 
 const it = testEffect(BunServices.layer);
 
-/** A folder that is no workspace yet, which opening may rename the files of. */
 const folder = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-workspace-" });
@@ -25,7 +23,6 @@ const folder = Effect.gen(function* () {
   const exists = (rel: string) => fs.exists(join(root, rel));
   const read = (rel: string) => fs.readFileString(join(root, rel));
 
-  /** Open the workspace at `root` and return its name. */
   const openName = Effect.map(Workspace, (ws) => ws.config.name).pipe(
     Effect.provide(Workspace.layer(root)),
   );

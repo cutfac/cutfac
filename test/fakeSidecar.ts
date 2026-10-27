@@ -6,11 +6,6 @@ import { HttpClient } from "effect/http";
 import { Install, ServerEnv, startSidecar, type SidecarOptions } from "../electron/sidecar.ts";
 import { eventually } from "./effect.ts";
 
-/**
- * The server's CLI as far as the app uses it, run by Bun: `init`, `serve`, and the commands
- * `runCli` runs. FAKE_SIDECAR in its environment picks how `serve` and `init` misbehave; left out, a
- * server asked to stop leaves `stopped` in its workspace.
- */
 const FAKE = `
 const [command, ...args] = process.argv.slice(2);
 const mode = process.env.FAKE_SIDECAR;
@@ -49,7 +44,6 @@ if (command === "init") {
 }
 `;
 
-/** A folder for the test, with the fake as an executable in it. */
 export const fakeSidecar = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-sidecar-" });
@@ -58,7 +52,6 @@ export const fakeSidecar = Effect.gen(function* () {
   yield* fs.writeFileString(fake, `#!${process.execPath}\n${FAKE}`);
   yield* fs.chmod(fake, 0o755);
 
-  /** A folder in `dir` holding `files`, to serve as a workspace. */
   const folder = Effect.fnUntraced(function* (name: string, files: ReadonlyArray<string> = []) {
     const at = path.join(dir, name);
 
@@ -68,10 +61,6 @@ export const fakeSidecar = Effect.gen(function* () {
     return at;
   });
 
-  /**
-   * Runs `effect` as the app does from a checkout, with CUTFAC_SIDECAR pointing at the fake, and
-   * the server's environment telling the fake how to behave.
-   */
   const asApp =
     (mode = "") =>
     <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -88,20 +77,17 @@ export const fakeSidecar = Effect.gen(function* () {
         Effect.provideService(ServerEnv, { FAKE_SIDECAR: mode, SERVER_ONLY: "kept" }),
       );
 
-  /** A server started as the app starts one, stopped when the test ends, whatever happened. */
   const start = (options: SidecarOptions, mode = "") =>
     Effect.acquireRelease(startSidecar(options).pipe(asApp(mode)), (server) => server.stop);
 
   return { dir, fake, folder, asApp, start };
 });
 
-/** Whether the server at `url` answers at all. */
 export const answers = (url: string) =>
   HttpClient.get(url).pipe(
     Effect.map((response) => response.status === 200),
     Effect.orElseSucceed(() => false),
   );
 
-/** Waits until the fake has printed `line`, as the app's own output. */
 export const printed = (lines: Effect.Effect<ReadonlyArray<unknown>>, line: string) =>
   eventually(Effect.map(lines, (all) => all.includes(`[sidecar] ${line}`)));

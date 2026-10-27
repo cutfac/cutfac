@@ -14,7 +14,6 @@ import { CutfacToolkit } from "../src/mcp/server.ts";
 
 const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"] };
 
-/** The value after `flag` in an argument list. */
 const valueOf = (args: ReadonlyArray<string>, flag: string) => args[args.indexOf(flag) + 1] ?? "";
 
 const READ_TOOLS: ReadonlySet<string> = new Set(MCP_READ_TOOLS);
@@ -107,7 +106,6 @@ test("after Allow, Claude may fetch and write in the workspace, but not run what
   expect(args).toContain("--strict-mcp-config");
 });
 
-/** Servers as Codex lists them, all on. */
 const listing = (...names: string[]): CodexListed[] =>
   names.map((name) => ({ name, enabled: true, transport: "stdio", entry: { type: "stdio" } }));
 
@@ -143,7 +141,6 @@ test("neither phase of an import may send feedback to the Cutfac team", () => {
     const config = codexImportConfig(phase, SERVER, "cutfac-x", []);
 
     expect(denied).toContain("mcp__cutfac__send_feedback_to_cutfac");
-    // Codex asks before it, and with no one to ask, an import turn declines it.
     expect(config).toContain(
       'mcp_servers.cutfac-x.tools.send_feedback_to_cutfac.approval_mode="prompt"',
     );

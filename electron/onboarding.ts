@@ -89,7 +89,6 @@ export interface OnboardingHost {
   preload: string;
   window: () => BrowserWindow | undefined;
   bringToFront: () => void;
-  /** Starts the workspace and opens the board on it, failing with why it couldn't. */
   openWorkspace: (folder: string) => Effect.Effect<void, Failure, AppServices>;
   /** The board's language, for the agent to write in. */
   locale: () => string;
@@ -104,7 +103,6 @@ export function handleOnboarding(host: OnboardingHost): void {
     if (!host.isFromApp(event)) throw new Error("Untrusted IPC sender");
   };
 
-  /** Answers `channel` for the app's own pages only, with what `respond` makes. */
   const answer = <A, E extends Failure>(
     channel: string,
     respond: (event: IpcMainInvokeEvent) => Effect.Effect<A, E, AppServices>,
@@ -115,7 +113,6 @@ export function handleOnboarding(host: OnboardingHost): void {
       return runInMain(respond(event));
     });
 
-  /** Answers `channel` as `answer` does, with its input read as `schema`, the `what` it names. */
   const answerWith = <
     S extends Schema.Top & { readonly DecodingServices: never },
     A,
@@ -137,10 +134,6 @@ export function handleOnboarding(host: OnboardingHost): void {
       );
     });
 
-  /**
-   * Makes the workspace for the answers so far, in the app's folder, named as the dev build says
-   * or as the board suggests; the main process picks the place, never a page.
-   */
   const start = (given: Option.Option<string>) =>
     Effect.gen(function* () {
       const draft = yield* loadDraft;
@@ -163,12 +156,10 @@ export function handleOnboarding(host: OnboardingHost): void {
       });
     });
 
-  /** Opens the workspace the answers made, making it first when nothing was started in this run. */
   const createWorkspace = (given: Option.Option<string>) =>
     Effect.gen(function* () {
       const first = yield* FirstWorkspace;
 
-      // After a relaunch, as screen recording asks for, nothing was started in this run.
       const ready = yield* Option.match(yield* first.ready, {
         onSome: Effect.succeed,
         onNone: () => start(given),
@@ -209,7 +200,6 @@ export function handleOnboarding(host: OnboardingHost): void {
         boardUrl: host.boardUrl,
         preload: host.preload,
         onGranted: Effect.sync(() => {
-          // System Settings is in front; the app comes back on the step that waited for it.
           app.focus({ steal: true });
           host.bringToFront();
           host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);

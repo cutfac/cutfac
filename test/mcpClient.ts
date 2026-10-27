@@ -18,7 +18,6 @@ import { FakeAgentDir } from "./support.ts";
 
 const CLI = join(import.meta.dir, "../src/cli.ts");
 
-/** A JSON-RPC error, or a tool's result saying it failed. */
 export class McpFailed extends Schema.TaggedError<McpFailed>()("McpFailed", {
   message: Schema.String,
 }) {}
@@ -43,7 +42,6 @@ const ToolResult = Schema.Struct({
   ),
 });
 
-/** What `workspace_overview` says: the items by status, and what the agent should look at. */
 export const Overview = Schema.Struct({
   items: Schema.Record(Schema.String, Schema.Finite),
   notices: Schema.Array(Schema.String),
@@ -51,7 +49,6 @@ export const Overview = Schema.Struct({
 
 const encoder = new TextEncoder();
 
-/** Agents that are up to date, so the notices a test reads do not depend on what is installed here. */
 export const upToDateAgents = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
 
@@ -61,7 +58,6 @@ export const upToDateAgents = Effect.gen(function* () {
   return fakes;
 });
 
-/** The Cutfac team's feedback address, which keeps what it is sent instead of reaching cutfac.com. */
 const teamSite = Effect.gen(function* () {
   const received: URLSearchParams[] = [];
 
@@ -84,22 +80,15 @@ const teamSite = Effect.gen(function* () {
 });
 
 export interface McpOptions {
-  /** Whose fake agent CLIs come before any other on PATH; the test's own when left out. */
   readonly agents?: FakeAgentDir["Service"];
   readonly env?: Readonly<Record<string, string>>;
 }
 
-/**
- * A `cutfac mcp` for the workspace at `root`, spoken to over newline-delimited JSON-RPC as Claude
- * Code does, and stopped when the test ends. It is a fresh Bun process, so on a busy machine it
- * takes seconds to start.
- */
 export const mcpServer = Effect.fnUntraced(function* (root: string, options: McpOptions = {}) {
   const fs = yield* FileSystem.FileSystem;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const agents = options.agents ?? (yield* FakeAgentDir);
   const team = yield* teamSite;
-  // A home with no agent config, so the MCP servers set up on this machine stay out of notices.
   const home = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-mcp-home-" });
   const lines = yield* Queue.unbounded<Uint8Array, Cause.Done>();
   const pending = yield* Ref.make(HashMap.empty<number, Deferred.Deferred<RpcResponse>>());
@@ -164,7 +153,6 @@ export const mcpServer = Effect.fnUntraced(function* (root: string, options: Mcp
     return yield* Effect.orDie(Schema.decodeEffect(schema)(response.result));
   });
 
-  /** Call a tool and decode its structured result, failing on an error result. */
   const call = Effect.fnUntraced(function* <A>(
     name: string,
     args: Schema.JsonObject,

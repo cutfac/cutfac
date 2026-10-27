@@ -77,10 +77,6 @@ export interface SettingsPlace {
   readonly defaultLibrary: string;
 }
 
-/**
- * The app's settings.json, which the agent tools read the license from too: replaced whole, one
- * change at a time, and read a field at a time so a value another version wrote keeps the others.
- */
 export class Settings extends Context.Service<
   Settings,
   {
@@ -88,7 +84,6 @@ export class Settings extends Context.Service<
     readonly defaultLibrary: string;
     readonly read: Effect.Effect<Schema.JsonObject>;
     write(patch: Partial<Saved>): Effect.Effect<void, SettingsNotSaved>;
-    /** Done once every save asked for so far is on disk, or has failed. */
     readonly written: Effect.Effect<void>;
     readonly setAside: Effect.Effect<void, SettingsNotSaved>;
     readonly restore: Effect.Effect<boolean, SettingsNotSaved>;
@@ -142,7 +137,6 @@ const save = (patch: Partial<Saved>) =>
 
 export const settingsWritten = Effect.flatMap(Settings, (settings) => settings.written);
 
-/** The last workspace the user opened, while its folder is still there. */
 export const loadWorkspace = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const workspace = decodeText(yield* saved("workspace"));
@@ -164,7 +158,6 @@ export const saveLibrary = (library: string) => save({ library });
 
 export const saveWorkspace = (workspace: string) => save({ workspace, onboarding: undefined });
 
-/** The board keeps its preferences in storage keyed by its origin, so the port is kept too. */
 export const loadPort = Effect.map(saved("port"), decodePort);
 
 export const savePort = (port: number) => save({ port });

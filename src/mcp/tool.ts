@@ -25,7 +25,6 @@ const CutfacFailure = Schema.Union([
   FreeLimitReached,
 ]);
 
-/** `value` without the fields it leaves undefined, at any depth, as JSON carries it. */
 const withoutUndefined = <A>(value: A): A => {
   if (Array.isArray(value)) {
     // SAFETY: each element keeps its own type, its undefined fields left out.
@@ -42,10 +41,7 @@ const withoutUndefined = <A>(value: A): A => {
   ) as A;
 };
 
-/**
- * `success` sent without the fields left undefined, such as the README of a format that has none
- * yet. The MCP result check rejects undefined, and the agent would see only an internal error.
- */
+// The MCP result check rejects undefined, and the agent would see only an internal error.
 const asJson = <S extends Schema.Constraint>(success: S) =>
   Schema.encode<S>({
     decode: SchemaGetter.passthrough(),

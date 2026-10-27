@@ -40,7 +40,6 @@ const exists = (id: string, rel: string) =>
 const feedbackOf = (item: { doc: { feedback: ReadonlyArray<Feedback> } }, id: string) =>
   item.doc.feedback.find((f) => f.id === id);
 
-/** An item with one video, and a request for `wanted` versions of it. */
 const requestVersions = (wanted = 2) =>
   Effect.gen(function* () {
     const id = yield* newItem;
@@ -51,7 +50,6 @@ const requestVersions = (wanted = 2) =>
     return { id, feedbackId: requested.feedback.id, requested };
   });
 
-/** Stands in for the agent: render a take over the media, then save it as a version. */
 const render = (id: string, feedbackId: string, label: string, content = label) =>
   Effect.andThen(write(id, VIDEO, content), saveVariant(id, feedbackId, label));
 
@@ -99,7 +97,6 @@ describe("versions to compare", () => {
       expect(f !== undefined && awaitsDecision(f)).toBe(true);
       expect(yield* read(id, VIDEO)).toBe("first");
 
-      // Settling again leaves it alone, and only a pick or keeping none ends the request.
       yield* resolveEdit(id, feedbackId, "Two takes");
       expect(yield* read(id, VIDEO)).toBe("first");
       expect(yield* Effect.flip(approveEdit(id, feedbackId))).toBeInstanceOf(InvalidRequest);
@@ -149,7 +146,6 @@ describe("versions to compare", () => {
       const { id, feedbackId } = yield* requestVersions();
       const { variant } = yield* render(id, feedbackId, "Big captions");
 
-      // Even when the run stopped before resolving.
       const kept = yield* restoreBefore(id, feedbackId);
       const f = feedbackOf(kept, feedbackId);
 
@@ -178,14 +174,12 @@ describe("versions to compare", () => {
       expect(takes.at(-1)?.saved).toBe(MAX_VARIANTS);
       expect(yield* Effect.flip(render(id, feedbackId, "One more"))).toBeInstanceOf(InvalidRequest);
 
-      // Saving under a label already used replaces that version in place.
       const again = yield* render(id, feedbackId, "Take 1", "Take 1, louder");
 
       expect(again.saved).toBe(MAX_VARIANTS);
       expect(again.variant.id).toBe(takes[0]?.variant.id ?? "");
       expect(yield* read(id, again.variant.file)).toBe("Take 1, louder");
 
-      // A note never set up as an edit has no copy of the media to put back.
       const note = yield* addFeedback(id, { body: "Note", media: VIDEO });
 
       expect(yield* Effect.flip(render(id, note.feedback.id, "Take"))).toBeInstanceOf(

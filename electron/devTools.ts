@@ -74,7 +74,6 @@ export interface DevToolsHost {
   showOnboarding: (
     step: OnboardingStep,
   ) => Effect.Effect<void, { readonly message: string }, AppServices>;
-  /** Opens a workspace, or says why it couldn't. False if it didn't open. */
   activate: (workspace: string) => Effect.Effect<boolean, never, AppServices>;
 }
 
@@ -95,7 +94,6 @@ export interface DevTools {
 export function handleDevTools(host: DevToolsHost): DevTools {
   const panel = Ref.makeUnsafe(Option.none<BrowserWindow>());
   const fakes = Ref.makeUnsafe(NO_FAKES);
-  /** The name a fresh folder gets in this run, so each start uses the same one. */
   const freshName = Ref.makeUnsafe(Option.none<string>());
   const forgetFreshName = Ref.set(freshName, Option.none());
 
@@ -150,7 +148,6 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     }),
   };
 
-  /** Where the first workspace would go now, for the panel to show. */
   const suggestedFolder = Effect.map(checks.suggestion, ({ library, name }) =>
     Option.match(name, {
       onNone: () => library,
@@ -210,7 +207,6 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
         if (!decoded.freshFolder) yield* forgetFreshName;
 
-        // As if the user turned both on in System Settings: the access step moves on by itself.
         if (before.access !== "granted" && decoded.access === "granted") {
           for (const permission of ["screen", "accessibility"] as const) {
             host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
@@ -235,8 +231,6 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
         yield* host.showOnboarding("welcome");
 
-        // The board keeps what it has shown in storage by its origin: whether the Learn hint was
-        // seen, the layout, the language. A new user has none of it.
         const origins = new Set([...Option.toArray(board), ...Option.toArray(shown)]);
 
         yield* Effect.forEach(origins, (origin) =>

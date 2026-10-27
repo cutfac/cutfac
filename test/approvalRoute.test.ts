@@ -29,7 +29,6 @@ const REQUEST = JSON.stringify({
   },
 });
 
-/** A Claude that asks once, keeps the answer it reads back, then finishes. */
 const claudeAsking = Effect.gen(function* () {
   const fakes = yield* FakeAgentDir;
 
@@ -111,7 +110,6 @@ it.live("a board edit puts Claude's request on the board and takes the answer ba
       },
     });
 
-    // Once settled, a second answer goes nowhere.
     const late = yield* sendJson("POST", "/api/item/edit/approval?id=clip", {
       request: "r1",
       answer: "deny",

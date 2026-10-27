@@ -15,7 +15,6 @@ const Created = Schema.Struct({ id: Schema.String });
 
 const Updated = Schema.Struct({ status: Schema.String });
 
-/** What a result says about the Cutfac app's free version, if anything. */
 const FreeVersion = Schema.Struct({ freeVersion: Schema.optional(Schema.String) });
 
 const FormatDetail = Schema.Struct({
@@ -145,7 +144,6 @@ describe("the MCP server's tools", () => {
 
         expect(refused.message).toContain("License Key");
 
-        // The videos already made stay editable.
         expect(yield* app.call("update_item", { id: last.id, status: "review" }, Updated)).toEqual({
           status: "review",
         });
@@ -183,7 +181,6 @@ describe("the MCP server's tools", () => {
           Created,
         );
 
-        // A template the agent has not written a README for yet still reads.
         const format = yield* server.call("get_format", { id: "art" }, FormatDetail);
 
         expect(format.id).toBe("art");

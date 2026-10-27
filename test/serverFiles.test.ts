@@ -46,7 +46,6 @@ describe("routes", () => {
 
       yield* sendJson("POST", "/api/items", { title: "Clip" });
 
-      // Not a real video, so it probes to no aspect and keeps its name.
       const video = yield* upload(new File([new Uint8Array([0, 1, 2])], "take 1.mp4"));
 
       expect(video.status).toBe(200);

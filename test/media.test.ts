@@ -151,7 +151,6 @@ const hasFfmpeg = Bun.which("ffmpeg") !== null && Bun.which("ffprobe") !== null;
 
 const liveWithFfmpeg: typeof it.live = hasFfmpeg ? it.live : (name) => test.skip(name, () => {});
 
-/** A 2s 180×320 test pattern with a tone, so it probes as a 9:16 video with audio. */
 const makeVideo = (path: string) =>
   runChecked("ffmpeg", [
     "-v",
@@ -208,7 +207,6 @@ describe("media in a workspace", () => {
           "[9x16] My Clip.mp4",
         ]);
         expect(reports[0]?.checks.find((check) => check.name === "audio")?.ok).toBe(true);
-        // 180×320 is far below upload resolution.
         expect(reports[0]?.checks.find((check) => check.name === "resolution")?.ok).toBe(false);
       }),
     20_000,

@@ -171,7 +171,6 @@ describe("unreadableOutputMessage", () => {
 const answeringVersion = (version: string, script = "") =>
   `if [ "$1" = "--version" ]; then echo "${version}"; exit 0; fi\n${script}`;
 
-/** The line that makes a fake note each turn it runs, in the folder `calls`. */
 const countRun = (calls: string) => `echo run >> "${join(calls, "runs")}"`;
 
 describe("the versions agentStatus reports", () => {
@@ -304,7 +303,6 @@ describe("a run that ends well but says nothing Cutfac can read", () => {
     return text.split("\n").filter(Boolean).length;
   });
 
-  /** A session from an earlier turn, made as Claude Code makes them. */
   const STORED = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
 
   it.live("fails, naming the agent and its version, when claude prints nothing", () =>

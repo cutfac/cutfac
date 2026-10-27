@@ -121,7 +121,6 @@ it.live("ending a turn keeps who ran it and when it started", () =>
   }),
 );
 
-// Imports are told apart by when they were last touched, so the clock has to move between them.
 it.effect("imports list newest first and skip a file that does not read", () =>
   Effect.gen(function* () {
     const first = yield* createImport({ link: "https://example.com/a", agent: "claude" });

@@ -29,21 +29,14 @@ interface Served {
   readonly sidecar: Sidecar;
 }
 
-/**
- * The local server for the open workspace, one at a time. The first launch starts it before the
- * board shows its workspace, and opening that workspace then keeps it.
- */
 export class WorkspaceServer extends Context.Service<
   WorkspaceServer,
   {
-    /** The server on `workspace`, started unless it runs there already; none if the app quits. */
     serve(
       workspace: string,
     ): Effect.Effect<Option.Option<Sidecar>, SidecarFailed | PortTaken | SettingsNotSaved>;
     readonly stop: Effect.Effect<void>;
-    /** SIGKILL at once, for the process-exit hook. */
     readonly kill: Effect.Effect<void>;
-    /** Why each server that stopped on its own did. */
     readonly crashes: Queue.Dequeue<string>;
   }
 >()("cutfac/desktop/WorkspaceServer") {

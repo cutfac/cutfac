@@ -27,7 +27,6 @@ const FormatList = Schema.Struct({
   notices: Schema.Array(Schema.String),
 });
 
-/** The overview also notices a missing brief, which most of these tests are not about. */
 const briefed = (server: McpServer) =>
   server.call("update_brief", { purpose: "promote", body: "Videos for my app." }, Brief);
 
@@ -107,7 +106,6 @@ describe("what the MCP server tells the agent to look at", () => {
 
         const copy = join(ws.root, ".claude/skills/cutfac/SKILL.md");
 
-        // The server installed it on start.
         expect(yield* fs.readFileString(copy)).toBe(bundled);
         expect((yield* server.call("workspace_overview", {}, Overview)).notices).toEqual([]);
 
