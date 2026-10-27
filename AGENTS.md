@@ -33,6 +33,22 @@ Engineering:
   `reference-repos/opencode/`, vendored with `git subtree --squash`. Only read it; don't edit or
   import from it. Update it with
   `git subtree pull --prefix=reference-repos/opencode https://github.com/anomalyco/opencode.git dev --squash`.
+- Write everything that runs outside the browser in Effect 4: the core, the server, the MCP tools
+  and Electron's main process. Then what can fail or be missing is in the types, and every
+  dependency can be swapped in a test. Follow `node_modules/effect/CLAUDE.md` and its `ai-docs/`:
+  services as `Context.Service` with a `layer`, named operations with `Effect.fn`, errors as
+  `Schema.TaggedError`, and time, requests and state through `Clock`, `HttpClient` and `Ref` rather
+  than `Date.now()`, `fetch` and `let`. Where Electron calls in, as `app` and `ipcMain` handlers do,
+  run Effect code through a `ManagedRuntime`, as `electron/licenseRuntime.ts` does, and keep the
+  handler to that.
+- The board runs in the browser as React, which stays plain TypeScript, but it still decodes what
+  it receives with `Schema` and uses `Option`, `Match` and Effect's other data types.
+- Parse what comes from outside with `Schema` (`Schema.fromJsonString`, and `fromTomlString` and
+  `fromYamlString` in `src/core/configText.ts`), not `try`/`catch` or `Predicate` checks, and return
+  `Option` rather than `undefined` for a value that may be missing.
+- Test Effect code with `test/effect.ts`, as OpenCode's tests do: `it.effect` runs on a `TestClock`
+  the test moves, `it.live` on the real clock, and `testEffect(layer)` provides the services a file
+  needs. Pure functions keep plain `test`.
 - Keep each source file under 500 lines. When one grows past that, split it by responsibility into
   cohesive modules, not at arbitrary line boundaries. Split large intermediate work, such as
   generator scripts and generated files, the same way.
