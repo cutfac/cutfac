@@ -15,7 +15,7 @@ import {
 } from "./agents.ts";
 import { type TurnResult, converse, noteCompaction } from "./agentTurn.ts";
 import type { CodexPermissions } from "./codexProtocol.ts";
-import { Conflict, InvalidRequest, NotFound } from "./errors.ts";
+import { Conflict, NotFound } from "./errors.ts";
 import { freshPrompt, turnMessage } from "./importPrompts.ts";
 import {
   type NewImport,
@@ -28,9 +28,9 @@ import {
   endTurn,
   getImport,
   importFiles,
+  requireTurn,
   saveImportSession,
   settleInstalls,
-  turnProblem,
 } from "./imports.ts";
 import { shortId } from "./items.ts";
 import { type CodexListed, codexServers } from "./mcpServers.ts";
@@ -364,9 +364,7 @@ export const startTurn = Effect.fn("importRun.startTurn")(function* (
       if (yield* runs.isRunning(importId)) return yield* new Conflict({ message: BUSY });
 
       // Closing waits on the same lock, so a turn that can go now still can once its files are in.
-      const problem = turnProblem(doc, turn.kind);
-
-      if (problem !== undefined) return yield* new InvalidRequest({ message: problem });
+      yield* requireTurn(doc, turn.kind);
 
       yield* agentBin(doc.agent);
       yield* requireTrust(doc.agent);

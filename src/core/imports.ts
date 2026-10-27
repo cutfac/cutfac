@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { shortId } from "./items.ts";
@@ -204,17 +204,28 @@ const mutateImport = Effect.fnUntraced(function* <E, R>(
 });
 
 /** Why `kind` cannot be the next turn of `doc`, if it cannot. */
-export function turnProblem(doc: ImportDoc, kind: ImportTurnKind): string | undefined {
-  if (doc.closed) return "This import is closed";
+function turnProblem(doc: ImportDoc, kind: ImportTurnKind): Option.Option<string> {
+  if (doc.closed) return Option.some("This import is closed");
 
-  if (kind === "start") return doc.turns.length > 0 ? "This import has already started" : undefined;
+  if (kind === "start") {
+    return doc.turns.length > 0 ? Option.some("This import has already started") : Option.none();
+  }
 
-  if (doc.turns.length === 0) return "This import has not started";
+  if (doc.turns.length === 0) return Option.some("This import has not started");
 
-  if (kind === "allow" && doc.allowed) return "Installs are already allowed for this import";
+  if (kind === "allow" && doc.allowed) {
+    return Option.some("Installs are already allowed for this import");
+  }
 
-  return undefined;
+  return Option.none();
 }
+
+/** Fails with why `kind` cannot be the next turn of `doc`, if it cannot. */
+export const requireTurn = (doc: ImportDoc, kind: ImportTurnKind) =>
+  Option.match(turnProblem(doc, kind), {
+    onNone: () => Effect.void,
+    onSome: (message) => Effect.fail(new InvalidRequest({ message })),
+  });
 
 /**
  * Add the user's message with its run marked running. Allowing records what the workspace holds,
@@ -227,9 +238,7 @@ export const beginTurn = Effect.fn("imports.beginTurn")(function* (
 ) {
   return yield* mutateImport(id, (doc) =>
     Effect.gen(function* () {
-      const problem = turnProblem(doc, turn.kind);
-
-      if (problem !== undefined) return yield* new InvalidRequest({ message: problem });
+      yield* requireTurn(doc, turn.kind);
 
       const run: AgentRun = { agent: doc.agent, status: "running", startedAt };
       const added: ImportTurn = { ...turn, at: startedAt, run };
