@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect, Layer } from "effect";
+import { Effect, FileSystem, Layer, Ref } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import { CommandFailed, InvalidRequest, NotFound } from "../src/core/errors.ts";
@@ -21,7 +19,13 @@ import {
   readAbout,
   summarize,
 } from "../src/core/learn.ts";
-import { type FakeAgents, makeFakeAgents, makeWorkspace, type TestWorkspace } from "./support.ts";
+import { runChecked } from "../src/core/process.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { fakeAgents, tempWorkspace } from "./support.ts";
+
+// A PATH of only fakes: yt-dlp and whisper are never found, so nothing is downloaded or run.
+const it = testEffect(Layer.merge(tempWorkspace(), fakeAgents));
 
 const LANDING = `<html><head>
 <title>Fernly | Plant care reminders</title>
@@ -70,18 +74,37 @@ const svgIcon = (url: string) =>
     ? new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } })
     : respond(url);
 
-/** An HttpClient that answers from `answer` and records each requested URL in `requested`. */
-const fakeHttp = (requested: string[], answer: (url: string) => Response = respond) =>
-  Layer.succeed(
-    HttpClient.HttpClient,
-    HttpClient.make((request, url) =>
-      Effect.sync(() => {
-        requested.push(url.href);
+/** A web that answers from `answer`, to run an effect on, and the URLs it was asked for. */
+const fakeWeb = (answer: (url: string) => Response = respond) =>
+  Effect.gen(function* () {
+    const asked = yield* Ref.make<ReadonlyArray<string>>([]);
 
-        return HttpClientResponse.fromWeb(request, answer(url.href));
-      }),
-    ),
-  );
+    const client = HttpClient.make((request, url) =>
+      Effect.map(
+        Ref.update(asked, (urls) => [...urls, url.href]),
+        () => HttpClientResponse.fromWeb(request, answer(url.href)),
+      ),
+    );
+
+    return { online: Effect.provideService(HttpClient.HttpClient, client), asked: Ref.get(asked) };
+  });
+
+/** A folder outside the workspace, for what the user points at. */
+const outsideFolder = Effect.flatMap(FileSystem.FileSystem, (fs) =>
+  fs.makeTempDirectoryScoped({ prefix: "cutfac-learn-" }),
+);
+
+/** The workspace's about.md. */
+const about = Effect.flatMap(Workspace, (ws) => ws.readText(ABOUT_FILE));
+
+/** The names in a folder of the workspace, sorted. */
+const listing = (rel: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const ws = yield* Workspace;
+
+    return (yield* fs.readDirectory(join(ws.root, rel))).toSorted();
+  });
 
 describe("reading what was given", () => {
   test("a link is anything with a scheme or a www. prefix; the rest is a path", () => {
@@ -136,294 +159,286 @@ describe("reading what was given", () => {
 });
 
 describe("learn", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
-  let outside: string;
-  const requested: string[] = [];
+  it.live("a landing page keeps its icon and picture and starts a section in about.md", () =>
+    Effect.gen(function* () {
+      const web = yield* fakeWeb();
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-    // A PATH of only fakes: yt-dlp and whisper are never found, so nothing is downloaded or run.
-    fakes = await makeFakeAgents();
-    outside = await mkdtemp(join(tmpdir(), "cutfac-learn-"));
-    requested.length = 0;
-  });
-
-  afterEach(async () => {
-    await t.remove();
-    await fakes.remove();
-    await rm(outside, { recursive: true, force: true });
-  });
-
-  const offline = (answer?: (url: string) => Response) =>
-    Layer.merge(fakeHttp(requested, answer), fakes.layer);
-
-  const about = () => readFile(join(t.root, ABOUT_FILE), "utf8");
-
-  test("a landing page keeps its icon and picture and starts a section in about.md", async () => {
-    const { learned, warnings } = await t.runWith(
-      offline(),
-      learn(learnInputOf("https://fernly.app")),
-    );
-
-    expect(warnings).toEqual([]);
-    expect(learned.id).toBe("fernly");
-    expect(learned.dir).toBe("learned/fernly");
-    expect(learned.unread).toBe(true);
-    expect(learned.doc).toMatchObject({
-      kind: "page",
-      title: "Fernly — Plant care one reminder at a time",
-      description: "Care for your plants in two minutes a day & never miss a watering.",
-      source: { url: "https://fernly.app/" },
-      site: "Fernly",
-      icon: "icon.png",
-      images: ["image.png"],
-      links: ["https://apps.apple.com/us/app/fernly/id123456"],
-    });
-    // Store links on the page are noted, not followed.
-    expect(requested.toSorted()).toEqual([
-      "https://fernly.app/",
-      "https://fernly.app/favicon.png",
-      "https://fernly.app/og.png",
-    ]);
-    expect((await readdir(join(t.root, learned.dir))).toSorted()).toEqual([
-      "icon.png",
-      "image.png",
-      "learned.yaml",
-    ]);
-
-    const text = await about();
-
-    expect(text).toStartWith("# About\n");
-    expect(text).toContain(
-      "## Fernly — Plant care one reminder at a time\n<!-- learned:fernly -->\n",
-    );
-    expect(text).toContain(`${UNREAD}: `);
-    expect(text).toContain("- Link: https://fernly.app/\n- By: Fernly\n");
-    expect(text).toContain("- Saved: learned/fernly/\n\nCare for your plants");
-  });
-
-  test("an app keeps its full description, icon, and screenshots", async () => {
-    const { learned } = await t.runWith(
-      offline(),
-      learn({ url: "https://apps.apple.com/us/app/fernly/id123456" }),
-    );
-
-    expect(learned.doc).toMatchObject({
-      kind: "app",
-      title: "Fernly: Plant Care",
-      description: "Learn what each plant needs. Reminders keep watering on time.",
-      site: "Fernly Labs",
-      icon: "icon.png",
-      images: ["shot-01.png"],
-    });
-  });
-
-  test("a picture the board cannot show safely is left out with a warning", async () => {
-    const { learned, warnings } = await t.runWith(
-      offline(svgIcon),
-      learn({ url: "https://fernly.app" }),
-    );
-
-    expect(learned.doc.icon).toBeUndefined();
-    expect(learned.doc.images).toEqual(["image.png"]);
-    expect(warnings).toEqual([
-      "Could not download https://fernly.app/favicon.png: https://fernly.app/favicon.png: not a picture the board can show (image/svg+xml)",
-    ]);
-  });
-
-  test("without yt-dlp a video link is kept as its page, with a warning", async () => {
-    const { learned, warnings } = await t.runWith(
-      offline(),
-      learn({ url: "https://www.youtube.com/shorts/abc" }),
-    );
-
-    expect(learned.doc).toMatchObject({
-      kind: "page",
-      title: "Repotting in 30s",
-      images: ["image.png"],
-    });
-    expect(learned.doc.video).toBeUndefined();
-    expect(warnings).toEqual([
-      "Saved as a page without the video: yt-dlp is required to download videos from links (brew install yt-dlp).",
-    ]);
-  });
-
-  test("a video link with neither its page nor yt-dlp leaves nothing behind", async () => {
-    const error = await t.runWith(
-      offline(),
-      Effect.flip(learn({ url: "https://www.youtube.com/watch?v=gone" })),
-    );
-
-    expect(error).toBeInstanceOf(CommandFailed);
-    expect(await readdir(join(t.root, "learned"))).toEqual([]);
-    expect(await t.run(readAbout())).toBeUndefined();
-  });
-
-  test("a link with a login in it is refused before anything is fetched", async () => {
-    const error = await t.runWith(
-      offline(),
-      Effect.flip(learn({ url: "https://me:pass@fernly.app/" })),
-    );
-
-    expect(error).toBeInstanceOf(InvalidRequest);
-    expect(requested).toEqual([]);
-  });
-
-  test("a folder is summarized from its README and stays where it is", async () => {
-    const folder = join(outside, "fernly-app");
-    await mkdir(folder);
-    await writeFile(join(folder, "README.md"), "# Fernly\n\nA plant care tracker.\n");
-    await writeFile(join(folder, "main.ts"), "export {};\n");
-
-    const { learned } = await t.runWith(offline(), learn(learnInputOf(folder)));
-
-    expect(learned.doc).toMatchObject({
-      kind: "folder",
-      title: "Fernly",
-      description: "A plant care tracker.",
-      source: { path: folder },
-    });
-    expect(await readdir(join(t.root, learned.dir))).toEqual(["learned.yaml"]);
-    expect(await about()).toContain(`- Folder: ${folder}\n`);
-  });
-
-  test("a missing path is refused", async () => {
-    const error = await t.runWith(offline(), Effect.flip(learn({ path: join(outside, "nope") })));
-
-    expect(error).toBeInstanceOf(InvalidRequest);
-  });
-
-  test("an uploaded note is copied in, since its temporary file goes away", async () => {
-    const upload = join(outside, "upload-123");
-    await writeFile(upload, "# Launch plan\n\nShip the spring update in May.\n");
-
-    const { learned } = await t.runWith(offline(), learn({ file: upload, name: "plan.md" }));
-
-    expect(learned.doc).toMatchObject({
-      kind: "file",
-      title: "Launch plan",
-      description: "Ship the spring update in May.",
-    });
-    expect(learned.doc.source).toBeUndefined();
-    expect((await readdir(join(t.root, learned.dir))).toSorted()).toEqual([
-      "file.md",
-      "learned.yaml",
-    ]);
-    expect(await about()).toContain("- Uploaded file\n");
-  });
-
-  test("the same title gets its own folder", async () => {
-    const note = join(outside, "a.md");
-    await writeFile(note, "# Fernly\n");
-
-    const ids = await t.runWith(
-      offline(),
-      Effect.gen(function* () {
-        const first = yield* learn({ path: note });
-        const second = yield* learn({ path: note });
-
-        return [first.learned.id, second.learned.id];
-      }),
-    );
-
-    expect(ids).toEqual(["fernly", "fernly-2"]);
-  });
-
-  test("a section stops being unread once an agent rewrites it, and forget removes it", async () => {
-    const first = join(outside, "a.md");
-    await writeFile(first, "# First\n");
-    const second = join(outside, "b.md");
-    await writeFile(second, "# Second\n");
-
-    await t.runWith(offline(), learn({ path: first }));
-    await t.runWith(offline(), learn({ path: second }));
-
-    const unread = async () =>
-      Object.fromEntries(
-        (await t.run(listLearned())).map((entry) => [entry.id, entry.unread] as const),
+      const { learned, warnings } = yield* learn(learnInputOf("https://fernly.app")).pipe(
+        web.online,
       );
 
-    expect(await unread()).toEqual({ first: true, second: true });
+      expect(warnings).toEqual([]);
+      expect(learned.id).toBe("fernly");
+      expect(learned.dir).toBe("learned/fernly");
+      expect(learned.unread).toBe(true);
+      expect(learned.doc).toMatchObject({
+        kind: "page",
+        title: "Fernly — Plant care one reminder at a time",
+        description: "Care for your plants in two minutes a day & never miss a watering.",
+        source: { url: "https://fernly.app/" },
+        site: "Fernly",
+        icon: "icon.png",
+        images: ["image.png"],
+        links: ["https://apps.apple.com/us/app/fernly/id123456"],
+      });
+      // Store links on the page are noted, not followed.
+      expect((yield* web.asked).toSorted()).toEqual([
+        "https://fernly.app/",
+        "https://fernly.app/favicon.png",
+        "https://fernly.app/og.png",
+      ]);
+      expect(yield* listing(learned.dir)).toEqual(["icon.png", "image.png", "learned.yaml"]);
 
-    // An agent rewrites the first section and a person adds one of their own.
-    const read = (await about()).replace(/(<!-- learned:first -->\n)> Not read yet[^\n]*\n/, "$1");
-    await writeFile(join(t.root, ABOUT_FILE), `${read}\n## Voice\n\nPlayful.\n`);
+      const text = yield* about;
 
-    expect(await unread()).toEqual({ first: false, second: true });
+      expect(text).toStartWith("# About\n");
+      expect(text).toContain(
+        "## Fernly — Plant care one reminder at a time\n<!-- learned:fernly -->\n",
+      );
+      expect(text).toContain(`${UNREAD}: `);
+      expect(text).toContain("- Link: https://fernly.app/\n- By: Fernly\n");
+      expect(text).toContain("- Saved: learned/fernly/\n\nCare for your plants");
+    }),
+  );
 
-    const notices = learnNotices(await t.run(listLearned()), "/w/about.md");
+  it.live("an app keeps its full description, icon, and screenshots", () =>
+    Effect.gen(function* () {
+      const web = yield* fakeWeb();
 
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toStartWith("/w/about.md has sections no agent has read yet (second).");
+      const { learned } = yield* learn({
+        url: "https://apps.apple.com/us/app/fernly/id123456",
+      }).pipe(web.online);
 
-    await t.run(forget("second"));
+      expect(learned.doc).toMatchObject({
+        kind: "app",
+        title: "Fernly: Plant Care",
+        description: "Learn what each plant needs. Reminders keep watering on time.",
+        site: "Fernly Labs",
+        icon: "icon.png",
+        images: ["shot-01.png"],
+      });
+    }),
+  );
 
-    const left = await about();
+  it.live("a picture the board cannot show safely is left out with a warning", () =>
+    Effect.gen(function* () {
+      const web = yield* fakeWeb(svgIcon);
 
-    expect(left).toContain("<!-- learned:first -->");
-    expect(left).not.toContain("learned:second");
-    expect(left).toEndWith("## Voice\n\nPlayful.\n");
-    expect(await readdir(join(t.root, "learned"))).toEqual(["first"]);
-    expect(await t.fail(getLearned("second"))).toBeInstanceOf(NotFound);
-    expect(await t.fail(getLearned("../escape"))).toBeInstanceOf(NotFound);
-    expect(learnNotices(await t.run(listLearned()), "/w/about.md")).toEqual([]);
-  });
+      const { learned, warnings } = yield* learn({ url: "https://fernly.app" }).pipe(web.online);
+
+      expect(learned.doc.icon).toBeUndefined();
+      expect(learned.doc.images).toEqual(["image.png"]);
+      expect(warnings).toEqual([
+        "Could not download https://fernly.app/favicon.png: https://fernly.app/favicon.png: not a picture the board can show (image/svg+xml)",
+      ]);
+    }),
+  );
+
+  it.live("without yt-dlp a video link is kept as its page, with a warning", () =>
+    Effect.gen(function* () {
+      const web = yield* fakeWeb();
+
+      const { learned, warnings } = yield* learn({
+        url: "https://www.youtube.com/shorts/abc",
+      }).pipe(web.online);
+
+      expect(learned.doc).toMatchObject({
+        kind: "page",
+        title: "Repotting in 30s",
+        images: ["image.png"],
+      });
+      expect(learned.doc.video).toBeUndefined();
+      expect(warnings).toEqual([
+        "Saved as a page without the video: yt-dlp is required to download videos from links (brew install yt-dlp).",
+      ]);
+    }),
+  );
+
+  it.live("a video link with neither its page nor yt-dlp leaves nothing behind", () =>
+    Effect.gen(function* () {
+      const web = yield* fakeWeb();
+
+      const error = yield* Effect.flip(learn({ url: "https://www.youtube.com/watch?v=gone" })).pipe(
+        web.online,
+      );
+
+      expect(error).toBeInstanceOf(CommandFailed);
+      expect(yield* listing("learned")).toEqual([]);
+      expect(yield* readAbout()).toBeUndefined();
+    }),
+  );
+
+  it.live("a link with a login in it is refused before anything is fetched", () =>
+    Effect.gen(function* () {
+      const web = yield* fakeWeb();
+
+      const error = yield* Effect.flip(learn({ url: "https://me:pass@fernly.app/" })).pipe(
+        web.online,
+      );
+
+      expect(error).toBeInstanceOf(InvalidRequest);
+      expect(yield* web.asked).toEqual([]);
+    }),
+  );
+
+  it.live("a folder is summarized from its README and stays where it is", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const outside = yield* outsideFolder;
+      const web = yield* fakeWeb();
+      const folder = join(outside, "fernly-app");
+
+      yield* fs.makeDirectory(folder);
+      yield* fs.writeFileString(join(folder, "README.md"), "# Fernly\n\nA plant care tracker.\n");
+      yield* fs.writeFileString(join(folder, "main.ts"), "export {};\n");
+
+      const { learned } = yield* learn(learnInputOf(folder)).pipe(web.online);
+
+      expect(learned.doc).toMatchObject({
+        kind: "folder",
+        title: "Fernly",
+        description: "A plant care tracker.",
+        source: { path: folder },
+      });
+      expect(yield* listing(learned.dir)).toEqual(["learned.yaml"]);
+      expect(yield* about).toContain(`- Folder: ${folder}\n`);
+    }),
+  );
+
+  it.live("a missing path is refused", () =>
+    Effect.gen(function* () {
+      const outside = yield* outsideFolder;
+      const web = yield* fakeWeb();
+
+      const error = yield* Effect.flip(learn({ path: join(outside, "nope") })).pipe(web.online);
+
+      expect(error).toBeInstanceOf(InvalidRequest);
+    }),
+  );
+
+  it.live("an uploaded note is copied in, since its temporary file goes away", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const outside = yield* outsideFolder;
+      const web = yield* fakeWeb();
+      const upload = join(outside, "upload-123");
+
+      yield* fs.writeFileString(upload, "# Launch plan\n\nShip the spring update in May.\n");
+
+      const { learned } = yield* learn({ file: upload, name: "plan.md" }).pipe(web.online);
+
+      expect(learned.doc).toMatchObject({
+        kind: "file",
+        title: "Launch plan",
+        description: "Ship the spring update in May.",
+      });
+      expect(learned.doc.source).toBeUndefined();
+      expect(yield* listing(learned.dir)).toEqual(["file.md", "learned.yaml"]);
+      expect(yield* about).toContain("- Uploaded file\n");
+    }),
+  );
+
+  it.live("the same title gets its own folder", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const outside = yield* outsideFolder;
+      const web = yield* fakeWeb();
+      const note = join(outside, "a.md");
+
+      yield* fs.writeFileString(note, "# Fernly\n");
+
+      const first = yield* learn({ path: note }).pipe(web.online);
+      const second = yield* learn({ path: note }).pipe(web.online);
+
+      expect([first.learned.id, second.learned.id]).toEqual(["fernly", "fernly-2"]);
+    }),
+  );
+
+  it.live("a section stops being unread once an agent rewrites it, and forget removes it", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const ws = yield* Workspace;
+      const outside = yield* outsideFolder;
+      const web = yield* fakeWeb();
+      const first = join(outside, "a.md");
+      const second = join(outside, "b.md");
+
+      yield* fs.writeFileString(first, "# First\n");
+      yield* fs.writeFileString(second, "# Second\n");
+
+      yield* learn({ path: first }).pipe(web.online);
+      yield* learn({ path: second }).pipe(web.online);
+
+      const unread = Effect.map(listLearned(), (entries) =>
+        Object.fromEntries(entries.map((entry) => [entry.id, entry.unread] as const)),
+      );
+
+      expect(yield* unread).toEqual({ first: true, second: true });
+
+      // An agent rewrites the first section and a person adds one of their own.
+      const read = (yield* about).replace(/(<!-- learned:first -->\n)> Not read yet[^\n]*\n/, "$1");
+      yield* ws.writeText(ABOUT_FILE, `${read}\n## Voice\n\nPlayful.\n`);
+
+      expect(yield* unread).toEqual({ first: false, second: true });
+
+      const notices = learnNotices(yield* listLearned(), "/w/about.md");
+
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toStartWith("/w/about.md has sections no agent has read yet (second).");
+
+      yield* forget("second");
+
+      const left = yield* about;
+
+      expect(left).toContain("<!-- learned:first -->");
+      expect(left).not.toContain("learned:second");
+      expect(left).toEndWith("## Voice\n\nPlayful.\n");
+      expect(yield* listing("learned")).toEqual(["first"]);
+      expect(yield* Effect.flip(getLearned("second"))).toBeInstanceOf(NotFound);
+      expect(yield* Effect.flip(getLearned("../escape"))).toBeInstanceOf(NotFound);
+      expect(learnNotices(yield* listLearned(), "/w/about.md")).toEqual([]);
+    }),
+  );
 });
 
 const hasFfmpeg = Bun.which("ffmpeg") !== null && Bun.which("ffprobe") !== null;
 
 describe.skipIf(!hasFfmpeg)("learning a video file", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
-  let outside: string;
+  it.live(
+    "copies it in and preprocesses it",
+    () =>
+      Effect.gen(function* () {
+        const outside = yield* outsideFolder;
+        const web = yield* fakeWeb();
+        const video = join(outside, "Hook idea.mp4");
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-    fakes = await makeFakeAgents();
-    outside = await mkdtemp(join(tmpdir(), "cutfac-learn-"));
-  });
+        yield* runChecked("ffmpeg", [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc=size=180x320:rate=30:duration=2",
+          "-pix_fmt",
+          "yuv420p",
+          video,
+        ]);
 
-  afterEach(async () => {
-    await t.remove();
-    await fakes.remove();
-    await rm(outside, { recursive: true, force: true });
-  });
+        const { learned } = yield* learn({ path: video }).pipe(web.online);
 
-  test("copies it in and preprocesses it", async () => {
-    const video = join(outside, "Hook idea.mp4");
+        expect(learned.doc).toMatchObject({
+          kind: "video",
+          title: "Hook idea",
+          video: "source.mp4",
+          probe: { width: 180, height: 320, hasAudio: false },
+        });
+        expect(learned.preprocess?.frames.length).toBeGreaterThan(0);
+        expect(learned.preprocess?.contactSheet).toBe("contact.jpg");
 
-    const made = Bun.spawnSync([
-      "ffmpeg",
-      "-v",
-      "error",
-      "-f",
-      "lavfi",
-      "-i",
-      "testsrc=size=180x320:rate=30:duration=2",
-      "-pix_fmt",
-      "yuv420p",
-      video,
-    ]);
+        const got = yield* getLearned(learned.id);
 
-    expect(made.exitCode).toBe(0);
-
-    const { learned } = await t.runWith(
-      Layer.merge(fakeHttp([]), fakes.layer),
-      learn({ path: video }),
-    );
-
-    expect(learned.doc).toMatchObject({
-      kind: "video",
-      title: "Hook idea",
-      video: "source.mp4",
-      probe: { width: 180, height: 320, hasAudio: false },
-    });
-    expect(learned.preprocess?.frames.length).toBeGreaterThan(0);
-    expect(learned.preprocess?.contactSheet).toBe("contact.jpg");
-
-    const got = await t.run(getLearned(learned.id));
-
-    expect(got.preprocess?.contactSheet).toBe("contact.jpg");
-  }, 20_000);
+        expect(got.preprocess?.contactSheet).toBe("contact.jpg");
+      }),
+    20_000,
+  );
 });
