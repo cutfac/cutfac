@@ -59,6 +59,7 @@ import { MAX_TEAM_FEEDBACK_CHARS, sendTeamFeedback } from "../core/teamFeedback.
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
 import { trustNotices } from "../core/workspaceTrust.ts";
+import { feedbackInstallId } from "../errorReports.ts";
 import { createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
 import { BriefToolkit, briefHandlers } from "./brief.ts";
 import { RenderToolkit, renderHandlers } from "./render.ts";
@@ -787,17 +788,19 @@ const handlers = WorkspaceToolkit.toLayer(
       send_feedback_to_cutfac: ({ message, email, logs }) =>
         Effect.flatMap(Effect.serviceOption(McpSchema.McpRequestContext), (request) =>
           run(
-            Effect.as(
-              sendTeamFeedback({
+            Effect.gen(function* () {
+              yield* sendTeamFeedback({
                 message,
                 email,
                 withLogs: logs,
+                install: Option.getOrUndefined(yield* feedbackInstallId),
                 source: "agent",
                 platform: process.platform,
                 agent: Option.getOrUndefined(Option.map(request, clientName)),
-              }),
-              { ok: true as const },
-            ),
+              });
+
+              return { ok: true as const };
+            }),
           ),
         ),
 

@@ -96,6 +96,13 @@ import { sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace, type WorkspaceService } from "../core/workspace.ts";
 import { requireTrust, trustProblem, trustStatus, trustWorkspace } from "../core/workspaceTrust.ts";
+import {
+  type ReportSettings,
+  feedbackInstallId,
+  reportSettings,
+  resetInstallId,
+  setErrorReports,
+} from "../errorReports.ts";
 import { createCountedItem, planStatus } from "../plan.ts";
 import { approvalRoutes } from "./approvals.ts";
 import { briefRoutes } from "./brief.ts";
@@ -241,6 +248,15 @@ const TeamFeedbackBody = Schema.Struct({
   locale: Schema.optional(Schema.String),
   agent: Schema.optional(Schema.String),
   logs: Schema.optional(Schema.Boolean),
+});
+
+const ErrorReportsBody = Schema.Struct({ on: Schema.Boolean });
+
+/** The error report settings as the board reads them. */
+const reportView = ({ available, errorReports, installId }: ReportSettings) => ({
+  available,
+  errorReports: Option.getOrNull(errorReports),
+  installId: Option.getOrNull(installId),
 });
 
 const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
@@ -982,7 +998,12 @@ const apiRoutes = (options: ServerOptions) =>
         const ws = yield* Workspace;
         const { logs, ...body } = yield* HttpServerRequest.schemaBodyJson(TeamFeedbackBody);
 
-        yield* sendTeamFeedback({ ...body, withLogs: logs, agent: body.agent ?? defaultAgent(ws) });
+        yield* sendTeamFeedback({
+          ...body,
+          withLogs: logs,
+          agent: body.agent ?? defaultAgent(ws),
+          install: Option.getOrUndefined(yield* feedbackInstallId),
+        });
 
         return { ok: true };
       }),
@@ -992,6 +1013,15 @@ const apiRoutes = (options: ServerOptions) =>
       "/api/team-feedback/logs",
       Effect.map(recentLogs, (logs) => ({ logs: Option.getOrNull(logs) })),
     ),
+    json("GET", "/api/error-reports", Effect.map(reportSettings, reportView)),
+    json(
+      "POST",
+      "/api/error-reports",
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(ErrorReportsBody), ({ on }) =>
+        Effect.map(setErrorReports(on), reportView),
+      ),
+    ),
+    json("POST", "/api/error-reports/install-id", Effect.map(resetInstallId(), reportView)),
     json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),
     json("GET", "/api/formats", listFormats()),
     json("GET", "/api/formats/status", formatStatuses()),

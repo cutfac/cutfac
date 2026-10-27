@@ -21,6 +21,7 @@ import { logDir, logToFile } from "./core/logFile.ts";
 import { syncSkill } from "./core/skill.ts";
 import { CONFIG_FILE, Workspace, initWorkspace } from "./core/workspace.ts";
 import { trustCreated } from "./core/workspaceTrust.ts";
+import { errorReports } from "./errorReports.ts";
 import { MCP_VERSION, mcpLayer } from "./mcp/server.ts";
 import { appData } from "./plan.ts";
 import { serverLayer } from "./server/app.ts";
@@ -158,8 +159,15 @@ const init = Command.make(
   }),
 ).pipe(Command.withDescription("Create a workspace and connect your agents"));
 
-/** The desktop app's log for this process, `server` or `mcp`; none for the open-source CLI. */
-const processLog = (name: string) => logToFile(name).pipe(Layer.provideMerge(logDir));
+/**
+ * The desktop app's log for this process, `server` or `mcp`, and its error reports when the
+ * person allows them; neither for the open-source CLI.
+ */
+const processLog = (name: string) =>
+  logToFile(name).pipe(
+    Layer.provide(errorReports(name).pipe(Layer.provide(appData))),
+    Layer.provideMerge(logDir),
+  );
 
 const serve = Command.make(
   "serve",

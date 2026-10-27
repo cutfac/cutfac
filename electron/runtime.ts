@@ -1,13 +1,28 @@
 import { Effect, Layer, ManagedRuntime, Option, Predicate } from "effect";
+import { FetchHttpClient } from "effect/http";
 import type { PlatformError } from "effect/PlatformError";
 import { app } from "electron";
 
+import { AppData } from "../src/core/appData.ts";
 import { LogDir, logToFile } from "../src/core/logFile.ts";
+import { errorReports } from "../src/errorReports.ts";
 import { platform } from "./platform.ts";
 
-/** The app's own log, in Electron's logs folder: `~/Library/Logs/Cutfac`, or `Cutfac Dev`. */
+/** Reports the main process's failures, reading the person's choice from the app's data folder. */
+const appReports = errorReports("app").pipe(
+  Layer.provide([
+    Layer.sync(AppData, () => Option.some(app.getPath("userData"))),
+    FetchHttpClient.layer,
+    platform,
+  ]),
+);
+
+/**
+ * The app's own log, in Electron's logs folder: `~/Library/Logs/Cutfac`, or `Cutfac Dev`, with its
+ * error reports when the person allows them.
+ */
 export const appLog = logToFile("app").pipe(
-  Layer.provide([Layer.sync(LogDir, () => Option.some(app.getPath("logs"))), platform]),
+  Layer.provide([Layer.sync(LogDir, () => Option.some(app.getPath("logs"))), appReports, platform]),
 );
 
 /** Shared by the main process's runtimes, so they build the app's log once between them. */

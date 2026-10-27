@@ -34,6 +34,8 @@ It reads its credentials from `.env.release`, which git ignores:
 
 - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` to notarize
 - `CUTFAC_RELEASES_BUCKET`, `CUTFAC_RELEASES_REGION` for the private S3 bucket the builds go to
+- `CUTFAC_POSTHOG_KEY`, the project token of the PostHog project error reports go to, which the
+  build writes into the app (see Error reports)
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` for a user that can read and write `mac/` in it
 
 Give that user only `s3:PutObject`, `s3:GetObject` and `s3:AbortMultipartUpload` on the bucket's
@@ -85,7 +87,8 @@ In the desktop app, feedback can also carry the app's recent log (see Logs): the
 1 MB, gzipped as `cutfac-logs.txt.gz`, which cutfac.com attaches to the mail. "Send feedback" asks
 with a switch that starts on and shows what would go; the agent passes `logs: true` and says so in
 the text it shows first, leaving it off if the person says no. A `/feedback` message sends no log.
-Nothing else is sent.
+While the person sends error reports, feedback also carries the install ID, so the team can find
+that install's reports. Nothing else is sent.
 
 ## Logs
 
@@ -98,6 +101,25 @@ with an error. The home folder shows as `~`, and the log never holds what is in 
 a chat or a key. A process that starts removes the days older than a week, then the oldest until
 the folder holds 50 MB or less. The log stays on this Mac unless the person sends it with feedback.
 The open-source CLI keeps none; from source, `CUTFAC_LOG_DIR` names a folder to keep one in.
+
+## Error reports
+
+A release build can report failures to the Cutfac team's PostHog project (US cloud), once the
+person says yes. The board asks once, the first time it opens in a build that can send them, and
+Settings has the switch; nothing is sent before a yes, and a no takes hold at once. A report is a
+PostHog `$exception`: the failure's type and message with the home folder as `~`, the operation
+that failed, the process (`app`, `server` or `mcp`), the app's version and platform, and the cause
+up to 4,000 characters. Its only identity is the install ID, a random ID made with the first
+answer that Settings can renew, and PostHog keeps no person profile for it. Each process reports
+each failure once a run, and at most 20 of them. Never a video, a prompt, a chat, a file's
+contents or a key.
+
+The reports ride on the log: whatever the log keeps at error level, including a top-level
+operation that failed, also goes to `ErrorSink`, which `src/errorReports.ts` fills. Only a build
+made with `CUTFAC_POSTHOG_KEY` set can send them: `build:sidecar` and `build:electron` pass
+`--env='CUTFAC_POSTHOG_*'`, which writes the key into the build, and the release script requires
+it. Source builds and forks have no key, so they ask nothing and send nothing. The choice and the
+install ID live in `telemetry.json` in the app's data folder.
 
 ## Running it from source
 

@@ -34,6 +34,8 @@ export interface TeamFeedback {
   readonly agent?: string | undefined;
   /** The person agreed to send the app's recent log with it. */
   readonly withLogs?: boolean | undefined;
+  /** This install's ID, which the team matches to its error reports; only while it sends them. */
+  readonly install?: string | undefined;
 }
 
 /** The name the log goes under, gzipped, which the site attaches to its mail. */
@@ -75,6 +77,7 @@ export const sendTeamFeedback = Effect.fn("teamFeedback.send")(function* (feedba
     platform: feedback.platform ?? "",
     locale: feedback.locale ?? "",
     agent: feedback.agent ?? "",
+    install: feedback.install ?? "",
   };
 
   // A form with a file only when there is a log to send; without one, the request is as it was.
