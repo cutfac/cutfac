@@ -30,13 +30,13 @@ templates goes straight to what is missing. Closing the window keeps the progres
 save the step the user is on, and the next launch opens on it. Once the workspace is made, the
 board saves the answers into it and opens: nothing is made yet, so nothing is waited on.
 
-| Step            | Shows                                                                                                                                                                         | Done when                                 |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                     | Start is pressed                          |
-| 2. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace           | Next is pressed on the last part, or Skip |
-| 3. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                             | One agent is ready, and Next is pressed   |
-| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                        | Both are on, or Skip                      |
-| 5. Ready        | Where everything is kept, as one line (`~/Documents/Cutfac`) with Change, whether to share with the Cutfac team, and Start making. The folder is made and the agents from step 3 connect to it | The board opens on the folder             |
+| Step            | Shows                                                                                                                                                                                                                                              | Done when                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                                                                                          | Start is pressed                          |
+| 2. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                                                | Next is pressed on the last part, or Skip |
+| 3. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                                                  | One agent is ready, and Next is pressed   |
+| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                                             | Both are on, or Skip                      |
+| 5. Ready        | Where everything is kept, as one line (`~/Documents/Cutfac`) with Change, whether to share error reports and usage statistics with the Cutfac team, each on its own, and Start making. The folder is made and the agents from step 3 connect to it | The board opens on the folder             |
 
 ### Before the workspace
 

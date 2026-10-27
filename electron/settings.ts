@@ -24,8 +24,13 @@ const OnboardingDraft = Schema.Struct({
   }),
   sources: Schema.Array(Schema.String),
   skipped: Schema.Boolean,
-  /** Whether to share error reports and usage statistics; left out until answered. */
-  share: Schema.optionalKey(Schema.Boolean),
+  /** Whether to share error reports, and usage statistics; each left out until answered. */
+  sharing: Schema.optionalKey(
+    Schema.Struct({
+      errorReports: Schema.optionalKey(Schema.Boolean),
+      usageStats: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
 });
 
 /** The board page last shown, for the workspace it belongs to. */
@@ -208,7 +213,7 @@ export async function loadDraft(): Promise<Draft | undefined> {
     skipped: draft.skipped,
   };
 
-  if (draft.share !== undefined) copy.share = draft.share;
+  if (draft.sharing !== undefined) copy.sharing = { ...draft.sharing };
 
   return copy;
 }

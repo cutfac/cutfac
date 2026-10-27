@@ -2,7 +2,9 @@
 export const reportsEn = {
   askTitle: "Share with the Cutfac team?",
   askBody:
-    "Two things help us make Cutfac better: error reports, saying what failed and where, and usage statistics, counting which parts get used, such as videos made and versions kept. They carry the app's version and an ID made for this install, never a video, a prompt, a chat, a file's contents, a path or a key. You can change each in Settings.",
+    "Each helps us make Cutfac better. They carry the app's version and an ID made for this install, never a video, a prompt, a chat, a file's contents, a path or a key. You can change either in Settings.",
+  errorReports: "Error reports",
+  usageStats: "Usage statistics",
   share: "Share",
   dontShare: "Don't share",
   title: "Sharing with the Cutfac team",

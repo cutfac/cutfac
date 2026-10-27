@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 
-import { both, saveReportChoices } from "@/components/error-reports";
+import { saveReportChoices } from "@/components/error-reports";
 import { type Answers, saveAnswers } from "@/components/onboarding/answers";
 import { ONBOARDING_STEPS, OnboardingFrame, StepHeader } from "@/components/onboarding/frame";
 import { StartStep } from "@/components/onboarding/start-step";
 import { ListSkeleton } from "@/components/page";
 
-import { api, type WorkspaceInfo } from "../api.ts";
-import { type CutfacOnboarding, desktop, type OnboardingDraft } from "../desktop.ts";
+import { api, type ReportChoices, type WorkspaceInfo } from "../api.ts";
+import {
+  type CutfacOnboarding,
+  desktop,
+  type OnboardingDraft,
+  type SharingPurpose,
+} from "../desktop.ts";
 import { href, type Live } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
 import { errorText } from "../lib/notify.ts";
 import { skipStart } from "../lib/onboarding.ts";
+
+const SHARING_PURPOSES: ReadonlyArray<SharingPurpose> = ["errorReports", "usageStats"];
 
 /**
  * The end of the first launch: what the user said goes into the workspace, and the board opens.
@@ -82,17 +89,23 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
 }
 
 /**
- * Saves whether the first launch said to share with the Cutfac team, then counts how it went if
- * that allows. Going on without an answer is not sharing, and the board doesn't ask again.
+ * Saves what the first launch said to share with the Cutfac team, then counts how it went if that
+ * allows. A purpose left unanswered is not shared; one answered before keeps its answer.
  */
 async function handOnSharing(onboarding: CutfacOnboarding, draft: OnboardingDraft) {
   const settings = await api.errorReports();
 
   if (!settings.available) return;
 
-  if (draft.share !== undefined || settings.errorReports === null || settings.usageStats === null) {
-    await saveReportChoices(both(draft.share ?? false));
+  const choices: ReportChoices = {};
+
+  for (const purpose of SHARING_PURPOSES) {
+    const answer = draft.sharing?.[purpose] ?? (settings[purpose] === null ? false : undefined);
+
+    if (answer !== undefined) choices[purpose] = answer;
   }
+
+  await saveReportChoices(choices);
 
   const [screen, accessibility] = await Promise.all([
     onboarding.permission("screen"),

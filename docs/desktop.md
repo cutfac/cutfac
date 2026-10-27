@@ -107,11 +107,10 @@ The open-source CLI keeps none; from source, `CUTFAC_LOG_DIR` names a folder to 
 ## Error reports and usage statistics
 
 A release build can report failures and count usage to the Cutfac team's PostHog project (US
-cloud), once the person says yes. One question covers both, with "Share" and "Don't share" as
-equal answers and neither picked: the first launch asks it on its last step, and the board asks
-it once in a build that can send when nothing has answered it yet. Going on without an answer is
-not sharing. Settings has a switch for each; nothing is sent before a yes, and a no takes hold at
-once. A report is a
+cloud), once the person says yes. The first launch asks on its last step, on one screen with a
+choice for each, "Share" and "Don't share" as equal answers and neither picked. A purpose left
+unanswered is not shared, and nothing else asks again. Settings has a switch for each; nothing is
+sent before a yes, and a no takes hold at once. A report is a
 PostHog `$exception`: the failure's type and message with the home folder as `~`, the operation
 that failed, the process (`app`, `server` or `mcp`), the app's version and platform, and the cause
 up to 4,000 characters. Its only identity is the install ID, a random ID made with the first

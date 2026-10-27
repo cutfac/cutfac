@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
-import type { CutfacOnboarding, Folder } from "../../desktop.ts";
+import type { CutfacOnboarding, Folder, Sharing, SharingPurpose } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { EMPTY_BRIEF } from "../../lib/brief.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
@@ -26,7 +26,7 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   // Asked here only in a build that can send; undefined until it is known.
-  const [sharing, setSharing] = useState<{ available: boolean; share: boolean | null }>();
+  const [sharing, setSharing] = useState<Sharing>();
 
   useEffect(() => {
     onboarding.defaultFolder().then(setFolder, (cause: Error) => setError(cause.message));
@@ -36,22 +36,26 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
     );
     // An answer given here before wins over one from an earlier install.
     Promise.all([onboarding.sharing(), onboarding.draft()]).then(
-      ([found, draft]) => setSharing({ ...found, share: draft?.share ?? found.share }),
-      () => setSharing({ available: false, share: null }),
+      ([found, draft]) =>
+        setSharing({
+          available: found.available,
+          errorReports: draft?.sharing?.errorReports ?? found.errorReports,
+          usageStats: draft?.sharing?.usageStats ?? found.usageStats,
+        }),
+      () => setSharing({ available: false, errorReports: null, usageStats: null }),
     );
   }, [onboarding]);
 
   // Kept with the other answers; the board saves it once the workspace is there.
-  const share = (answer: boolean) => {
-    setSharing({ available: true, share: answer });
+  const share = (purpose: SharingPurpose, answer: boolean) => {
+    setSharing((current) => current && { ...current, [purpose]: answer });
     onboarding
       .draft()
-      .then((draft) =>
-        onboarding.saveDraft({
-          ...(draft ?? { brief: EMPTY_BRIEF, sources: [], skipped: true }),
-          share: answer,
-        }),
-      )
+      .then((draft) => {
+        const kept = draft ?? { brief: EMPTY_BRIEF, sources: [], skipped: true };
+
+        return onboarding.saveDraft({ ...kept, sharing: { ...kept.sharing, [purpose]: answer } });
+      })
       .catch((cause: Error) => setError(cause.message));
   };
 
@@ -107,7 +111,7 @@ export function ReadyStep({ onboarding }: { onboarding: CutfacOnboarding }) {
         </div>
       )}
       {sharing?.available === true ? (
-        <SharingChoice value={sharing.share} disabled={busy} onChange={share} />
+        <SharingChoice value={sharing} disabled={busy} onChange={share} />
       ) : null}
       {error === undefined ? null : <ErrorAlert message={error} />}
       <StepActions>

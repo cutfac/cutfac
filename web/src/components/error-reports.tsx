@@ -5,14 +5,6 @@ import { Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Item,
   ItemActions,
   ItemContent,
@@ -63,41 +55,6 @@ function useErrorReports() {
       .catch((cause: Error) => toast.error(`${t.reports.failed}: ${cause.message}`));
 
   return { data, save, resetId };
-}
-
-/** One answer for both: error reports and usage statistics go, or neither does. */
-export const both = (share: boolean): ReportChoices => ({ errorReports: share, usageStats: share });
-
-/**
- * Asks once, over the board, whether to share error reports and usage statistics: only in a build
- * that can send them, and until the person answers, which the desktop app's first launch already
- * asks. Two buttons of the same weight, and nothing is sent before they say yes.
- */
-export function ErrorReportsDialog() {
-  const t = useMessages();
-  const { data, save } = useErrorReports();
-
-  const unasked =
-    data?.available === true && (data.errorReports === null || data.usageStats === null);
-
-  return (
-    <Dialog open={unasked}>
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>{t.reports.askTitle}</DialogTitle>
-          <DialogDescription>{t.reports.askBody}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => save(both(false))}>
-            {t.reports.dontShare}
-          </Button>
-          <Button variant="secondary" onClick={() => save(both(true))}>
-            {t.reports.share}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 /**
