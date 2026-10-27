@@ -51,6 +51,7 @@ export const REQUIRED_ENV = [
   "AWS_SECRET_ACCESS_KEY",
   "CUTFAC_RELEASES_BUCKET",
   "CUTFAC_RELEASES_REGION",
+  "CUTFAC_POSTHOG_KEY",
 ] as const;
 
 /** The bucket folder the site serves builds from. */
