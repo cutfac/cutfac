@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import { BunServices } from "@effect/platform-bun";
+import { Effect, Option, Result } from "effect";
+
+import { release } from "../electron/release.ts";
 import {
   branchProblem,
   buildFiles,
   feedVersion,
-  incrementFrom,
   missingEnv,
   releaseArgs,
   releaseNotes,
@@ -13,7 +16,10 @@ import {
   tagName,
   treeProblem,
   versionProblem,
-} from "../electron/release.ts";
+} from "../electron/releasePlan.ts";
+import { testEffect } from "./effect.ts";
+
+const it = testEffect(BunServices.layer);
 
 /** What `security find-identity -v -p codesigning` prints for the keychain's `names`. */
 const identities = (...names: string[]) =>
@@ -24,41 +30,39 @@ const identities = (...names: string[]) =>
 
 describe("the release command", () => {
   test("releases package.json's version, or bumps it by what it is given", () => {
-    expect(incrementFrom([])).toBeUndefined();
-    expect(incrementFrom(["patch"])).toBe("patch");
-    expect(incrementFrom(["1.2.3"])).toBe("1.2.3");
-  });
-
-  test("shows how to use it when given more, or a flag", () => {
-    expect(() => incrementFrom(["patch", "minor"])).toThrow("Usage: bun run release");
-    expect(() => incrementFrom(["--help"])).toThrow("Usage: bun run release");
+    expect(releaseArgs([])).toEqual(Option.some({ increment: Option.none(), checkAgents: true }));
+    expect(releaseArgs(["patch"])).toEqual(
+      Option.some({ increment: Option.some("patch"), checkAgents: true }),
+    );
+    expect(releaseArgs(["1.2.3"])).toEqual(
+      Option.some({ increment: Option.some("1.2.3"), checkAgents: true }),
+    );
   });
 
   test("checks the agent CLIs first, unless told to skip it", () => {
-    expect(releaseArgs([])).toEqual({ increment: undefined, checkAgents: true });
-    expect(releaseArgs(["minor"])).toEqual({ increment: "minor", checkAgents: true });
-    expect(releaseArgs(["--skip-agent-check"])).toEqual({
-      increment: undefined,
-      checkAgents: false,
-    });
-
-    expect(releaseArgs(["patch", "--skip-agent-check"])).toEqual({
-      increment: "patch",
-      checkAgents: false,
-    });
-
-    expect(releaseArgs(["--skip-agent-check", "1.2.3"])).toEqual({
-      increment: "1.2.3",
-      checkAgents: false,
-    });
-  });
-
-  test("still refuses other flags and extra words, and the usage names the skip", () => {
-    expect(() => releaseArgs(["--help"])).toThrow("[--skip-agent-check]");
-    expect(() => releaseArgs(["patch", "minor", "--skip-agent-check"])).toThrow(
-      "Usage: bun run release",
+    expect(releaseArgs(["--skip-agent-check"])).toEqual(
+      Option.some({ increment: Option.none(), checkAgents: false }),
+    );
+    expect(releaseArgs(["patch", "--skip-agent-check"])).toEqual(
+      Option.some({ increment: Option.some("patch"), checkAgents: false }),
+    );
+    expect(releaseArgs(["--skip-agent-check", "1.2.3"])).toEqual(
+      Option.some({ increment: Option.some("1.2.3"), checkAgents: false }),
     );
   });
+
+  it.effect.each([
+    { args: ["patch", "minor"] },
+    { args: ["--help"] },
+    { args: ["patch", "minor", "--skip-agent-check"] },
+  ])("shows how to use it, the skip too, for $args before checking anything", ({ args }) =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(release(args));
+
+      expect(error.message).toStartWith("Usage: bun run release");
+      expect(error.message).toContain("[--skip-agent-check]");
+    }),
+  );
 });
 
 describe("desktop release checks", () => {
@@ -82,18 +86,22 @@ describe("desktop release checks", () => {
       "releaseDate: '2026-10-16T00:00:00.000Z'",
     ].join("\n");
 
-    expect(feedVersion(feed)).toBe("0.2.0");
-    expect(feedVersion("files: []")).toBeUndefined();
-    expect(feedVersion("")).toBeUndefined();
+    expect(feedVersion(feed)).toEqual(Option.some("0.2.0"));
+    expect(feedVersion("files: []")).toEqual(Option.none());
+    expect(feedVersion("")).toEqual(Option.none());
   });
 
   test("only a newer version may go out", () => {
-    expect(versionProblem("0.1.0", undefined)).toBeUndefined();
-    expect(versionProblem("0.2.0", "0.1.0")).toBeUndefined();
-    expect(versionProblem("0.10.0", "0.9.0")).toBeUndefined();
-    expect(versionProblem("1.0.0", "1.0.0-beta.2")).toBeUndefined();
-    expect(versionProblem("0.1.0", "0.1.0")).toContain("bun run release patch");
-    expect(versionProblem("0.1.0", "0.2.0")).toContain("0.2.0 is already published");
+    expect(versionProblem("0.1.0", Option.none())).toEqual(Option.none());
+    expect(versionProblem("0.2.0", Option.some("0.1.0"))).toEqual(Option.none());
+    expect(versionProblem("0.10.0", Option.some("0.9.0"))).toEqual(Option.none());
+    expect(versionProblem("1.0.0", Option.some("1.0.0-beta.2"))).toEqual(Option.none());
+    expect(Option.getOrThrow(versionProblem("0.1.0", Option.some("0.1.0")))).toContain(
+      "bun run release patch",
+    );
+    expect(Option.getOrThrow(versionProblem("0.1.0", Option.some("0.2.0")))).toContain(
+      "0.2.0 is already published",
+    );
   });
 
   test("uploads this version's disk image, zip and blockmaps, and nothing else", () => {
@@ -109,19 +117,21 @@ describe("desktop release checks", () => {
       "mac-arm64",
     ];
 
-    expect(buildFiles("0.2.0", outputs)).toEqual([
-      { name: "cutfac-0.2.0-arm64.dmg", type: "application/x-apple-diskimage" },
-      { name: "cutfac-0.2.0-arm64.dmg.blockmap", type: "application/octet-stream" },
-      { name: "cutfac-0.2.0-arm64.zip", type: "application/zip" },
-      { name: "cutfac-0.2.0-arm64.zip.blockmap", type: "application/octet-stream" },
-    ]);
+    expect(buildFiles("0.2.0", outputs)).toEqual(
+      Result.succeed([
+        { name: "cutfac-0.2.0-arm64.dmg", type: "application/x-apple-diskimage" },
+        { name: "cutfac-0.2.0-arm64.dmg.blockmap", type: "application/octet-stream" },
+        { name: "cutfac-0.2.0-arm64.zip", type: "application/zip" },
+        { name: "cutfac-0.2.0-arm64.zip.blockmap", type: "application/octet-stream" },
+      ]),
+    );
   });
 
   test("releases only from main, caught up with origin", () => {
-    expect(branchProblem("main", 0)).toBeUndefined();
-    expect(branchProblem("feature", 0)).toBe("Release from main, not feature.");
-    expect(branchProblem("", 0)).toBe("Release from main, not a detached HEAD.");
-    expect(branchProblem("main", 2)).toContain("2 commit(s) behind origin/main");
+    expect(branchProblem("main", 0)).toEqual(Option.none());
+    expect(branchProblem("feature", 0)).toEqual(Option.some("Release from main, not feature."));
+    expect(branchProblem("", 0)).toEqual(Option.some("Release from main, not a detached HEAD."));
+    expect(Option.getOrThrow(branchProblem("main", 2))).toContain("2 commit(s) behind origin/main");
   });
 
   test("signs only with a Developer ID Application certificate for the team", () => {
@@ -129,42 +139,43 @@ describe("desktop release checks", () => {
 
     expect(
       signingProblem(identities("Apple Development: Someone (TEAM1)", developerId), "TEAM1"),
-    ).toBeUndefined();
-    expect(signingProblem(identities("Apple Development: Someone (TEAM1)"), "TEAM1")).toContain(
-      "no valid Developer ID Application certificate",
-    );
+    ).toEqual(Option.none());
     // Names the variable, never its value.
-    expect(signingProblem(identities(developerId), "TEAM2")).toBe(
-      "The keychain has no valid Developer ID Application certificate for APPLE_TEAM_ID.",
+    expect(signingProblem(identities(developerId), "TEAM2")).toEqual(
+      Option.some(
+        "The keychain has no valid Developer ID Application certificate for APPLE_TEAM_ID.",
+      ),
     );
-    expect(signingProblem("     0 valid identities found", "TEAM1")).toBeDefined();
+    expect(Option.isSome(signingProblem("     0 valid identities found", "TEAM1"))).toBe(true);
   });
 
   test("refuses to publish without both the disk image and the zip", () => {
-    expect(() => buildFiles("0.2.0", ["cutfac-0.2.0-arm64.zip"])).toThrow(
-      "did not produce cutfac-0.2.0-arm64.dmg",
+    expect(buildFiles("0.2.0", ["cutfac-0.2.0-arm64.zip"])).toEqual(
+      Result.fail("The build did not produce cutfac-0.2.0-arm64.dmg."),
     );
-    expect(() => buildFiles("0.2.0", ["cutfac-0.2.0-arm64.dmg"])).toThrow(
-      "did not produce cutfac-0.2.0-arm64.zip",
+    expect(buildFiles("0.2.0", ["cutfac-0.2.0-arm64.dmg"])).toEqual(
+      Result.fail("The build did not produce cutfac-0.2.0-arm64.zip."),
     );
   });
 });
 
 describe("release tagging", () => {
   test("releases only a tree that matches its commit", () => {
-    expect(treeProblem("")).toBeUndefined();
+    const problem = (status: string) => Option.getOrElse(treeProblem(status), () => "");
+
+    expect(treeProblem("")).toEqual(Option.none());
     // Notes and folders a build never reads cannot change it.
-    expect(treeProblem("?? docs/guides/\n?? .github/workflows/\n")).toBeUndefined();
-    expect(treeProblem(" M src/core/item.ts\n?? docs/guides/\n")).toBe(
+    expect(treeProblem("?? docs/guides/\n?? .github/workflows/\n")).toEqual(Option.none());
+    expect(problem(" M src/core/item.ts\n?? docs/guides/\n")).toBe(
       "Commit or stash src/core/item.ts first, so the release matches a commit.",
     );
-    expect(treeProblem("?? web/src/new.tsx\n?? notes.txt\nM  package.json\n")).toContain(
+    expect(problem("?? web/src/new.tsx\n?? notes.txt\nM  package.json\n")).toContain(
       "web/src/new.tsx, notes.txt, package.json",
     );
     // Any other folder may feed the build, like the skill the server bundles.
-    expect(treeProblem("?? skills/cutfac/extra.md\n")).toContain("skills/cutfac/extra.md");
+    expect(problem("?? skills/cutfac/extra.md\n")).toContain("skills/cutfac/extra.md");
     // A change to a tracked file anywhere counts, even where untracked notes do not.
-    expect(treeProblem(" M docs/guides/a.md")).toContain("docs/guides/a.md");
+    expect(problem(" M docs/guides/a.md")).toContain("docs/guides/a.md");
   });
 
   test("tags a version with a v", () => {

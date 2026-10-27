@@ -8,10 +8,33 @@
  * no license key. Last, it pushes main with a `v<version>` tag and publishes a source-only GitHub
  * release. Credentials come from .env.release; nothing here prints their values.
  */
-import { readdir } from "node:fs/promises";
+// The script is its own entry point, so it provides the platform's services itself.
+// @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
-import { Option, Schema } from "effect";
+import { BunServices } from "@effect/platform-bun";
+import { Config, Console, Effect, FileSystem, Option, Result, Schema } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
+
+import { run as runCaptured } from "../src/core/process.ts";
+import {
+  BRANCH,
+  BUMP,
+  type BuildFile,
+  type ReleaseArgs,
+  type ReleaseSetting,
+  USAGE,
+  branchProblem,
+  buildFiles,
+  feedVersion,
+  missingEnv,
+  releaseArgs,
+  releaseNotes,
+  signingProblem,
+  tagName,
+  treeProblem,
+  versionProblem,
+} from "./releasePlan.ts";
 
 const root = path.resolve(import.meta.dir, "..");
 
@@ -19,265 +42,130 @@ const outputDir = path.join(root, "release");
 
 const packageFile = path.join(root, "package.json");
 
-/** The branch releases are made from, and pushed to with their tag. */
-const BRANCH = "main";
-
-const USAGE = "Usage: bun run release [patch | minor | major | <version>] [--skip-agent-check]";
-
-const SKIP_AGENT_CHECK = "--skip-agent-check";
-
-const BUMP = "Bump it with `bun run release patch` (or minor, major).";
-
 /** What CI runs on every push besides the build, so no release ships what CI would fail. */
 const CHECKS = [
   ["bun", "test"],
   ["bun", "run", "typecheck"],
   ["bun", "run", "lint"],
   ["bun", "run", "format:check"],
-];
+] as const;
 
 /**
  * The agent CLIs against Cutfac's parsers, which makes real model calls and needs both CLIs
  * installed and signed in. A release that cannot run it, or does not need to, skips it. It saves
  * nothing, so the tree stays what the release is tagged at.
  */
-const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"];
-
-export const REQUIRED_ENV = [
-  "APPLE_ID",
-  "APPLE_APP_SPECIFIC_PASSWORD",
-  "APPLE_TEAM_ID",
-  "AWS_ACCESS_KEY_ID",
-  "AWS_SECRET_ACCESS_KEY",
-  "CUTFAC_RELEASES_BUCKET",
-  "CUTFAC_RELEASES_REGION",
-  "CUTFAC_POSTHOG_KEY",
-] as const;
+const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"] as const;
 
 /** The bucket folder the site serves builds from. */
 const FOLDER = "mac";
 
 const FEED_FILE = "latest-mac.yml";
 
-const CONTENT_TYPES = new Map([
-  [".dmg", "application/x-apple-diskimage"],
-  [".zip", "application/zip"],
-  [".blockmap", "application/octet-stream"],
-]);
+export class ReleaseFailed extends Schema.TaggedError<ReleaseFailed>()("ReleaseFailed", {
+  message: Schema.String,
+}) {}
 
-const decodeFeed = Schema.decodeUnknownOption(Schema.Struct({ version: Schema.NonEmptyString }));
+const decodePackage = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Struct({ version: Schema.NonEmptyString })),
+);
 
-const decodePackage = Schema.decodeUnknownSync(Schema.Struct({ version: Schema.NonEmptyString }));
+const log = (message: string) => Console.log(`[release] ${message}`);
 
-/**
- * The version bump `bun run release` was given, which `bun pm version` checks, or undefined to
- * release the version package.json is at.
- */
-export function incrementFrom(args: readonly string[]): string | undefined {
-  const [increment, ...rest] = args;
+const setting = (name: ReleaseSetting) =>
+  Config.option(Config.String(name)).pipe(
+    Effect.orElseSucceed(Option.none<string>),
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.fail(new ReleaseFailed({ message: `Set ${name} in .env.release.` })),
+        onSome: (value) =>
+          value === ""
+            ? Effect.fail(new ReleaseFailed({ message: `Set ${name} in .env.release.` }))
+            : Effect.succeed(value),
+      }),
+    ),
+  );
 
-  if (rest.length > 0 || increment?.startsWith("-")) throw new Error(USAGE);
+/** Runs `command` in the repository with this terminal's input and output, failing unless it exits 0. */
+const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const [program = "", ...args] = command;
+  const shown = command.join(" ");
 
-  return increment;
-}
+  const code = yield* Effect.scoped(
+    Effect.flatMap(
+      spawner.spawn(
+        ChildProcess.make(program, args, {
+          cwd: root,
+          stdin: "inherit",
+          stdout: "inherit",
+          stderr: "inherit",
+        }),
+      ),
+      (handle) => handle.exitCode,
+    ),
+  ).pipe(
+    Effect.mapError((error) => new ReleaseFailed({ message: `\`${shown}\` ${error.message}` })),
+  );
 
-/** What `bun run release` was asked to do: the version bump, and whether to check the agent CLIs. */
-export interface ReleaseArgs {
-  readonly increment: string | undefined;
-  readonly checkAgents: boolean;
-}
+  if (code !== 0)
+    return yield* new ReleaseFailed({ message: `\`${shown}\` exited with code ${code}.` });
+});
 
-/** `incrementFrom` for the arguments that are left once `--skip-agent-check` is taken out. */
-export function releaseArgs(args: readonly string[]): ReleaseArgs {
-  return {
-    increment: incrementFrom(args.filter((arg) => arg !== SKIP_AGENT_CHECK)),
-    checkAgents: !args.includes(SKIP_AGENT_CHECK),
-  };
-}
+/** What `command` prints, without the final newline, or none when it fails. */
+const output = (command: ReadonlyArray<string>) => {
+  const [program = "", ...args] = command;
 
-/** The names in `REQUIRED_ENV` that are unset or empty. */
-export function missingEnv(env: Record<string, string | undefined>): string[] {
-  return REQUIRED_ENV.filter((name) => !env[name]);
-}
+  return runCaptured(program, args, { cwd: root }).pipe(
+    // Only the end: `git status` starts lines with a space.
+    Effect.map((result) =>
+      result.code === 0 ? Option.some(result.stdout.trimEnd()) : Option.none<string>(),
+    ),
+    Effect.orElseSucceed(Option.none<string>),
+  );
+};
 
-/** The version a feed file announces, or undefined when it names none. */
-export function feedVersion(feed: string): string | undefined {
-  return Option.getOrUndefined(decodeFeed(Bun.YAML.parse(feed)))?.version;
-}
+/** The private bucket builds are served from, with the feed that makes a version live. */
+const releaseBucket = Effect.gen(function* () {
+  const s3 = new Bun.S3Client({
+    bucket: yield* setting("CUTFAC_RELEASES_BUCKET"),
+    region: yield* setting("CUTFAC_RELEASES_REGION"),
+    accessKeyId: yield* setting("AWS_ACCESS_KEY_ID"),
+    secretAccessKey: yield* setting("AWS_SECRET_ACCESS_KEY"),
+  });
 
-/** Why `version` cannot be released over `published`, or undefined when it can. */
-export function versionProblem(version: string, published: string | undefined): string | undefined {
-  if (published === undefined || Bun.semver.order(version, published) > 0) return undefined;
-
-  return `package.json is at ${version}, but ${published} is already published. ${BUMP}`;
-}
-
-/** Folders a build never reads, so an untracked file there, like a note in docs/, cannot change it. */
-const OUTSIDE_BUILD = ["docs/", ".github/", "test/"];
-
-const inBuild = (file: string) => !OUTSIDE_BUILD.some((dir) => file.startsWith(dir));
-
-/**
- * Why the working tree cannot be released, from `git status --porcelain`, or undefined when it
- * can. The release is tagged at HEAD, so the build must be exactly that commit.
- */
-export function treeProblem(status: string): string | undefined {
-  const dirty = status
-    .split("\n")
-    .filter((line) => line !== "")
-    .flatMap((line) => {
-      const file = line.slice(3);
-
-      return line.startsWith("??") && !inBuild(file) ? [] : [file];
+  const failed = (what: string) => (cause: unknown) =>
+    new ReleaseFailed({
+      message: `${what}: ${cause instanceof Error ? cause.message : String(cause)}`,
     });
 
-  if (dirty.length === 0) return undefined;
+  /** The version the bucket's feed hands out now, if it has one. */
+  const published = Effect.tryPromise({
+    try: async () => {
+      const feed = s3.file(`${FOLDER}/${FEED_FILE}`);
 
-  return `Commit or stash ${dirty.join(", ")} first, so the release matches a commit.`;
-}
+      return (await feed.exists()) ? Option.some(await feed.text()) : Option.none<string>();
+    },
+    catch: failed(`Couldn't read ${FOLDER}/${FEED_FILE} in the bucket`),
+  }).pipe(Effect.map(Option.flatMap(feedVersion)));
 
-/** Why the checkout cannot be released from, given its branch and how far it is behind origin. */
-export function branchProblem(branch: string, behind: number): string | undefined {
-  if (branch !== BRANCH) return `Release from ${BRANCH}, not ${branch || "a detached HEAD"}.`;
+  const upload = ({ name, type }: BuildFile) =>
+    Effect.andThen(
+      log(`Uploading ${name}.`),
+      Effect.tryPromise({
+        try: () => s3.write(`${FOLDER}/${name}`, Bun.file(path.join(outputDir, name)), { type }),
+        catch: failed(`Couldn't upload ${name}`),
+      }),
+    );
 
-  if (behind > 0) return `${BRANCH} is ${behind} commit(s) behind origin/${BRANCH}. Pull first.`;
+  return { published, upload };
+});
 
-  return undefined;
-}
-
-/**
- * Why the keychain cannot sign the app, from `security find-identity -v -p codesigning`, or
- * undefined when it holds a valid Developer ID Application certificate for `team`.
- */
-export function signingProblem(identities: string, team: string): string | undefined {
-  const signs = identities
-    .split("\n")
-    .some((line) => line.includes('"Developer ID Application: ') && line.endsWith(`(${team})"`));
-
-  return signs
-    ? undefined
-    : "The keychain has no valid Developer ID Application certificate for APPLE_TEAM_ID.";
-}
-
-export const tagName = (version: string) => `v${version}`;
-
-const COMMIT = /^(?<type>\w+)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?: (?<text>.+)$/;
-
-const SECTIONS = [
-  ["breaking", "Breaking changes"],
-  ["feat", "Features"],
-  ["fix", "Fixes"],
-  ["perf", "Performance"],
-] as const;
-
-const FOOTER =
-  "The signed Mac app is at https://cutfac.com and updates itself. To build it yourself, see the README.";
-
-/**
- * Release notes from the subjects of the commits since the last release, in Conventional Commits.
- * Only changes people notice make the list; docs, tests, and chores stay out.
- */
-export function releaseNotes(subjects: readonly string[]): string {
-  const entries = subjects.flatMap((subject) => {
-    const groups = COMMIT.exec(subject)?.groups;
-
-    if (groups?.["type"] === undefined || groups["text"] === undefined) return [];
-
-    const scope = groups["scope"] === undefined ? "" : `**${groups["scope"]}:** `;
-    const section = groups["breaking"] === undefined ? groups["type"] : "breaking";
-
-    return [{ section, line: `- ${scope}${groups["text"]}` }];
-  });
-
-  const sections = SECTIONS.flatMap(([key, title]) => {
-    const lines = entries.flatMap((entry) => (entry.section === key ? [entry.line] : []));
-
-    return lines.length === 0 ? [] : [`### ${title}\n\n${lines.join("\n")}`];
-  });
-
-  const body =
-    sections.length === 0 ? "Maintenance and documentation changes." : sections.join("\n\n");
-
-  return `${body}\n\n${FOOTER}\n`;
-}
-
-/** A build to upload and the type the bucket serves it with. */
-export interface BuildFile {
-  name: string;
-  type: string;
-}
-
-/**
- * The builds of `version` among `files`, in upload order: the disk image people install, the zip
- * apps update from, and their blockmaps. Throws when either build is missing.
- */
-export function buildFiles(version: string, files: readonly string[]): BuildFile[] {
-  const prefix = `cutfac-${version}-arm64.`;
-
-  const builds = files.toSorted().flatMap((name) => {
-    const type = CONTENT_TYPES.get(path.extname(name));
-
-    return name.startsWith(prefix) && type ? [{ name, type }] : [];
-  });
-
-  for (const needed of [`${prefix}dmg`, `${prefix}zip`]) {
-    if (!builds.some((build) => build.name === needed)) {
-      throw new Error(`The build did not produce ${needed}.`);
-    }
-  }
-
-  return builds;
-}
-
-function setting(name: (typeof REQUIRED_ENV)[number]): string {
-  const value = process.env[name];
-
-  if (!value) throw new Error(`Set ${name} in .env.release.`);
-
-  return value;
-}
-
-function bucket(): Bun.S3Client {
-  return new Bun.S3Client({
-    bucket: setting("CUTFAC_RELEASES_BUCKET"),
-    region: setting("CUTFAC_RELEASES_REGION"),
-    accessKeyId: setting("AWS_ACCESS_KEY_ID"),
-    secretAccessKey: setting("AWS_SECRET_ACCESS_KEY"),
-  });
-}
-
-async function publishedVersion(releases: Bun.S3Client): Promise<string | undefined> {
-  const feed = releases.file(`${FOLDER}/${FEED_FILE}`);
-
-  if (!(await feed.exists())) return undefined;
-
-  return feedVersion(await feed.text());
-}
-
-async function upload(releases: Bun.S3Client, { name, type }: BuildFile): Promise<void> {
-  console.log(`[release] Uploading ${name}.`);
-  await releases.write(`${FOLDER}/${name}`, Bun.file(path.join(outputDir, name)), { type });
-}
-
-async function run(command: string[]): Promise<void> {
-  const code = await Bun.spawn(command, { cwd: root, stdio: ["inherit", "inherit", "inherit"] })
-    .exited;
-
-  if (code !== 0) throw new Error(`\`${command.join(" ")}\` exited with code ${code}.`);
-}
-
-/** What `command` prints, without the final newline, or undefined when it fails. */
-async function output(command: string[]): Promise<string | undefined> {
-  const child = Bun.spawn(command, { cwd: root, stdout: "pipe", stderr: "ignore" });
-  const text = await new Response(child.stdout).text();
-
-  // Only the end: `git status` starts lines with a space.
-  return (await child.exited) === 0 ? text.trimEnd() : undefined;
-}
+type ReleaseBucket = Effect.Success<typeof releaseBucket>;
 
 /** The subjects of the commits up to `commit` since the release tag before it, or all of them. */
-async function subjectsSinceRelease(commit: string): Promise<string[]> {
-  const previous = await output([
+const subjectsSinceRelease = Effect.fnUntraced(function* (commit: string) {
+  const previous = yield* output([
     "git",
     "describe",
     "--tags",
@@ -287,84 +175,127 @@ async function subjectsSinceRelease(commit: string): Promise<string[]> {
     commit,
   ]);
 
-  const range = previous === undefined ? commit : `${previous}..${commit}`;
-  const log = await output(["git", "log", "--format=%s", range]);
+  const range = Option.match(previous, {
+    onNone: () => commit,
+    onSome: (tag) => `${tag}..${commit}`,
+  });
 
-  return log === undefined || log === "" ? [] : log.split("\n");
-}
+  const subjects = yield* output(["git", "log", "--format=%s", range]);
+
+  return Option.match(
+    Option.filter(subjects, (text) => text !== ""),
+    {
+      onNone: (): Array<string> => [],
+      onSome: (text) => text.split("\n"),
+    },
+  );
+});
 
 /** What stops a release, found in seconds so that nothing fails for it after the long build. */
-async function preflight(): Promise<string[]> {
+const preflight = Effect.gen(function* () {
   const missing = missingEnv(process.env);
-  const team = process.env["APPLE_TEAM_ID"];
-  const fetched = await output(["git", "fetch", "--quiet", "origin", BRANCH]);
 
-  const [status, branch, behind, identities, github] = await Promise.all([
-    output(["git", "status", "--porcelain"]),
-    output(["git", "branch", "--show-current"]),
-    output(["git", "rev-list", "--count", `HEAD..origin/${BRANCH}`]),
-    output(["security", "find-identity", "-v", "-p", "codesigning"]),
-    output(["gh", "auth", "status"]),
-  ]);
+  const team = Option.filter(
+    Option.fromUndefinedOr(process.env["APPLE_TEAM_ID"]),
+    (id) => id !== "",
+  );
 
-  return [
+  const fetched = yield* output(["git", "fetch", "--quiet", "origin", BRANCH]);
+
+  const [status, branch, behind, identities, github] = yield* Effect.all(
+    [
+      output(["git", "status", "--porcelain"]),
+      output(["git", "branch", "--show-current"]),
+      output(["git", "rev-list", "--count", `HEAD..origin/${BRANCH}`]),
+      output(["security", "find-identity", "-v", "-p", "codesigning"]),
+      output(["gh", "auth", "status"]),
+    ],
+    { concurrency: "unbounded" },
+  );
+
+  const problems: Array<Option.Option<string>> = [
     missing.length === 0
-      ? undefined
-      : `Set ${missing.join(", ")} in .env.release (see docs/desktop.md, Releasing the app).`,
-    status === undefined ? "Run this in a git checkout." : treeProblem(status),
-    fetched === undefined
-      ? `Couldn't fetch origin/${BRANCH}.`
-      : branchProblem(branch ?? "", Number(behind ?? 0)),
-    team ? signingProblem(identities ?? "", team) : undefined,
-    github === undefined ? "Log in to GitHub with `gh auth login`." : undefined,
-  ].filter((problem) => problem !== undefined);
-}
+      ? Option.none()
+      : Option.some(
+          `Set ${missing.join(", ")} in .env.release (see docs/desktop.md, Releasing the app).`,
+        ),
+    Option.match(status, {
+      onNone: () => Option.some("Run this in a git checkout."),
+      onSome: treeProblem,
+    }),
+    Option.isNone(fetched)
+      ? Option.some(`Couldn't fetch origin/${BRANCH}.`)
+      : branchProblem(
+          Option.getOrElse(branch, () => ""),
+          Number(Option.getOrElse(behind, () => "0")),
+        ),
+    Option.flatMap(team, (id) =>
+      signingProblem(
+        Option.getOrElse(identities, () => ""),
+        id,
+      ),
+    ),
+    Option.isNone(github) ? Option.some("Log in to GitHub with `gh auth login`.") : Option.none(),
+  ];
 
-async function packageVersion(): Promise<string> {
-  return decodePackage(await Bun.file(packageFile).json()).version;
-}
+  return problems.flatMap(Option.toArray);
+});
+
+const packageVersion = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+
+  return (yield* fs.readFileString(packageFile).pipe(Effect.flatMap(decodePackage))).version;
+});
 
 /** Refuses a version that is already tagged, or not newer than the one the bucket serves. */
-async function refuseReleased(version: string, releases: Bun.S3Client): Promise<void> {
-  if (await output(["git", "rev-parse", "--quiet", "--verify", `refs/tags/${tagName(version)}`])) {
-    throw new Error(`${tagName(version)} is already tagged. ${BUMP}`);
+const refuseReleased = Effect.fnUntraced(function* (version: string, bucket: ReleaseBucket) {
+  const tagged = yield* output([
+    "git",
+    "rev-parse",
+    "--quiet",
+    "--verify",
+    `refs/tags/${tagName(version)}`,
+  ]);
+
+  if (Option.exists(tagged, (commit) => commit !== "")) {
+    return yield* new ReleaseFailed({ message: `${tagName(version)} is already tagged. ${BUMP}` });
   }
 
-  const problem = versionProblem(version, await publishedVersion(releases));
+  const problem = versionProblem(version, yield* bucket.published);
 
-  if (problem) throw new Error(problem);
-}
+  if (Option.isSome(problem)) return yield* new ReleaseFailed({ message: problem.value });
+});
 
 /**
  * The version to release once it is new and passes CI's checks: package.json's, or the one
  * `bun pm version` bumps it to. The bump is committed only after the checks pass; until then a
  * failure puts package.json back, so the next try starts from the same tree.
  */
-async function checkedVersion(
+const checkedVersion = Effect.fnUntraced(function* (
   { increment, checkAgents }: ReleaseArgs,
-  releases: Bun.S3Client,
-): Promise<string> {
-  const original = await Bun.file(packageFile).text();
+  bucket: ReleaseBucket,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const original = yield* fs.readFileString(packageFile);
 
-  if (increment !== undefined) {
-    await run(["bun", "pm", "version", increment, "--no-git-tag-version"]);
+  if (Option.isSome(increment)) {
+    yield* run(["bun", "pm", "version", increment.value, "--no-git-tag-version"]);
   }
 
-  try {
-    const version = await packageVersion();
+  const checked = Effect.gen(function* () {
+    const version = yield* packageVersion;
 
-    await refuseReleased(version, releases);
-    console.log(`[release] Running CI's checks on ${version}.`);
-
-    for (const check of CHECKS) await run(check);
+    yield* refuseReleased(version, bucket);
+    yield* log(`Running CI's checks on ${version}.`);
+    yield* Effect.forEach(CHECKS, run, { discard: true });
 
     if (checkAgents) {
-      console.log("[release] Checking the installed agent CLIs against Cutfac's parsers.");
-      await run(AGENT_CHECK);
+      yield* log("Checking the installed agent CLIs against Cutfac's parsers.");
+      yield* run(AGENT_CHECK);
     }
 
-    if (increment !== undefined) {
-      await run([
+    if (Option.isSome(increment)) {
+      yield* run([
         "git",
         "commit",
         "--quiet",
@@ -376,28 +307,27 @@ async function checkedVersion(
     }
 
     return version;
-  } catch (error) {
-    if (increment !== undefined) await Bun.write(packageFile, original);
+  });
 
-    throw error;
-  }
-}
+  return yield* Option.isSome(increment)
+    ? checked.pipe(Effect.onError(() => Effect.ignore(fs.writeFileString(packageFile, original))))
+    : checked;
+});
 
 /** Where the GitHub release's notes are written. */
-function notesPath(version: string): string {
-  return path.join(outputDir, `notes-${version}.md`);
-}
+const notesPath = (version: string) => path.join(outputDir, `notes-${version}.md`);
 
 /**
  * Tag the commit that was built, push it to main with the tag, and publish a source-only GitHub
  * release. The builds are live by now, so a failure here only leaves the remaining steps to run by
- * hand.
+ * hand, and the release exits with 1.
  */
-async function publishSource(version: string, commit: string, notes: string): Promise<void> {
+const publishSource = Effect.fnUntraced(function* (version: string, commit: string, notes: string) {
+  const fs = yield* FileSystem.FileSystem;
   const tag = tagName(version);
   const notesFile = notesPath(version);
 
-  await Bun.write(notesFile, notes);
+  yield* fs.writeFileString(notesFile, notes);
 
   const steps = [
     ["git", "tag", "-a", tag, commit, "-m", `Cutfac ${version}`],
@@ -417,42 +347,55 @@ async function publishSource(version: string, commit: string, notes: string): Pr
   ];
 
   for (const [index, step] of steps.entries()) {
-    try {
-      await run(step);
-    } catch (error) {
+    const failed = yield* Effect.flip(run(step)).pipe(Effect.option);
+
+    if (Option.isSome(failed)) {
       const left = steps.slice(index).map((command) => command.join(" "));
 
-      const message = error instanceof Error ? error.message : String(error);
+      yield* Console.error(
+        `[release] ${failed.value.message} Run the rest yourself:\n  ${left.join("\n  ")}`,
+      );
 
-      console.error(`[release] ${message} Run the rest yourself:\n  ${left.join("\n  ")}`);
-      process.exitCode = 1;
-
-      return;
+      return 1;
     }
   }
 
-  console.log(`[release] Pushed ${BRANCH} with ${tag} and published its GitHub release.`);
-}
+  yield* log(`Pushed ${BRANCH} with ${tag} and published its GitHub release.`);
 
-async function release(args: ReleaseArgs): Promise<void> {
-  const problems = await preflight();
+  return 0;
+});
 
-  if (problems.length > 0) throw new Error(`Fix these first:\n  - ${problems.join("\n  - ")}`);
+/** Runs the release `args` ask for, as the process exit code. */
+export const release = Effect.fn("release")(function* (args: ReadonlyArray<string>) {
+  const fs = yield* FileSystem.FileSystem;
+  const asked = releaseArgs(args);
 
-  const releases = bucket();
-  const version = await checkedVersion(args, releases);
-  const commit = await output(["git", "rev-parse", "HEAD"]);
+  if (Option.isNone(asked)) return yield* new ReleaseFailed({ message: USAGE });
 
-  if (commit === undefined) throw new Error("Couldn't read the commit to release.");
+  const problems = yield* preflight;
 
-  console.log(`[release] Building Cutfac ${version}.`);
-  await run(["bun", "run", "build"]);
-  await run(["bun", "run", "build:sidecar"]);
-  await run(["bun", "run", "build:electron"]);
+  if (problems.length > 0) {
+    return yield* new ReleaseFailed({
+      message: `Fix these first:\n  - ${problems.join("\n  - ")}`,
+    });
+  }
+
+  const bucket = yield* releaseBucket;
+  const version = yield* checkedVersion(asked.value, bucket);
+  const commit = yield* output(["git", "rev-parse", "HEAD"]);
+
+  if (Option.isNone(commit)) {
+    return yield* new ReleaseFailed({ message: "Couldn't read the commit to release." });
+  }
+
+  yield* log(`Building Cutfac ${version}.`);
+  yield* run(["bun", "run", "build"]);
+  yield* run(["bun", "run", "build:sidecar"]);
+  yield* run(["bun", "run", "build:electron"]);
 
   // Fails instead of building an unsigned app when the Developer ID certificate is missing. The
   // feed file is still written; this script uploads it, since the bucket is not a builder target.
-  await run([
+  yield* run([
     path.join(root, "node_modules", ".bin", "electron-builder"),
     "--mac",
     "--publish",
@@ -460,35 +403,44 @@ async function release(args: ReleaseArgs): Promise<void> {
     "-c.mac.forceCodeSigning=true",
   ]);
 
-  const feed = Bun.file(path.join(outputDir, FEED_FILE));
+  const feed = yield* fs.readFileString(path.join(outputDir, FEED_FILE)).pipe(Effect.option);
 
   // The feed is what makes a version live, so a stale one must never go up.
-  if (!(await feed.exists()) || feedVersion(await feed.text()) !== version) {
-    throw new Error(`The build did not produce a ${FEED_FILE} for ${version}.`);
+  if (!Option.contains(Option.flatMap(feed, feedVersion), version)) {
+    return yield* new ReleaseFailed({
+      message: `The build did not produce a ${FEED_FILE} for ${version}.`,
+    });
   }
 
-  for (const build of buildFiles(version, await readdir(outputDir))) {
-    await upload(releases, build);
-  }
+  const builds = buildFiles(version, yield* fs.readDirectory(outputDir));
+
+  if (Result.isFailure(builds)) return yield* new ReleaseFailed({ message: builds.failure });
+
+  yield* Effect.forEach(builds.success, bucket.upload, { discard: true });
 
   // Last, so no app or download page sees the version before its files are there.
-  await upload(releases, { name: FEED_FILE, type: "text/yaml" });
+  yield* bucket.upload({ name: FEED_FILE, type: "text/yaml" });
+  yield* log(`Published ${version}. cutfac.com/download now hands it out.`);
 
-  console.log(`[release] Published ${version}. cutfac.com/download now hands it out.`);
-
-  await publishSource(version, commit, releaseNotes(await subjectsSinceRelease(commit)));
+  const code = yield* publishSource(
+    version,
+    commit.value,
+    releaseNotes(yield* subjectsSinceRelease(commit.value)),
+  );
 
   // The site's changelog is written by hand for people using the app, so nothing here can add it.
-  console.log(
-    `[release] Next, add ${version} to cutfac.com/changelog, from ${path.relative(root, notesPath(version))}.`,
+  yield* log(
+    `Next, add ${version} to cutfac.com/changelog, from ${path.relative(root, notesPath(version))}.`,
   );
-}
+
+  return code;
+});
 
 if (import.meta.main) {
-  try {
-    await release(releaseArgs(Bun.argv.slice(2)));
-  } catch (error) {
-    console.error(`[release] ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
+  process.exitCode = await Effect.runPromise(
+    release(Bun.argv.slice(2)).pipe(
+      Effect.catch((error) => Effect.as(Console.error(`[release] ${error.message}`), 1)),
+      Effect.provide(BunServices.layer),
+    ),
+  );
 }
