@@ -1,13 +1,22 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
+import { Option, Schema } from "effect";
+
 /** Where a window is on screen, in points from the top left of the main display, as Electron has it. */
-export interface Frame {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+const Frame = Schema.Struct({
+  x: Schema.Finite,
+  y: Schema.Finite,
+  width: Schema.Finite,
+  height: Schema.Finite,
+});
+
+export type Frame = typeof Frame.Type;
+
+/** A line the script prints: the window's frame, or null while it has none on screen. */
+export const decodeFrameLine = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.NullOr(Frame)),
+);
 
 /**
  * Prints the System Settings window's frame each time it changes, as a line of JSON, or `null`
@@ -61,14 +70,11 @@ export function followSettingsWindow(onFrame: (frame: Frame | null) => void): ()
   child.on("error", () => (child = undefined));
 
   if (child.stdout !== null) {
-    createInterface({ input: child.stdout }).on("line", (line) => {
-      try {
-        // SAFETY: the script above prints only a frame of these four numbers or null.
-        onFrame(JSON.parse(line) as Frame | null);
-      } catch {
-        // A line cut off as the script stops; the next one says where the window is.
-      }
-    });
+    // A line that doesn't read, such as one cut off as the script stops, is skipped; the next one
+    // says where the window is.
+    createInterface({ input: child.stdout }).on("line", (line) =>
+      Option.map(decodeFrameLine(line), onFrame),
+    );
   }
 
   return () => {
