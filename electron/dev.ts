@@ -7,9 +7,8 @@ import { watch } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-import type { Subprocess } from "bun";
-
 import { DEV_APP, devElectron } from "./devApp.ts";
+import { type AppProcess, launchApp } from "./devLaunch.ts";
 import { probePort } from "./ports.ts";
 
 const root = path.resolve(import.meta.dir, "..");
@@ -31,14 +30,17 @@ while (vitePort === serverPort) vitePort = await probePort(0);
 
 const devUrl = `http://localhost:${vitePort}`;
 
-const env = { ...process.env, CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
+/** What the app needs from this script; it finds the rest of its environment as a released app does. */
+const appEnv = { CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
+
+const env = { ...process.env, ...appEnv };
 
 const spawnLogged = (command: string[]) =>
   Bun.spawn(command, { cwd: root, env, stdio: ["ignore", "inherit", "inherit"] });
 
 const vite = spawnLogged([bin("vite"), "--port", String(vitePort), "--strictPort"]);
 
-let electron: Subprocess | undefined;
+let electron: AppProcess | undefined;
 
 let stopping = false;
 
@@ -102,13 +104,18 @@ async function electronExecutable(): Promise<string> {
 const executable = electronExecutable();
 
 async function launch(): Promise<void> {
-  const command = [await executable, "."];
+  const app = await executable;
 
   if (stopping) return;
 
-  const child = spawnLogged(command);
+  const child = launchApp({ executable: app, root, env: appEnv });
 
   electron = child;
+
+  void child.pid.then((pid) => {
+    if (pid === undefined && electron === child)
+      log(`Could not find ${DEV_APP.name} to restart it.`);
+  });
 
   // The app quit by itself (window closed or Cmd+Q), not for a restart: wind everything down.
   void child.exited.then((code) => {
@@ -141,8 +148,9 @@ async function reloadPage(): Promise<void> {
 
   log("electron/preload.ts changed, rebuilding and reloading the page.");
 
-  // Not `electron.kill("SIGUSR2")`: Bun sends Linux's number for it, which is SIGSYS on macOS.
-  if ((await buildElectron()) && electron) process.kill(electron.pid, "SIGUSR2");
+  // Through process.kill, never a Bun subprocess's kill: Bun sends Linux's number for SIGUSR2,
+  // which is SIGSYS on macOS.
+  if ((await buildElectron()) && electron) electron.kill("SIGUSR2");
 }
 
 const reloadsPage = (files: ReadonlySet<string>) =>
@@ -156,7 +164,7 @@ let pending: ReturnType<typeof setTimeout> | undefined;
 const changed = new Set<string>();
 
 // The app does not run these, so a change to them is no reason to restart it.
-const devScripts = new Set([path.basename(import.meta.path), "devApp.ts"]);
+const devScripts = new Set([path.basename(import.meta.path), "devApp.ts", "devLaunch.ts"]);
 
 watch(path.join(root, "electron"), { recursive: true }, (_event, file) => {
   if (!file?.endsWith(".ts") || devScripts.has(file)) return;
