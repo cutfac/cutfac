@@ -1,5 +1,6 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -101,6 +102,17 @@ export async function makeFakeAgents(): Promise<FakeAgents> {
 
   return { dir, calls, layer, bin, remove };
 }
+
+/** Listens on `port` on loopback until the scope closes, as another program holding it would. */
+export const holdPort = (port: number) =>
+  Effect.acquireRelease(
+    Effect.callback<Server>((resume) => {
+      const server = createServer();
+
+      server.listen(port, "127.0.0.1", () => resume(Effect.succeed(server)));
+    }),
+    (server) => Effect.callback<void>((resume) => void server.close(() => resume(Effect.void))),
+  );
 
 /** A key pair to sign license grants with, as cutfac.com does, made for each run. */
 export const licenseSigning = generateKeyPairSync("ed25519");

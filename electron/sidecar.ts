@@ -1,60 +1,66 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline";
-import type { Readable } from "node:stream";
-import { setTimeout as delay } from "node:timers/promises";
 
-import { app } from "electron";
+import {
+  Console,
+  Context,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Option,
+  Ref,
+  Schema,
+  Scope,
+  Stream,
+} from "effect";
+import { HttpClient } from "effect/http";
+import type { PlatformError } from "effect/PlatformError";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import { STOP_GRACE } from "../src/core/process.ts";
 import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.ts";
-import { HOST } from "./ports.ts";
+import { bindPort, freePort, HOST } from "./ports.ts";
 
-const limits = {
-  cliTimeoutMs: 30_000,
-  healthTimeoutMs: 20_000,
-  healthPollMs: 150,
-  stopGraceMs: 3_000,
-  outputTailLines: 40,
-};
+// The local server the desktop app runs as a child process, and the server's CLI commands it runs.
 
-export interface Sidecar {
-  url: string;
-  /** SIGTERM, then SIGKILL after a grace period. Resolves once the process is gone. */
-  stop: () => Promise<void>;
-  /** Synchronous SIGKILL for the process-exit hook. */
-  kill: () => void;
+const CLI_TIMEOUT = "30 seconds";
+
+const HEALTH_TIMEOUT_SECONDS = 20;
+
+const HEALTH_POLL = "150 millis";
+
+const PING_TIMEOUT = "1 second";
+
+/** How long a process that ended gets to finish printing, in case a grandchild holds its pipes. */
+const DRAIN_WAIT = "500 millis";
+
+const OUTPUT_TAIL_LINES = 40;
+
+/** A process environment, as Node passes one. */
+export type Env = Readonly<Record<string, string | undefined>>;
+
+/** The server could not be started, or ended before it answered. */
+export class SidecarFailed extends Schema.TaggedError<SidecarFailed>()("SidecarFailed", {
+  message: Schema.String,
+}) {}
+
+/** Where the app runs from and what it was started with, as Electron reports them. */
+export interface InstallInfo {
+  /** The released app, as opposed to one run from a checkout. */
+  readonly packaged: boolean;
+  /** The checkout, when the app runs from source. */
+  readonly appPath: string;
+  /** The packaged app's resources: the server's binary and the built board. */
+  readonly resourcesPath: string;
+  readonly logsPath: string;
+  readonly homePath: string;
+  /** The environment the app was started with. */
+  readonly launchEnv: Env;
 }
 
-export interface SidecarOptions {
-  workspace: string;
-  port: number;
-  /** Called with an explanation and the output tail if the server dies without `stop()`. */
-  onCrash: (message: string) => void;
-  /** Restart the server in place when its source changes, if it runs from source. */
-  watch: boolean;
-}
-
-interface Launch {
-  command: string;
-  args: string[];
-  webDir: string;
-  /** Flags that make the server restart itself when its source changes; empty for a binary. */
-  watchFlags: string[];
-}
-
-interface Running {
-  child: ChildProcess;
-  tail: string[];
-  /** Set once the process exited or failed to spawn. */
-  endReason: string | undefined;
-  /** Settles when the process has exited or failed to spawn. */
-  ended: Promise<void>;
-  /** Settles once stdio is drained as well, so the output tail is complete. */
-  drained: Promise<void>;
-}
-
-let launchEnv: Promise<NodeJS.ProcessEnv> | undefined;
+export class Install extends Context.Service<Install, InstallInfo>()("cutfac/desktop/Install") {}
 
 /**
  * The packaged app gives the server its user's terminal environment and nothing from the
@@ -63,241 +69,292 @@ let launchEnv: Promise<NodeJS.ProcessEnv> | undefined;
  * the app was started from the developer's own terminal or editor, so that is kept and only the
  * PATH is widened.
  */
-export function resolveServerEnv(): Promise<NodeJS.ProcessEnv> {
-  launchEnv ??= readServerEnv();
+const readServerEnv: Effect.Effect<Env, never, Install> = Effect.gen(function* () {
+  const install = yield* Install;
 
-  return launchEnv;
-}
-
-async function readServerEnv(): Promise<NodeJS.ProcessEnv> {
   // The desktop app ships for macOS only; elsewhere there's no login shell to ask.
-  if (process.platform === "win32") return process.env;
+  if (process.platform === "win32") return install.launchEnv;
 
-  const account = await readAccount();
-  const clean = cleanEnv(account, process.env);
-  const shell = account.shell ? await readShellEnv(account.shell, clean) : undefined;
+  const account = yield* Effect.promise(readAccount);
+  const clean = cleanEnv(account, install.launchEnv);
+  const login = account.shell;
+  const shell = login ? yield* Effect.promise(() => readShellEnv(login, clean)) : undefined;
   const env = serverEnv(shell, clean);
 
-  if (app.isPackaged) return env;
+  if (install.packaged) return env;
 
   // The bundled server finds the app's logs folder itself; one run from source is told it.
   return {
-    ...process.env,
-    PATH: joinPath(process.env.PATH, env.PATH),
-    CUTFAC_LOG_DIR: app.getPath("logs"),
+    ...install.launchEnv,
+    PATH: joinPath(install.launchEnv["PATH"], env.PATH),
+    CUTFAC_LOG_DIR: install.logsPath,
   };
-}
+});
 
-function findExecutable(name: string, searchPath: string): string {
-  for (const dir of searchPath.split(path.delimiter)) {
-    const candidate = path.join(dir, name);
-
-    if (dir && statSync(candidate, { throwIfNoEntry: false })?.isFile()) return candidate;
-  }
-
-  throw new Error(`\`${name}\` is not on PATH. Install Bun (https://bun.sh) to run from source.`);
+/** The environment the server and the commands it runs get, read once. */
+export class ServerEnv extends Context.Service<ServerEnv, Env>()("cutfac/desktop/ServerEnv") {
+  static readonly layer = Layer.effect(ServerEnv, readServerEnv);
 }
 
 /** The built board, which the server serves and the first launch loads before there is one. */
-export function boardDir(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "web")
-    : path.join(app.getAppPath(), "dist", "web");
+export const boardDirOf = (install: InstallInfo) =>
+  install.packaged
+    ? path.join(install.resourcesPath, "web")
+    : path.join(install.appPath, "dist", "web");
+
+interface Launch {
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+  readonly webDir: string;
+  /** Flags that make the server restart itself when its source changes; empty for a binary. */
+  readonly watchFlags: ReadonlyArray<string>;
 }
+
+const findExecutable = Effect.fnUntraced(function* (name: string, searchPath: string) {
+  const fs = yield* FileSystem.FileSystem;
+
+  for (const dir of searchPath.split(path.delimiter).filter((entry) => entry !== "")) {
+    const candidate = path.join(dir, name);
+    const info = yield* Effect.option(fs.stat(candidate));
+
+    if (Option.isSome(info) && info.value.type === "File") return candidate;
+  }
+
+  return yield* new SidecarFailed({
+    message: `\`${name}\` is not on PATH. Install Bun (https://bun.sh) to run from source.`,
+  });
+});
 
 /**
  * The compiled binary in the packaged app, `bun src/cli.ts` from a checkout. From a checkout,
  * CUTFAC_SIDECAR points at any executable that speaks the sidecar CLI (used to test the shell
  * without the real server); the packaged app runs only its own.
  */
-function resolveLaunch(env: NodeJS.ProcessEnv): Launch {
-  if (app.isPackaged) {
-    const resources = process.resourcesPath;
+const resolveLaunch = Effect.gen(function* () {
+  const install = yield* Install;
+  const webDir = boardDirOf(install);
 
-    return {
-      command: path.join(resources, "bin", "cutfac"),
-      args: [],
-      webDir: boardDir(),
-      watchFlags: [],
-    };
+  if (install.packaged) {
+    const command = path.join(install.resourcesPath, "bin", "cutfac");
+
+    return { command, args: [], webDir, watchFlags: [] } satisfies Launch;
   }
 
-  const root = app.getAppPath();
-  const webDir = boardDir();
-  const override = process.env.CUTFAC_SIDECAR;
+  const override = install.launchEnv["CUTFAC_SIDECAR"];
 
-  if (override) return { command: override, args: [], webDir, watchFlags: [] };
+  if (override) return { command: override, args: [], webDir, watchFlags: [] } satisfies Launch;
+
+  const env = yield* ServerEnv;
 
   return {
-    command: findExecutable("bun", env.PATH ?? ""),
-    args: [path.join(root, "src", "cli.ts")],
+    command: yield* findExecutable("bun", env["PATH"] ?? ""),
+    args: [path.join(install.appPath, "src", "cli.ts")],
     webDir,
     // Bun re-executes in place, so the process (and the app's handle on it) survives a reload.
     watchFlags: ["--watch"],
-  };
+  } satisfies Launch;
+});
+
+/** The message Node gave for a failure, not the spawner's wrapping of it. */
+const nodeMessage = (error: PlatformError) =>
+  error.cause instanceof Error ? error.cause.message : error.message;
+
+/** A server or command running, and the last lines it printed. */
+interface Running {
+  readonly handle: ChildProcessSpawner.ChildProcessHandle;
+  readonly tail: Ref.Ref<ReadonlyArray<string>>;
+  /** Done once stdout and stderr are drained, so the tail is complete. */
+  readonly output: Fiber.Fiber<void>;
 }
 
-function forward(stream: Readable, log: (line: string) => void, tail: string[]): void {
-  createInterface({ input: stream }).on("line", (line) => {
-    tail.push(line);
+/** Prints each of the process's lines as the app's own, and hands it to `keep`. */
+const forward = (
+  stream: Stream.Stream<Uint8Array, PlatformError>,
+  print: (line: string) => Effect.Effect<void>,
+  keep: (line: string) => Effect.Effect<void> = () => Effect.void,
+) =>
+  stream.pipe(
+    Stream.decodeText(),
+    Stream.splitLines,
+    Stream.runForEach((line) => Effect.andThen(keep(line), print(`[sidecar] ${line}`))),
+  );
 
-    if (tail.length > limits.outputTailLines) tail.shift();
+/** Command options for the server and its commands: exactly the server's environment. */
+const childOptions = (cwd: string, env: Env): ChildProcess.CommandOptions => ({
+  cwd,
+  env,
+  extendEnv: false,
+  stdin: "ignore",
+  // In the app's own process group, as Node spawns it: stopping it signals the server alone, which
+  // stops what it runs itself.
+  detached: false,
+  forceKillAfter: STOP_GRACE,
+});
 
-    log(`[sidecar] ${line}`);
-  });
-}
+/** Starts `args` with `launch` in `cwd`, printing what it prints; `what` names it in a failure. */
+const spawn = Effect.fnUntraced(function* (
+  launch: Launch,
+  args: ReadonlyArray<string>,
+  cwd: string,
+  what: string,
+) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
-function run(launch: Launch, args: string[], workspace: string, env: NodeJS.ProcessEnv): Running {
-  const child = spawn(launch.command, [...launch.args, ...args], {
-    cwd: workspace,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const command = ChildProcess.make(
+    launch.command,
+    [...launch.args, ...args],
+    childOptions(cwd, yield* ServerEnv),
+  );
 
-  const tail: string[] = [];
+  const handle = yield* spawner
+    .spawn(command)
+    .pipe(
+      Effect.mapError(
+        (error) =>
+          new SidecarFailed({ message: `${what} could not be started (${nodeMessage(error)}).` }),
+      ),
+    );
 
-  forward(child.stdout, console.log, tail);
-  forward(child.stderr, console.error, tail);
+  const tail = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const running: Running = {
-    child,
-    tail,
-    endReason: undefined,
-    ended: new Promise((resolve) => {
-      child.once("error", (error) => {
-        running.endReason = `could not be started (${error.message})`;
-        resolve();
-      });
-      child.once("exit", (code, signal) => {
-        running.endReason = signal ? `was killed by ${signal}` : `exited with code ${code}`;
-        resolve();
-      });
+  const keep = (line: string) =>
+    Ref.update(tail, (lines) => [...lines, line].slice(-OUTPUT_TAIL_LINES));
+
+  // Left to end with the process's pipes, so what it prints while it stops still shows.
+  const output = yield* Effect.all(
+    [forward(handle.stdout, Console.log, keep), forward(handle.stderr, Console.error, keep)],
+    { concurrency: 2, discard: true },
+  ).pipe(Effect.ignore, Effect.forkDetach);
+
+  return { handle, tail, output } satisfies Running;
+});
+
+/** Whether the process has yet to end. */
+const stillRunning = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+  Effect.orElseSucceed(handle.isRunning, () => false);
+
+const KILLED_BY = /signal: '(\w+)'/;
+
+/** How the process ended: its exit code, or the signal that killed it. */
+const endOf = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+  handle.exitCode.pipe(
+    Effect.match({
+      onSuccess: (code) => `exited with code ${code}`,
+      // Node gives a process a signal killed no exit code; the spawner's error names the signal.
+      onFailure: (error) =>
+        Option.match(Option.fromNullishOr(KILLED_BY.exec(nodeMessage(error))?.[1]), {
+          onNone: () => "was killed",
+          onSome: (signal) => `was killed by ${signal}`,
+        }),
     }),
-    drained: new Promise((resolve) => {
-      child.once("error", () => resolve());
-      child.once("close", () => resolve());
-    }),
-  };
+  );
 
-  return running;
-}
+/** Why a process that ended did, with the last lines it printed. */
+const describeEnd = Effect.fnUntraced(function* (running: Running, what: string) {
+  yield* Effect.timeoutOption(Fiber.await(running.output), DRAIN_WAIT);
 
-async function describeEnd(running: Running, what: string): Promise<string> {
-  // The exit event can beat the last stdout/stderr lines, and a grandchild may hold the pipes open.
-  await Promise.race([running.drained, delay(500)]);
+  const tail = yield* Ref.get(running.tail);
+  const output = tail.length > 0 ? `\n\nLast output:\n${tail.join("\n")}` : "";
 
-  const output = running.tail.length > 0 ? `\n\nLast output:\n${running.tail.join("\n")}` : "";
+  return `${what} ${yield* endOf(running.handle)}.${output}`;
+});
 
-  return `${what} ${running.endReason ?? "ended"}.${output}`;
-}
+/** Whether `url` answers with success: false while nothing is listening yet. */
+const answers = (url: string) =>
+  HttpClient.get(url).pipe(
+    Effect.map((response) => response.status >= 200 && response.status < 300),
+    Effect.timeout(PING_TIMEOUT),
+    Effect.orElseSucceed(() => false),
+  );
 
-async function ping(url: string): Promise<boolean> {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+/** Waits until the server answers at `url`; one that ends or takes too long fails with why. */
+const untilHealthy = (url: string, server: Running) => {
+  const poll = Effect.gen(function* () {
+    while (yield* stillRunning(server.handle)) {
+      if (yield* answers(url)) return;
 
-    return response.ok;
-  } catch {
-    // Nothing is listening yet.
-    return false;
-  }
-}
-
-async function waitUntilHealthy(url: string, running: Running): Promise<void> {
-  const deadline = Date.now() + limits.healthTimeoutMs;
-
-  while (Date.now() < deadline) {
-    if (running.endReason !== undefined) {
-      throw new Error(await describeEnd(running, "The local server"));
+      yield* Effect.sleep(HEALTH_POLL);
     }
 
-    if (await ping(url)) return;
+    return yield* new SidecarFailed({ message: yield* describeEnd(server, "The local server") });
+  });
 
-    await delay(limits.healthPollMs);
-  }
+  const tooSlow = Effect.gen(function* () {
+    yield* Effect.ignore(server.handle.kill({ forceKillAfter: STOP_GRACE }));
 
-  await terminate(running);
-  throw new Error(
-    await describeEnd(
-      running,
-      `The local server did not answer within ${limits.healthTimeoutMs / 1_000}s and`,
-    ),
+    return yield* new SidecarFailed({
+      message: yield* describeEnd(
+        server,
+        `The local server did not answer within ${HEALTH_TIMEOUT_SECONDS}s and`,
+      ),
+    });
+  });
+
+  return Effect.timeoutOrElse(poll, {
+    duration: Duration.seconds(HEALTH_TIMEOUT_SECONDS),
+    orElse: () => tooSlow,
+  });
+};
+
+/** Makes `workspace` one with the server's `init`, or fails with why it couldn't. */
+const setUp = (launch: Launch, workspace: string) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const init = yield* spawn(
+        launch,
+        ["init", workspace, "--no-connect"],
+        workspace,
+        "Workspace setup",
+      );
+
+      const ended = yield* Effect.exit(init.handle.exitCode);
+
+      if (Exit.isSuccess(ended) && ended.value === 0) return;
+
+      return yield* new SidecarFailed({ message: yield* describeEnd(init, "Workspace setup") });
+    }),
   );
+
+export interface SidecarOptions {
+  readonly workspace: string;
+  /** A port the server must take, as the dev runner's proxy expects; else the last one, if free. */
+  readonly port: { readonly fixed: number } | { readonly last: Option.Option<number> };
+  /** Restart the server in place when its source changes, if it runs from source. */
+  readonly watch: boolean;
+  /** Told why, with the output tail, if the server ends before it is stopped. */
+  readonly onCrash: (message: string) => Effect.Effect<void>;
 }
 
-async function terminate(running: Running): Promise<void> {
-  if (running.endReason !== undefined) return;
-
-  running.child.kill("SIGTERM");
-
-  const timer = setTimeout(() => running.child.kill("SIGKILL"), limits.stopGraceMs);
-
-  await running.ended;
-  clearTimeout(timer);
+/** The local server, running on a workspace until it is stopped. */
+export interface Sidecar {
+  readonly url: string;
+  readonly port: number;
+  /** SIGTERM, then SIGKILL after a grace period; done once the process is gone. */
+  readonly stop: Effect.Effect<void>;
+  /** SIGKILL at once, for the process-exit hook, which can't wait. */
+  readonly kill: Effect.Effect<void>;
 }
 
-/**
- * Runs a command that needs no workspace, such as `agents --json`, and resolves what it printed.
- * One that hangs is killed, and resolves with what it printed so far.
- */
-export async function runCli(args: string[]): Promise<{ code: number | null; stdout: string }> {
-  const env = await resolveServerEnv();
-  const launch = resolveLaunch(env);
-
-  const child = spawn(launch.command, [...launch.args, ...args], {
-    cwd: app.getPath("home"),
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  const timer = setTimeout(() => child.kill("SIGKILL"), limits.cliTimeoutMs);
-  let stdout = "";
-
-  child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
-    stdout += chunk;
-  });
-  forward(child.stderr, console.error, []);
-
-  return new Promise((resolve, reject) => {
-    child.once("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.once("close", (code) => {
-      clearTimeout(timer);
-      resolve({ code, stdout });
-    });
-  });
-}
-
-/** Initialises the workspace if needed, starts the server on it and resolves once it is healthy. */
-export async function startSidecar({
-  workspace,
-  port,
-  onCrash,
-  watch,
-}: SidecarOptions): Promise<Sidecar> {
-  const env = await resolveServerEnv();
-  const launch = resolveLaunch(env);
+/** Runs on `scope`, which keeps the server until it closes. */
+const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope.Closeable) {
+  const fs = yield* FileSystem.FileSystem;
+  const choice = options.port;
+  const port = yield* "fixed" in choice ? bindPort(choice.fixed) : freePort(choice.last);
+  const launch = yield* resolveLaunch;
 
   // factory.yaml is what a workspace made before the rename to Cutfac calls it; serving renames it.
-  const configs = ["cutfac.yaml", "factory.yaml"].map((name) => path.join(workspace, name));
+  const configs = yield* Effect.forEach(["cutfac.yaml", "factory.yaml"], (name) =>
+    fs.exists(path.join(options.workspace, name)).pipe(Effect.orElseSucceed(() => false)),
+  );
 
-  if (!configs.some((file) => existsSync(file))) {
-    const init = run(launch, ["init", workspace, "--no-connect"], workspace, env);
+  if (!configs.includes(true)) yield* setUp(launch, options.workspace);
 
-    await init.ended;
-
-    if (init.child.exitCode !== 0) {
-      throw new Error(await describeEnd(init, "Workspace setup"));
-    }
-  }
-
-  const serve = run(
-    watch ? { ...launch, args: [...launch.watchFlags, ...launch.args] } : launch,
+  const server = yield* spawn(
+    options.watch ? { ...launch, args: [...launch.watchFlags, ...launch.args] } : launch,
     [
       "serve",
       "--workspace",
-      workspace,
+      options.workspace,
       "--port",
       String(port),
       "--host",
@@ -305,29 +362,88 @@ export async function startSidecar({
       "--web-dir",
       launch.webDir,
     ],
-    workspace,
-    env,
-  );
+    options.workspace,
+    "The local server",
+  ).pipe(Scope.provide(scope));
 
   const url = `http://${HOST}:${port}/`;
 
-  await waitUntilHealthy(`${url}api/health`, serve);
+  yield* untilHealthy(`${url}api/health`, server);
 
-  let stopping = false;
+  // Stopping closes the scope, which ends this before the process, so only a crash is reported.
+  yield* Effect.exit(server.handle.exitCode).pipe(
+    Effect.andThen(describeEnd(server, "The local server")),
+    Effect.flatMap(options.onCrash),
+    Effect.forkIn(scope),
+  );
 
-  void serve.ended.then(async () => {
-    if (!stopping) onCrash(await describeEnd(serve, "The local server"));
-  });
+  const { handle } = server;
+
+  const kill = Effect.flatMap(stillRunning(handle), (running) =>
+    running ? Effect.try(() => process.kill(handle.pid, "SIGKILL")) : Effect.void,
+  );
 
   return {
     url,
-    stop: () => {
-      stopping = true;
+    port,
+    stop: Scope.close(scope, Exit.void),
+    kill: Effect.ignore(kill),
+  } satisfies Sidecar;
+});
 
-      return terminate(serve);
-    },
-    kill: () => {
-      serve.child.kill("SIGKILL");
-    },
-  };
-}
+/** Sets the workspace up if needed, starts the server on it and succeeds once it is healthy. */
+export const startSidecar = Effect.fn("sidecar.start")(function* (options: SidecarOptions) {
+  const scope = yield* Scope.make();
+
+  return yield* serve(options, scope).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
+});
+
+/**
+ * Runs a command that needs no workspace, such as `agents --json`, and returns what it printed and
+ * its exit code. One that hangs is killed, and returns what it printed so far, with no code.
+ */
+export const runCli = Effect.fn("sidecar.runCli")(function* (args: ReadonlyArray<string>) {
+  const install = yield* Install;
+  const launch = yield* resolveLaunch;
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
+  const command = ChildProcess.make(
+    launch.command,
+    [...launch.args, ...args],
+    childOptions(install.homePath, yield* ServerEnv),
+  );
+
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const handle = yield* spawner
+        .spawn(command)
+        .pipe(Effect.mapError((error) => new SidecarFailed({ message: nodeMessage(error) })));
+
+      const stdout = yield* Ref.make("");
+
+      const output = yield* Effect.all(
+        [
+          handle.stdout.pipe(
+            Stream.decodeText(),
+            Stream.runForEach((chunk) => Ref.update(stdout, (text) => text + chunk)),
+          ),
+          forward(handle.stderr, Console.error),
+        ],
+        { concurrency: 2, discard: true },
+      ).pipe(Effect.ignore, Effect.forkDetach);
+
+      const code: Option.Option<number> = yield* Effect.option(handle.exitCode).pipe(
+        Effect.timeoutOrElse({
+          duration: CLI_TIMEOUT,
+          orElse: () =>
+            handle.kill({ killSignal: "SIGKILL" }).pipe(Effect.ignore, Effect.as(Option.none())),
+        }),
+      );
+
+      // Node can report the exit before the pipes are drained.
+      yield* Fiber.await(output);
+
+      return { code, stdout: yield* Ref.get(stdout) };
+    }),
+  );
+});

@@ -55,9 +55,15 @@ const make = <R, E>(testLayer: Layer.Layer<R, E>, liveLayer: Layer.Layer<R, E>) 
   /** A test on a test clock, which only moves when the test moves it with `TestClock`. */
   effect: <A, E2>(name: string, body: () => Effect.Effect<A, E2, R | Scope.Scope>) =>
     test(name, () => run(body, testLayer)),
-  /** A test on the real clock, for code that waits on the file system or other processes. */
-  live: <A, E2>(name: string, body: () => Effect.Effect<A, E2, R | Scope.Scope>) =>
-    test(name, () => run(body, liveLayer)),
+  /**
+   * A test on the real clock, for code that waits on the file system or other processes; `timeout`
+   * in milliseconds, for one that waits longer than bun's default allows.
+   */
+  live: <A, E2>(
+    name: string,
+    body: () => Effect.Effect<A, E2, R | Scope.Scope>,
+    timeout?: number,
+  ) => test(name, () => run(body, liveLayer), timeout),
 });
 
 const testEnv = Layer.mergeAll(TestConsole.layer, TestClock.layer());

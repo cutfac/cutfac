@@ -43,7 +43,6 @@ import { MESSAGES } from "./messages.ts";
 import { keepInsideApp } from "./navigation.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions, sandboxed } from "./permissions.ts";
-import { freePort, probePort } from "./ports.ts";
 import { guardQuit, guardWindow } from "./quitGuard.ts";
 import {
   loadLocale,
@@ -60,7 +59,7 @@ import {
   saveWorkspace,
   settingsWritten,
 } from "./settings.ts";
-import { boardDir, startSidecar, type Sidecar } from "./sidecar.ts";
+import { boardDir, startSidecar, type Sidecar } from "./sidecarRuntime.ts";
 import { stopWatching } from "./systemAccess.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
@@ -339,12 +338,10 @@ async function open(workspace: string): Promise<boolean> {
     await sidecar?.stop();
     sidecar = undefined;
 
-    // A fixed dev port held by a stale server fails here instead of passing the health check.
-    const port = devUrl ? await probePort(devPort) : await freePort(await loadPort());
-
     const started = await startSidecar({
       workspace,
-      port,
+      // A fixed dev port held by a stale server fails here instead of passing the health check.
+      port: devUrl ? { fixed: devPort } : { last: await loadPort() },
       onCrash: handleCrash,
       watch: devUrl !== undefined,
     });
@@ -359,7 +356,7 @@ async function open(workspace: string): Promise<boolean> {
     workspaceRoot = workspace;
     await saveWorkspace(workspace);
 
-    if (!devUrl) await savePort(port);
+    if (!devUrl) await savePort(started.port);
 
     const page = (await loadPage(workspace)) ?? "";
 

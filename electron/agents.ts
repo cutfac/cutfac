@@ -8,7 +8,7 @@ import { app } from "electron";
 import { AgentSetupJson, type AgentSetup } from "../src/core/agentReadiness.ts";
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentFix } from "../web/src/desktop.ts";
-import { resolveServerEnv, runCli } from "./sidecar.ts";
+import { resolveServerEnv, runCli } from "./sidecarRuntime.ts";
 
 /** A sign-in waits on the user's browser; one left that long is given up on. */
 const FIX_TIMEOUT_MS = 10 * 60_000;
