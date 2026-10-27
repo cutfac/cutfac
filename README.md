@@ -103,10 +103,11 @@ to date.
 
 ## Privacy
 
-- Your videos and files stay on your disk. No account, no usage analytics.
-- The Mac app asks once whether to send error reports. Only if you agree does it report its
-  failures to the Cutfac team through PostHog, never your videos, prompts or chats. Settings turns
-  them off. Builds from source never send any.
+- Your videos and files stay on your disk. No account.
+- The Mac app asks once whether to share error reports and usage statistics with the Cutfac team.
+  Only if you agree does it send them through PostHog: what failed, and counts like videos made and
+  versions kept, never your videos, prompts or chats. Settings turns each off. Builds from source
+  never send any.
 - The Mac app keeps a log in `~/Library/Logs/Cutfac` to help trace problems. It stays on your Mac
   unless you send it with feedback, and entries older than 7 days are deleted
   ([details](docs/desktop.md#logs)).
@@ -114,8 +115,8 @@ to date.
 - The server listens on `127.0.0.1` unless you pass `--host`, and refuses requests from other
   websites.
 - It goes online only when you ask: learning from a link, or sending feedback. The Mac app also
-  checks for updates, with a license key whether the plan is active, and sends the error reports
-  you agreed to.
+  checks for updates, with a license key whether the plan is active, and sends what you agreed to
+  share.
 - Learn only from videos you're allowed to download.
 
 See [SECURITY.md](SECURITY.md) to report a problem.
