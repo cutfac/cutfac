@@ -33,11 +33,13 @@
   /* Hovers and state changes settle quickly instead of easing in and out. */
   --default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
   /* The Full Disk Access step's picture: the app dragged from the panel into the list, on a loop. */
-  --animate-access-drag: access-drag 5s ease-in-out infinite;
-  --animate-access-row: access-row 5s ease-out infinite;
-  --animate-access-switch: access-switch 5s ease-out infinite;
-  --animate-access-knob: access-knob 5s ease-out infinite;
-  --animate-access-pointer: access-pointer 5s ease-in-out infinite;
+  --animate-access-drag: access-drag 3.6s ease-in-out infinite;
+  --animate-access-row: access-row 3.6s ease-out infinite;
+  --animate-access-switch: access-switch 3.6s ease-out infinite;
+  --animate-access-knob: access-knob 3.6s ease-out infinite;
+  --animate-access-pointer: access-pointer 3.6s ease-in-out infinite;
+  --animate-access-arrow: access-arrow 3.6s step-end infinite;
+  --animate-access-grab: access-grab 3.6s step-end infinite;
   /* macOS's own colors, only for the picture of System Settings, so it reads as the real window. */
   --color-mac-close: oklch(0.68 0.2 25);
   --color-mac-minimize: oklch(0.83 0.16 80);
@@ -297,19 +299,19 @@
 /* The card lifts as the pointer presses it, rides up with it, and drops into the list. */
 @keyframes access-drag {
   0%,
-  16% {
+  12% {
     opacity: 0;
     translate: 0 0;
   }
-  18% {
+  14% {
     opacity: 1;
     translate: 0 0;
   }
-  50% {
+  40% {
     opacity: 1;
     translate: var(--access-shift) var(--access-lift);
   }
-  56%,
+  46%,
   100% {
     opacity: 0;
     translate: var(--access-shift) var(--access-lift);
@@ -323,29 +325,29 @@
     translate: 2.5rem 2rem;
     scale: 1;
   }
-  6% {
+  4% {
     opacity: 1;
+  }
+  10% {
+    translate: 0 0;
+    scale: 1;
   }
   14% {
     translate: 0 0;
     scale: 1;
   }
-  18% {
-    translate: 0 0;
-    scale: 0.85;
-  }
-  50% {
-    translate: var(--access-shift) var(--access-lift);
-    scale: 0.85;
-  }
-  56% {
+  40% {
     translate: var(--access-shift) var(--access-lift);
     scale: 1;
   }
-  70% {
+  45% {
+    translate: var(--access-shift) var(--access-lift);
+    scale: 1;
+  }
+  54% {
     opacity: 1;
   }
-  76%,
+  60%,
   100% {
     opacity: 0;
     translate: calc(var(--access-shift) + 2rem) calc(var(--access-lift) + 1.5rem);
@@ -355,10 +357,10 @@
 
 @keyframes access-row {
   0%,
-  50% {
+  40% {
     opacity: 0;
   }
-  56%,
+  46%,
   92% {
     opacity: 1;
   }
@@ -370,10 +372,10 @@
 /* The new row's switch turns on a moment after the row lands. */
 @keyframes access-switch {
   0%,
-  68% {
+  52% {
     opacity: 0;
   }
-  74%,
+  58%,
   100% {
     opacity: 1;
   }
@@ -381,11 +383,37 @@
 
 @keyframes access-knob {
   0%,
-  68% {
+  52% {
     translate: -0.625rem 0;
   }
-  74%,
+  58%,
   100% {
     translate: 0 0;
+  }
+}
+
+/* The pointer is an arrow until it presses the card, a closed hand while it carries it, and an
+   arrow again once it lets go, as macOS draws it. */
+@keyframes access-arrow {
+  0% {
+    opacity: 1;
+  }
+  13% {
+    opacity: 0;
+  }
+  44% {
+    opacity: 1;
+  }
+}
+
+@keyframes access-grab {
+  0% {
+    opacity: 0;
+  }
+  13% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0;
   }
 }

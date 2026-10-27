@@ -2,6 +2,7 @@ import {
   ArrowUpIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  HandGrabIcon,
   HandIcon,
   MinusIcon,
   MousePointer2Icon,
@@ -67,7 +68,10 @@ export function AccessPreview({ app }: { app: App | undefined }) {
           <div className="animate-access-drag">
             <DragCard app={app} lifted />
           </div>
-          <MousePointer2Icon className="absolute top-3 left-8 size-4 animate-access-pointer fill-foreground text-background" />
+          <div className="absolute top-2.5 left-8 size-6 animate-access-pointer">
+            <MousePointer2Icon className="absolute inset-0 size-6 animate-access-arrow fill-foreground text-background" />
+            <HandGrabIcon className="absolute inset-0 size-6 animate-access-grab fill-foreground text-background" />
+          </div>
         </div>
       </div>
     </div>
