@@ -296,8 +296,8 @@
 
 :root {
   /* How far the card in the Full Disk Access picture moves from the panel to its row in the list. */
-  --access-shift: 0.375rem;
-  --access-lift: -7.125rem;
+  --access-shift: 0.25rem;
+  --access-lift: -6.25rem;
 }
 
 /* What the pointer carries rises from the panel to the list. The card and the pointer ride in it

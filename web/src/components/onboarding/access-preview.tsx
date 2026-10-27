@@ -3,11 +3,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   HandGrabIcon,
-  HandIcon,
   MinusIcon,
   MousePointer2Icon,
   PlusIcon,
   SearchIcon,
+  XIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -31,10 +31,12 @@ const SIDEBAR_BELOW = ["w-2/3", "w-1/2"];
  * reduced motion it shows the app already in the list.
  */
 export function AccessPreview({ app }: { app: App | undefined }) {
-  const t = useMessages().onboarding.access.preview;
+  const messages = useMessages().onboarding;
+  const t = messages.access.preview;
+  const hint = messages.dragHelper.hint;
 
   return (
-    <div aria-hidden className="relative h-60 select-none">
+    <div aria-hidden className="relative h-57 select-none">
       <div className="absolute inset-x-0 top-0 h-40 overflow-hidden rounded-xl bg-background shadow-md ring-1 ring-foreground/15">
         <Sidebar pane={t.pane} search={t.search} />
         <div className="absolute inset-y-0 right-0 left-1/3 flex flex-col px-3 pt-2.5">
@@ -54,23 +56,21 @@ export function AccessPreview({ app }: { app: App | undefined }) {
           </div>
         </div>
       </div>
-      <div className="absolute top-42 right-0 bottom-0 left-1/3 flex flex-col gap-1.5 rounded-xl bg-card p-2 shadow-md ring-1 ring-foreground/10">
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-          <ArrowUpIcon className="size-3 text-brand" />
-          {t.drop}
-        </p>
-        <DragCard app={app} />
+      <div className="absolute top-42 right-0 bottom-0 left-1/3 rounded-xl bg-background p-1 shadow-md ring-1 ring-foreground/15">
+        <DragCard app={app} hint={hint} />
       </div>
-      {/* The card on its way up, and the pointer that comes in, takes it and lets it go. */}
-      <div className="absolute top-42 right-0 bottom-0 left-1/3 flex flex-col gap-1.5 p-2 motion-reduce:hidden">
-        <p className="invisible text-xs">{t.drop}</p>
-        <div className="relative animate-access-carry">
-          <div className="animate-access-card">
-            <DragCard app={app} lifted />
-          </div>
-          <div className="absolute top-2.5 left-8 size-6 animate-access-pointer">
-            <MousePointer2Icon className="absolute inset-0 size-6 animate-access-arrow fill-foreground text-background" />
-            <HandGrabIcon className="absolute inset-0 size-6 animate-access-grab fill-foreground text-background" />
+      {/* The app on its way up, as macOS drags it: its icon under the pointer that comes in, takes it
+          and lets it go. Laid out as the card is, so it starts on the card's icon. */}
+      <div className="absolute top-42 right-0 bottom-0 left-1/3 p-1 motion-reduce:hidden">
+        <div className="flex h-full items-center px-2">
+          <div className="relative size-6 animate-access-carry">
+            {app === undefined ? null : (
+              <img src={app.icon} alt="" className="size-6 animate-access-card drop-shadow-md" />
+            )}
+            <div className="absolute top-3 left-3 size-6 animate-access-pointer">
+              <MousePointer2Icon className="absolute inset-0 size-6 animate-access-arrow fill-foreground text-background" />
+              <HandGrabIcon className="absolute inset-0 size-6 animate-access-grab fill-foreground text-background" />
+            </div>
           </div>
         </div>
       </div>
@@ -147,23 +147,22 @@ function Row({ app, className }: { app?: App | undefined; className?: string }) 
   );
 }
 
-/** The panel's card: the app to drag. */
-function DragCard({ app, lifted = false }: { app: App | undefined; lifted?: boolean }) {
+/** The panel's card, as the real panel draws it: the app to drag, where it goes, and a gold glow. */
+function DragCard({ app, hint }: { app: App | undefined; hint: string }) {
   return (
-    <div
-      className={cn(
-        "flex h-7 items-center gap-2 rounded-lg px-1.5",
-        // Lifted off the panel while it is dragged.
-        lifted ? "bg-muted shadow-md ring-1 ring-foreground/10" : "bg-foreground/6",
-      )}
-    >
+    <div className="relative flex h-full animate-access-glow items-center gap-2 overflow-hidden rounded-lg bg-foreground/6 px-2 motion-reduce:animate-none">
+      <span className="pointer-events-none absolute inset-y-0 left-0 w-1/3 animate-access-shine bg-linear-to-r from-transparent via-foreground/12 to-transparent motion-reduce:hidden" />
       {app === undefined ? (
-        <span className="size-4 rounded-sm bg-foreground/15" />
+        <span className="size-6 shrink-0 rounded-md bg-foreground/15" />
       ) : (
-        <img src={app.icon} alt="" className="size-4" />
+        <img src={app.icon} alt="" className="size-6 shrink-0" />
       )}
-      <span className="flex-1 truncate text-xs">{app?.name}</span>
-      <HandIcon className="size-3 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-xs font-semibold">{app?.name}</span>
+        <span className="truncate text-xs text-muted-foreground">{hint}</span>
+      </div>
+      <ArrowUpIcon className="size-3.5 shrink-0 animate-bounce text-brand motion-reduce:animate-none" />
+      <XIcon className="size-3 shrink-0 text-muted-foreground" />
     </div>
   );
 }

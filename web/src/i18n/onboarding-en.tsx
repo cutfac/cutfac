@@ -56,7 +56,6 @@ export const onboardingEn = {
     /** The picture of System Settings with the panel under it. */
     preview: {
       list: "Full Disk Access",
-      drop: "Drag into the list above",
       pane: "Privacy & Security",
       search: "Search",
     },

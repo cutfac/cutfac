@@ -52,7 +52,6 @@ export const onboardingKo: OnboardingMessages = {
     skipNote: "대신 macOS가 폴더마다 물어봐요.",
     preview: {
       list: "전체 디스크 접근 권한",
-      drop: "위 목록에 끌어다 놓으세요",
       pane: "개인정보 보호 및 보안",
       search: "검색",
     },
