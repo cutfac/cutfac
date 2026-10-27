@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { Layer, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 
 import { type RequestFacts, requestGuard, requestProblem } from "../src/server/guard.ts";
+import { it } from "./effect.ts";
+import { jsonOf } from "./routeSupport.ts";
 
 const BOARD = "http://127.0.0.1:4317";
 
@@ -99,31 +101,29 @@ describe("request guard", () => {
     ).toEqual(Option.some("Cross-site request"));
   });
 
-  test("answers every route with 403 for a refused request", async () => {
-    const app = Layer.merge(
-      HttpRouter.add("GET", "/api/health", HttpServerResponse.jsonUnsafe({ ok: true })),
-      requestGuard("127.0.0.1"),
-    );
-
-    const web = HttpRouter.toWebHandler(app, { disableLogger: true });
-
-    try {
-      const allowed = await web.handler(
-        new Request(`${BOARD}/api/health`, { headers: { host: "127.0.0.1:4317", origin: BOARD } }),
+  it.live("answers every route with 403 for a refused request", () =>
+    Effect.gen(function* () {
+      const app = Layer.merge(
+        HttpRouter.add("GET", "/api/health", HttpServerResponse.jsonUnsafe({ ok: true })),
+        requestGuard("127.0.0.1"),
       );
+
+      const web = yield* Effect.acquireRelease(
+        Effect.sync(() => HttpRouter.toWebHandler(app, { disableLogger: true })),
+        (handler) => Effect.promise(handler.dispose),
+      );
+
+      const health = (headers: Record<string, string>) =>
+        Effect.promise(() => web.handler(new Request(`${BOARD}/api/health`, { headers })));
+
+      const allowed = yield* health({ host: "127.0.0.1:4317", origin: BOARD });
 
       expect(allowed.status).toBe(200);
 
-      const refused = await web.handler(
-        new Request(`${BOARD}/api/health`, {
-          headers: { host: "127.0.0.1:4317", origin: "https://evil.example" },
-        }),
-      );
+      const refused = yield* health({ host: "127.0.0.1:4317", origin: "https://evil.example" });
 
       expect(refused.status).toBe(403);
-      expect(await refused.json()).toEqual({ error: "Cross-origin request" });
-    } finally {
-      await web.dispose();
-    }
-  });
+      expect(yield* jsonOf(refused)).toEqual({ error: "Cross-origin request" });
+    }),
+  );
 });

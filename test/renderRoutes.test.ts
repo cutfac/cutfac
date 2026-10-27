@@ -1,59 +1,33 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { expect } from "bun:test";
 
-// The web handler is the test's entry point, so it provides every layer the routes need.
-// @effect-diagnostics strictEffectProvide:off
-import { BunHttpPlatform } from "@effect/platform-bun";
-import { Layer, ManagedRuntime } from "effect";
-import { HttpRouter } from "effect/http";
+import { Effect, Option, Schema, Stream } from "effect";
+import { Sse } from "effect/encoding";
 
 import { createItem } from "../src/core/items.ts";
 import { RENDERS_DIR } from "../src/core/render.ts";
+import { Workspace } from "../src/core/workspace.ts";
 import { renderRoutes } from "../src/server/render.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { workspaceRoutes } from "./routeSupport.ts";
+import { tempWorkspace } from "./support.ts";
 
-/** The render routes on a test workspace. */
-const makeServer = async (t: TestWorkspace) => {
-  const runtime = ManagedRuntime.make(t.layer);
-  const context = await runtime.context();
+const it = testEffect(tempWorkspace("Render routes"));
 
-  const web = HttpRouter.toWebHandler(
-    renderRoutes.pipe(Layer.provide(Layer.merge(t.layer, BunHttpPlatform.layer))),
-    { disableLogger: true },
-  );
+/** The render routes on the test's workspace, with an item to render. */
+const renderServer = Effect.gen(function* () {
+  const server = yield* workspaceRoutes(renderRoutes);
 
-  const send = (path: string, init: RequestInit = {}) =>
-    web.handler(new Request(`http://localhost${path}`, init), context);
+  yield* createItem({ title: "Clip" });
 
-  const dispose = async () => {
-    await web.dispose();
-    await runtime.dispose();
-  };
-
-  return { send, dispose };
-};
-
-let t: TestWorkspace;
-
-let server: Awaited<ReturnType<typeof makeServer>>;
-
-beforeEach(async () => {
-  t = await makeWorkspace("Render routes");
-  server = await makeServer(t);
-  await t.run(createItem({ title: "Clip" }));
-});
-
-afterEach(async () => {
-  await server.dispose();
-  await t.remove();
+  return server;
 });
 
 /** A render of `clip` this test process is running, as the MCP server would save it. */
-const saveRunning = async () => {
-  await mkdir(join(t.root, RENDERS_DIR), { recursive: true });
-  await writeFile(
-    join(t.root, RENDERS_DIR, "clip.json"),
+const saveRunning = Effect.gen(function* () {
+  const ws = yield* Workspace;
+
+  yield* ws.writeText(
+    `${RENDERS_DIR}/clip.json`,
     JSON.stringify({
       item: "clip",
       command: "npx remotion render",
@@ -65,58 +39,72 @@ const saveRunning = async () => {
       owner: process.pid,
     }),
   );
-};
+});
+
+const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Json));
 
 /** The first `render` event the stream sends. */
-const firstRender = async (response: Response) => {
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let text = "";
+const firstRender = (response: Response) =>
+  Stream.fromReadableStream({
+    evaluate: () => response.body ?? new ReadableStream(),
+    onError: (error) => new Error(`The stream broke: ${String(error)}`),
+  }).pipe(
+    Stream.decodeText(),
+    Stream.pipeThroughChannel(Sse.decode()),
+    Stream.filter((event) => event.event === "render"),
+    Stream.runHead,
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.die(new Error("The stream ended before a render event")),
+        onSome: (event) => decodeJson(event.data),
+      }),
+    ),
+    Effect.orDie,
+  );
 
-  while (true) {
-    const chunk = await reader.read();
+it.live("streams null while the item has no render", () =>
+  Effect.gen(function* () {
+    const { send } = yield* renderServer;
 
-    if (chunk.done) break;
+    const response = yield* send("/api/item/render?id=clip");
 
-    text += decoder.decode(chunk.value);
-    const event = /event: render\ndata: (.*)\n/.exec(text);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(yield* firstRender(response)).toBeNull();
+  }),
+);
 
-    if (event?.[1] !== undefined) {
-      await reader.cancel();
+it.live("streams the render the agent saves", () =>
+  Effect.gen(function* () {
+    const { send } = yield* renderServer;
 
-      return JSON.parse(event[1]);
-    }
-  }
+    yield* saveRunning;
 
-  throw new Error(`no render event in ${text}`);
-};
+    const render = yield* firstRender(yield* send("/api/item/render?id=clip"));
 
-test("streams null while the item has no render", async () => {
-  const response = await server.send("/api/item/render?id=clip");
+    expect(render).toMatchObject({ status: "running", progress: { done: 12, total: 60 } });
+  }),
+);
 
-  expect(response.headers.get("content-type")).toContain("text/event-stream");
-  expect(await firstRender(response)).toBeNull();
-});
+it.live("refuses an item that isn't there", () =>
+  Effect.gen(function* () {
+    const { send } = yield* renderServer;
 
-test("streams the render the agent saves", async () => {
-  await saveRunning();
+    const response = yield* send("/api/item/render?id=missing");
 
-  const render = await firstRender(await server.send("/api/item/render?id=clip"));
+    expect(response.status).toBe(404);
+  }),
+);
 
-  expect(render).toMatchObject({ status: "running", progress: { done: 12, total: 60 } });
-});
+it.live("stopping leaves a note for the process running it", () =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+    const { send } = yield* renderServer;
 
-test("refuses an item that isn't there", async () => {
-  const response = await server.send("/api/item/render?id=missing");
+    yield* saveRunning;
 
-  expect(response.status).toBe(404);
-});
+    const response = yield* send("/api/item/render/stop?id=clip", { method: "POST" });
 
-test("stopping leaves a note for the process running it", async () => {
-  await saveRunning();
-
-  const response = await server.send("/api/item/render/stop?id=clip", { method: "POST" });
-
-  expect(response.status).toBe(200);
-  expect(await Bun.file(join(t.root, RENDERS_DIR, "clip.stop")).exists()).toBe(true);
-});
+    expect(response.status).toBe(200);
+    expect(yield* ws.exists(`${RENDERS_DIR}/clip.stop`)).toBe(true);
+  }),
+);

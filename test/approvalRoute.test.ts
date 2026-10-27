@@ -1,19 +1,14 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { expect } from "bun:test";
 import { join } from "node:path";
 
-// The web handler is the test's entry point, so it provides every layer the routes need.
-// @effect-diagnostics strictEffectProvide:off
-import { BunHttpPlatform } from "@effect/platform-bun";
-import { Effect, Layer, ManagedRuntime, Option, Schema, Stream } from "effect";
-import { FetchHttpClient, HttpRouter } from "effect/http";
+import { Deferred, Effect, Fiber, FileSystem, Layer, Schema, Stream } from "effect";
 
 import type { RunEvent } from "../src/core/agentParse.ts";
-import { RunRegistry } from "../src/core/agentRun.ts";
-import { ImportRuns } from "../src/core/importRun.ts";
-import { DesktopData } from "../src/plan.ts";
-import { routes } from "../src/server/app.ts";
-import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { type BoardServer, boardServer, jsonOf } from "./routeSupport.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace("Approvals"), fakeAgents));
 
 /** Claude Code asking to run ffmpeg, offering to allow it from now on. */
 const REQUEST = JSON.stringify({
@@ -34,54 +29,11 @@ const REQUEST = JSON.stringify({
   },
 });
 
-/** The board's API on a test workspace, finding only the fake agents. */
-const makeServer = async (t: TestWorkspace, fakes: FakeAgents) => {
-  // Route handlers read their services per request, as `serve` does from the server's context.
-  const runtime = ManagedRuntime.make(
-    Layer.mergeAll(
-      RunRegistry.layer(undefined),
-      ImportRuns.layer,
-      FetchHttpClient.layer,
-      BunHttpPlatform.layer,
-      Layer.succeed(DesktopData, Option.none()),
-    ).pipe(Layer.provideMerge(t.layer), Layer.provideMerge(fakes.layer)),
-  );
+/** A Claude that asks once, keeps the answer it reads back, then finishes. */
+const claudeAsking = Effect.gen(function* () {
+  const fakes = yield* FakeAgentDir;
 
-  const context = await runtime.context();
-  const app = routes({}).pipe(Layer.provide(Layer.merge(t.layer, BunHttpPlatform.layer)));
-  const web = HttpRouter.toWebHandler(app, { disableLogger: true });
-
-  const post = (path: string, body: Schema.JsonObject) =>
-    web.handler(
-      new Request(`http://localhost${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }),
-      context,
-    );
-
-  const dispose = async () => {
-    await web.dispose();
-    await runtime.dispose();
-  };
-
-  return { runtime, post, dispose };
-};
-
-let t: TestWorkspace;
-
-let fakes: FakeAgents;
-
-let server: Awaited<ReturnType<typeof makeServer>>;
-
-beforeEach(async () => {
-  t = await makeWorkspace("Approvals");
-  fakes = await makeFakeAgents();
-  server = await makeServer(t, fakes);
-
-  // A Claude that asks once, keeps the answer it reads back, then finishes.
-  await fakes.bin(
+  yield* fakes.bin(
     "claude",
     `head -n 1 >/dev/null
 echo '{"type":"system","subtype":"init","session_id":"sess-1"}'
@@ -92,94 +44,98 @@ echo '{"type":"result","subtype":"success","session_id":"sess-1","result":"Done.
   );
 });
 
-afterEach(async () => {
-  // Stops any agent still running before the workspace is removed.
-  await server.dispose();
-  await fakes.remove();
-  await t.remove();
-});
-
-const post = (path: string, body: Schema.JsonObject) => server.post(path, body);
-
 /** The item's run events up to its end, and the first request it puts to the board. */
-const watch = async (id: string) => {
-  const asked = Promise.withResolvers<RunEvent>();
-  const listening = Promise.withResolvers<void>();
+const watch = Effect.fnUntraced(function* (server: BoardServer, id: string) {
+  const asked = yield* Deferred.make<RunEvent>();
+  const { events } = yield* server.runs.subscribe(id);
 
-  const events = server.runtime.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const subscription = yield* (yield* RunRegistry).subscribe(id);
-        listening.resolve();
-
-        return yield* Stream.runCollect(
-          subscription.events.pipe(
-            Stream.tap((event) =>
-              Effect.sync(() => (event.type === "approval" ? asked.resolve(event) : undefined)),
-            ),
-            Stream.takeUntil((event) => event.type === "done" || event.type === "error"),
-          ),
-        );
-      }),
+  const collected = yield* events.pipe(
+    Stream.tap((event) =>
+      event.type === "approval" ? Deferred.succeed(asked, event) : Effect.void,
     ),
+    Stream.takeUntil((event) => event.type === "done" || event.type === "error"),
+    Stream.runCollect,
+    Effect.forkScoped,
   );
 
-  await listening.promise;
-
-  return { asked: asked.promise, events };
-};
-
-test("a board edit puts Claude's request on the board and takes the answer back to it", async () => {
-  await post("/api/items", { title: "Clip" });
-  const run = await watch("clip");
-
-  await post("/api/item/edit?id=clip", { agent: "claude", body: "Cut the clip" });
-
-  expect(await run.asked).toEqual({
-    type: "approval",
-    id: "r1",
-    tool: "Bash",
-    kind: "command",
-    network: false,
-    detail: "ffmpeg -i clip.mp4 out.mp4",
-    always: true,
-    rules: ["Bash(ffmpeg:*)"],
-    session: false,
-  });
-
-  const answered = await post("/api/item/edit/approval?id=clip", {
-    request: "r1",
-    answer: "allow",
-  });
-
-  expect(answered.status).toBe(200);
-  expect(await answered.json()).toEqual({ answered: true });
-  expect((await run.events).map((event) => event.type)).toEqual([
-    "start",
-    "approval",
-    "approval-settled",
-    "done",
-  ]);
-
-  const reply = JSON.parse(await readFile(join(fakes.calls, "answer"), "utf8"));
-
-  expect(reply.response).toMatchObject({
-    request_id: "r1",
-    response: { behavior: "allow", updatedInput: { command: "ffmpeg -i clip.mp4 out.mp4" } },
-  });
-
-  // Once settled, a second answer goes nowhere.
-  const late = await post("/api/item/edit/approval?id=clip", { request: "r1", answer: "deny" });
-
-  expect(await late.json()).toEqual({ answered: false });
+  return { asked: Deferred.await(asked), events: Fiber.join(collected) };
 });
 
-test("takes only the answers the board offers", async () => {
-  const unknown = await post("/api/item/edit/approval?id=clip", { request: "r1", answer: "maybe" });
+it.live("a board edit puts Claude's request on the board and takes the answer back to it", () =>
+  Effect.gen(function* () {
+    const fakes = yield* FakeAgentDir;
+    const fs = yield* FileSystem.FileSystem;
+    const server = yield* boardServer();
+    const { sendJson } = server;
 
-  expect(unknown.status).toBe(400);
+    yield* claudeAsking;
+    yield* sendJson("POST", "/api/items", { title: "Clip" });
+    const run = yield* watch(server, "clip");
 
-  const unnamed = await post("/api/item/edit/approval?id=clip", { answer: "allow" });
+    yield* sendJson("POST", "/api/item/edit?id=clip", { agent: "claude", body: "Cut the clip" });
 
-  expect(unnamed.status).toBe(400);
-});
+    expect(yield* run.asked).toEqual({
+      type: "approval",
+      id: "r1",
+      tool: "Bash",
+      kind: "command",
+      network: false,
+      detail: "ffmpeg -i clip.mp4 out.mp4",
+      always: true,
+      rules: ["Bash(ffmpeg:*)"],
+      session: false,
+    });
+
+    const answered = yield* sendJson("POST", "/api/item/edit/approval?id=clip", {
+      request: "r1",
+      answer: "allow",
+    });
+
+    expect(answered.status).toBe(200);
+    expect(yield* jsonOf(answered)).toEqual({ answered: true });
+    expect((yield* run.events).map((event) => event.type)).toEqual([
+      "start",
+      "approval",
+      "approval-settled",
+      "done",
+    ]);
+
+    const reply = yield* fs
+      .readFileString(join(fakes.calls, "answer"))
+      .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))), Effect.orDie);
+
+    expect(reply).toMatchObject({
+      response: {
+        request_id: "r1",
+        response: { behavior: "allow", updatedInput: { command: "ffmpeg -i clip.mp4 out.mp4" } },
+      },
+    });
+
+    // Once settled, a second answer goes nowhere.
+    const late = yield* sendJson("POST", "/api/item/edit/approval?id=clip", {
+      request: "r1",
+      answer: "deny",
+    });
+
+    expect(yield* jsonOf(late)).toEqual({ answered: false });
+  }),
+);
+
+it.live("takes only the answers the board offers", () =>
+  Effect.gen(function* () {
+    const { sendJson } = yield* boardServer();
+
+    const unknown = yield* sendJson("POST", "/api/item/edit/approval?id=clip", {
+      request: "r1",
+      answer: "maybe",
+    });
+
+    expect(unknown.status).toBe(400);
+
+    const unnamed = yield* sendJson("POST", "/api/item/edit/approval?id=clip", {
+      answer: "allow",
+    });
+
+    expect(unnamed.status).toBe(400);
+  }),
+);

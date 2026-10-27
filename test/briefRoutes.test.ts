@@ -1,83 +1,61 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { expect } from "bun:test";
 import { join } from "node:path";
 
-// The web handler is the test's entry point, so it provides every layer the routes need.
-// @effect-diagnostics strictEffectProvide:off
-import { BunHttpPlatform } from "@effect/platform-bun";
-import { Layer, ManagedRuntime, Schema } from "effect";
-import { HttpRouter } from "effect/http";
+import { Effect, type Schema } from "effect";
 
+import { Workspace } from "../src/core/workspace.ts";
 import { briefRoutes } from "../src/server/brief.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { jsonOf, workspaceRoutes } from "./routeSupport.ts";
+import { tempWorkspace } from "./support.ts";
 
-/** The brief routes on a test workspace. */
-const makeServer = async (t: TestWorkspace) => {
-  const runtime = ManagedRuntime.make(t.layer);
-  const context = await runtime.context();
+const it = testEffect(tempWorkspace("Brief routes"));
 
-  const web = HttpRouter.toWebHandler(
-    briefRoutes.pipe(Layer.provide(Layer.merge(t.layer, BunHttpPlatform.layer))),
-    { disableLogger: true },
-  );
+/** The brief routes on the test's workspace. */
+const briefServer = Effect.gen(function* () {
+  const { send, sendJson } = yield* workspaceRoutes(briefRoutes);
 
-  const send = (init: RequestInit = {}) =>
-    web.handler(new Request("http://localhost/api/brief", init), context);
+  return {
+    send: (init: RequestInit = {}) => send("/api/brief", init),
+    patch: (body: Schema.JsonObject) => sendJson("PATCH", "/api/brief", body),
+  };
+});
 
-  const patch = (body: Schema.JsonObject) =>
-    send({
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+it.live("the board reads an empty brief until someone writes one", () =>
+  Effect.gen(function* () {
+    const ws = yield* Workspace;
+    const server = yield* briefServer;
+
+    const response = yield* server.send();
+
+    expect(response.status).toBe(200);
+    expect(yield* jsonOf(response)).toEqual({
+      path: join(ws.root, "brief.md"),
+      exists: false,
+      purpose: null,
+      platforms: [],
+      body: "",
+    });
+  }),
+);
+
+it.live("the board changes only what it sends, and refuses what the brief can't hold", () =>
+  Effect.gen(function* () {
+    const server = yield* briefServer;
+
+    yield* server.patch({ purpose: "tips", body: "Cooking tips." });
+    const changed = yield* server.patch({ platforms: ["shorts"] });
+
+    expect(yield* jsonOf(changed)).toMatchObject({
+      exists: true,
+      purpose: "tips",
+      platforms: ["shorts"],
+      body: "Cooking tips.",
     });
 
-  const dispose = async () => {
-    await web.dispose();
-    await runtime.dispose();
-  };
+    const refused = yield* server.patch({ platforms: ["myspace"] });
 
-  return { send, patch, dispose };
-};
-
-let t: TestWorkspace;
-
-let server: Awaited<ReturnType<typeof makeServer>>;
-
-beforeEach(async () => {
-  t = await makeWorkspace("Brief routes");
-  server = await makeServer(t);
-});
-
-afterEach(async () => {
-  await server.dispose();
-  await t.remove();
-});
-
-test("the board reads an empty brief until someone writes one", async () => {
-  const response = await server.send();
-
-  expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({
-    path: join(t.root, "brief.md"),
-    exists: false,
-    purpose: null,
-    platforms: [],
-    body: "",
-  });
-});
-
-test("the board changes only what it sends, and refuses what the brief can't hold", async () => {
-  await server.patch({ purpose: "tips", body: "Cooking tips." });
-  const changed = await server.patch({ platforms: ["shorts"] });
-
-  expect(await changed.json()).toMatchObject({
-    exists: true,
-    purpose: "tips",
-    platforms: ["shorts"],
-    body: "Cooking tips.",
-  });
-
-  const refused = await server.patch({ platforms: ["myspace"] });
-
-  expect(refused.status).toBe(400);
-  expect(await (await server.send()).json()).toMatchObject({ platforms: ["shorts"] });
-});
+    expect(refused.status).toBe(400);
+    expect(yield* jsonOf(yield* server.send())).toMatchObject({ platforms: ["shorts"] });
+  }),
+);
