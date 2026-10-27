@@ -13,6 +13,7 @@ import { renderEn } from "./render-en.tsx";
 import { reportsEn } from "./reports-en.tsx";
 import { startEn } from "./start-en.tsx";
 import { trustEn } from "./trust-en.tsx";
+import { workspacesEn } from "./workspaces-en.tsx";
 
 /** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
 type Link = (text: string) => ReactNode;
@@ -742,6 +743,7 @@ export const en = {
   start: startEn,
   trust: trustEn,
   reports: reportsEn,
+  workspaces: workspacesEn,
   mcp: mcpEn,
   permissions: permissionsEn,
   gallery: galleryEn,

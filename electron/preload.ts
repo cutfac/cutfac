@@ -45,6 +45,9 @@ import {
   OPEN_DEV_PANEL_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
   OPEN_WORKSPACE_CHANNEL,
+  NEW_WORKSPACE_CHANNEL,
+  SWITCH_WORKSPACE_CHANNEL,
+  WORKSPACES_CHANNEL,
   PICK_PATH_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
@@ -115,7 +118,7 @@ const onboarding = {
   appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
   defaultFolder: () => ipcRenderer.invoke(DEFAULT_FOLDER_CHANNEL),
   chooseFolder: () => ipcRenderer.invoke(CHOOSE_FOLDER_CHANNEL),
-  createWorkspace: (folder) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, folder),
+  createWorkspace: (library, name) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, library, name),
 } satisfies CutfacOnboarding;
 
 /** The Dev Panel's tools; the dev build passes the flag to that window alone. */
@@ -139,6 +142,9 @@ const dev = {
 
 const bridge = {
   openWorkspace: (): Promise<boolean> => ipcRenderer.invoke(OPEN_WORKSPACE_CHANNEL),
+  workspaces: () => ipcRenderer.invoke(WORKSPACES_CHANNEL),
+  switchWorkspace: (name) => ipcRenderer.invoke(SWITCH_WORKSPACE_CHANNEL, name),
+  newWorkspace: (name) => ipcRenderer.invoke(NEW_WORKSPACE_CHANNEL, name),
   revealPath: (target: string): Promise<void> => ipcRenderer.invoke(REVEAL_PATH_CHANNEL, target),
   pickPath: (): Promise<string | undefined> => ipcRenderer.invoke(PICK_PATH_CHANNEL),
   startDrag: (target) => ipcRenderer.send(START_DRAG_CHANNEL, target),

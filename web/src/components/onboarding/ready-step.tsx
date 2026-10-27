@@ -1,22 +1,26 @@
+import { Match } from "effect";
 import { ArrowRightIcon, FolderIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { ErrorAlert } from "@/components/page";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
 import type { CutfacOnboarding, Folder, Sharing, SharingPurpose } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { EMPTY_BRIEF } from "../../lib/brief.ts";
+import { nameFromSources } from "../../lib/onboarding.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
 import { SharingChoice } from "./sharing-choice.tsx";
 
 /**
- * The last step before there is a workspace: where the templates and videos will be kept, as one
- * line with a way to change it, and the one press that makes the folder and starts the first
- * template from what the user said. Most keep the folder, so it doesn't ask a step of its own. The
- * app starts the server on it and the window moves on to the board by itself.
+ * The last step before there is a workspace: its name, already filled in, with where the app keeps
+ * its workspaces under it and a way to change that, and the one press that makes it. Most keep
+ * both, so neither asks a step of its own. The app starts the server on it and the window moves on
+ * to the board by itself.
  */
 export function ReadyStep({
   onboarding,
@@ -26,14 +30,22 @@ export function ReadyStep({
   onBack: () => void;
 }) {
   const t = useMessages().onboarding.ready;
-  const [folder, setFolder] = useState<Folder>();
+  const [library, setLibrary] = useState<Folder>();
+  const [name, setName] = useState("");
+  const nameId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   // Asked here only in a build that can send; undefined until it is known.
   const [sharing, setSharing] = useState<Sharing>();
 
   useEffect(() => {
-    onboarding.defaultFolder().then(setFolder, (cause: Error) => setError(cause.message));
+    Promise.all([onboarding.defaultFolder(), onboarding.draft()]).then(
+      ([suggested, draft]) => {
+        setLibrary(suggested.library);
+        setName(suggested.name ?? nameFromSources(draft?.sources ?? []) ?? t.defaultName);
+      },
+      (cause: Error) => setError(cause.message),
+    );
     // An answer given here before wins over one from an earlier install.
     Promise.all([onboarding.sharing(), onboarding.draft()]).then(
       ([found, draft]) =>
@@ -44,7 +56,7 @@ export function ReadyStep({
         }),
       () => setSharing({ available: false, errorReports: null, usageStats: null }),
     );
-  }, [onboarding]);
+  }, [onboarding, t.defaultName]);
 
   // Kept with the other answers; the board saves it once the workspace is there.
   const share = (purpose: SharingPurpose, answer: boolean) => {
@@ -64,7 +76,7 @@ export function ReadyStep({
       (next) => {
         if (next === undefined) return;
 
-        setFolder(next);
+        setLibrary(next);
         setError(undefined);
       },
       (cause: Error) => setError(cause.message),
@@ -74,11 +86,18 @@ export function ReadyStep({
     setBusy(true);
     setError(undefined);
     // On success the window loads the board, so only a failure comes back here.
-    onboarding.createWorkspace(target.path).then(
-      (reason) => {
-        if (reason === undefined) return;
+    onboarding.createWorkspace(target.path, name).then(
+      (failure) => {
+        if (failure === undefined) return;
 
-        setError(reason);
+        setError(
+          Match.value(failure).pipe(
+            Match.when({ kind: "taken" }, () => t.taken),
+            Match.when({ kind: "invalid" }, () => t.invalidName),
+            Match.when({ kind: "failed" }, ({ message }) => message),
+            Match.exhaustive,
+          ),
+        );
         setBusy(false);
       },
       (cause: Error) => {
@@ -91,20 +110,32 @@ export function ReadyStep({
   return (
     <>
       <StepHeader title={t.title} body={t.body} />
-      {folder === undefined ? (
-        <Skeleton className="h-14 w-full" />
+      {library === undefined ? (
+        <Skeleton className="h-28 w-full" />
       ) : (
-        <div className="flex items-center gap-3 rounded-2xl bg-muted py-2.5 pr-2.5 pl-4">
-          <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-xs text-muted-foreground">{t.savedIn}</span>
-            <span className="truncate font-mono text-xs" title={folder.path}>
-              {folder.label}
+        <div className="flex flex-col gap-3 rounded-2xl bg-muted p-4">
+          <Field>
+            <FieldLabel htmlFor={nameId}>{t.nameLabel}</FieldLabel>
+            <Input
+              id={nameId}
+              value={name}
+              maxLength={64}
+              disabled={busy}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+          <div className="flex min-w-0 items-center gap-2">
+            <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <span
+              className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+              title={library.path}
+            >
+              {`${library.label}/workspaces/${name.trim()}`}
             </span>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={change}>
+              {t.change}
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={change}>
-            {t.change}
-          </Button>
         </div>
       )}
       {sharing?.available === true ? (
@@ -114,9 +145,9 @@ export function ReadyStep({
       <StepActions onBack={onBack} backDisabled={busy}>
         <Button
           size="lg"
-          disabled={folder === undefined || sharing === undefined || busy}
+          disabled={library === undefined || name.trim() === "" || sharing === undefined || busy}
           onClick={() => {
-            if (folder !== undefined) create(folder);
+            if (library !== undefined) create(library);
           }}
         >
           {busy ? <Spinner data-icon="inline-start" /> : null}

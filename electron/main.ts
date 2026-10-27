@@ -22,14 +22,13 @@ import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPage
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
 import { DEV_APP } from "./devApp.ts";
 import { handleDevTools } from "./devTools.ts";
-import { describeError, pickSource, pickWorkspace, showStartFailure } from "./dialogs.ts";
+import { describeError, pickSource, showStartFailure } from "./dialogs.ts";
 import {
   APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,
   LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
-  OPEN_WORKSPACE_CHANNEL,
   PICK_PATH_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
@@ -64,6 +63,7 @@ import { stopWatching } from "./systemAccess.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
+import { handleWorkspaces } from "./workspaces.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
 // packaged app ignores it, so another program can't open the app on a page of its choosing.
@@ -86,6 +86,8 @@ let sidecar: Sidecar | undefined;
 let updates: Updates | undefined;
 
 let links: Links | undefined;
+
+let workspaces: ReturnType<typeof handleWorkspaces> | undefined;
 
 /** Only the packaged app checks its license key; a dev build leaves the saved one alone. */
 let license: License | undefined;
@@ -158,10 +160,13 @@ if (!app.requestSingleInstanceLock()) {
   // `bun run desktop:dev` rebuilt the preload script, which a reload runs in the page.
   if (devUrl) process.on("SIGUSR2", () => window?.webContents.reloadIgnoringCache());
 
-  ipcMain.handle(OPEN_WORKSPACE_CHANNEL, (event) => {
-    assertFromApp(event);
-
-    return chooseWorkspace();
+  workspaces = handleWorkspaces({
+    isFromApp,
+    window: () => window,
+    current: () => workspaceRoot,
+    switching: () => switching,
+    activate,
+    chooseMessage: () => MESSAGES[locale].chooseWorkspace,
   });
   ipcMain.handle(REVEAL_PATH_CHANNEL, (event, target: string) => {
     assertFromApp(event);
@@ -202,7 +207,7 @@ if (!app.requestSingleInstanceLock()) {
     preload: preloadPath,
     window: () => window,
     bringToFront,
-    chooseMessage: () => MESSAGES[locale].chooseWorkspace,
+    chooseMessage: () => MESSAGES[locale].chooseLibrary,
     openWorkspace: async (folder) => {
       if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
     },
@@ -263,7 +268,7 @@ function setMenu(): void {
     updatesEnabled: updates?.enabled ?? false,
     checkForUpdates: () => void updates?.checkNow(),
     requestLicenseKey,
-    openWorkspace: () => void chooseWorkspace(),
+    openWorkspace: () => void workspaces?.choose(),
     appCommand: sendAppCommand,
     editCommand: sendEditCommand,
     goBack: () => window?.webContents.navigationHistory.goBack(),
@@ -297,23 +302,6 @@ function bringToFront(): void {
 function requestLicenseKey(): void {
   bringToFront();
   window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, license?.hasKey() ?? false);
-}
-
-/** Asks for a folder and switches to it. Resolves false if cancelled or if it failed to start. */
-async function chooseWorkspace(): Promise<boolean> {
-  if (switching) return false;
-
-  const workspace = await pickWorkspace(window, MESSAGES[locale].chooseWorkspace, workspaceRoot);
-
-  if (!workspace) return false;
-
-  const previous = workspaceRoot;
-
-  if (await activate(workspace)) return true;
-
-  if (previous) await activate(previous);
-
-  return false;
 }
 
 /** Opens `workspace`, or says why it couldn't. Resolves false if it didn't open. */

@@ -1,7 +1,7 @@
 import { ArchiveIcon, FolderOpenIcon, PanelLeftIcon, PlugZapIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { MAIN_NAV, openWorkspace } from "@/components/app-sidebar";
+import { MAIN_NAV } from "@/components/app-sidebar";
 import { openNewItem } from "@/components/new-item-dialog";
 import { StatusDot } from "@/components/status-dot";
 import {
@@ -15,6 +15,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { useSidebar } from "@/components/ui/sidebar";
+import { openWorkspace } from "@/components/workspace-menu";
 
 import { api } from "../api.ts";
 import { desktop } from "../desktop.ts";

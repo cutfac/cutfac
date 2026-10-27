@@ -80,7 +80,10 @@ export const onboardingEn = {
   ready: {
     title: "Ready to make your first video",
     body: "Your agent reads what you told it before every video. Cutfac keeps your videos and templates as plain files in one folder.",
-    savedIn: "Saved in",
+    nameLabel: "Workspace name",
+    defaultName: "My videos",
+    taken: "A folder with this name is already there. Try another name.",
+    invalidName: "Use a name without / or :, not starting with a dot.",
     change: "Change…",
     start: "Start making",
     creating: "Setting up…",

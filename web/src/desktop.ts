@@ -74,6 +74,12 @@ export interface Folder {
   label: string;
 }
 
+/** Why a workspace couldn't be made: its name is taken or can't be a folder's, or what failed. */
+export type CreateFailure =
+  | { kind: "taken" }
+  | { kind: "invalid" }
+  | { kind: "failed"; message: string };
+
 /** What the first launch asks of the app before there is a workspace, and so a server. */
 export interface CutfacOnboarding {
   /** Every agent CLI as found on this computer now. */
@@ -118,15 +124,18 @@ export interface CutfacOnboarding {
   focusDragHelper: () => void;
   /** The app as a list in System Settings shows it, for the helper window to show as the thing to drag. */
   appIcon: () => Promise<{ icon: string; name: string }>;
-  /** The folder the workspace step suggests. */
-  defaultFolder: () => Promise<Folder>;
-  /** Ask for another folder. Resolves it, or undefined if cancelled. */
+  /**
+   * The app's own folder, where the first workspace goes, and a name for that workspace when the
+   * app suggests one, as the dev build does.
+   */
+  defaultFolder: () => Promise<{ library: Folder; name?: string }>;
+  /** Ask for another folder for the app to keep its workspaces in. Resolves it, or undefined. */
   chooseFolder: () => Promise<Folder | undefined>;
   /**
-   * Make the folder if it is new and open the board on it; the window moves on by itself. Resolves
-   * why it couldn't, or undefined.
+   * Make the workspace `name` in the app's folder `library` and open the board on it; the window
+   * moves on by itself. Resolves why it couldn't, or undefined.
    */
-  createWorkspace: (folder: string) => Promise<string | undefined>;
+  createWorkspace: (library: string, name: string) => Promise<CreateFailure | undefined>;
 }
 
 /** What the Dev Panel has an agent be, or `real` to check this Mac for it. */
@@ -180,10 +189,21 @@ export interface Attention {
   asking: { id: string; title: string; about: "approval" | "question" }[];
 }
 
+/** The workspaces in the app's folder, by name, and which one is open. */
+export interface LibraryWorkspaces {
+  workspaces: { name: string; path: string; current: boolean }[];
+}
+
 /** What the Electron preload script exposes; absent when the board runs in a plain browser. */
 export interface CutfacDesktop {
   /** Ask for a workspace folder and restart the local server on it. Resolves false if cancelled. */
   openWorkspace: () => Promise<boolean>;
+  /** The workspaces in the app's folder. */
+  workspaces: () => Promise<LibraryWorkspaces>;
+  /** Open the workspace of that name in the app's folder. Resolves false if it didn't. */
+  switchWorkspace: (name: string) => Promise<boolean>;
+  /** Make a workspace of that name in the app's folder and open it. Resolves why it couldn't. */
+  newWorkspace: (name: string) => Promise<CreateFailure | undefined>;
   /** Show a workspace file or folder in Finder / Explorer. `path` is absolute. */
   revealPath: (path: string) => Promise<void>;
   /**

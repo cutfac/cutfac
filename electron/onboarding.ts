@@ -1,7 +1,6 @@
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import {
   app,
   ipcMain,
@@ -12,9 +11,9 @@ import {
 } from "electron";
 
 import { AgentName } from "../src/core/schema.ts";
-import type { Folder } from "../web/src/desktop.ts";
+import type { CreateFailure, Folder } from "../web/src/desktop.ts";
 import { agentSetups, fixAgent } from "./agents.ts";
-import { pickWorkspace } from "./dialogs.ts";
+import { pickLibrary } from "./dialogs.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   AGENTS_CHANNEL,
@@ -35,7 +34,8 @@ import {
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
-import { clearDraft, isDraft, loadDraft, saveDraft } from "./settings.ts";
+import { decodeWorkspaceName } from "./library.ts";
+import { clearDraft, isDraft, loadDraft, loadLibrary, saveDraft, saveLibrary } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
 import {
   appBadge,
@@ -46,6 +46,7 @@ import {
   openAccessSettings,
   systemVersion,
 } from "./systemAccess.ts";
+import { prepareWorkspaceFolder } from "./workspaces.ts";
 
 const isAgentName = Schema.is(AgentName);
 
@@ -67,15 +68,15 @@ export interface OnboardingChecks {
   agentSetups: typeof agentSetups;
   fixAgent: typeof fixAgent;
   hasPermission: typeof hasPermission;
-  /** Where the workspace step suggests making one. It isn't checked: looking in Documents has macOS ask. */
-  defaultFolder: () => string;
+  /** The app's folder the last step suggests, and a name for the workspace when it has one. */
+  suggestion: () => Promise<{ library: string; name: string | undefined }>;
 }
 
 export const macChecks: OnboardingChecks = {
   agentSetups,
   fixAgent,
   hasPermission,
-  defaultFolder: () => path.join(app.getPath("documents"), "Cutfac"),
+  suggestion: async () => ({ library: await loadLibrary(), name: undefined }),
 };
 
 export interface OnboardingHost {
@@ -85,7 +86,7 @@ export interface OnboardingHost {
   preload: string;
   window: () => BrowserWindow | undefined;
   bringToFront: () => void;
-  /** What the folder dialog says, in the board's language. */
+  /** What the dialog for the app's folder says, in the board's language. */
   chooseMessage: () => string;
   /** Starts the workspace and opens the board on it. Throws why it couldn't. */
   openWorkspace: (folder: string) => Promise<void>;
@@ -96,7 +97,7 @@ export interface OnboardingHost {
 export function handleOnboarding(host: OnboardingHost): void {
   const checks = host.checks ?? macChecks;
 
-  // Only a folder the step was given here may be made into a workspace, never any path a page sends.
+  // Only a folder the step was given here may hold the workspace, never any path a page sends.
   const offered = new Set<string>();
 
   const offer = (target: string): Folder => {
@@ -192,30 +193,44 @@ export function handleOnboarding(host: OnboardingHost): void {
 
     return appBadge();
   });
-  ipcMain.handle(DEFAULT_FOLDER_CHANNEL, (event) => {
+  ipcMain.handle(DEFAULT_FOLDER_CHANNEL, async (event) => {
     assertFromApp(event);
 
-    return offer(checks.defaultFolder());
+    const { library, name } = await checks.suggestion();
+
+    return name === undefined ? { library: offer(library) } : { library: offer(library), name };
   });
   ipcMain.handle(CHOOSE_FOLDER_CHANNEL, async (event) => {
     assertFromApp(event);
 
-    const chosen = await pickWorkspace(host.window(), host.chooseMessage(), undefined);
+    const chosen = await pickLibrary(host.window(), host.chooseMessage());
 
     return chosen === undefined ? undefined : offer(chosen);
   });
-  ipcMain.handle(CREATE_WORKSPACE_CHANNEL, async (event, target) => {
-    assertFromApp(event);
+  ipcMain.handle(
+    CREATE_WORKSPACE_CHANNEL,
+    async (event, library, input): Promise<CreateFailure | undefined> => {
+      assertFromApp(event);
 
-    if (!isText(target) || !offered.has(target)) return "Choose a folder first";
+      if (!isText(library) || !offered.has(library)) return { kind: "invalid" };
 
-    try {
-      await mkdir(target, { recursive: true });
-      await host.openWorkspace(target);
+      const name = Option.getOrUndefined(decodeWorkspaceName(input));
 
-      return undefined;
-    } catch (error) {
-      return error instanceof Error ? error.message : String(error);
-    }
-  });
+      if (name === undefined) return { kind: "invalid" };
+
+      try {
+        // A workspace of that name already there is opened, as after a reinstall.
+        const prepared = await prepareWorkspaceFolder(library, name, true);
+
+        if (prepared.kind === "taken") return { kind: "taken" };
+
+        await saveLibrary(library);
+        await host.openWorkspace(prepared.path);
+
+        return undefined;
+      } catch (error) {
+        return { kind: "failed", message: error instanceof Error ? error.message : String(error) };
+      }
+    },
+  );
 }

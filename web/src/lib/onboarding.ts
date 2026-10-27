@@ -9,6 +9,24 @@ export const agentsToConnect = (statuses: ReadonlyArray<AgentStatus>): AgentName
     status.installed && status.outdated === undefined && !status.connected ? [status.agent] : [],
   );
 
+/**
+ * A name for the first workspace from the website the user gave, as its address reads without
+ * `www.`, such as `cutfac.com`; none without one.
+ */
+export function nameFromSources(sources: ReadonlyArray<string>): string | undefined {
+  for (const source of sources) {
+    const text = source.trim();
+
+    if (!URL.canParse(text.includes("://") ? text : `https://${text}`)) continue;
+
+    const { hostname } = new URL(text.includes("://") ? text : `https://${text}`);
+
+    if (hostname.includes(".")) return hostname.replace(/^www\./, "");
+  }
+
+  return undefined;
+}
+
 const skipKey = (root: string) => `cutfac.start.skipped.${root}`;
 
 /**

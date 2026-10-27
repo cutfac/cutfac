@@ -30,13 +30,13 @@ templates goes straight to what is missing. Closing the window keeps the progres
 save the step the user is on, and the next launch opens on it. Once the workspace is made, the
 board saves the answers into it and opens: nothing is made yet, so nothing is waited on.
 
-| Step            | Shows                                                                                                                                                                                                                                              | Done when                               |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                                                                                          | Start is pressed                        |
-| 2. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                                                | Next is pressed on the last part        |
-| 3. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                                                  | One agent is ready, and Next is pressed |
-| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                                             | Both are on, or Skip                    |
-| 5. Ready        | Where everything is kept, as one line (`~/Documents/Cutfac`) with Change, whether to share error reports and usage statistics with the Cutfac team, each on its own, and Start making. The folder is made and the agents from step 3 connect to it | The board opens on the folder           |
+| Step            | Shows                                                                                                                                                                                                                                                                                   | Done when                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                                                                                                                               | Start is pressed                        |
+| 2. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                                                                                     | Next is pressed on the last part        |
+| 3. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                                                                                       | One agent is ready, and Next is pressed |
+| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                                                                                  | Both are on, or Skip                    |
+| 5. Ready        | The workspace's name, filled in, with where it goes under it (`~/Movies/Cutfac/workspaces/<name>`) and Change, whether to share error reports and usage statistics with the Cutfac team, each on its own, and Start making. The folder is made and the agents from step 3 connect to it | The board opens on the folder           |
 
 ### Before the workspace
 
@@ -48,6 +48,21 @@ What to make has nowhere to be saved yet, so the app keeps the answers in its se
 last through the relaunch screen recording asks for. Step 5 starts the server on the folder; the
 board then forgets the answers, saves the brief and learns the material, which takes seconds, and
 opens. A browser has no steps before the workspace, so it asks what to make on Start.
+
+### Where workspaces are kept
+
+The app has one folder of its own, `~/Movies/Cutfac` (`Cutfac Dev` for the dev build), and every
+workspace it makes is a folder in its `workspaces`, named for the workspace. People pick a name,
+never a place: Ready fills in the website's address or "My videos", and the switcher at the top of
+the sidebar lists the workspaces there and makes a new one from a name. Change on Ready picks
+another folder for the app; Open a folder in the switcher still opens one anywhere else, such as a
+project folder.
+
+Movies is where macOS's video apps keep their libraries: Final Cut Pro, iMovie, CapCut and
+Camtasia. iCloud's Desktop and Documents sync doesn't move it, so large media isn't uploaded or
+evicted from the Mac while an agent reads it, and macOS doesn't ask before an app reads it, as it
+does for Desktop, Documents and Downloads. The folder's own top level is left for what every
+workspace will share.
 
 ### Agent
 

@@ -1,9 +1,7 @@
 import {
   ArrowRightIcon,
   TargetIcon,
-  ChevronsUpDownIcon,
   ClapperboardIcon,
-  FolderOpenIcon,
   LanguagesIcon,
   LayoutTemplateIcon,
   MessageSquareIcon,
@@ -12,8 +10,7 @@ import {
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useId, type ReactNode } from "react";
-import { toast } from "sonner";
+import { useEffect, type ReactNode } from "react";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { ItemMenu } from "@/components/item-menu";
@@ -25,7 +22,6 @@ import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -46,6 +42,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { workDot, workText } from "@/components/work-state";
+import { WorkspaceMenu } from "@/components/workspace-menu";
 
 import { api, type Plan, type WorkspaceInfo } from "../api.ts";
 import { desktop, insetTitleBar } from "../desktop.ts";
@@ -76,11 +73,6 @@ export const MAIN_NAV: ReadonlyArray<MainNavItem> = [
 
 /** How many videos the sidebar lists before pointing at the board. */
 const MAX_VIDEOS = 8;
-
-export function openWorkspace() {
-  // The desktop shell reloads the window itself once the new workspace is serving.
-  desktop?.openWorkspace().catch((cause: Error) => toast.error(cause.message));
-}
 
 interface LinkRowProps {
   to: string;
@@ -152,99 +144,6 @@ function LinkRow({
       <ContextMenuTrigger render={<SidebarMenuItem />}>{row}</ContextMenuTrigger>
       {menu}
     </ContextMenu>
-  );
-}
-
-/**
- * The brand mark, as on the app icon and cutfac.com: takes of a clip fanned out on a dark tile, the
- * chosen one in amber. Cards are listed back to front.
- */
-const MARK = {
-  tile: ["#332f2b", "#0e0d0c"],
-  cards: [
-    { name: "variant", x: 6.5, y: 4, fill: ["#f6f4f1", "#f6f4f1"], opacity: 0.38 },
-    { name: "chosen", x: 10, y: 7, fill: ["#f4c022", "#e3a90f"], opacity: 1 },
-    { name: "front", x: 13.5, y: 10, fill: ["#fffefb", "#e6e1d8"], opacity: 1 },
-  ],
-} as const;
-
-function CutfacMark({ className }: { className?: string }) {
-  // Gradient ids are document-wide, so each drawing gets its own.
-  const id = useId();
-  const fills = [{ name: "tile", fill: MARK.tile }, ...MARK.cards];
-
-  return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
-      <defs>
-        {fills.map(({ name, fill: [top, bottom] }) => (
-          <linearGradient key={name} id={`${id}-${name}`} x2="0" y2="1">
-            <stop stopColor={top} />
-            <stop offset="1" stopColor={bottom} />
-          </linearGradient>
-        ))}
-      </defs>
-      <rect width="32" height="32" rx="7" fill={`url(#${id}-tile)`} />
-      {MARK.cards.map(({ name, x, y, opacity }) => (
-        <rect
-          key={name}
-          x={x}
-          y={y}
-          width="12"
-          height="18"
-          rx="3.25"
-          fill={`url(#${id}-${name})`}
-          fillOpacity={opacity}
-        />
-      ))}
-    </svg>
-  );
-}
-
-function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
-  const t = useMessages();
-  const name = ws?.name ?? t.nav.appName;
-
-  const content = (
-    <>
-      {/* Important, since the menu button sizes every svg in it as a small icon. */}
-      <CutfacMark className="size-8!" />
-      <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-        <span title={ws?.root} className="truncate font-semibold">
-          {name}
-        </span>
-        <span className="truncate text-xs text-muted-foreground">{t.nav.appName}</span>
-      </div>
-    </>
-  );
-
-  if (!desktop) {
-    return (
-      <SidebarMenuButton
-        size="lg"
-        tooltip={name}
-        render={
-          // oxlint-disable-next-line jsx-a11y/control-has-associated-label -- the label is the button's children
-          <a href={href("board")} />
-        }
-      >
-        {content}
-      </SidebarMenuButton>
-    );
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={name} />}>
-        {content}
-        <ChevronsUpDownIcon className="ml-auto" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="start" className="min-w-56">
-        <DropdownMenuItem onClick={openWorkspace}>
-          <FolderOpenIcon />
-          {t.nav.openWorkspace}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

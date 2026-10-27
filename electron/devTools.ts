@@ -2,7 +2,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { Option, Schema } from "effect";
-import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
 
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentFix, DevState, OnboardingStep } from "../web/src/desktop.ts";
@@ -30,10 +30,12 @@ import {
   DEV_TOOLS_FLAG,
   OPEN_DEV_PANEL_CHANNEL,
 } from "./ipc.ts";
+import { WORKSPACES } from "./library.ts";
 import { lockNavigation } from "./navigation.ts";
 import { macChecks, type OnboardingChecks } from "./onboarding.ts";
 import { sandboxed } from "./permissions.ts";
 import {
+  loadLibrary,
   loadOnboarding,
   loadWorkspace,
   restoreSettings,
@@ -90,7 +92,7 @@ export interface DevTools {
 export function handleDevTools(host: DevToolsHost): DevTools {
   let panel: BrowserWindow | undefined;
   let fakes = NO_FAKES;
-  let freshFolder: string | undefined;
+  let freshName: string | undefined;
 
   /** A faked agent's fix prints a few lines, then fails or leaves the agent ready. */
   const fix = async (agent: AgentName, onLine: (line: string) => void): Promise<AgentFix> => {
@@ -121,17 +123,21 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     fixAgent: fix,
     hasPermission: (permission) =>
       fakes.access === "real" ? hasPermission(permission) : fakes.access === "granted",
-    defaultFolder: () => {
-      if (!fakes.freshFolder) return macChecks.defaultFolder();
+    suggestion: async () => {
+      if (!fakes.freshFolder) return macChecks.suggestion();
 
-      // Beside where the released app suggests Documents/Cutfac, dated for when it was made.
-      freshFolder ??= path.join(
-        app.getPath("documents"),
-        `Cutfac Dev ${freshFolderName(new Date())}`,
-      );
+      // A new workspace each run, named for when it was made, in the dev build's own folder.
+      freshName ??= freshFolderName(new Date());
 
-      return freshFolder;
+      return { library: await loadLibrary(), name: freshName };
     },
+  };
+
+  /** Where the first workspace would go now, for the panel to show. */
+  const suggestedFolder = async () => {
+    const { library, name } = await checks.suggestion();
+
+    return name === undefined ? library : path.join(library, WORKSPACES, name);
   };
 
   const state = async (): Promise<DevState> => ({
@@ -139,7 +145,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     settingsFile: settingsFile(),
     setAside: await settingsSetAside(),
     workspace: await loadWorkspace(),
-    defaultFolder: checks.defaultFolder(),
+    defaultFolder: await suggestedFolder(),
     // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps its permissions
     // by it.
     bundleId: process.env.CUTFAC_DEV_URL ? DEV_APP.bundleId : "com.github.Electron",
@@ -172,7 +178,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
     fakes = decoded;
 
-    if (!fakes.freshFolder) freshFolder = undefined;
+    if (!fakes.freshFolder) freshName = undefined;
 
     // As if the user turned both on in System Settings: the access step moves on by itself.
     if (granted) {
@@ -187,7 +193,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     fromPanel(event);
     stopFixes();
     await setSettingsAside();
-    freshFolder = undefined;
+    freshName = undefined;
 
     const shown = originOf(host.window()?.webContents.getURL() ?? "");
 
@@ -207,7 +213,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     fromPanel(event);
     stopFixes();
     await restoreSettings();
-    freshFolder = undefined;
+    freshName = undefined;
 
     const saved = await loadWorkspace();
 
@@ -220,7 +226,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
     if (!isStep(step)) throw new Error("Unknown step");
 
-    freshFolder = undefined;
+    freshName = undefined;
 
     return host.showOnboarding(step);
   });

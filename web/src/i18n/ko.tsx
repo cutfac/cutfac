@@ -10,6 +10,7 @@ import { renderKo } from "./render-ko.tsx";
 import { reportsKo } from "./reports-ko.tsx";
 import { startKo } from "./start-ko.tsx";
 import { trustKo } from "./trust-ko.tsx";
+import { workspacesKo } from "./workspaces-ko.tsx";
 
 const TOOL_PHRASES: Record<ToolKind, (count: number) => string> = {
   read: (count) => `파일 ${count}개 읽음`,
@@ -688,6 +689,7 @@ export const ko: Messages = {
   start: startKo,
   trust: trustKo,
   reports: reportsKo,
+  workspaces: workspacesKo,
   mcp: mcpKo,
   permissions: permissionsKo,
   gallery: galleryKo,

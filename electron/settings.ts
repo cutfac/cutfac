@@ -40,6 +40,8 @@ const Page = Schema.Struct({
 
 interface Settings {
   workspace: string;
+  /** The app's own folder, where its workspaces are; left out for the default. */
+  library: string;
   port: number;
   locale: Locale;
   licenseKey: string;
@@ -133,6 +135,19 @@ export async function loadWorkspace(): Promise<string | undefined> {
     return undefined;
   }
 }
+
+/**
+ * The app's folder when none was chosen: `~/Movies/Cutfac`, or `Cutfac Dev` for the dev build, as
+ * macOS's video apps keep their libraries in Movies.
+ */
+const defaultLibrary = () => path.join(app.getPath("videos"), app.getName());
+
+/** The app's own folder, where new workspaces go: the one chosen, or `~/Movies/Cutfac`. */
+export async function loadLibrary(): Promise<string> {
+  return Option.getOrElse(decodeText((await readSettings()).library), defaultLibrary);
+}
+
+export const saveLibrary = (library: string) => writeSettings({ library });
 
 /** Saves the workspace just opened, which ends the first launch. */
 export const saveWorkspace = (workspace: string) =>

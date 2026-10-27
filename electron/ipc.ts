@@ -1,5 +1,14 @@
 export const OPEN_WORKSPACE_CHANNEL = "cutfac:open-workspace";
 
+/** The workspaces in the app's folder. */
+export const WORKSPACES_CHANNEL = "cutfac:workspaces";
+
+/** Open a workspace in the app's folder by its name. */
+export const SWITCH_WORKSPACE_CHANNEL = "cutfac:switch-workspace";
+
+/** Make a workspace in the app's folder by its name, and open it. */
+export const NEW_WORKSPACE_CHANNEL = "cutfac:new-workspace";
+
 export const REVEAL_PATH_CHANNEL = "cutfac:reveal-path";
 
 export const SET_LOCALE_CHANNEL = "cutfac:set-locale";
