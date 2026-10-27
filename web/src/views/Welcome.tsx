@@ -22,7 +22,7 @@ import {
 
 type Step = Exclude<OnboardingStep, "welcome">;
 
-const STEPS = ["make", "agent", "access", "folder"] as const satisfies ReadonlyArray<Step>;
+const STEPS = ["agent", "make", "access", "folder"] as const satisfies ReadonlyArray<Step>;
 
 /** Each step opens the next by its page, so the app keeps where the user is if they quit. */
 const go = (step: Step) => {
@@ -30,10 +30,10 @@ const go = (step: Step) => {
 };
 
 /**
- * The first launch before there is a workspace: Welcome, then what to make, so the setup after it is
- * for making that: the agent, the permissions it works under, and where it all is kept, which makes
- * the workspace and starts the first template. One at a time; the app answers them over its bridge,
- * since there is no server yet.
+ * The first launch before there is a workspace: Welcome, then the agent, which everything after it
+ * runs on, then what to make, the permissions the agent works under, and where it all is kept,
+ * which makes the workspace. One at a time; the app answers them over its bridge, since there is no
+ * server yet.
  */
 export function Welcome({
   onboarding,
@@ -44,18 +44,18 @@ export function Welcome({
 }) {
   const current = STEPS.find((candidate) => candidate === step);
 
-  if (current === "make") {
+  if (current === "agent") {
     return (
-      <OnboardingFrame step={1} wide>
-        <MakeStep onboarding={onboarding} onDone={() => go("agent")} />
+      <OnboardingFrame step={1}>
+        <AgentStep onboarding={onboarding} onDone={() => go("make")} />
       </OnboardingFrame>
     );
   }
 
-  if (current === "agent") {
+  if (current === "make") {
     return (
-      <OnboardingFrame step={2}>
-        <AgentStep onboarding={onboarding} onDone={() => go("access")} onBack={() => go("make")} />
+      <OnboardingFrame step={2} wide>
+        <MakeStep onboarding={onboarding} onDone={() => go("access")} onBack={() => go("agent")} />
       </OnboardingFrame>
     );
   }
@@ -63,11 +63,7 @@ export function Welcome({
   if (current === "access") {
     return (
       <OnboardingFrame step={3}>
-        <AccessStep
-          onboarding={onboarding}
-          onDone={() => go("folder")}
-          onBack={() => go("agent")}
-        />
+        <AccessStep onboarding={onboarding} onDone={() => go("folder")} onBack={() => go("make")} />
       </OnboardingFrame>
     );
   }
@@ -82,7 +78,7 @@ export function Welcome({
 
   return (
     <OnboardingFrame>
-      <Greeting onboarding={onboarding} onStart={() => go("make")} />
+      <Greeting onboarding={onboarding} onStart={() => go("agent")} />
     </OnboardingFrame>
   );
 }

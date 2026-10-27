@@ -39,6 +39,7 @@ export function BriefQuestions({
   busy = false,
   error,
   onFinish,
+  onBack,
 }: {
   initial: Answers;
   /** The last part's button, and what it says while it works. */
@@ -46,6 +47,8 @@ export function BriefQuestions({
   busy?: boolean;
   error?: string | undefined;
   onFinish: (answers: Answers) => void;
+  /** Back from the first part to the step before it, when there is one. */
+  onBack?: (() => void) | undefined;
 }) {
   const { whatToMake: t, brief: b } = useMessages().start;
   const [brief, setBrief] = useState(initial.brief);
@@ -137,8 +140,13 @@ export function BriefQuestions({
       {error === undefined ? null : <ErrorAlert message={error} />}
       {/* Each place keeps its meaning: back at the left, on at the far right. */}
       <div className="flex items-center gap-2">
-        {index === 0 ? null : (
-          <Button size="lg" variant="ghost" disabled={busy} onClick={() => go(-1)}>
+        {index === 0 && onBack === undefined ? null : (
+          <Button
+            size="lg"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => (index === 0 ? onBack?.() : go(-1))}
+          >
             {t.back}
           </Button>
         )}

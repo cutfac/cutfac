@@ -58,7 +58,8 @@ export function AgentStep({
 }: {
   onboarding: CutfacOnboarding;
   onDone: () => void;
-  onBack: () => void;
+  /** Back to the step before, when there is one. */
+  onBack?: (() => void) | undefined;
 }) {
   const t = useMessages().onboarding.agent;
   const [setups, setSetups] = useState<ReadonlyArray<AgentSetup>>();
