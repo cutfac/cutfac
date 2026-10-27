@@ -1,12 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import { Effect, FileSystem, Layer, Ref } from "effect";
 
 import { agentInvocation, isSessionId } from "../src/core/agentCommand.ts";
 import { converse } from "../src/core/agentTurn.ts";
-import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents, tempWorkspace } from "./support.ts";
+
+const it = testEffect(Layer.merge(tempWorkspace("Test"), fakeAgents));
 
 describe("what an agent run lets through to the CLI", () => {
   test("claude allows only Cutfac's own tools, and asks on stdin about the rest", () => {
@@ -42,53 +44,39 @@ describe("what an agent run lets through to the CLI", () => {
 });
 
 describe("a stored session that is not one the agent made", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
+  it.live("never reaches the agent, and a new session takes its place", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const fakes = yield* FakeAgentDir;
+      const fresh = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Test");
-    fakes = await makeFakeAgents();
-  });
-
-  afterEach(async () => {
-    await fakes.remove();
-    await t.remove();
-  });
-
-  test("never reaches the agent, and a new session takes its place", async () => {
-    const fresh = "5f0c6a52-6f1e-4c43-9d2a-0c1d2e3f4a5b";
-
-    const bin = await fakes.bin(
-      "claude",
-      `head -n 1 >/dev/null
+      const bin = yield* fakes.bin(
+        "claude",
+        `head -n 1 >/dev/null
 printf '%s\\n' "$@" > "${join(fakes.calls, "args")}"
 echo '{"type":"system","subtype":"init","session_id":"${fresh}"}'
 echo '{"type":"result","subtype":"success","session_id":"${fresh}","result":"ok"}'
 `,
-    );
+      );
 
-    const saved: Array<string | undefined> = [];
+      const saved = yield* Ref.make<ReadonlyArray<string | undefined>>([]);
 
-    const result = await t.run(
-      converse({
+      const result = yield* converse({
         agent: "claude",
         stored: "--dangerously-skip-permissions",
         invocation: (session) =>
           Effect.succeed(agentInvocation("claude", { bin, prompt: "hi", ...session })),
-        save: (session) =>
-          Effect.sync(() => {
-            saved.push(session);
-          }),
+        save: (session) => Ref.update(saved, (sessions) => [...sessions, session]),
         emit: () => Effect.void,
-      }),
-    );
+      });
 
-    const args = (await readFile(join(fakes.calls, "args"), "utf8")).split("\n");
+      const args = (yield* fs.readFileString(join(fakes.calls, "args"))).split("\n");
 
-    expect(result.reply).toBe("ok");
-    expect(args).not.toContain("--dangerously-skip-permissions");
-    expect(args).not.toContain("--resume");
-    expect(args).toContain("--session-id");
-    expect(saved).toEqual([fresh]);
-  });
+      expect(result.reply).toBe("ok");
+      expect(args).not.toContain("--dangerously-skip-permissions");
+      expect(args).not.toContain("--resume");
+      expect(args).toContain("--session-id");
+      expect(yield* Ref.get(saved)).toEqual([fresh]);
+    }),
+  );
 });
