@@ -63,6 +63,9 @@ process.on("SIGINT", () => void stop(130));
 
 process.on("SIGTERM", () => void stop(143));
 
+// The terminal closed. The app runs apart from this script on macOS, so it would outlive it.
+process.on("SIGHUP", () => void stop(129));
+
 void vite.exited.then((code) => {
   if (stopping) return;
 
@@ -107,7 +110,8 @@ async function electronExecutable(): Promise<string> {
 // Built while Vite starts.
 const executable = electronExecutable();
 
-async function launch(): Promise<void> {
+/** Starts the app; a restart opens it behind what the developer works in, and its window too. */
+async function launch(again = false): Promise<void> {
   const app = await executable;
 
   if (stopping) return;
@@ -116,7 +120,8 @@ async function launch(): Promise<void> {
     executable: app,
     root,
     args: [`--remote-debugging-port=${cdpPort}`],
-    env: appEnv,
+    env: again ? { ...appEnv, CUTFAC_DEV_RESTART: "1" } : appEnv,
+    background: again,
   });
 
   electron = child;
@@ -147,7 +152,7 @@ async function restart(): Promise<void> {
   // The app holds a single-instance lock and the server port until it has quit.
   await previous?.exited;
 
-  if (!stopping) await launch();
+  if (!stopping) await launch(true);
 }
 
 // The preload script runs in the page, so a new one needs only the page reloaded, which the app

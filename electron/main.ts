@@ -72,6 +72,9 @@ const devUrl = app.isPackaged ? undefined : process.env.CUTFAC_DEV_URL || undefi
 
 const devPort = Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10);
 
+// The dev runner restarted the app for a change: it comes back behind what the developer works in.
+const devRestart = devUrl !== undefined && process.env.CUTFAC_DEV_RESTART === "1";
+
 const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 
 /** The board before there is a workspace: the app's own copy, or Vite's in dev. */
@@ -414,7 +417,8 @@ function createWindow(place: WindowPlace | undefined): BrowserWindow {
   created.once("ready-to-show", () => {
     if (place?.maximized) created.maximize();
 
-    created.show();
+    if (devRestart) created.showInactive();
+    else created.show();
   });
   created.on("focus", () => {
     license?.refresh();
