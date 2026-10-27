@@ -2,7 +2,7 @@ import { Effect, Option, Path, Predicate, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 
 import { claudeConfigDir, codexHome } from "./agents.ts";
-import { byName, canonicalJson, isJsonObject } from "./json.ts";
+import { byName, canonicalJson, isJsonObject, lenient } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import {
   type McpServer,
@@ -12,7 +12,6 @@ import {
   isCutfacServer,
   tomlTables,
   peekConfig,
-  textOf,
 } from "./mcpServers.ts";
 import type { AgentName } from "./schema.ts";
 import { sha256 } from "./skill.ts";
@@ -62,9 +61,38 @@ function inside(path: Path.Path, root: string, rel: string) {
     : Option.some(full);
 }
 
-/** The servers in a plugin's server file, which keeps them under `mcpServers` or at the top. */
+const Text = lenient(Schema.String);
+
+/** A plugin's server file, which keeps them under `mcpServers` or at the top. */
+const decodeServerFile = Schema.decodeUnknownOption(
+  Schema.Struct({ mcpServers: lenient(Schema.JsonObject) }),
+);
+
+/** The servers in a plugin's server file. */
 const serversIn = (config: Schema.JsonObject) =>
-  entriesIn(isJsonObject(config["mcpServers"]) ? config["mcpServers"] : config);
+  entriesIn(Option.getOrUndefined(decodeServerFile(config))?.mcpServers ?? config);
+
+const decodeText = Schema.decodeUnknownOption(Schema.String);
+
+const decodeObject = Schema.decodeUnknownOption(Schema.JsonObject);
+
+/** What a plugin's manifest says of it; any part may be missing or something else. */
+const Manifest = Schema.Struct({
+  name: Text,
+  description: Text,
+  mcpServers: Schema.optionalKey(Schema.Json),
+  interface: lenient(Schema.Struct({ displayName: Text, shortDescription: Text, logo: Text })),
+});
+
+type Manifest = typeof Manifest.Type;
+
+const decodeManifest = Schema.decodeUnknownOption(Manifest);
+
+/** The manifest in the first of `files` that holds one. */
+const manifestOf = <E, R>(found: Effect.Effect<Option.Option<Schema.JsonObject>, E, R>) =>
+  Effect.map(found, (manifest) =>
+    Option.getOrElse(Option.flatMap(manifest, decodeManifest), (): Manifest => ({})),
+  );
 
 /**
  * The servers `spec`, a manifest's `mcpServers`, sets up in the plugin at `root`: files in it or
@@ -84,9 +112,10 @@ const pluginEntries = Effect.fnUntraced(function* (
     spec === undefined
       ? Option.toArray(yield* firstObject(defaults, read))
       : yield* Effect.forEach(Array.isArray(spec) ? spec : [spec], (one) =>
-          Predicate.isString(one)
-            ? read(one)
-            : Effect.succeed(isJsonObject(one) ? Option.some(one) : Option.none()),
+          Option.match(decodeText(one), {
+            onSome: read,
+            onNone: () => Effect.succeed(decodeObject(one)),
+          }),
         ).pipe(Effect.map((found) => found.flatMap(Option.toArray)));
 
   return [...new Map(configs.flatMap(serversIn).map((one) => [one.name, one])).values()];
@@ -116,15 +145,19 @@ const InstalledPlugins = Schema.Struct({
 
 const decodeInstalled = Schema.decodeUnknownOption(Schema.fromJsonString(InstalledPlugins));
 
+const decodeSwitches = Schema.decodeUnknownOption(
+  Schema.Struct({ enabledPlugins: lenient(Schema.Record(Schema.String, Schema.Json)) }),
+);
+
+const decodeSwitch = Schema.decodeUnknownOption(Schema.Boolean);
+
 /** The plugins `settings` turns on or off, by id. */
 function enabledIn(settings: Option.Option<Schema.JsonObject>) {
-  const enabled = Option.getOrUndefined(settings)?.["enabledPlugins"];
+  const enabled = Option.getOrUndefined(Option.flatMap(settings, decodeSwitches))?.enabledPlugins;
 
-  return isJsonObject(enabled)
-    ? Object.entries(enabled).flatMap(([id, on]) =>
-        Predicate.isBoolean(on) ? [[id, on] as const] : [],
-      )
-    : [];
+  return Object.entries(enabled ?? {}).flatMap(([id, value]) =>
+    Option.toArray(Option.map(decodeSwitch(value), (on) => [id, on] as const)),
+  );
 }
 
 /** Claude Code names a plugin's data folder after its id, with only these characters kept. */
@@ -173,12 +206,11 @@ export const claudePlugins = Effect.fn("mcpPlugins.claude")(function* () {
 
       const root = install.installPath;
 
-      const manifest = Option.getOrElse(
-        yield* peekObject(path.join(root, ".claude-plugin", "plugin.json")),
-        (): Schema.JsonObject => ({}),
+      const manifest = yield* manifestOf(
+        peekObject(path.join(root, ".claude-plugin", "plugin.json")),
       );
 
-      const entries = yield* pluginEntries(root, manifest["mcpServers"], [".mcp.json"]);
+      const entries = yield* pluginEntries(root, manifest.mcpServers, [".mcp.json"]);
 
       const servers = entries.flatMap(({ name, entry }): ReadonlyArray<McpServer> =>
         isCutfacServer(name) || asksTheUser(entry)
@@ -192,8 +224,8 @@ export const claudePlugins = Effect.fn("mcpPlugins.claude")(function* () {
       const plugin: McpPlugin = {
         agent: "claude",
         id,
-        title: textOf(manifest["name"]) ?? name ?? id,
-        description: textOf(manifest["description"]),
+        title: manifest.name ?? name ?? id,
+        description: manifest.description,
         servers,
         vars: {
           CLAUDE_PLUGIN_ROOT: root,
@@ -312,17 +344,11 @@ export const codexPlugins = Effect.fn("mcpPlugins.codex")(function* () {
 
         if (Option.isNone(root)) return [];
 
-        const manifests = yield* firstObject(CODEX_MANIFESTS, (file) =>
-          peekObject(path.join(root.value, file)),
+        const manifest = yield* manifestOf(
+          firstObject(CODEX_MANIFESTS, (file) => peekObject(path.join(root.value, file))),
         );
 
-        const manifest = Option.getOrElse(manifests, (): Schema.JsonObject => ({}));
-
-        const entries = yield* pluginEntries(
-          root.value,
-          manifest["mcpServers"],
-          CODEX_SERVER_FILES,
-        );
+        const entries = yield* pluginEntries(root.value, manifest.mcpServers, CODEX_SERVER_FILES);
 
         const servers = entries.flatMap(({ name: server, entry }): ReadonlyArray<McpServer> =>
           entry["enabled"] === false || configured.has(server) || isCutfacServer(server)
@@ -332,16 +358,17 @@ export const codexPlugins = Effect.fn("mcpPlugins.codex")(function* () {
 
         if (servers.length === 0) return [];
 
-        const shown = isJsonObject(manifest["interface"]) ? manifest["interface"] : {};
-        const logo = textOf(shown["logo"]);
+        const shown = manifest.interface ?? {};
 
         const plugin: McpPlugin = {
           agent: "codex",
           id,
-          title: textOf(shown["displayName"]) ?? textOf(manifest["name"]) ?? name,
-          description: textOf(shown["shortDescription"]) ?? textOf(manifest["description"]),
+          title: shown.displayName ?? manifest.name ?? name,
+          description: shown.shortDescription ?? manifest.description,
           logoFile:
-            logo === undefined ? undefined : Option.getOrUndefined(inside(path, root.value, logo)),
+            shown.logo === undefined
+              ? undefined
+              : Option.getOrUndefined(inside(path, root.value, shown.logo)),
           servers,
           vars: {},
         };

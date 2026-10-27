@@ -122,13 +122,14 @@ describe("what the user sees of a server", () => {
     expect(shownUrl("https://api.example.com/mcp")).toBe("https://api.example.com/mcp");
   });
 
-  test("is the command it runs, and the names of what it gets", () => {
+  test("is the command it runs, and the names of what it gets, an odd part left out", () => {
     expect(
       launchView(
         claude("srv", {
           command: "/opt/my tools/srv",
-          args: ["--root", "it's here"],
+          args: ["--root", "it's here", 3],
           env: { TOKEN: "x", A: "y" },
+          headers: "not a map",
           headersHelper: "./headers.sh",
         }),
       ),
@@ -145,15 +146,17 @@ describe("what the user sees of a server", () => {
         codex("api", {
           url: "https://api.example.com/mcp?k=1",
           bearer_token_env_var: "API_TOKEN",
+          env_vars: ["REGION"],
           http_headers: { "X-Team": "a" },
           env_http_headers: { "X-Key": "KEY_VAR" },
+          http_headers_helper: "./codex-headers.sh",
         }),
       ),
     ).toEqual({
       kind: "url",
       launch: "https://api.example.com/mcp?…",
-      helper: undefined,
-      env: ["API_TOKEN"],
+      helper: "./codex-headers.sh",
+      env: ["REGION", "API_TOKEN"],
       headers: ["X-Team", "X-Key"],
     });
   });

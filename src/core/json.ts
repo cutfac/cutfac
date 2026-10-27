@@ -1,7 +1,11 @@
-import { Predicate, type Schema } from "effect";
+import { Effect, Predicate, Schema } from "effect";
 
 export const isJsonObject = (value: Schema.Json | undefined): value is Schema.JsonObject =>
   Predicate.isObject(value) && !Array.isArray(value);
+
+/** `schema` as an optional key, read as missing when it holds anything else, so the rest still reads. */
+export const lenient = <S extends Schema.Top>(schema: S) =>
+  Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
 /** Null, `[]` and `{}`, which turn nothing on. */
 export const isEmptyJson = (value: Schema.Json) =>

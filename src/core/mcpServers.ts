@@ -3,7 +3,7 @@ import { Effect, Option, Path, Predicate, Schema } from "effect";
 import { LEGACY_SERVER_NAME, SERVER_NAME, codexHome, envVar } from "./agents.ts";
 import { fromTomlString } from "./configText.ts";
 import { CommandFailed } from "./errors.ts";
-import { canonicalJson, isEmptyJson, isJsonObject } from "./json.ts";
+import { canonicalJson, isEmptyJson, isJsonObject, lenient } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import { run } from "./process.ts";
 import type { AgentName } from "./schema.ts";
@@ -267,7 +267,7 @@ const setupOf = (fields: ReadonlyArray<readonly [string, Schema.Json | undefined
     fields.flatMap(([key, value]) => {
       if (value === undefined || isEmptyJson(value)) return [];
 
-      return [[key, SECRET_MAPS.has(key) && isJsonObject(value) ? keysOf(value) : value]];
+      return [[key, SECRET_MAPS.has(key) && isJsonObject(value) ? namesIn(value) : value]];
     }),
   ) satisfies Schema.JsonObject;
 
@@ -284,14 +284,37 @@ export const approvedSetup = (server: McpServer) =>
 export const serverFingerprint = (server: McpServer) =>
   sha256(JSON.stringify(canonicalJson(approvedSetup(server))));
 
-const strings = (value: Schema.Json | undefined) =>
-  Array.isArray(value) ? value.filter(Predicate.isString) : [];
+const Text = lenient(Schema.String);
 
-const keysOf = (value: Schema.Json | undefined) =>
-  isJsonObject(value) ? Object.keys(value).toSorted() : [];
+const Names = lenient(Schema.Record(Schema.String, Schema.Json));
 
-export const textOf = (value: Schema.Json | undefined) =>
-  Predicate.isString(value) ? value : undefined;
+const Words = lenient(Schema.Array(Schema.Json));
+
+/** How a server starts and what it is given, as the user sees it; any part may be off or missing. */
+const ServerLaunch = Schema.Struct({
+  command: Text,
+  args: Words,
+  url: Text,
+  bearer_token_env_var: Text,
+  headersHelper: Text,
+  http_headers_helper: Text,
+  env: Names,
+  env_vars: Words,
+  headers: Names,
+  http_headers: Names,
+  env_http_headers: Names,
+});
+
+type ServerLaunch = typeof ServerLaunch.Type;
+
+const decodeLaunch = Schema.decodeUnknownOption(ServerLaunch);
+
+const isText = Schema.is(Schema.String);
+
+const stringsIn = (values: ReadonlyArray<Schema.Json> = []) => values.filter(isText);
+
+const namesIn = (record: Readonly<Record<string, Schema.Json>> = {}) =>
+  Object.keys(record).toSorted();
 
 /** `arg` as a shell would need it typed. */
 const shellWord = (arg: string) =>
@@ -316,34 +339,32 @@ function shownWord(arg: string, home: string | undefined) {
   return rest === "" ? "~/" : `~/${shellWord(rest)}`;
 }
 
-function launchOf(entry: Schema.JsonObject, home: string | undefined) {
-  const command = textOf(entry["command"]);
-
+function launchOf({ command, args }: ServerLaunch, home: string | undefined) {
   if (command === undefined) return "";
 
-  return [command, ...strings(entry["args"])].map((arg) => shownWord(arg, home)).join(" ");
+  return [command, ...stringsIn(args)].map((arg) => shownWord(arg, home)).join(" ");
 }
 
 /** What the user sees of `server`, its paths under the user's home folder `home` shown from `~`. */
 export function launchView({ entry }: McpServer, home?: string): McpLaunchView {
-  const url = textOf(entry["url"]);
-  const bearer = textOf(entry["bearer_token_env_var"]);
+  const launch = Option.getOrElse(decodeLaunch(entry), (): ServerLaunch => ({}));
+  const { url, bearer_token_env_var: bearer } = launch;
   // A home of `/` would turn every path into `~`.
   const under = home?.replace(/\/+$/, "") || undefined;
 
   return {
     kind: url === undefined ? "command" : "url",
-    launch: url === undefined ? launchOf(entry, under) : shownUrl(url),
-    helper: textOf(entry["headersHelper"]) ?? textOf(entry["http_headers_helper"]),
+    launch: url === undefined ? launchOf(launch, under) : shownUrl(url),
+    helper: launch.headersHelper ?? launch.http_headers_helper,
     env: [
-      ...keysOf(entry["env"]),
-      ...strings(entry["env_vars"]),
+      ...namesIn(launch.env),
+      ...stringsIn(launch.env_vars),
       ...(bearer === undefined ? [] : [bearer]),
     ],
     headers: [
-      ...keysOf(entry["headers"]),
-      ...keysOf(entry["http_headers"]),
-      ...keysOf(entry["env_http_headers"]),
+      ...namesIn(launch.headers),
+      ...namesIn(launch.http_headers),
+      ...namesIn(launch.env_http_headers),
     ],
   };
 }

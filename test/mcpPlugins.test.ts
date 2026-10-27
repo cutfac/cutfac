@@ -53,7 +53,7 @@ describe("Claude Code's plugins", () => {
       {
         "docs@market": {
           files: {
-            ".claude-plugin/plugin.json": { name: "docs", description: "Search the docs" },
+            ".claude-plugin/plugin.json": { name: "Docs", description: "Search the docs" },
             ".mcp.json": {
               mcpServers: {
                 search: SEARCH,
@@ -101,7 +101,7 @@ describe("Claude Code's plugins", () => {
     const plugins = await read(claudePlugins());
 
     expect(plugins.map((plugin) => [plugin.id, plugin.title, plugin.description])).toEqual([
-      ["docs@market", "docs", "Search the docs"],
+      ["docs@market", "Docs", "Search the docs"],
       ["mine@market", "mine", undefined],
     ]);
     // A server that asks the user for a value when the plugin is turned on can't start in a run.
