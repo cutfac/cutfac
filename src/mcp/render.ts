@@ -1,4 +1,4 @@
-import { Clock, Effect, Layer, Schema } from "effect";
+import { Clock, Effect, Layer, Option, Schema } from "effect";
 import { Toolkit } from "effect/ai";
 
 import { Conflict, InvalidRequest } from "../core/errors.ts";
@@ -97,29 +97,30 @@ export const renderHandlers = RenderToolkit.toLayer(
     return RenderToolkit.of({
       render: ({ id, command, cwd, output, label }) =>
         Effect.gen(function* () {
-          const current = renders.current(id);
+          const current = yield* renders.current(id);
 
           // A call repeating the running render's command only waits on it, as a retry would.
-          if (command !== undefined && current === undefined) {
+          if (command !== undefined && Option.isNone(current)) {
             yield* renders.start({ item: id, command, cwd, output, label });
           } else if (
             command !== undefined &&
-            (current?.command !== command || current.label !== label)
+            Option.isSome(current) &&
+            (current.value.command !== command || current.value.label !== label)
           ) {
             return yield* new Conflict({
-              message: `${id} is already rendering ${current?.label ?? "a version"}; call render with just the id to wait for it first`,
+              message: `${id} is already rendering ${current.value.label ?? "a version"}; call render with just the id to wait for it first`,
             });
           }
 
           const state = yield* renders.wait(id, WAIT);
 
-          if (state === undefined) {
+          if (Option.isNone(state)) {
             return yield* new InvalidRequest({
               message: `${id} has no render yet; pass the command to start one`,
             });
           }
 
-          return report(state, yield* Clock.currentTimeMillis);
+          return report(state.value, yield* Clock.currentTimeMillis);
         }).pipe(logFailure),
     });
   }),

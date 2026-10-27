@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Option } from "effect";
 
 import { Conflict } from "../src/core/errors.ts";
 import { createItem } from "../src/core/items.ts";
@@ -108,7 +108,7 @@ const render = (command: string, wait: Duration.Input = "5 seconds") =>
       const renders = yield* makeRenders;
       yield* renders.start({ item: item.id, command, label: "v2" });
 
-      return yield* renders.wait(item.id, wait);
+      return Option.getOrThrow(yield* renders.wait(item.id, wait));
     }),
   );
 
@@ -135,7 +135,7 @@ describe("running a render", () => {
     });
     expect(state?.endedAt).toBeNumber();
 
-    const saved = await ws.run(readRender("clip"));
+    const saved = Option.getOrThrow(await ws.run(readRender("clip")));
 
     expect(saved).toEqual(state);
   });
@@ -163,7 +163,7 @@ describe("running a render", () => {
           yield* Effect.sleep("300 millis");
           yield* requestStop(item.id);
 
-          return yield* renders.wait(item.id, "5 seconds");
+          return Option.getOrThrow(yield* renders.wait(item.id, "5 seconds"));
         }),
       ),
     );
@@ -221,7 +221,7 @@ describe("running a render", () => {
       }),
     );
 
-    const state = await ws.run(readRender("clip"));
+    const state = Option.getOrThrow(await ws.run(readRender("clip")));
 
     expect(state?.status).toBe("stopped");
     expect(state?.endedAt).toBeNumber();

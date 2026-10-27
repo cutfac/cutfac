@@ -8,6 +8,7 @@ import {
   Option,
   Path,
   Predicate,
+  Ref,
   Schema,
   Scope,
   Stream,
@@ -91,20 +92,28 @@ export const readRender = Effect.fn("render.readRender")(function* (item: string
   const ws = yield* Workspace;
   const path = statePath(item);
 
-  if (!(yield* ws.exists(path))) return undefined;
+  if (!(yield* ws.exists(path))) return Option.none<RenderState>();
 
-  const read = Effect.map(ws.readText(path), (text) => Option.getOrUndefined(decodeState(text)));
+  const read = Effect.map(ws.readText(path), decodeState);
+  const first = yield* read;
   // Saving truncates the file before writing it, so a read can land in between.
-  const state = (yield* read) ?? (yield* Effect.andThen(Effect.sleep(WRITE_GAP), read));
+  const state = Option.isSome(first) ? first : yield* Effect.andThen(Effect.sleep(WRITE_GAP), read);
 
-  if (state?.status === "running" && !(yield* alive(state.owner))) {
+  if (
+    Option.isSome(state) &&
+    state.value.status === "running" &&
+    !(yield* alive(state.value.owner))
+  ) {
     const { mtime } = yield* ws.stat(path);
 
-    return { ...state, status: "stopped" as const, endedAt: mtime };
+    return Option.some<RenderState>({ ...state.value, status: "stopped", endedAt: mtime });
   }
 
   return state;
 });
+
+const isRunning = (state: Option.Option<RenderState>) =>
+  Option.isSome(state) && state.value.status === "running";
 
 /** The items whose render is going on now, sorted. */
 export const runningRenders = Effect.fn("render.runningRenders")(function* () {
@@ -115,7 +124,9 @@ export const runningRenders = Effect.fn("render.runningRenders")(function* () {
     readRender(decodeURIComponent(entry.name.slice(0, -".json".length))),
   );
 
-  return states.flatMap((state) => (state?.status === "running" ? [state.item] : []));
+  return states.flatMap((state) =>
+    isRunning(state) ? Option.toArray(Option.map(state, ({ item }) => item)) : [],
+  );
 });
 
 const writeRender = Effect.fn("render.writeRender")(function* (state: RenderState) {
@@ -128,9 +139,8 @@ const writeRender = Effect.fn("render.writeRender")(function* (state: RenderStat
 /** Ask the process running the item's render to stop it; it checks twice a second. */
 export const requestStop = Effect.fn("render.requestStop")(function* (item: string) {
   const ws = yield* Workspace;
-  const state = yield* readRender(item);
 
-  if (state?.status !== "running") return;
+  if (!isRunning(yield* readRender(item))) return;
 
   yield* ws.writeText(stopPath(item), "");
 });
@@ -144,7 +154,7 @@ const waitSaved = (item: string, timeout: Duration.Input) =>
     while (true) {
       const state = yield* readRender(item);
 
-      if (state?.status !== "running") return state;
+      if (!isRunning(state)) return state;
 
       yield* Effect.sleep(TICK);
     }
@@ -171,7 +181,7 @@ export interface RenderJobs {
     input: RenderInput,
   ) => Effect.Effect<RenderState, CommandFailed | Conflict | ItemErrors>;
   /** The item's render while this process runs it. */
-  readonly current: (item: string) => RenderState | undefined;
+  readonly current: (item: string) => Effect.Effect<Option.Option<RenderState>>;
   /**
    * The item's render once it ends, or where it stands after `timeout`. Without a render here,
    * the latest one saved, from any agent.
@@ -179,12 +189,12 @@ export interface RenderJobs {
   readonly wait: (
     item: string,
     timeout: Duration.Input,
-  ) => Effect.Effect<RenderState | undefined, ItemErrors>;
+  ) => Effect.Effect<Option.Option<RenderState>, ItemErrors>;
 }
 
 /** A render going on here: where it stands, and its end once it comes. */
 interface Job {
-  state: RenderState;
+  readonly state: Ref.Ref<RenderState>;
   readonly done: Deferred.Deferred<RenderState>;
 }
 
@@ -196,7 +206,10 @@ export const makeRenders = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const path = yield* Path.Path;
   const scope = yield* Scope.Scope;
-  const jobs = new Map<string, Job>();
+  const jobs = yield* Ref.make<ReadonlyMap<string, Job>>(new Map());
+
+  const jobOf = (item: string) =>
+    Effect.map(Ref.get(jobs), (all) => Option.fromNullishOr(all.get(item)));
 
   const provide = <A, E>(effect: Effect.Effect<A, E, Workspace>) =>
     Effect.provideService(effect, Workspace, ws);
@@ -204,31 +217,30 @@ export const makeRenders = Effect.gen(function* () {
   /** Run the command to its end, keeping the job and its saved file up to date as it goes. */
   const execute = (job: Job, absCwd: string) =>
     Effect.gen(function* () {
-      const { item, command } = job.state;
-      let dirty = false;
+      const { item, command } = yield* Ref.get(job.state);
+      const dirty = yield* Ref.make(false);
 
-      const onLine = (raw: string) =>
-        Effect.sync(() => {
-          const line = plainLine(raw);
-          const { state } = job;
-          job.state = {
+      const onLine = (raw: string) => {
+        const line = plainLine(raw);
+
+        return Effect.andThen(
+          Ref.update(job.state, (state) => ({
             ...state,
             progress: readProgress(state.progress, line),
             log: appendLog(state.log, line),
-          };
-          dirty = true;
-        });
+          })),
+          Ref.set(dirty, true),
+        );
+      };
 
       const lines = <E>(stream: Stream.Stream<Uint8Array, E>) =>
         stream.pipe(Stream.decodeText(), Stream.splitLines, Stream.runForEach(onLine));
 
-      const flush = Effect.suspend(() => {
-        if (!dirty) return Effect.void;
-
-        dirty = false;
-
-        return provide(writeRender(job.state));
-      });
+      const flush = Effect.flatMap(Ref.getAndSet(dirty, false), (changed) =>
+        changed
+          ? Effect.flatMap(Ref.get(job.state), (state) => provide(writeRender(state)))
+          : Effect.void,
+      );
 
       // A save or check that fails only skips a tick; it shouldn't end the render.
       const stopAsked = Effect.gen(function* () {
@@ -271,8 +283,10 @@ export const makeRenders = Effect.gen(function* () {
   /** End the job. A save that fails leaves the file behind, which `start` knows to look past. */
   const finish = (job: Job, ended: Ended) =>
     Effect.gen(function* () {
-      job.state = { ...job.state, ...ended, endedAt: yield* Clock.currentTimeMillis };
-      yield* Effect.ignore(provide(writeRender(job.state)));
+      const endedAt = yield* Clock.currentTimeMillis;
+      const state = yield* Ref.updateAndGet(job.state, (now) => ({ ...now, ...ended, endedAt }));
+
+      yield* Effect.ignore(provide(writeRender(state)));
     });
 
   const start: RenderJobs["start"] = (input) =>
@@ -284,10 +298,14 @@ export const makeRenders = Effect.gen(function* () {
           yield* getItem(item);
 
           const saved = yield* readRender(item);
-          // One marked running by this process but no longer here ended without saving that.
-          const elsewhere = saved?.status === "running" && saved.owner !== process.pid;
 
-          if (jobs.has(item) || elsewhere) {
+          // One marked running by this process but no longer here ended without saving that.
+          const elsewhere = Option.exists(
+            saved,
+            ({ status, owner }) => status === "running" && owner !== process.pid,
+          );
+
+          if (Option.isSome(yield* jobOf(item)) || elsewhere) {
             return yield* new Conflict({ message: `${item} is already rendering` });
           }
 
@@ -312,24 +330,29 @@ export const makeRenders = Effect.gen(function* () {
 
           yield* writeRender(initial);
 
-          const job: Job = { state: initial, done: yield* Deferred.make<RenderState>() };
+          const job: Job = {
+            state: yield* Ref.make(initial),
+            done: yield* Deferred.make<RenderState>(),
+          };
 
-          jobs.set(item, job);
+          yield* Ref.update(jobs, (all) => new Map([...all, [item, job]]));
 
           yield* execute(job, absCwd).pipe(
-            Effect.catch((error) => {
-              job.state = { ...job.state, log: appendLog(job.state.log, plainLine(error.message)) };
-
-              return Effect.succeed<Ended>({ status: "failed", code: undefined });
-            }),
+            Effect.catch((error) =>
+              Effect.as(
+                Ref.update(job.state, (state) => ({
+                  ...state,
+                  log: appendLog(state.log, plainLine(error.message)),
+                })),
+                { status: "failed", code: undefined } satisfies Ended,
+              ),
+            ),
             Effect.flatMap((ended) => finish(job, ended)),
             Effect.ensuring(
-              Effect.suspend(() => {
-                jobs.delete(item);
-
-                return Deferred.succeed(job.done, job.state).pipe(
-                  Effect.andThen(ws.remove(stopPath(item)).pipe(Effect.ignore)),
-                );
+              Effect.gen(function* () {
+                yield* Ref.update(jobs, (all) => new Map([...all].filter(([one]) => one !== item)));
+                yield* Deferred.succeed(job.done, yield* Ref.get(job.state));
+                yield* ws.remove(stopPath(item)).pipe(Effect.ignore);
               }),
             ),
             Effect.forkIn(scope),
@@ -340,18 +363,30 @@ export const makeRenders = Effect.gen(function* () {
       ),
     );
 
-  const wait: RenderJobs["wait"] = (item, timeout) => {
-    const job = jobs.get(item);
-
-    if (job === undefined) return provide(waitSaved(item, timeout));
-
-    return Deferred.await(job.done).pipe(
-      Effect.timeoutOption(timeout),
-      Effect.map(() => job.state),
+  const wait: RenderJobs["wait"] = (item, timeout) =>
+    Effect.flatMap(
+      jobOf(item),
+      Option.match({
+        onNone: () => provide(waitSaved(item, timeout)),
+        onSome: (job) =>
+          Deferred.await(job.done).pipe(
+            Effect.timeoutOption(timeout),
+            Effect.andThen(Ref.get(job.state)),
+            Effect.asSome,
+          ),
+      }),
     );
-  };
 
-  const renders: RenderJobs = { start, current: (item) => jobs.get(item)?.state, wait };
+  const current: RenderJobs["current"] = (item) =>
+    Effect.flatMap(
+      jobOf(item),
+      Option.match({
+        onNone: () => Effect.succeedNone,
+        onSome: (job) => Effect.asSome(Ref.get(job.state)),
+      }),
+    );
+
+  const renders: RenderJobs = { start, current, wait };
 
   return renders;
 });

@@ -25,7 +25,7 @@ const renderStream = withId((id) =>
     return eventStream(
       Stream.tick(POLL_EVERY).pipe(
         Stream.mapEffect(() => Effect.provideService(readRender(id), Workspace, ws)),
-        Stream.map((state) => JSON.stringify(state ?? null)),
+        Stream.map((state) => JSON.stringify(Option.getOrNull(state))),
         Stream.changes,
         Stream.map((data) => sseEvent("render", data)),
       ),
@@ -55,11 +55,6 @@ export const renderRoutes = HttpRouter.addAll([
   json(
     "POST",
     "/api/item/render/stop",
-    withId((id) =>
-      Effect.andThen(
-        requestStop(id),
-        Effect.map(readRender(id), (state) => state ?? null),
-      ),
-    ),
+    withId((id) => Effect.andThen(requestStop(id), Effect.map(readRender(id), Option.getOrNull))),
   ),
 ]);

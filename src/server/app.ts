@@ -362,7 +362,9 @@ const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
     requests: feedback.filter((f) => f.status === "open" || awaitsDecision(f)),
     running: yield* runs.isRunning(item.id),
     ...asked(yield* runs.pending(item.id)),
-    render: render?.status === "running" || render?.status === "failed" ? render : undefined,
+    render: Option.getOrUndefined(
+      Option.filter(render, ({ status }) => status === "running" || status === "failed"),
+    ),
     media: item.media,
     updatedAt: item.updatedAt,
   };
