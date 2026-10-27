@@ -1,13 +1,17 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { expect, test } from "bun:test";
+
+import { Effect } from "effect";
 
 import type { McpLaunch } from "../src/core/agents.ts";
 import { ALLOW_RULES, freshPrompt, turnMessage } from "../src/core/importPrompts.ts";
 import { claudeImportFlags } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
 import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace("Brief imports"));
 
 const SERVER: McpLaunch = { command: "cutfac", args: ["mcp", "--workspace", "/w"] };
 
@@ -15,48 +19,44 @@ const AT = "2026-10-13T00:00:00.000Z";
 
 const FOLDER = "/w/.cutfac/imports/x";
 
-let t: TestWorkspace;
+const write = (rel: string, text: string) =>
+  Effect.flatMap(Workspace, (ws) => ws.writeText(rel, text));
 
-beforeEach(async () => {
-  t = await makeWorkspace("Brief imports");
-});
+it.live("a brief import with no reference may write from the start", () =>
+  Effect.gen(function* () {
+    yield* write(".agents/skills/old/SKILL.md", "# old");
+    yield* write("formats/existing/format.yaml", "name: Existing\n");
 
-afterEach(async () => {
-  await t.remove();
-});
+    for (const link of [undefined, "  "]) {
+      const { doc } = yield* createImport({ kind: "brief", link, agent: "claude" });
 
-const write = async (rel: string, text: string) => {
-  await mkdir(dirname(join(t.root, rel)), { recursive: true });
-  await writeFile(join(t.root, rel), text);
-};
+      expect(doc.link).toBeUndefined();
+      expect(doc.allowed).toBe(true);
+      expect(doc.baseline).toEqual({ skills: ["old"], formats: ["existing"] });
+    }
+  }),
+);
 
-test("a brief import with no reference may write from the start", async () => {
-  await write(".agents/skills/old/SKILL.md", "# old");
-  await write("formats/existing/format.yaml", "name: Existing\n");
+it.live("a brief import with a reference reads first, as any import does", () =>
+  Effect.gen(function* () {
+    const { doc } = yield* createImport({
+      kind: "brief",
+      link: " https://example.com/kit ",
+      agent: "codex",
+    });
 
-  for (const link of [undefined, "  "]) {
-    const { doc } = await t.run(createImport({ kind: "brief", link, agent: "claude" }));
+    expect(doc).toMatchObject({ kind: "brief", link: "https://example.com/kit", allowed: false });
+    expect(doc.baseline).toBeUndefined();
+  }),
+);
 
-    expect(doc.link).toBeUndefined();
-    expect(doc.allowed).toBe(true);
-    expect(doc.baseline).toEqual({ skills: ["old"], formats: ["existing"] });
-  }
-});
+it.live("only a brief import may go without a link", () =>
+  Effect.gen(function* () {
+    const error = yield* Effect.flip(createImport({ agent: "claude" }));
 
-test("a brief import with a reference reads first, as any import does", async () => {
-  const { doc } = await t.run(
-    createImport({ kind: "brief", link: " https://example.com/kit ", agent: "codex" }),
-  );
-
-  expect(doc).toMatchObject({ kind: "brief", link: "https://example.com/kit", allowed: false });
-  expect(doc.baseline).toBeUndefined();
-});
-
-test("only a brief import may go without a link", async () => {
-  const error = await t.fail(createImport({ agent: "claude" }));
-
-  expect(error.message).toContain("http(s)");
-});
+    expect(error.message).toContain("http(s)");
+  }),
+);
 
 test("with no reference, Claude's shell commands reach only code hosts", () => {
   const args = claudeImportFlags("install", SERVER, undefined);
