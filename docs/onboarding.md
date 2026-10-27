@@ -115,16 +115,19 @@ differently from the release, so it gets its own entry in each list.
 A template is the folder that lets an agent make one kind of video the same way every time: the
 spec, the skills, the render code and the choices (see `templates.md`). People don't write one, and
 don't need the word. They say what they want to make and point at what they like, and the agent
-writes the template from that. So step 5 asks for:
+writes the template from that. So step 5 asks, a part at a time and in this order, for:
 
 - **Purpose**: promoting the user's own product or service, information and tips, a personal
   brand, or their own words.
 - **Platforms**: TikTok, YouTube Shorts, Instagram Reels, any of them. They set the aspect ratios and
   lengths.
 - **Their material**, optional: website links, or local folders to read from (a brand kit, past
-  videos, a product folder). Start learns each one into the workspace with the Learn the board
+  videos, a product folder). A website and a folder each have a tile of their own, side by side, so
+  either or both read as fine. Start learns each one into the workspace with the Learn the board
   already has, into `about.md`, so every later run reads it too. A folder is read where it is, not
   copied.
+- **Anything else**, last and optional: a line or two in the user's own words, for what the choices
+  left out. For their own purpose it is required, since it is all the brief says.
 - **A reference**, optional: one card from a gallery of public examples (skills, starter kits,
   finished projects and collections of videos with their prompts), or another link pasted in.
 

@@ -36,15 +36,15 @@ async function startAgent(preferred: AgentChoice): Promise<AgentName | undefined
 }
 
 /** The parts of what to make, asked one at a time. */
-const PARTS = ["purpose", "details", "platforms", "material"] as const;
+const PARTS = ["purpose", "platforms", "material", "details"] as const;
 
 type Part = (typeof PARTS)[number];
 
 /**
- * What to make, a part at a time so each screen asks one thing: what the videos are for, a line
- * about them, where they go, then material to read. Picking a purpose moves on by itself, and a
- * part that can be left out says so on its button. Start saves the brief, learns the material, and
- * has the agent make the first template.
+ * What to make, a part at a time so each screen asks one thing: what the videos are for, where they
+ * go, material to read, then anything else the agent should know, in the user's own words. Picking a
+ * purpose moves on by itself, and a part that can be left out says so on its button. Start, on the
+ * last part, saves the brief, learns the material, and has the agent make the first template.
  */
 export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
   const { whatToMake: t, brief: b } = useMessages().start;
@@ -92,6 +92,7 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
   }
 
   const index = PARTS.indexOf(part);
+  const material = sources.length > 0 || typed.trim() !== "";
   const go = (step: 1 | -1) => setPart(PARTS[index + step] ?? part);
   const own = brief.purpose === "own";
   const parts = { value: brief, onChange: setBrief, disabled: busy };
@@ -129,12 +130,6 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       ),
       primary: next(t.next, brief.purpose !== null),
     },
-    details: {
-      title: own ? b.ownBodyLabel : b.bodyLabel,
-      body: own ? t.details.ownBody : t.details.body,
-      field: <BriefBody {...parts} focusOnOpen />,
-      primary: next(own || brief.body.trim() !== "" ? t.next : t.skipPart, briefReady(brief)),
-    },
     platforms: {
       title: b.platformsLabel,
       body: b.platformsHint,
@@ -147,8 +142,15 @@ export function StartStep({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDr
       field: (
         <MaterialPicker sources={sources} draft={typed} onSources={setSources} onDraft={setTyped} />
       ),
+      primary: next(material ? t.next : t.skipPart),
+    },
+    // Last, so the user says anything the choices left out; for their own purpose, it is the brief.
+    details: {
+      title: own ? b.ownBodyLabel : t.details.title,
+      body: own ? t.details.ownBody : t.details.body,
+      field: <BriefBody {...parts} focusOnOpen />,
       primary: (
-        <Button size="lg" disabled={busy} onClick={() => void start()}>
+        <Button size="lg" disabled={busy || !briefReady(brief)} onClick={() => void start()}>
           {busy ? <Spinner data-icon="inline-start" /> : null}
           {busy ? t.starting : t.start}
           {busy ? null : <ArrowRightIcon data-icon="inline-end" />}

@@ -55,13 +55,15 @@ export const startKo: StartMessages = {
     title: "무슨 일을 하나요?",
     body: "에이전트에게 조금만 알려 주면 영상 만드는 방식을 알아서 준비해요. 나중에 사이드바의 브리프에서 언제든 바꿀 수 있어요.",
     details: {
-      body: "한두 줄이면 충분해요. 건너뛰어도 돼요.",
+      title: "에이전트가 더 알아야 할 게 있나요?",
+      body: "한두 줄이면 충분해요. 비워 둬도 돼요.",
       ownBody: "한두 줄이면 충분해요.",
     },
     material: {
       title: "에이전트가 읽을 자료가 있나요?",
-      label: "내 자료",
-      hint: "제품 페이지나 브랜드 키트처럼 에이전트가 읽을 웹사이트나 폴더예요.",
+      hint: "에이전트가 시작하기 전에 읽어요.",
+      website: { title: "웹사이트", hint: "제품 페이지나 스토어 페이지" },
+      folder: { title: "폴더", hint: "브랜드 키트나 영상 소재" },
       placeholder: "https://내-사이트.com",
       add: "추가",
       choose: "폴더 선택…",

@@ -67,13 +67,15 @@ export const startEn = {
     title: "What do you do?",
     body: "Tell your agent a little, and it sets up how your videos get made. You can change it all later under Brief in the sidebar.",
     details: {
-      body: "A line or two is enough, or skip it.",
+      title: "Anything else your agent should know?",
+      body: "A line or two is enough, or leave it empty.",
       ownBody: "A line or two is enough.",
     },
     material: {
       title: "Anything your agent should read?",
-      label: "Your material",
-      hint: "A website or folder your agent should read, like your product page or a brand kit.",
+      hint: "Your agent reads them before it starts.",
+      website: { title: "Website", hint: "Your product page or app listing" },
+      folder: { title: "Folder", hint: "A brand kit or your footage" },
       placeholder: "https://your-site.com",
       add: "Add",
       choose: "Choose folder…",
