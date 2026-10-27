@@ -1,7 +1,7 @@
 import { Config, Context, Effect, Layer, Option, Path, Schema } from "effect";
 
 import { AppData, appendAppRecord } from "./core/appData.ts";
-import { COMPILED } from "./core/build.ts";
+import { BUNDLED } from "./core/build.ts";
 import { type NewItemInput, createItem } from "./core/items.ts";
 import { Workspace, nowIso } from "./core/workspace.ts";
 import { paidInSettings } from "./license.ts";
@@ -21,9 +21,6 @@ const VIDEOS_BYTES = 64 * 1024;
 /** The time each new video was made on this Mac, a line each, paid or not. */
 const VIDEOS_FILE = "videos.log";
 
-/** Where the desktop app keeps the binary it bundles, as opposed to the CLI built from source. */
-const BUNDLED_BINARY = /\.app\/Contents\/Resources\/bin\/[^/]+$/;
-
 /**
  * The desktop app's data folder, which holds its license and the count of videos made, when this
  * process belongs to the desktop app. None for the open-source CLI, which has no limit.
@@ -42,8 +39,7 @@ const env = (name: string) =>
 export const desktopData = Layer.effect(
   DesktopData,
   Effect.gen(function* () {
-    if (!COMPILED || !BUNDLED_BINARY.test(process.execPath))
-      return yield* env("CUTFAC_DESKTOP_DATA");
+    if (!BUNDLED) return yield* env("CUTFAC_DESKTOP_DATA");
     const path = yield* Path.Path;
 
     return Option.map(yield* env("HOME"), (home) =>
