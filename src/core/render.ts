@@ -7,6 +7,7 @@ import {
   Layer,
   Option,
   Path,
+  Predicate,
   Schema,
   Scope,
   Stream,
@@ -69,16 +70,15 @@ const RenderJson = Schema.fromJsonString(RenderState, { space: 2 });
 const decodeState = Schema.decodeUnknownOption(RenderJson);
 
 /** Whether process `pid` is still there. Signal 0 checks without sending anything. */
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-
-    return true;
-  } catch (error) {
-    // Someone else's process is still a live one.
-    return error instanceof Error && "code" in error && error.code === "EPERM";
-  }
-}
+const alive = (pid: number) =>
+  Effect.try(() => process.kill(pid, 0)).pipe(
+    Effect.match({
+      onSuccess: () => true,
+      // Someone else's process is still a live one.
+      onFailure: ({ cause }) =>
+        cause instanceof Error && Predicate.hasProperty(cause, "code") && cause.code === "EPERM",
+    }),
+  );
 
 /** How long a read that found the state file cut short waits for the write to finish. */
 const WRITE_GAP = Duration.millis(50);
@@ -97,7 +97,7 @@ export const readRender = Effect.fn("render.readRender")(function* (item: string
   // Saving truncates the file before writing it, so a read can land in between.
   const state = (yield* read) ?? (yield* Effect.andThen(Effect.sleep(WRITE_GAP), read));
 
-  if (state?.status === "running" && !alive(state.owner)) {
+  if (state?.status === "running" && !(yield* alive(state.owner))) {
     const { mtime } = yield* ws.stat(path);
 
     return { ...state, status: "stopped" as const, endedAt: mtime };

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { ConfigProvider, Schema } from "effect";
+import { ConfigProvider, Option, Schema } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
 import { agentStatus } from "../src/core/agents.ts";
@@ -174,15 +174,19 @@ describe("the model an agent picks itself", () => {
   });
 
   test("Codex's config sets it, through the profile in use when there is one", () => {
-    expect(codexConfigModel('model = "gpt-b"\n[tui]\ntheme = "dark"\n')).toBe("gpt-b");
+    expect(codexConfigModel('model = "gpt-b"\n[tui]\ntheme = "dark"\n')).toEqual(
+      Option.some("gpt-b"),
+    );
     expect(
       codexConfigModel(
         'model = "gpt-b"\nprofile = "fast"\n[profiles.fast]\nmodel = "gpt-a"\n[profiles.slow]\n',
       ),
-    ).toBe("gpt-a");
-    expect(codexConfigModel('profile = "slow"\nmodel = "gpt-b"\n[profiles.slow]\n')).toBe("gpt-b");
-    expect(codexConfigModel("[tui]\n")).toBeUndefined();
-    expect(codexConfigModel("model = ")).toBeUndefined();
+    ).toEqual(Option.some("gpt-a"));
+    expect(codexConfigModel('profile = "slow"\nmodel = "gpt-b"\n[profiles.slow]\n')).toEqual(
+      Option.some("gpt-b"),
+    );
+    expect(codexConfigModel("[tui]\n")).toEqual(Option.none());
+    expect(codexConfigModel("model = ")).toEqual(Option.none());
   });
 });
 

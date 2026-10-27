@@ -1,6 +1,7 @@
 import { Effect, Option, Schema } from "effect";
-import { parse, stringify } from "yaml";
+import { stringify } from "yaml";
 
+import { fromYamlString } from "./configText.ts";
 import { InvalidRequest } from "./errors.ts";
 import { readOptionalText } from "./library.ts";
 import { Workspace } from "./workspace.ts";
@@ -63,7 +64,8 @@ const FrontMatterFields = Schema.Record(Schema.String, Schema.Unknown);
 
 type FrontMatterFields = typeof FrontMatterFields.Type;
 
-const decodeFields = Schema.decodeUnknownOption(FrontMatterFields);
+// An empty block parses as null: no fields, which is fine.
+const decodeFields = Schema.decodeUnknownOption(fromYamlString(Schema.NullOr(FrontMatterFields)));
 
 interface FrontMatter {
   readonly fields: FrontMatterFields;
@@ -80,20 +82,11 @@ function frontMatter(text: string): FrontMatter {
   if (match === null) return { fields: {}, rest: text, broken: false };
 
   const rest = text.slice(match[0].length);
-  let parsed: unknown;
 
-  try {
-    parsed = parse(match[1] ?? "");
-  } catch {
-    return { fields: {}, rest, broken: true };
-  }
-
-  // An empty block parses as null: no fields, which is fine.
-  if (parsed === null) return { fields: {}, rest, broken: false };
-
-  const fields = Option.getOrUndefined(decodeFields(parsed));
-
-  return { fields: fields ?? {}, rest, broken: fields === undefined };
+  return Option.match(decodeFields(match[1] ?? ""), {
+    onNone: () => ({ fields: {}, rest, broken: true }),
+    onSome: (fields) => ({ fields: fields ?? {}, rest, broken: false }),
+  });
 }
 
 /**

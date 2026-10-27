@@ -109,6 +109,7 @@ command = "/opt/cutfac"
 
   test("are none when the file isn't TOML or has none", () => {
     expect(configServers("[mcp_servers")).toEqual([]);
+    expect(configServers('[[mcp_servers]]\ncommand = "x"\n')).toEqual([]);
     expect(configServers('model = "gpt-5"')).toEqual([]);
   });
 });

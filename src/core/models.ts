@@ -1,5 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
+import { fromTomlString } from "./configText.ts";
 import { run } from "./process.ts";
 import { Effort, ModelName } from "./schema.ts";
 
@@ -93,26 +94,15 @@ const CodexConfig = Schema.Struct({
   ),
 });
 
-const decodeCodexConfig = Schema.decodeUnknownOption(CodexConfig);
+const decodeCodexConfig = Schema.decodeUnknownOption(fromTomlString(CodexConfig));
 
 /** The model a Codex `config.toml` sets: its profile's, else its own; none when it sets none. */
-export function codexConfigModel(toml: string): string | undefined {
-  let parsed: unknown;
-
-  try {
-    parsed = Bun.TOML.parse(toml);
-  } catch {
-    return undefined;
-  }
-
-  const config = decodeCodexConfig(parsed);
-
-  if (Option.isNone(config)) return undefined;
-
-  const { model, profile, profiles } = config.value;
-
-  return (profile === undefined ? undefined : profiles?.[profile]?.model) ?? model;
-}
+export const codexConfigModel = (toml: string): Option.Option<string> =>
+  Option.flatMapNullishOr(
+    decodeCodexConfig(toml),
+    ({ model, profile, profiles }) =>
+      (profile === undefined ? undefined : profiles?.[profile]?.model) ?? model,
+  );
 
 /**
  * The name of the model Codex runs when none is picked: the one its config sets, else the first it

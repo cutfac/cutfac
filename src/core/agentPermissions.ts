@@ -3,6 +3,7 @@ import { Effect, Option, Path, Schema } from "effect";
 import { claudeSettingsFiles, codexHome } from "./agents.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
 import type { CodexPermissions } from "./codexProtocol.ts";
+import { fromTomlString } from "./configText.ts";
 import { isJsonObject, setAt } from "./json.ts";
 import { peekConfig } from "./mcpServers.ts";
 import { AGENTS, AgentName } from "./schema.ts";
@@ -163,21 +164,13 @@ const CodexConfig = Schema.Struct({
   profiles: Schema.optional(Schema.Record(Schema.String, CodexPolicy)),
 });
 
-const decodeCodexConfig = Schema.decodeUnknownOption(CodexConfig);
+const decodeCodexConfig = Schema.decodeUnknownOption(fromTomlString(CodexConfig));
 
 const decodeText = Schema.decodeUnknownOption(Schema.String);
 
 /** The permission settings a Codex `config.toml` sets, its profile's over its own. */
 export function codexPermissionSettings(toml: string): CodexPermissionSettings {
-  let parsed: unknown;
-
-  try {
-    parsed = Bun.TOML.parse(toml);
-  } catch {
-    return {};
-  }
-
-  const config = decodeCodexConfig(parsed);
+  const config = decodeCodexConfig(toml);
 
   if (Option.isNone(config)) return {};
 

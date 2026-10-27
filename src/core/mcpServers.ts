@@ -1,6 +1,7 @@
 import { Effect, Option, Path, Predicate, Schema } from "effect";
 
 import { LEGACY_SERVER_NAME, SERVER_NAME, codexHome, envVar } from "./agents.ts";
+import { fromTomlString } from "./configText.ts";
 import { CommandFailed } from "./errors.ts";
 import { canonicalJson, isEmptyJson, isJsonObject } from "./json.ts";
 import { readOptionalText } from "./library.ts";
@@ -67,6 +68,12 @@ export const decodeJsonObject = Schema.decodeUnknownOption(
 );
 
 const decodeTable = Schema.decodeUnknownOption(Schema.JsonObject);
+
+const Tables = Schema.Record(Schema.String, Schema.Unknown);
+
+const decodeTables = Schema.decodeUnknownOption(Tables);
+
+const decodeToml = Schema.decodeUnknownOption(fromTomlString(Tables));
 
 /** The servers in an `mcpServers` object, skipping anything that isn't one. */
 export const entriesIn = (servers: Schema.Json | undefined) =>
@@ -196,27 +203,22 @@ export const codexCandidates = (listed: ReadonlyArray<CodexListed>): ReadonlyArr
     enabled && !isCutfacServer(name) ? [{ agent: "codex", name, source: "user", entry }] : [],
   );
 
-/** The tables under `key` in `toml`, a Codex `config.toml`, by name; none when it isn't TOML. */
-export function tomlTables(toml: string, key: string) {
-  let parsed: unknown;
-
-  try {
-    parsed = Bun.TOML.parse(toml);
-  } catch {
-    return [];
-  }
-
-  const tables = Predicate.hasProperty(parsed, key) ? parsed[key] : undefined;
-
-  if (!Predicate.isObject(tables)) return [];
-
-  return Object.entries(tables).flatMap(([name, value]) =>
-    Option.match(decodeTable(value), {
+/**
+ * The tables under `key` in `toml`, a Codex `config.toml`, by name, skipping any value that isn't
+ * one; none when it isn't TOML.
+ */
+export const tomlTables = (toml: string, key: string) =>
+  decodeToml(toml).pipe(
+    Option.flatMapNullishOr((document) => document[key]),
+    Option.flatMap(decodeTables),
+    Option.match({
       onNone: () => [],
-      onSome: (table) => [[name, table] as const],
+      onSome: (tables) =>
+        Object.entries(tables).flatMap(([name, value]) =>
+          Option.toArray(Option.map(decodeTable(value), (table) => [name, table] as const)),
+        ),
     }),
   );
-}
 
 /** The servers in `toml`, a Codex `config.toml`, that are on and not Cutfac's. */
 export const configServers = (toml: string): ReadonlyArray<McpServer> =>

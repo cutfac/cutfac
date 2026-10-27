@@ -1,19 +1,20 @@
+import { Option } from "effect";
+
 import { allowedFromStart } from "./imports.ts";
 import type { ImportDoc, ImportTurn } from "./schema.ts";
 
 // What the import's agent is told: the first message, each turn after it, and the conversation
 // so far when its session is gone.
 
-/** The English name of a locale's language, such as "Korean" for `ko-KR`. */
-export function languageName(locale: string): string | undefined {
-  try {
-    const { language } = new Intl.Locale(locale);
+const LANGUAGE_NAMES = new Intl.DisplayNames(["en"], { type: "language" });
 
-    return new Intl.DisplayNames(["en"], { type: "language" }).of(language);
-  } catch {
-    return undefined;
-  }
-}
+const displayName = Option.liftThrowable((locale: string) =>
+  LANGUAGE_NAMES.of(new Intl.Locale(locale).language),
+);
+
+/** The English name of a locale's language, such as "Korean" for `ko-KR`; none for a bad tag. */
+export const languageName = (locale: string) =>
+  Option.flatMap(displayName(locale), Option.fromNullishOr);
 
 const SKILL_SECTION = '"Import a template from a link" in the cutfac skill';
 
@@ -35,10 +36,10 @@ function attachedLines(turn: ImportTurn | undefined, folder: string): string[] {
 
 /** How the agent talks to the user, last in every first message. */
 function voiceLines(doc: ImportDoc): string[] {
-  const language = doc.locale === undefined ? undefined : languageName(doc.locale);
+  const language = Option.flatMap(Option.fromNullishOr(doc.locale), languageName);
 
   return [
-    ...(language === undefined ? [] : [`Write to the user in ${language}.`]),
+    ...Option.toArray(Option.map(language, (name) => `Write to the user in ${name}.`)),
     "Keep replies short and plain; the user may not be a developer.",
   ];
 }

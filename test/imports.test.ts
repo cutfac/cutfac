@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 // The end-to-end tests run the import registry against the test workspace.
 // @effect-diagnostics strictEffectProvide:off
-import { Context, Effect, Layer, ManagedRuntime, Result, Schema, Stream } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Option, Result, Schema, Stream } from "effect";
 import { Tool } from "effect/ai";
 
 import { MCP_READ_TOOLS, MCP_WRITE_TOOLS, type McpLaunch } from "../src/core/agents.ts";
@@ -506,8 +506,8 @@ test("without a session, the prompt names the files sent earlier, the first mess
 });
 
 test("a locale that is not one names no language", () => {
-  expect(languageName("ko-KR")).toBe("Korean");
-  expect(languageName("not a locale!")).toBeUndefined();
+  expect(languageName("ko-KR")).toEqual(Option.some("Korean"));
+  expect(languageName("not a locale!")).toEqual(Option.none());
 });
 
 // --- Running a turn through a fake agent CLI ----------------------------------------------------

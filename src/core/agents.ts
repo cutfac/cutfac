@@ -421,7 +421,7 @@ const codexConfiguredModel = Effect.fn("agents.codexConfiguredModel")(function* 
 
   const config = yield* peek(path.join(dir.value, "config.toml"));
 
-  return Option.isSome(config) ? codexConfigModel(config.value) : undefined;
+  return Option.getOrUndefined(Option.flatMap(config, codexConfigModel));
 });
 
 /**
