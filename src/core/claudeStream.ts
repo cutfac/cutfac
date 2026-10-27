@@ -66,9 +66,11 @@ const claudeEvents = (json: Schema.JsonObject, root: string | undefined): Readon
         }
 
         if (block.type === "tool_use" && block.name !== undefined) {
-          const detail = block.input === undefined ? undefined : toolDetail(block.input, root);
+          const detail = Option.flatMap(Option.fromUndefinedOr(block.input), (input) =>
+            toolDetail(input, root),
+          );
 
-          return [{ type: "tool", name: block.name, detail }];
+          return [{ type: "tool", name: block.name, detail: Option.getOrUndefined(detail) }];
         }
 
         return [];
@@ -198,10 +200,10 @@ const decodeAskInput = Schema.decodeUnknownOption(AskInput);
  * and always lets the user write an answer of their own. None of its questions, or a tool input
  * it can't read, leaves it to the deny for a tool the board can't stand in for.
  */
-function questionRequest(use: ToolUse): AgentControl | undefined {
+function questionRequest(use: ToolUse): Option.Option<AgentControl> {
   const asked = Option.getOrUndefined(decodeAskInput(use.input))?.questions ?? [];
 
-  if (asked.length === 0) return undefined;
+  if (asked.length === 0) return Option.none();
 
   const questions = asked.map((question): Question => ({
     id: question.question,
@@ -233,7 +235,7 @@ function questionRequest(use: ToolUse): AgentControl | undefined {
     return claudeAnswer({ ...use, input: { ...use.input, answers } }, "allow");
   };
 
-  return { kind: "ask", request: { approval, answer } };
+  return Option.some({ kind: "ask", request: { approval, answer } });
 }
 
 /** The answer to a request of a kind the board doesn't take, so Claude goes on without it. */
@@ -309,9 +311,9 @@ function toolRequest(
 
   const display = textOf(request, "display_name");
   const tool = textOf(request, "tool_name") ?? display ?? "tool";
-  const question = tool === ASK_TOOL ? questionRequest(use) : undefined;
+  const question = tool === ASK_TOOL ? questionRequest(use) : Option.none();
 
-  if (question !== undefined) return question;
+  if (Option.isSome(question)) return question.value;
 
   if (request["requires_user_interaction"] === true) {
     return { kind: "reply", lines: [claudeAnswer(use, "deny", IN_PERSON)] };
@@ -331,7 +333,9 @@ function toolRequest(
     kind,
     network: kind === "network",
     title: shown(textOf(request, "title") ?? display),
-    detail: mainArgument(input, root) ?? shown(textOf(request, "blocked_path") ?? everything),
+    detail: Option.getOrElse(mainArgument(input, root), () =>
+      shown(textOf(request, "blocked_path") ?? everything),
+    ),
     reason: shown(textOf(request, "description") ?? textOf(request, "decision_reason")),
     always: suggestions.length > 0 && request["suppress_always_allow_rule"] !== true,
     rules: allowRules(suggestions),
@@ -349,17 +353,21 @@ function claudeControl(
   type: string,
   json: Schema.JsonObject,
   root: string | undefined,
-): AgentControl | undefined {
-  const id = textOf(json, "request_id");
+): Option.Option<AgentControl> {
+  return Option.map(Option.fromUndefinedOr(textOf(json, "request_id")), (id): AgentControl => {
+    if (type === "control_cancel_request") return { kind: "cancel", id };
 
-  if (id === undefined) return undefined;
-
-  if (type === "control_cancel_request") return { kind: "cancel", id };
-  const request = Option.getOrUndefined(decodeObject(json["request"]));
-
-  return request !== undefined && textOf(request, "subtype") === "can_use_tool"
-    ? toolRequest(id, request, root)
-    : { kind: "reply", lines: [claudeRefusal(id, UNSUPPORTED)] };
+    return Option.match(
+      Option.filter(
+        decodeObject(json["request"]),
+        (request) => textOf(request, "subtype") === "can_use_tool",
+      ),
+      {
+        onNone: () => ({ kind: "reply", lines: [claudeRefusal(id, UNSUPPORTED)] }),
+        onSome: (request) => toolRequest(id, request, root),
+      },
+    );
+  });
 }
 
 const CONTROL_TYPES = new Set(["control_request", "control_cancel_request"]);
@@ -378,7 +386,10 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
   const msg = envelope.value;
 
   if (CONTROL_TYPES.has(msg.type)) {
-    return { events: [], control: claudeControl(msg.type, json.value, root) };
+    return {
+      events: [],
+      control: Option.getOrUndefined(claudeControl(msg.type, json.value, root)),
+    };
   }
 
   const events = msg.type === "assistant" ? claudeEvents(json.value, root) : claudeCompaction(msg);

@@ -115,7 +115,7 @@ function itemStarted(item: Schema.JsonObject, state: TurnState, root: string | u
     case "dynamicToolCall":
       return tool(
         textOf(item, "tool") ?? "tool",
-        toolDetail(objectOf(item, "arguments") ?? {}, root),
+        Option.getOrUndefined(toolDetail(objectOf(item, "arguments") ?? {}, root)),
       );
 
     case "contextCompaction":

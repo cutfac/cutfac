@@ -198,7 +198,7 @@ function mcpApproval(
     id: String(id),
     tool: textOf(meta, "tool_title") ?? textOf(params, "serverName") ?? "mcp",
     title: shown(textOf(params, "message"), root),
-    detail: mainArgument(input, root) ?? shown(everything, root),
+    detail: Option.getOrElse(mainArgument(input, root), () => shown(everything, root)),
     reason: shown(textOf(meta, "tool_description"), root),
     always: persist !== undefined,
     rules: [],

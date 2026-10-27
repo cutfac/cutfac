@@ -1,4 +1,4 @@
-import { Option, Predicate, Schema } from "effect";
+import { Array, Option, Predicate, Schema } from "effect";
 
 import { type Answer, Approval } from "./approval.ts";
 import { AgentName, ModelSettings } from "./schema.ts";
@@ -105,25 +105,14 @@ export const clampDetail = (value: string | ReadonlyArray<string>, root: string 
   clamp(shownValue(value, root));
 
 /** The one argument worth showing for a tool call, whole: its command, file, search pattern, or address. */
-export function mainArgument(
-  input: Schema.JsonObject,
-  root: string | undefined,
-): string | undefined {
-  for (const key of DETAIL_KEYS) {
-    const value = decodeDetail(input[key]);
-
-    if (Option.isSome(value)) return shownValue(value.value, root);
-  }
-
-  return undefined;
-}
+export const mainArgument = (input: Schema.JsonObject, root: string | undefined) =>
+  Array.findFirst(DETAIL_KEYS, (key) => decodeDetail(input[key])).pipe(
+    Option.map((value) => shownValue(value, root)),
+  );
 
 /** A tool call's main argument, cut short to fit on its line. */
-export function toolDetail(input: Schema.JsonObject, root: string | undefined): string | undefined {
-  const text = mainArgument(input, root);
-
-  return text === undefined ? undefined : clamp(text);
-}
+export const toolDetail = (input: Schema.JsonObject, root: string | undefined) =>
+  Option.map(mainArgument(input, root), clamp);
 
 const decodeJsonLine = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
