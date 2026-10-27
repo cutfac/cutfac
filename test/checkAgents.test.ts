@@ -2,8 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { BunServices } from "@effect/platform-bun";
+import { Effect, Option } from "effect";
+import { TestConsole } from "effect/testing";
+
 import {
   FIXTURE_ROOT,
+  checkAgents,
   checkArgs,
   fixtureLines,
   readTurn,
@@ -13,21 +18,27 @@ import {
 import { parseClaudeLine } from "../src/core/claudeStream.ts";
 import { codexTurn } from "../src/core/codexAppServer.ts";
 import type { AgentName } from "../src/core/schema.ts";
+import { testEffect } from "./effect.ts";
+
+const it = testEffect(BunServices.layer);
 
 describe("check:agents arguments", () => {
   test("checks every agent and saves fixtures, unless told otherwise", () => {
-    expect(checkArgs([])).toEqual({ agents: ["claude", "codex"], save: true });
-    expect(checkArgs(["codex"])).toEqual({ agents: ["codex"], save: true });
-    expect(checkArgs(["--no-save", "claude", "claude"])).toEqual({
-      agents: ["claude"],
-      save: false,
-    });
+    expect(checkArgs([])).toEqual(Option.some({ agents: ["claude", "codex"], save: true }));
+    expect(checkArgs(["codex"])).toEqual(Option.some({ agents: ["codex"], save: true }));
+    expect(checkArgs(["--no-save", "claude", "claude"])).toEqual(
+      Option.some({ agents: ["claude"], save: false }),
+    );
   });
 
-  test("shows how to use it for anything else", () => {
-    expect(() => checkArgs(["gemini"])).toThrow("Usage: bun run check:agents");
-    expect(() => checkArgs(["--save"])).toThrow("Usage: bun run check:agents");
-  });
+  it.effect.each([{ args: ["gemini"] }, { args: ["--save"] }])(
+    "shows how to use it for $args, and fails",
+    ({ args }) =>
+      Effect.gen(function* () {
+        expect(yield* checkAgents(args)).toBe(1);
+        expect((yield* TestConsole.errorLines).join("\n")).toContain("Usage: bun run check:agents");
+      }),
+  );
 });
 
 describe("what a turn must show", () => {

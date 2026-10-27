@@ -6,13 +6,26 @@
  * resume the first one. It makes real model calls. Passing, it saves the raw output as fixtures
  * in test/fixtures/, which the unit tests parse; `--no-save` leaves them alone.
  */
+// The script is its own entry point, so it provides the platform's services itself.
 // @effect-diagnostics strictEffectProvide:off
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer, Option, Schema } from "effect";
+import {
+  type Cause,
+  Clock,
+  Config,
+  Console,
+  Crypto,
+  Effect,
+  FileSystem,
+  Option,
+  Queue,
+  Ref,
+  Schema,
+  Stream,
+} from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { type AgentInvocation, agentInvocation } from "../src/core/agentCommand.ts";
 import type { ParsedLine } from "../src/core/agentParse.ts";
@@ -25,7 +38,7 @@ import {
 } from "../src/core/agents.ts";
 import { detectAgentRelease, outdatedAgent, versionOf } from "../src/core/agentVersion.ts";
 import { codexServers } from "../src/core/mcpServers.ts";
-import { UNINHERITED } from "../src/core/process.ts";
+import { commandOptions, which } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 
@@ -48,7 +61,7 @@ const WORKSPACE_NAME = "agent-check";
 export const FIXTURE_ROOT = "/work/agent-check";
 
 /** A turn that has not ended by now is stuck, not slow. */
-const TURN_TIMEOUT_MS = 240_000;
+const TURN_TIMEOUT_SECONDS = 240;
 
 /** What the first turn is asked to reply with, and the second turn to repeat. */
 const REPLY = "ready-4721";
@@ -69,17 +82,20 @@ export interface CheckArgs {
 
 const isAgent = (name: string): name is AgentName => AGENTS.some((agent) => agent === name);
 
-/** Which agents to check (all, unless named) and whether to save fixtures. Throws the usage. */
-export function checkArgs(args: ReadonlyArray<string>): CheckArgs {
+/** Which agents to check (all, unless named) and whether to save fixtures; none for a misuse. */
+export function checkArgs(args: ReadonlyArray<string>): Option.Option<CheckArgs> {
   const named = args.filter((arg) => !arg.startsWith("-"));
   const flags = args.filter((arg) => arg.startsWith("-"));
   const agents = named.filter(isAgent);
 
   if (agents.length !== named.length || flags.some((flag) => flag !== "--no-save")) {
-    throw new Error(USAGE);
+    return Option.none();
   }
 
-  return { agents: agents.length === 0 ? AGENTS : [...new Set(agents)], save: flags.length === 0 };
+  return Option.some({
+    agents: agents.length === 0 ? AGENTS : [...new Set(agents)],
+    save: flags.length === 0,
+  });
 }
 
 /** What Cutfac made of one turn's output. */
@@ -214,107 +230,110 @@ interface TurnOutput {
   readonly timedOut: boolean;
 }
 
+const encoder = new TextEncoder();
+
 /**
  * Runs one turn as a board run does: each line read as it comes, what the agent waits on
  * answered on stdin, and stdin closed once the turn ends. Whatever the agent asks the user is
  * turned down, as nobody is there to answer.
  */
-async function runTurn(invocation: AgentInvocation, cwd: string): Promise<TurnOutput> {
-  const child = Bun.spawn([invocation.command, ...invocation.args], {
-    cwd,
-    env: { ...process.env, ...UNINHERITED, ...invocation.env },
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+const runTurn = Effect.fnUntraced(function* (invocation: AgentInvocation, cwd: string) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const stdin = yield* Queue.unbounded<Uint8Array, Cause.Done>();
+  const send = (text: string) => Effect.asVoid(Queue.offer(stdin, encoder.encode(text)));
+  const end = Effect.asVoid(Queue.end(stdin));
+  const lines = yield* Ref.make<ReadonlyArray<string>>([]);
+  const reading = yield* Ref.make(UNREAD);
 
-  const send = (text: string) => {
-    child.stdin.write(text);
-    child.stdin.flush();
-  };
-
-  let timedOut = false;
-
-  const timer = setTimeout(() => {
-    timedOut = true;
-    child.kill();
-  }, TURN_TIMEOUT_MS);
-
-  const stderr = new Response(child.stderr).text();
-  const lines: string[] = [];
-  let reading = UNREAD;
-  let pending = "";
-
-  const take = (line: string) => {
+  const take = Effect.fnUntraced(function* (line: string) {
     if (line.trim() === "") return;
-    lines.push(line);
-    const parsed = invocation.parse(line, cwd);
 
-    reading = nextReading(reading, parsed);
+    yield* Ref.update(lines, (all) => [...all, line]);
+
+    const parsed = invocation.parse(line, cwd);
     const control = parsed.control;
 
-    if (control?.kind === "reply") control.lines.forEach(send);
+    yield* Ref.update(reading, (now) => nextReading(now, parsed));
 
-    if (control?.kind === "ask") send(control.request.answer("deny"));
+    if (control?.kind === "reply") yield* Effect.forEach(control.lines, send, { discard: true });
 
-    if (parsed.ended === true) child.stdin.end();
+    if (control?.kind === "ask") yield* send(control.request.answer("deny"));
+
+    if (parsed.ended === true) yield* end;
+  });
+
+  yield* send(invocation.stdin);
+
+  const ran = yield* Effect.scoped(
+    Effect.gen(function* () {
+      const handle = yield* spawner.spawn(
+        ChildProcess.make(invocation.command, invocation.args, {
+          ...commandOptions({ cwd, stdin: Stream.fromQueue(stdin), env: invocation.env }),
+        }),
+      );
+
+      const [, stderr, code] = yield* Effect.all(
+        [
+          // Claude reads its message and stops; a turn that never ended still lets the process go.
+          handle.stdout.pipe(
+            Stream.decodeText(),
+            Stream.splitLines,
+            Stream.runForEach(take),
+            Effect.andThen(end),
+          ),
+          handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
+          Effect.map(handle.exitCode, Number),
+        ],
+        { concurrency: "unbounded" },
+      );
+
+      return { code, stderr };
+    }),
+  ).pipe(Effect.timeoutOption(`${TURN_TIMEOUT_SECONDS} seconds`));
+
+  const output: TurnOutput = {
+    code: Option.match(ran, { onNone: () => 1, onSome: ({ code }) => code }),
+    lines: yield* Ref.get(lines),
+    reading: yield* Ref.get(reading),
+    stderr: Option.match(ran, { onNone: () => "", onSome: ({ stderr }) => stderr }),
+    timedOut: Option.isNone(ran),
   };
 
-  try {
-    send(invocation.stdin);
-    const decoder = new TextDecoder();
+  return output;
+});
 
-    for await (const chunk of child.stdout) {
-      const parts = (pending + decoder.decode(chunk, { stream: true })).split("\n");
-
-      pending = parts.pop() ?? "";
-      parts.forEach(take);
-    }
-
-    take(pending);
-    // Claude reads its message and stops; a turn that never ended still lets the process go.
-    child.stdin.end();
-
-    return { code: await child.exited, lines, reading, stderr: await stderr, timedOut };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-const log = (message: string) => console.log(`[check:agents] ${message}`);
+const log = (message: string) => Console.log(`[check:agents] ${message}`);
 
 /** A workspace to run the agents in: just enough for this workspace's MCP server to start. */
-async function makeCheckWorkspace(): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "cutfac-agent-check-"));
+const checkWorkspace = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-agent-check-" });
 
-  await writeFile(path.join(dir, "cutfac.yaml"), `name: ${WORKSPACE_NAME}\n`);
-  await mkdir(path.join(dir, "items"), { recursive: true });
+  yield* fs.writeFileString(path.join(dir, "cutfac.yaml"), `name: ${WORKSPACE_NAME}\n`);
+  yield* fs.makeDirectory(path.join(dir, "items"), { recursive: true });
 
   return dir;
-}
+});
 
 /**
  * How each agent is told to reach this workspace's server, built as a board run builds it: Codex
  * also has every other server it lists switched off, plugins' too.
  */
-async function serverOptions(agent: AgentName, bin: string, workspace: string) {
-  const launch = mcpLaunch(
-    { command: process.execPath, args: [path.join(root, "src", "cli.ts")] },
-    workspace,
-  );
+const serverOptions = Effect.fnUntraced(
+  function* (agent: AgentName, bin: string, workspace: string) {
+    const launch = mcpLaunch(
+      { command: process.execPath, args: [path.join(root, "src", "cli.ts")] },
+      workspace,
+    );
 
-  const inWorkspace = Layer.provideMerge(Workspace.layer(workspace), BunServices.layer);
+    if (agent === "claude") return { mcpConfig: yield* runMcpConfig(launch) };
 
-  if (agent === "claude") {
-    const mcpConfig = await Effect.runPromise(Effect.provide(runMcpConfig(launch), inWorkspace));
+    const listed = yield* codexServers(bin);
 
-    return { mcpConfig };
-  }
-
-  const listed = await Effect.runPromise(Effect.provide(codexServers(bin), inWorkspace));
-
-  return { codexConfig: codexRunServers(codexServerName(WORKSPACE_NAME), launch, listed) };
-}
+    return { codexConfig: codexRunServers(codexServerName(WORKSPACE_NAME), launch, listed) };
+  },
+  (options, _agent, _bin, workspace) => Effect.provide(options, Workspace.layer(workspace)),
+);
 
 interface CheckedTurn {
   readonly name: "first" | "resume";
@@ -323,27 +342,29 @@ interface CheckedTurn {
   readonly lines: ReadonlyArray<string>;
 }
 
-async function checkTurn(
+const checkTurn = Effect.fnUntraced(function* (
   agent: AgentName,
   bin: string,
   workspace: string,
   name: CheckedTurn["name"],
   sessionId: string | undefined,
-): Promise<CheckedTurn> {
+) {
+  const crypto = yield* Crypto.Crypto;
+
   const invocation = agentInvocation(agent, {
     bin,
     prompt: name === "first" ? FIRST_PROMPT : RESUME_PROMPT,
     sessionId,
-    newSessionId: crypto.randomUUID(),
-    ...(await serverOptions(agent, bin, workspace)),
+    newSessionId: yield* Effect.orDie(crypto.randomUUIDv4()),
+    ...(yield* serverOptions(agent, bin, workspace)),
   });
 
-  const startedAt = Date.now();
-  const output = await runTurn(invocation, workspace);
+  const startedAt = yield* Clock.currentTimeMillis;
+  const output = yield* runTurn(invocation, workspace);
   const reading = output.reading;
 
   const problems = [
-    output.timedOut ? `did not finish in ${TURN_TIMEOUT_MS / 1000} seconds` : undefined,
+    output.timedOut ? `did not finish in ${TURN_TIMEOUT_SECONDS} seconds` : undefined,
     ...turnProblems(output.code, reading, {
       tool: name === "first",
       reply: name === "first" ? REPLY : REMEMBERED,
@@ -353,113 +374,130 @@ async function checkTurn(
       : []),
   ].filter((problem) => problem !== undefined);
 
-  const seconds = Math.round((Date.now() - startedAt) / 1000);
+  const seconds = Math.round(((yield* Clock.currentTimeMillis) - startedAt) / 1000);
 
   if (problems.length === 0) {
     const tools = reading.tools.length === 0 ? "no tool call" : `tool ${reading.tools.join(", ")}`;
 
-    log(`  ${name} turn ok in ${seconds}s: ${tools}, reply ${JSON.stringify(reading.reply)}`);
+    yield* log(
+      `  ${name} turn ok in ${seconds}s: ${tools}, reply ${JSON.stringify(reading.reply)}`,
+    );
   } else {
-    log(`  ${name} turn FAILED after ${seconds}s:`);
-
-    for (const problem of problems) log(`    - ${problem}`);
+    yield* log(`  ${name} turn FAILED after ${seconds}s:`);
+    yield* Effect.forEach(problems, (problem) => log(`    - ${problem}`), { discard: true });
   }
 
-  return {
+  const checked: CheckedTurn = {
     name,
     problems,
     reading,
-    lines: fixtureLines(output.lines.join("\n"), await places(workspace)),
+    lines: fixtureLines(output.lines.join("\n"), yield* places(workspace)),
   };
-}
+
+  return checked;
+});
 
 /** The folders a fixture must not keep, each with what stands in for it. */
-async function places(workspace: string): Promise<Array<readonly [string, string]>> {
-  return [
+const places = Effect.fnUntraced(function* (workspace: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const home = yield* Config.String("HOME");
+
+  const swaps: Array<readonly [string, string]> = [
     [workspace, FIXTURE_ROOT],
-    [await realpath(workspace), FIXTURE_ROOT],
-    [homedir(), "/home/user"],
+    [yield* fs.realPath(workspace), FIXTURE_ROOT],
+    [home, "/home/user"],
   ];
-}
+
+  return swaps;
+});
 
 /** Checks `agent` and says whether it passed; with `save`, a pass also writes its fixtures. */
-async function checkAgent(agent: AgentName, save: boolean): Promise<boolean> {
-  const bin = Bun.which(agent);
+const checkAgent = Effect.fnUntraced(function* (agent: AgentName, save: boolean) {
+  const fs = yield* FileSystem.FileSystem;
+  const found = yield* which(agent);
 
-  if (bin === null) {
-    log(`${agent}: FAILED. It is not installed or not on PATH.`);
+  if (Option.isNone(found)) {
+    yield* log(`${agent}: FAILED. It is not installed or not on PATH.`);
 
     return false;
   }
 
-  const release = await Effect.runPromise(
-    Effect.provide(detectAgentRelease(bin), BunServices.layer),
-  );
-
+  const bin = found.value;
+  const release = yield* detectAgentRelease(bin);
   const outdated = outdatedAgent(agent, release);
 
-  log(`${agent} ${versionOf(release) ?? "(version unknown)"}`);
+  yield* log(`${agent} ${versionOf(release) ?? "(version unknown)"}`);
 
   if (Option.isSome(outdated)) {
     const { minimum, update } = outdated.value;
 
-    log(`  older than ${minimum}, the oldest Cutfac supports; run \`${update}\``);
+    yield* log(`  older than ${minimum}, the oldest Cutfac supports; run \`${update}\``);
   }
 
-  const workspace = await makeCheckWorkspace();
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const workspace = yield* checkWorkspace;
+      const first = yield* checkTurn(agent, bin, workspace, "first", undefined);
+      const resumed = first.problems.length === 0 ? first.reading.sessionId : undefined;
 
-  try {
-    const first = await checkTurn(agent, bin, workspace, "first", undefined);
-    const resumed = first.problems.length === 0 ? first.reading.sessionId : undefined;
+      // A resume needs the session the first turn reported.
+      if (resumed === undefined) {
+        yield* log("  resume turn skipped: the first turn failed");
 
-    // A resume needs the session the first turn reported.
-    const second =
-      resumed === undefined ? undefined : await checkTurn(agent, bin, workspace, "resume", resumed);
-
-    const passed = second !== undefined && second.problems.length === 0;
-
-    if (second === undefined) log("  resume turn skipped: the first turn failed");
-
-    if (passed && save) {
-      await mkdir(FIXTURES, { recursive: true });
-
-      for (const turn of [first, second]) {
-        const file = path.join(FIXTURES, `${agent}-${turn.name}.jsonl`);
-
-        await Bun.write(file, `${turn.lines.join("\n")}\n`);
-        log(`  saved ${path.relative(root, file)}`);
+        return false;
       }
-    }
 
-    return passed;
-  } finally {
-    await rm(workspace, { recursive: true, force: true });
+      const second = yield* checkTurn(agent, bin, workspace, "resume", resumed);
+      const passed = second.problems.length === 0;
+
+      if (passed && save) {
+        yield* fs.makeDirectory(FIXTURES, { recursive: true });
+
+        for (const turn of [first, second]) {
+          const file = path.join(FIXTURES, `${agent}-${turn.name}.jsonl`);
+
+          yield* fs.writeFileString(file, `${turn.lines.join("\n")}\n`);
+          yield* log(`  saved ${path.relative(root, file)}`);
+        }
+      }
+
+      return passed;
+    }),
+  );
+});
+
+/** Runs the check for the agents `args` name, as the process exit code. */
+export const checkAgents = Effect.fn("checkAgents")(function* (args: ReadonlyArray<string>) {
+  const parsed = checkArgs(args);
+
+  if (Option.isNone(parsed)) {
+    yield* Console.error(`[check:agents] ${USAGE}`);
+
+    return 1;
   }
-}
 
-/** Runs the check for the agents `args` name. Resolves to the process exit code. */
-export async function checkAgents(args: ReadonlyArray<string>): Promise<number> {
-  const { agents, save } = checkArgs(args);
-  const results: Array<readonly [AgentName, boolean]> = [];
+  const { agents, save } = parsed.value;
 
-  for (const agent of agents) results.push([agent, await checkAgent(agent, save)]);
+  const results = yield* Effect.forEach(agents, (agent) =>
+    Effect.map(checkAgent(agent, save), (passed) => [agent, passed] as const),
+  );
 
   const failed = results.flatMap(([agent, passed]) => (passed ? [] : [agent]));
 
-  log(
+  yield* log(
     failed.length === 0
       ? `Cutfac still reads ${agents.join(" and ")}.`
       : `Failed for ${failed.join(" and ")}. If the CLI's output changed, Cutfac's parsers need updating; if the CLI is old, update it.`,
   );
 
   return failed.length === 0 ? 0 : 1;
-}
+});
 
 if (import.meta.main) {
-  try {
-    process.exitCode = await checkAgents(Bun.argv.slice(2));
-  } catch (error) {
-    console.error(`[check:agents] ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
+  process.exitCode = await Effect.runPromise(
+    checkAgents(Bun.argv.slice(2)).pipe(
+      Effect.catch((error) => Effect.as(Console.error(`[check:agents] ${error.message}`), 1)),
+      Effect.provide(BunServices.layer),
+    ),
+  );
 }
