@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 import { Effect, Option, Schema } from "effect";
@@ -14,9 +14,14 @@ import {
   toMediaFiles,
 } from "../src/core/media.ts";
 import { frameTimes } from "../src/core/preprocess.ts";
+import { runChecked } from "../src/core/process.ts";
 import { FormatDoc } from "../src/core/schema.ts";
 import { verifyItem } from "../src/core/verify.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace());
 
 describe("media names", () => {
   test("reads the aspect prefix", () => {
@@ -144,80 +149,68 @@ describe("video preprocessing", () => {
 
 const hasFfmpeg = Bun.which("ffmpeg") !== null && Bun.which("ffprobe") !== null;
 
-/** A 2s 180×320 test pattern with a tone, so it probes as a 9:16 video with audio. */
-function makeVideo(path: string): void {
-  const generated = Bun.spawnSync(
-    [
-      "ffmpeg",
-      "-v",
-      "error",
-      "-f",
-      "lavfi",
-      "-i",
-      "testsrc=size=180x320:rate=30:duration=2",
-      "-f",
-      "lavfi",
-      "-i",
-      "sine=frequency=440:duration=2",
-      "-pix_fmt",
-      "yuv420p",
-      "-shortest",
-      path,
-    ],
-    { stderr: "pipe" },
-  );
+const liveWithFfmpeg: typeof it.live = hasFfmpeg ? it.live : (name) => test.skip(name, () => {});
 
-  if (generated.exitCode !== 0) throw new Error(generated.stderr.toString());
-}
+/** A 2s 180×320 test pattern with a tone, so it probes as a 9:16 video with audio. */
+const makeVideo = (path: string) =>
+  runChecked("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=180x320:rate=30:duration=2",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=2",
+    "-pix_fmt",
+    "yuv420p",
+    "-shortest",
+    path,
+  ]);
 
 describe("media in a workspace", () => {
-  let t: TestWorkspace;
-  let source: string;
+  it.live("refuses to import a file that is not media", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-    source = join(t.root, "upload.mp4");
-  });
+      yield* ws.writeText("notes.txt", "hi");
 
-  afterEach(() => t.remove());
-
-  test("refuses to import a file that is not media", async () => {
-    await Bun.write(join(t.root, "notes.txt"), "hi");
-
-    const error = await t.fail(
-      Effect.flatMap(createItem({ title: "Clip" }), (item) =>
-        importMedia(item.id, join(t.root, "notes.txt"), "notes.txt"),
-      ),
-    );
-
-    expect(error).toBeInstanceOf(InvalidRequest);
-  });
-
-  test.skipIf(!hasFfmpeg)(
-    "imports uploads with a probed aspect tag and unique names, then verifies them",
-    async () => {
-      makeVideo(source);
-
-      const { first, second, reports } = await t.run(
-        Effect.gen(function* () {
-          const item = yield* createItem({ title: "Clip" });
-          const a = yield* importMedia(item.id, source, "[1x1] My Clip.mp4");
-          const b = yield* importMedia(item.id, source, "My Clip.mp4");
-
-          return { first: a, second: b, reports: yield* verifyItem(item.id) };
-        }),
+      const error = yield* Effect.flip(
+        Effect.flatMap(createItem({ title: "Clip" }), (item) =>
+          importMedia(item.id, join(ws.root, "notes.txt"), "notes.txt"),
+        ),
       );
 
-      expect(first.name).toBe("[9x16] My Clip.mp4");
-      expect(second.name).toBe("[9x16] My Clip-2.mp4");
-      expect(reports.map((report) => report.file)).toEqual([
-        "[9x16] My Clip-2.mp4",
-        "[9x16] My Clip.mp4",
-      ]);
-      expect(reports[0]?.checks.find((check) => check.name === "audio")?.ok).toBe(true);
-      // 180×320 is far below upload resolution.
-      expect(reports[0]?.checks.find((check) => check.name === "resolution")?.ok).toBe(false);
-    },
+      expect(error).toBeInstanceOf(InvalidRequest);
+    }),
+  );
+
+  liveWithFfmpeg(
+    "imports uploads with a probed aspect tag and unique names, then verifies them",
+    () =>
+      Effect.gen(function* () {
+        const ws = yield* Workspace;
+        const source = join(ws.root, "upload.mp4");
+
+        yield* makeVideo(source);
+
+        const item = yield* createItem({ title: "Clip" });
+        const first = yield* importMedia(item.id, source, "[1x1] My Clip.mp4");
+        const second = yield* importMedia(item.id, source, "My Clip.mp4");
+        const reports = yield* verifyItem(item.id);
+
+        expect(first.name).toBe("[9x16] My Clip.mp4");
+        expect(second.name).toBe("[9x16] My Clip-2.mp4");
+        expect(reports.map((report) => report.file)).toEqual([
+          "[9x16] My Clip-2.mp4",
+          "[9x16] My Clip.mp4",
+        ]);
+        expect(reports[0]?.checks.find((check) => check.name === "audio")?.ok).toBe(true);
+        // 180×320 is far below upload resolution.
+        expect(reports[0]?.checks.find((check) => check.name === "resolution")?.ok).toBe(false);
+      }),
     20_000,
   );
 });
