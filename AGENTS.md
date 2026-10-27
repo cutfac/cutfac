@@ -45,6 +45,8 @@ Engineering:
 - Workspace files are the source of truth. Do not add a database without a demonstrated need.
 - The core must stay domain-agnostic; product- or niche-specific logic belongs in a workspace.
 - Add a focused `bun:test` for parsing, status mapping, verification, and persistence changes.
+- To see and drive the desktop app, use argent: `bun run desktop:dev` opens Cutfac Dev with the
+  DevTools Protocol on port 9222, or the port it logs, which argent's Chromium tools reach.
 - Before finishing: `bun test`, `bun run typecheck`, `bun run lint`, `bun run format:check`, and `bun run build` for web changes.
 - Work directly in this checkout. Do not create git worktrees unless the user explicitly asks.
 - Commits use Conventional Commits and stay atomic.
