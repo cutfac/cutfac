@@ -4,7 +4,7 @@ import { Toolkit } from "effect/ai";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { RENDER_STATUSES, Renders, type RenderState } from "../core/render.ts";
 import { RENDER_STAGES, RENDER_UNITS } from "../core/renderProgress.ts";
-import { asJson, describe, tool } from "./tool.ts";
+import { asJson, describe, logFailure, tool } from "./tool.ts";
 
 /**
  * How long one call waits for the render to end. Under the minute Codex gives a tool call, so a
@@ -120,7 +120,7 @@ export const renderHandlers = RenderToolkit.toLayer(
           }
 
           return report(state, yield* Clock.currentTimeMillis);
-        }),
+        }).pipe(logFailure),
     });
   }),
 ).pipe(Layer.provide(Renders.layer));

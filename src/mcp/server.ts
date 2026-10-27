@@ -62,7 +62,7 @@ import { trustNotices } from "../core/workspaceTrust.ts";
 import { createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
 import { BriefToolkit, briefHandlers } from "./brief.ts";
 import { RenderToolkit, renderHandlers } from "./render.ts";
-import { asJson, describe, tool } from "./tool.ts";
+import { asJson, describe, logFailure, tool } from "./tool.ts";
 
 export const MCP_VERSION = version;
 
@@ -544,8 +544,9 @@ const handlers = WorkspaceToolkit.toLayer(
     const services = yield* Effect.context<ToolServices>();
     const ws = yield* Workspace;
 
-    const run = <A, E>(effect: Effect.Effect<A, E, ToolServices>) =>
-      Effect.map(Effect.provideContext(effect, services), asJson);
+    const run = <A, E extends { readonly message: string }>(
+      effect: Effect.Effect<A, E, ToolServices>,
+    ) => Effect.map(Effect.provideContext(effect, services), asJson).pipe(logFailure);
 
     const itemAbs = (id: string) => ws.abs(`${ws.config.paths.items}/${id}`);
 

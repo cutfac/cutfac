@@ -6,7 +6,7 @@ import { BunServices } from "@effect/platform-bun";
 import { ConfigProvider, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
-import { LogDir, logDir, logToFile } from "../src/core/logFile.ts";
+import { LogDir, answeredWithError, logDir, logToFile } from "../src/core/logFile.ts";
 import { testEffect } from "./effect.ts";
 
 const it = testEffect(BunServices.layer);
@@ -106,6 +106,45 @@ describe("the desktop app's log", () => {
         ["INFO", "McpServer.tools/call took 0ms"],
       ]);
       expect(kept[1]?.cause).toContain("nope");
+    }),
+  );
+
+  it.effect("names the tool an agent called, never what it passed, and says when it erred", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* folder;
+
+      // As Effect's Toolkit marks the request it runs a tool for.
+      const call = (tool: string, answer: Effect.Effect<void>) =>
+        Effect.withSpan(
+          Effect.andThen(
+            Effect.annotateCurrentSpan({ tool, parameters: { title: "My secret video" } }),
+            answer,
+          ),
+          "McpServer.tools/call",
+        );
+
+      yield* TestClock.setTime(NOW);
+      yield* logged(
+        dir,
+        Effect.gen(function* () {
+          yield* call("list_items", Effect.void);
+          yield* call("get_item", answeredWithError("Item nope not found"));
+          yield* settle;
+        }),
+      );
+
+      expect((yield* lines(dir)).map(({ level, message }) => [level, message])).toEqual([
+        ["INFO", "McpServer.tools/call list_items took 0ms"],
+        [
+          "WARN",
+          "McpServer.tools/call get_item took 0ms and answered with an error: Item nope not found",
+        ],
+      ]);
+      expect(yield* fs.readFileString(path.join(dir, "server-2026-10-28.log"))).not.toContain(
+        "My secret video",
+      );
     }),
   );
 

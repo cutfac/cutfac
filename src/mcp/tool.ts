@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { Tool } from "effect/ai";
 
 import {
@@ -9,6 +9,7 @@ import {
   NotFound,
   WorkspaceError,
 } from "../core/errors.ts";
+import { answeredWithError } from "../core/logFile.ts";
 import { FreeLimitReached } from "../plan.ts";
 
 export const describe = (description: string) => ({ description });
@@ -61,3 +62,11 @@ export const tool = <
  * MCP result check rejects undefined, and the agent would see only an internal error.
  */
 export const asJson = <A>(value: A): A => JSON.parse(JSON.stringify(value));
+
+/**
+ * Marks a tool call that fails in the app's log, with the message the agent sees. The call itself
+ * ends well, as the error goes back to the agent, so the log would otherwise not say.
+ */
+export const logFailure = <A, E extends { readonly message: string }, R>(
+  call: Effect.Effect<A, E, R>,
+) => Effect.tapError(call, (error) => answeredWithError(error.message));

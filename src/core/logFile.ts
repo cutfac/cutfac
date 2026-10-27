@@ -11,6 +11,7 @@ import {
   Logger,
   Option,
   Path,
+  Predicate,
   Queue,
   Tracer,
 } from "effect";
@@ -88,18 +89,37 @@ const prune = Effect.fnUntraced(function* (dir: string, today: DateTime.Utc) {
   );
 });
 
+/** Effect's Toolkit names the tool it runs under this key of the request's span. */
+const TOOL = "tool";
+
+/** Why an operation that ended well answered with an error, under this key of its span. */
+const ANSWERED_WITH_ERROR = "cutfac.error";
+
+/**
+ * Marks the current top-level operation as one that answered with `message`, such as a tool call
+ * an agent got wrong: it ends well, so the log would otherwise not say.
+ */
+export const answeredWithError = (message: string) =>
+  Effect.annotateCurrentSpan(ANSWERED_WITH_ERROR, message);
+
 /** A top-level operation that ended, as the log keeps it. */
 interface Ended {
   readonly name: string;
   readonly took: Duration.Duration;
   readonly exit: Exit.Exit<unknown, unknown>;
+  readonly error: Option.Option<string>;
 }
 
 /** Whether `ended` belongs in the log: it failed, it was slow, or an agent asked for it. */
-const worthKeeping = ({ name, took, exit }: Ended) =>
+const worthKeeping = ({ name, took, exit, error }: Ended) =>
   (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) ||
+  Option.isSome(error) ||
   Duration.isGreaterThanOrEqualTo(took, SLOW) ||
   name.startsWith("McpServer.");
+
+/** A span's attribute under `key`, when it is text. */
+const textAttribute = (span: Tracer.Span, key: string) =>
+  Option.filter(Option.fromNullishOr(span.attributes.get(key)), Predicate.isString);
 
 /** `base`, but every span without a parent in this process is offered to `ended` as it ends. */
 const tracking = (base: Tracer.Tracer, ended: Queue.Queue<Ended>) =>
@@ -114,10 +134,18 @@ const tracking = (base: Tracer.Tracer, ended: Queue.Queue<Ended>) =>
       return Object.assign(span, {
         end(endTime: bigint, exit: Exit.Exit<unknown, unknown>) {
           end(endTime, exit);
+
+          // Only the tool's name; the parameters beside it can hold what the user wrote.
+          const tool = textAttribute(span, TOOL);
+
           Queue.offerUnsafe(ended, {
-            name: options.name,
+            name: Option.match(tool, {
+              onNone: () => options.name,
+              onSome: (named) => `${options.name} ${named}`,
+            }),
             took: Duration.nanos(endTime - options.startTime),
             exit,
+            error: textAttribute(span, ANSWERED_WITH_ERROR),
           });
         },
       });
@@ -126,11 +154,15 @@ const tracking = (base: Tracer.Tracer, ended: Queue.Queue<Ended>) =>
   });
 
 /** The line an operation that ended leaves in the log. */
-const record = ({ name, took, exit }: Ended) => {
+const record = ({ name, took, exit, error }: Ended) => {
   const line = `${name} took ${Math.round(Duration.toMillis(took))}ms`;
 
   return Exit.match(exit, {
-    onSuccess: () => Effect.logInfo(line),
+    onSuccess: () =>
+      Option.match(error, {
+        onNone: () => Effect.logInfo(line),
+        onSome: (message) => Effect.logWarning(`${line} and answered with an error: ${message}`),
+      }),
     onFailure: (cause) => Effect.logError(`${line} and failed`, cause),
   });
 };
