@@ -161,16 +161,16 @@ describe("running on a model", () => {
 
 describe("the model an agent picks itself", () => {
   test("a Claude model goes by the name people know it by", () => {
-    expect(claudeModelName("claude-opus-5-5")).toBe("Opus 5.5");
-    expect(claudeModelName("claude-sonnet-5")).toBe("Sonnet 5");
-    expect(claudeModelName("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
-    expect(claudeModelName("claude-opus-4-6[1m]")).toBe("Opus 4.6");
-    expect(claudeModelName("claude-3-5-sonnet-20241022")).toBe("Sonnet 3.5");
-    expect(claudeModelName("opus")).toBe("Opus 5.5");
-    expect(claudeModelName("Opus[1m]")).toBe("Opus 5.5");
-    expect(claudeModelName("us.anthropic.custom")).toBe("us.anthropic.custom");
-    expect(claudeModelName("default")).toBeUndefined();
-    expect(claudeModelName(" ")).toBeUndefined();
+    expect(claudeModelName("claude-opus-5-5")).toEqual(Option.some("Opus 5.5"));
+    expect(claudeModelName("claude-sonnet-5")).toEqual(Option.some("Sonnet 5"));
+    expect(claudeModelName("claude-haiku-4-5-20251001")).toEqual(Option.some("Haiku 4.5"));
+    expect(claudeModelName("claude-opus-4-6[1m]")).toEqual(Option.some("Opus 4.6"));
+    expect(claudeModelName("claude-3-5-sonnet-20241022")).toEqual(Option.some("Sonnet 3.5"));
+    expect(claudeModelName("opus")).toEqual(Option.some("Opus 5.5"));
+    expect(claudeModelName("Opus[1m]")).toEqual(Option.some("Opus 5.5"));
+    expect(claudeModelName("us.anthropic.custom")).toEqual(Option.some("us.anthropic.custom"));
+    expect(claudeModelName("default")).toEqual(Option.none());
+    expect(claudeModelName(" ")).toEqual(Option.none());
   });
 
   test("Codex's config sets it, through the profile in use when there is one", () => {

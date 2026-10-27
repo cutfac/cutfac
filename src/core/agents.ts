@@ -415,7 +415,7 @@ const claudeDefaultModel = Effect.fn("agents.claudeDefaultModel")(function* () {
     if (Option.isSome(model)) return claudeModelName(model.value);
   }
 
-  return undefined;
+  return Option.none<string>();
 });
 
 /** The model Codex's own `config.toml` sets, if any. */
@@ -487,7 +487,7 @@ export const agentStatus = Effect.fn("agents.agentStatus")(function* () {
       version: versionOf(claudeRelease),
       outdated: Option.getOrUndefined(outdatedAgent("claude", claudeRelease)),
       ...CLAUDE_MODELS,
-      defaultModel: yield* claudeDefaultModel(),
+      defaultModel: Option.getOrUndefined(yield* claudeDefaultModel()),
     },
     {
       agent: "codex",

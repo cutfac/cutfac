@@ -59,31 +59,33 @@ const familyName = (family: string, major: string, minor: string | undefined) =>
  * listed. A name the board cannot read comes back as it is; `default`, the account's own pick, is
  * unknown.
  */
-export function claudeModelName(model: string): string | undefined {
+export function claudeModelName(model: string): Option.Option<string> {
   const id = model
     .trim()
     .toLowerCase()
     .replace(/\[[^\]]*\]$/, "");
 
-  if (id === "" || id === "default") return undefined;
+  if (id === "" || id === "default") return Option.none();
 
   const alias = CLAUDE_MODELS.models.find((option) =>
     option.label.toLowerCase().startsWith(`${id} `),
   );
 
-  if (alias !== undefined) return alias.label;
+  if (alias !== undefined) return Option.some(alias.label);
 
   const named = CLAUDE_ID.exec(id);
 
   if (named?.[1] !== undefined && named[2] !== undefined) {
-    return familyName(named[1], named[2], named[3]);
+    return Option.some(familyName(named[1], named[2], named[3]));
   }
 
   const old = OLD_CLAUDE_ID.exec(id);
 
-  if (old?.[1] !== undefined && old[3] !== undefined) return familyName(old[3], old[1], old[2]);
+  if (old?.[1] !== undefined && old[3] !== undefined) {
+    return Option.some(familyName(old[3], old[1], old[2]));
+  }
 
-  return model.trim();
+  return Option.some(model.trim());
 }
 
 const CodexConfig = Schema.Struct({
