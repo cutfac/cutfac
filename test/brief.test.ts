@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
+
+import { Effect } from "effect";
 
 import {
   BRIEF_FILE,
@@ -11,7 +11,11 @@ import {
   updateBrief,
 } from "../src/core/brief.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace());
 
 describe("parsing brief.md", () => {
   test("reads the purpose, platforms, and the body", () => {
@@ -73,41 +77,48 @@ describe("parsing brief.md", () => {
 });
 
 describe("brief.md in a workspace", () => {
-  let ws: TestWorkspace;
+  it.live("there is none until someone writes one", () =>
+    Effect.gen(function* () {
+      expect(yield* readBrief()).toBeUndefined();
+    }),
+  );
 
-  beforeEach(async () => {
-    ws = await makeWorkspace();
-  });
+  it.live("an update creates it, and the next one changes only what it names", () =>
+    Effect.gen(function* () {
+      yield* updateBrief({ purpose: "promote", platforms: ["tiktok"], body: "My app." });
+      const brief = yield* updateBrief({ platforms: ["tiktok", "shorts"] });
 
-  afterEach(() => ws.remove());
+      expect(brief).toEqual({
+        purpose: "promote",
+        platforms: ["tiktok", "shorts"],
+        body: "My app.",
+      });
+      expect(yield* readBrief()).toEqual(brief);
+    }),
+  );
 
-  test("there is none until someone writes one", async () => {
-    expect(await ws.run(readBrief())).toBeUndefined();
-  });
+  it.live("an update over a hand-written file keeps what the app doesn't read", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
 
-  test("an update creates it, and the next one changes only what it names", async () => {
-    await ws.run(updateBrief({ purpose: "promote", platforms: ["tiktok"], body: "My app." }));
-    const brief = await ws.run(updateBrief({ platforms: ["tiktok", "shorts"] }));
+      yield* ws.writeText(BRIEF_FILE, "---\nmaterial: [~/Brand]\n---\nMine\n");
+      yield* updateBrief({ purpose: "own" });
+      const text = yield* ws.readText(BRIEF_FILE);
 
-    expect(brief).toEqual({ purpose: "promote", platforms: ["tiktok", "shorts"], body: "My app." });
-    expect(await ws.run(readBrief())).toEqual(brief);
-  });
+      expect(text).toContain("material:");
+      expect(parseBrief(text)).toEqual({ purpose: "own", platforms: [], body: "Mine" });
+    }),
+  );
 
-  test("an update over a hand-written file keeps what the app doesn't read", async () => {
-    await writeFile(join(ws.root, BRIEF_FILE), "---\nmaterial: [~/Brand]\n---\nMine\n");
-    await ws.run(updateBrief({ purpose: "own" }));
-    const text = await readFile(join(ws.root, BRIEF_FILE), "utf8");
+  it.live("an update won't write over front matter it can't read", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const broken = "---\nplatforms: [tiktok\nvoice: calm\n---\nMine\n";
 
-    expect(text).toContain("material:");
-    expect(parseBrief(text)).toEqual({ purpose: "own", platforms: [], body: "Mine" });
-  });
+      yield* ws.writeText(BRIEF_FILE, broken);
 
-  test("an update won't write over front matter it can't read", async () => {
-    const broken = "---\nplatforms: [tiktok\nvoice: calm\n---\nMine\n";
-
-    await writeFile(join(ws.root, BRIEF_FILE), broken);
-
-    expect(await ws.fail(updateBrief({ purpose: "own" }))).toBeInstanceOf(InvalidRequest);
-    expect(await readFile(join(ws.root, BRIEF_FILE), "utf8")).toBe(broken);
-  });
+      expect(yield* Effect.flip(updateBrief({ purpose: "own" }))).toBeInstanceOf(InvalidRequest);
+      expect(yield* ws.readText(BRIEF_FILE)).toBe(broken);
+    }),
+  );
 });
