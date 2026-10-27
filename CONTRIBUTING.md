@@ -10,6 +10,8 @@ Thanks for helping. Bug reports, fixes, and ideas are all welcome.
   write it. Cutfac is agent-first: a feature should work through the tools an agent already calls
   before it gets a button on the board. [AGENTS.md](AGENTS.md) lists the principles we weigh
   changes by.
+- A pull request needs an issue we agreed on first, except for typos and small, obvious fixes.
+  Pull requests without one are closed, however good they are.
 - Report security problems privately, as [SECURITY.md](SECURITY.md) describes, not in an issue.
 
 ## Setup
@@ -53,7 +55,12 @@ The main ones:
 - A new dependency needs a reason, and a quick check of its license, maintenance, and adoption.
 
 Writing your change with an agent is fine. You are still the one who answers for it, so read the
-diff and run the checks before you send it.
+diff and run the checks before you send it, and say in the pull request whether and how you used
+one. Pull requests that look generated and unread, or that the author can't explain, are closed
+without a detailed review.
+
+`AGENTS.md`, `CLAUDE.md` and `skills/` are instructions agents follow, and `SKILL.md` ships to
+every user's agent. Change them only when the issue calls for it, and expect a close review.
 
 ## Commits and pull requests
 

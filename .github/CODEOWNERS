@@ -1,0 +1,18 @@
+# Every change needs a maintainer's review before it merges.
+*                       @w00ing
+
+# Agents read these files as instructions, and SKILL.md ships to users' agents. A change here can
+# steer someone's agent, so review it line by line, and treat a changed skill hash in
+# src/core/skill.ts as a reason to look closer.
+/AGENTS.md              @w00ing
+/CLAUDE.md              @w00ing
+/skills/                @w00ing
+/src/core/skill.ts      @w00ing
+/src/core/importPrompts.ts @w00ing
+
+# What runs on a contributor's or maintainer's machine, and what builds the signed app.
+/package.json           @w00ing
+/bun.lock               @w00ing
+/.github/               @w00ing
+/electron/release.ts    @w00ing
+/electron-builder.yml   @w00ing

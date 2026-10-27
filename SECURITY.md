@@ -7,6 +7,10 @@ Please report vulnerabilities privately through
 not in a public issue or pull request. Include what you found, how to reproduce it, and the version
 or commit you tested.
 
+A report needs steps or a proof of concept that shows the problem in Cutfac itself. Reports that
+only describe a possible weakness, including ones a tool or a model wrote without checking, are
+closed.
+
 We'll confirm we got your report within a few days, keep you updated while we fix it, and credit you
 in the advisory unless you'd rather we didn't.
 
@@ -17,8 +21,8 @@ latest release to get them.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.2.x   | Yes       |
-| < 0.2   | No        |
+| 0.3.x   | Yes       |
+| < 0.3   | No        |
 
 ## What's in scope
 
