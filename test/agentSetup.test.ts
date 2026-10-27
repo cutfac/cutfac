@@ -1,10 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-import { Option } from "effect";
+import { BunServices } from "@effect/platform-bun";
+import { Effect, Layer, Option } from "effect";
 
 import { INSTALL_COMMAND, SIGN_IN_COMMAND, agentSetup, readiness } from "../src/core/agentSetup.ts";
 import { MIN_AGENT_VERSION } from "../src/core/agentVersion.ts";
-import { makeFakeAgents, makeWorkspace, type FakeAgents, type TestWorkspace } from "./support.ts";
+import { testEffect } from "./effect.ts";
+import { FakeAgentDir, fakeAgents } from "./support.ts";
+
+const it = testEffect(Layer.merge(fakeAgents, BunServices.layer));
 
 const NATIVE = "/Users/ada/.local/share/claude/versions/2.1.1";
 
@@ -42,46 +46,41 @@ describe("what an installed agent needs", () => {
 });
 
 describe("agents on this machine", () => {
-  let t: TestWorkspace;
-  let fakes: FakeAgents;
+  it.live("finds each agent's install, release and sign-in", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Agent setup");
-    fakes = await makeFakeAgents();
-  });
+      yield* fakes.bin(
+        "claude",
+        answering(
+          `${MIN_AGENT_VERSION.claude} (Claude Code)`,
+          `echo '{"loggedIn": false, "authMethod": "none"}'\nexit 1\n`,
+        ),
+      );
 
-  afterEach(async () => {
-    await fakes.remove();
-    await t.remove();
-  });
+      expect(yield* agentSetup()).toEqual([
+        {
+          agent: "claude",
+          state: "signedOut",
+          version: MIN_AGENT_VERSION.claude,
+          fix: SIGN_IN_COMMAND.claude,
+        },
+        { agent: "codex", state: "missing", fix: INSTALL_COMMAND.codex },
+      ]);
+    }),
+  );
 
-  test("finds each agent's install, release and sign-in", async () => {
-    await fakes.bin(
-      "claude",
-      answering(
-        `${MIN_AGENT_VERSION.claude} (Claude Code)`,
-        `echo '{"loggedIn": false, "authMethod": "none"}'\nexit 1\n`,
-      ),
-    );
+  it.live("a signed-in agent is ready, and codex says so by its exit code", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
 
-    expect(await t.runWith(fakes.layer, agentSetup())).toEqual([
-      {
-        agent: "claude",
-        state: "signedOut",
-        version: MIN_AGENT_VERSION.claude,
-        fix: SIGN_IN_COMMAND.claude,
-      },
-      { agent: "codex", state: "missing", fix: INSTALL_COMMAND.codex },
-    ]);
-  });
+      yield* fakes.bin("claude", answering("99.0.0 (Claude Code)", `echo '{"loggedIn": true}'\n`));
+      yield* fakes.bin("codex", answering("codex-cli 99.0.0", "echo 'Logged in using ChatGPT'\n"));
 
-  test("a signed-in agent is ready, and codex says so by its exit code", async () => {
-    await fakes.bin("claude", answering("99.0.0 (Claude Code)", `echo '{"loggedIn": true}'\n`));
-    await fakes.bin("codex", answering("codex-cli 99.0.0", "echo 'Logged in using ChatGPT'\n"));
+      const setups = yield* agentSetup();
 
-    const setups = await t.runWith(fakes.layer, agentSetup());
-
-    expect(setups.map((setup) => setup.state)).toEqual(["ready", "ready"]);
-    expect(setups.every((setup) => setup.fix === undefined)).toBe(true);
-  });
+      expect(setups.map((setup) => setup.state)).toEqual(["ready", "ready"]);
+      expect(setups.every((setup) => setup.fix === undefined)).toBe(true);
+    }),
+  );
 });
