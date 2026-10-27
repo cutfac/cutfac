@@ -10,11 +10,6 @@ the `cutfac` MCP tools read and write the same files, and the user watches resul
 local web board (`cutfac serve`). Use the MCP tools for structured fields; write media directly
 into folders.
 
-Look for files in the workspace and in the sources the user named, not across their home folder.
-Check a tool with `command -v` or its `--version`, and a package in the project that uses it. A
-search such as `find ~` makes macOS ask the user to allow Desktop, Documents and Downloads, one
-prompt at a time.
-
 ## Start of every task
 
 1. `workspace_overview` — config, the brief, what was learned, item counts, formats, open feedback.
