@@ -9,7 +9,11 @@ export const onboardingEn = {
   linkWaiting: "A video request from a link is waiting. It opens once setup is done.",
   welcome: {
     title: "Welcome to Cutfac",
-    body: "Make short videos by asking your agent. Point at any moment to change it, and try a few versions side by side.",
+    /** One line each, broken where the sentences end rather than wherever the width runs out. */
+    body: [
+      "Make short videos by asking your agent.",
+      "Point at any moment to change it, and try a few versions side by side.",
+    ],
     start: "Get started",
   },
   agent: {

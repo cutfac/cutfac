@@ -113,7 +113,13 @@ function Greeting({ onboarding, onStart }: { onboarding: CutfacOnboarding; onSta
       </div>
       <header className="flex flex-col gap-3">
         <h1 className="text-3xl font-semibold tracking-tight text-balance">{t.title}</h1>
-        <p className="text-sm/relaxed text-pretty text-muted-foreground">{t.body}</p>
+        <p className="text-sm/relaxed text-balance text-muted-foreground">
+          {t.body.map((line) => (
+            <span key={line} className="block">
+              {line}
+            </span>
+          ))}
+        </p>
       </header>
       <Button size="lg" className="w-full max-w-64" onClick={onStart}>
         {t.start}
@@ -129,8 +135,12 @@ function LanguagePicker() {
   const locale = useLocale();
 
   return (
-    <div className="-mt-4 flex items-center gap-1.5 text-muted-foreground">
-      <LanguagesIcon className="size-3.5" aria-hidden />
+    // The icon hangs off the left of the choices, so the choices themselves sit centred.
+    <div className="relative -mt-4 text-muted-foreground">
+      <LanguagesIcon
+        className="absolute top-1/2 right-full mr-1.5 size-3.5 -translate-y-1/2"
+        aria-hidden
+      />
       <ToggleGroup
         size="sm"
         aria-label={t.language.label}
