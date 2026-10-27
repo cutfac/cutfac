@@ -1,10 +1,10 @@
-import { Clock, Config, Context, Effect, Layer, Option, Path, Schema } from "effect";
+import { Config, Context, Effect, Layer, Option, Path, Schema } from "effect";
 
 import { AppData, appendAppRecord } from "./core/appData.ts";
 import { COMPILED } from "./core/build.ts";
 import { type NewItemInput, createItem } from "./core/items.ts";
 import { Workspace, nowIso } from "./core/workspace.ts";
-import { LICENSE_PUBLIC_KEY, paidInSettings } from "./license.ts";
+import { paidInSettings } from "./license.ts";
 
 /** How many videos the desktop app's free version makes on one Mac, with every feature open. */
 export const FREE_VIDEOS = 3;
@@ -31,14 +31,6 @@ const BUNDLED_BINARY = /\.app\/Contents\/Resources\/bin\/[^/]+$/;
 export const DesktopData = Context.Reference<Option.Option<string>>("cutfac/DesktopData", {
   defaultValue: () => Option.none(),
 });
-
-/** The key that verifies cutfac.com's license grants. Tests sign their own. */
-export const LicensePublicKey = Context.Reference<typeof LICENSE_PUBLIC_KEY>(
-  "cutfac/LicensePublicKey",
-  {
-    defaultValue: () => LICENSE_PUBLIC_KEY,
-  },
-);
 
 const env = (name: string) =>
   Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none<string>));
@@ -104,19 +96,17 @@ const OPEN_SOURCE: Plan = { edition: "open-source" };
 
 const PAID: Plan = { edition: "desktop", paid: true };
 
-/** What the desktop app's settings and video count say about the plan at `now`. */
-export function planOf(
-  settings: string | undefined,
+/** What the desktop app's settings and video count say about the plan now. */
+export const planOf = Effect.fnUntraced(function* (
+  settings: Option.Option<string>,
   videos: string,
-  now: number,
-  publicKey = LICENSE_PUBLIC_KEY,
-): Plan {
-  if (settings !== undefined && paidInSettings(settings, now, publicKey)) return PAID;
+): Effect.fn.Return<Plan> {
+  if (Option.isSome(settings) && (yield* paidInSettings(settings.value))) return PAID;
 
   const made = videos.split("\n").filter((line) => line.trim() !== "").length;
 
   return { edition: "desktop", paid: false, used: Math.min(made, FREE_VIDEOS), limit: FREE_VIDEOS };
-}
+});
 
 /** The plan now. Files the app hasn't written yet, or can't be read, count as none. */
 export const planStatus = Effect.fn("plan.status")(function* () {
@@ -136,12 +126,7 @@ export const planStatus = Effect.fn("plan.status")(function* () {
     { concurrency: "unbounded" },
   );
 
-  return planOf(
-    Option.getOrUndefined(settings),
-    videos,
-    yield* Clock.currentTimeMillis,
-    yield* LicensePublicKey,
-  );
+  return yield* planOf(settings, videos);
 });
 
 /** A new video refused because the desktop app's free version has made all of its videos. */

@@ -1,198 +1,260 @@
-import type { KeyObject } from "node:crypto";
-
-import { Option, Schema } from "effect";
-
 import {
-  LICENSE_PUBLIC_KEY,
-  isPaid,
-  openGrant,
-  type LicenseRecord,
-  type SavedLicense,
-} from "../src/license.ts";
+  Clock,
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Match,
+  Option,
+  Ref,
+  Schedule,
+  Schema,
+  Semaphore,
+} from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+
+import { LicenseKey, LicenseRecord, grantFor, isPaid, type SavedLicense } from "../src/license.ts";
 import type { LicenseCheck } from "../web/src/desktop.ts";
-
-/** Polar's keys are far shorter; anything longer is a paste gone wrong. */
-const MAX_KEY_LENGTH = 128;
-
-/** Keys travel in an HTTP header, which takes visible ASCII only. */
-const KEY_CHARACTERS = /^[\x21-\x7e]+$/;
 
 /** Where the app asks whether its key unlocks the paid plan. */
 export const LICENSE_URL = "https://cutfac.com/api/license";
 
-const CHECK_TIMEOUT_MS = 8_000;
+const CHECK_TIMEOUT = "8 seconds";
 
-const DAY_MS = 24 * 60 * 60 * 1_000;
+/** While the app runs, it asks again this often. */
+const CHECK_EVERY = "1 day";
 
 /** Coming back to the app asks again at most this often. */
-const REFRESH_MS = 60 * 1_000;
+const ASK_AGAIN_AFTER = Duration.minutes(1);
 
 // cutfac.com also says when the plan ends and whether it is a trial's, for apps from before grants
 // were signed. The signed token says when it ends, and any grant unlocks the same plan.
-const decodeGrant = Schema.decodeUnknownOption(Schema.Struct({ token: Schema.String }));
+const GrantReply = Schema.Struct({ token: Schema.NonEmptyString });
 
-/** The key as typed or pasted, without surrounding space, or undefined when it can't be one. */
-export function licenseKeyFrom(input: string): string | undefined {
-  const key = input.trim();
+/**
+ * A key as the board takes it. Keys travel in an HTTP header, which takes visible ASCII only, and
+ * Polar's are far shorter than the limit; anything longer is a paste gone wrong.
+ */
+const decodeKey = Schema.decodeUnknownOption(
+  LicenseKey.check(Schema.isMaxLength(128), Schema.isPattern(/^[\x21-\x7e]+$/)),
+);
 
-  return key.length <= MAX_KEY_LENGTH && KEY_CHARACTERS.test(key) ? key : undefined;
-}
+/** The key as typed or pasted, without surrounding space, if it can be one. */
+export const licenseKeyFrom = (input: string) => decodeKey(input.trim());
 
-type Request = (url: string, init: RequestInit) => Promise<Response>;
+/** cutfac.com couldn't be asked about a key, or gave no clear answer. */
+export class LicenseUnanswered extends Schema.TaggedError<LicenseUnanswered>()(
+  "LicenseUnanswered",
+  { message: Schema.String },
+) {}
 
-/** How the app reaches cutfac.com and checks what it signs; tests stand in for both. */
-interface LicenseServer {
-  request?: Request;
-  publicKey?: KeyObject;
-}
+/** The key and cutfac.com's answer about it couldn't be saved. */
+export class LicenseNotSaved extends Schema.TaggedError<LicenseNotSaved>()("LicenseNotSaved", {
+  cause: Schema.Defect(),
+}) {}
+
+const unanswered = (error: { readonly message: string }) =>
+  new LicenseUnanswered({ message: error.message });
+
+/** The grant in cutfac.com's reply, which only counts as an answer if it is signed for `key`. */
+const grantIn = Effect.fnUntraced(function* (
+  key: LicenseKey,
+  response: HttpClientResponse.HttpClientResponse,
+) {
+  const { token } = yield* HttpClientResponse.filterStatusOk(response).pipe(
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(GrantReply)),
+    Effect.mapError(unanswered),
+  );
+
+  if (Option.isNone(yield* grantFor(key, token)))
+    return yield* new LicenseUnanswered({ message: "The grant isn't signed for this key" });
+
+  return LicenseRecord.cases.LicenseGrant.make({ token });
+});
 
 /**
  * Asks cutfac.com about `key`: a grant, or a refusal for a key that names no license or one whose
- * plan has ended. Undefined when it couldn't be asked or gave no clear answer, which a grant that
- * isn't signed for the key is.
+ * plan has ended.
  */
-export async function fetchLicense(
-  key: string,
-  { request = fetch, publicKey = LICENSE_PUBLIC_KEY }: LicenseServer = {},
-): Promise<LicenseRecord | undefined> {
-  try {
-    const response = await request(LICENSE_URL, {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
-    });
+export const fetchLicense = Effect.fn("license.fetch")(
+  function* (
+    key: LicenseKey,
+  ): Effect.fn.Return<LicenseRecord, LicenseUnanswered, HttpClient.HttpClient> {
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.get(LICENSE_URL).pipe(HttpClientRequest.bearerToken(key)),
+    ).pipe(Effect.mapError(unanswered));
 
-    const checkedAt = Date.now();
+    const checkedAt = yield* Clock.currentTimeMillis;
 
-    if (response.status === 401) return { checkedAt, refusal: "invalid" };
+    const refusal = (reason: "invalid" | "ended") =>
+      Effect.succeed(LicenseRecord.cases.LicenseRefusal.make({ checkedAt, refusal: reason }));
 
-    if (response.status === 402) return { checkedAt, refusal: "ended" };
+    return yield* Match.value(response.status).pipe(
+      Match.when(401, () => refusal("invalid")),
+      Match.when(402, () => refusal("ended")),
+      Match.orElse(() => grantIn(key, response)),
+    );
+  },
+  Effect.timeoutOrElse({
+    duration: CHECK_TIMEOUT,
+    orElse: () =>
+      Effect.fail(new LicenseUnanswered({ message: "cutfac.com didn't answer in time" })),
+  }),
+);
 
-    if (!response.ok) return undefined;
+/** What the board hears when it gives a key: no answer, or cutfac.com's. */
+const checkOf = (answer: Option.Option<LicenseRecord>): LicenseCheck =>
+  Option.match(answer, {
+    onNone: (): LicenseCheck => "unavailable",
+    onSome: LicenseRecord.match({
+      LicenseGrant: (): LicenseCheck => "granted",
+      LicenseRefusal: ({ refusal }) => refusal,
+    }),
+  });
 
-    const grant = Option.getOrUndefined(decodeGrant(await response.json()));
-
-    if (grant === undefined || openGrant(grant.token, publicKey)?.key !== key) return undefined;
-
-    return { token: grant.token };
-  } catch {
-    return undefined;
+/** Where the app keeps the license key and cutfac.com's last answer about it. */
+export class LicenseSettings extends Context.Service<
+  LicenseSettings,
+  {
+    readonly load: Effect.Effect<SavedLicense>;
+    /** Saves both together; no record drops the old one. */
+    save(
+      key: LicenseKey,
+      record: Option.Option<LicenseRecord>,
+    ): Effect.Effect<void, LicenseNotSaved>;
   }
-}
-
-/** What `check` says when the board takes a key. */
-function checkOf(record: LicenseRecord | undefined): LicenseCheck {
-  if (record === undefined) return "unavailable";
-
-  return "refusal" in record ? record.refusal : "granted";
-}
-
-interface LicenseOptions extends SavedLicense, LicenseServer {
-  save: (key: string, record: LicenseRecord | undefined) => Promise<void>;
-  /** The paid plan unlocked or ran out, once the settings that say so are saved. */
-  onChange: () => void;
-}
-
-export interface License {
-  /** Checks a key from the board and keeps it unless it names no license. */
-  setKey: (input: string) => Promise<LicenseCheck>;
-  /** Catches up when the user comes back, asking again about a saved key that isn't paid now. */
-  refresh: () => void;
-  hasKey: () => boolean;
-}
+>()("cutfac/desktop/LicenseSettings") {}
 
 /**
- * Keeps cutfac.com's answer about the saved key fresh: asks at launch and once a day, and again
- * when the user comes back to a key that doesn't unlock the paid plan, perhaps after renewing or
- * getting online. Without the paid plan the app is the free version; it never locks.
+ * The desktop app's license. Without the paid plan the app is the free version; it never locks.
  */
-export function startLicense({ key, record, save, onChange, ...server }: LicenseOptions): License {
-  let saved: SavedLicense = { key, record };
+export class License extends Context.Service<
+  License,
+  {
+    /** Checks a key from the board and keeps it unless it names no license. */
+    setKey(input: string): Effect.Effect<LicenseCheck, LicenseNotSaved>;
+    /** Catches up when the user comes back, asking again about a saved key that isn't paid now. */
+    readonly refresh: Effect.Effect<void>;
+    readonly hasKey: Effect.Effect<boolean>;
+  }
+>()("cutfac/desktop/License") {
+  /**
+   * Keeps cutfac.com's answer about the saved key fresh: asks at launch and once a day, and again
+   * when the user comes back to a key that doesn't unlock the paid plan, perhaps after renewing or
+   * getting online. `changed` tells the board the paid plan unlocked or ran out, once the settings
+   * that say so are saved.
+   */
+  static readonly layer = (changed: Effect.Effect<void>) => Layer.effect(License, make(changed));
+}
 
-  let paid = isPaid(saved, Date.now(), server.publicKey);
+const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
+  const settings = yield* LicenseSettings;
+  const client = yield* HttpClient.HttpClient;
+  const initial = yield* settings.load;
+  const saved = yield* Ref.make(initial);
+  const paid = yield* Ref.make(yield* isPaid(initial));
+  const askedAt = yield* Ref.make(Option.none<number>());
 
-  let askedAt = Number.NEGATIVE_INFINITY;
+  // Each check runs after the one before, so an answer about an old key never lands on a new one.
+  const serialized = (yield* Semaphore.make(1)).withPermits(1);
 
-  let checking: Promise<unknown> = Promise.resolve();
+  const ask = (key: LicenseKey) =>
+    fetchLicense(key).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.option);
 
   /** Tells the board when the plan changed, which a grant running out does on its own. */
-  function publish() {
-    const next = isPaid(saved, Date.now(), server.publicKey);
+  const publish = Effect.gen(function* () {
+    const next = yield* Effect.flatMap(Ref.get(saved), isPaid);
 
-    if (next === paid) return;
+    if (yield* Ref.modify(paid, (was) => [was !== next, next])) yield* changed;
+  });
 
-    paid = next;
-    onChange();
-  }
-
-  /** Runs after any check in progress, so an answer about an old key never lands on a new one. */
-  function serialize<A>(run: () => Promise<A>): Promise<A> {
-    const next = checking.then(run);
-
-    checking = next.catch(() => {});
-
-    return next;
-  }
-
-  async function keep(next: SavedLicense) {
-    saved = next;
+  const keep = Effect.fnUntraced(function* (key: LicenseKey, record: Option.Option<LicenseRecord>) {
+    yield* Ref.set(saved, { key: Option.some(key), record });
 
     // The board's server reads the plan from the saved settings, so they go first.
-    if (next.key !== undefined) await save(next.key, next.record);
+    yield* settings.save(key, record);
+    yield* publish;
+  });
 
-    publish();
-  }
+  /** Asks about the saved key. No answer keeps the last one, which holds until its grace runs out. */
+  const check = Effect.gen(function* () {
+    yield* Ref.set(askedAt, Option.some(yield* Clock.currentTimeMillis));
 
-  const check = () => {
-    askedAt = Date.now();
+    yield* serialized(
+      Effect.gen(function* () {
+        const { key } = yield* Ref.get(saved);
 
-    return serialize(async () => {
-      if (saved.key === undefined) return;
+        if (Option.isNone(key)) return;
 
-      const answer = await fetchLicense(saved.key, server);
+        const answer = yield* ask(key.value);
 
-      // No answer keeps the last one, which holds until its grace runs out.
-      if (answer !== undefined) await keep({ key: saved.key, record: answer });
-      else publish();
-    });
-  };
+        yield* Option.match(answer, {
+          onNone: () => publish,
+          onSome: (record) => keep(key.value, Option.some(record)),
+        });
+      }),
+    );
+  }).pipe(
+    Effect.catchTag("LicenseNotSaved", (error) =>
+      Effect.logWarning("The license answer wasn't saved", error.cause),
+    ),
+  );
 
-  void check();
-  setInterval(() => void check(), DAY_MS).unref();
+  yield* check.pipe(
+    Effect.repeat(Schedule.fixed(CHECK_EVERY)),
+    Effect.forkScoped({ startImmediately: true }),
+  );
 
-  return {
-    setKey: (input) => {
-      const next = licenseKeyFrom(input);
+  const setKey = Effect.fn("License.setKey")(function* (
+    input: string,
+  ): Effect.fn.Return<LicenseCheck, LicenseNotSaved> {
+    const key = licenseKeyFrom(input);
 
-      if (next === undefined) return Promise.resolve("invalid");
+    if (Option.isNone(key)) return "invalid";
 
-      return serialize(async () => {
-        const answer = await fetchLicense(next, server);
+    return yield* serialized(
+      Effect.gen(function* () {
+        const answer = yield* ask(key.value);
         const result = checkOf(answer);
 
         if (result === "invalid") return result;
 
+        const before = yield* Ref.get(saved);
+
         // An unconfirmed new key stays on the free version until cutfac.com answers for it.
-        await keep({
-          key: next,
-          record: answer ?? (next === saved.key ? saved.record : undefined),
-        });
+        const last = Option.contains(before.key, key.value) ? before.record : Option.none();
+
+        yield* keep(
+          key.value,
+          Option.orElse(answer, () => last),
+        );
 
         return result;
-      });
-    },
-    refresh: () => {
-      publish();
+      }),
+    );
+  });
 
-      // A key that names no license won't name one later; a new key goes through `setKey`.
-      const invalid =
-        saved.record !== undefined &&
-        "refusal" in saved.record &&
-        saved.record.refusal === "invalid";
+  const refresh = Effect.gen(function* () {
+    yield* publish;
 
-      if (saved.key === undefined || paid || invalid || Date.now() - askedAt < REFRESH_MS) return;
+    const { key, record } = yield* Ref.get(saved);
+    const now = yield* Clock.currentTimeMillis;
 
-      void check();
-    },
-    hasKey: () => saved.key !== undefined,
-  };
-}
+    const recent = Option.exists(
+      yield* Ref.get(askedAt),
+      (at) => now - at < Duration.toMillis(ASK_AGAIN_AFTER),
+    );
+
+    // A key that names no license won't name one later; a new key goes through `setKey`.
+    if (Option.isNone(key) || (yield* Ref.get(paid)) || checkOf(record) === "invalid" || recent)
+      return;
+
+    yield* check;
+  });
+
+  return License.of({
+    setKey,
+    refresh,
+    hasKey: Effect.map(Ref.get(saved), ({ key }) => Option.isSome(key)),
+  });
+});

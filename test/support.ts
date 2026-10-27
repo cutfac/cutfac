@@ -6,10 +6,11 @@ import { join } from "node:path";
 // Each helper runs a test's effect to completion, so it is the entry point that provides layers.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
-import { ConfigProvider, Effect, Layer, Option, type Schema } from "effect";
+import { ConfigProvider, Effect, FileSystem, Layer, Option, type Schema } from "effect";
 
 import { which } from "../src/core/process.ts";
 import { Workspace } from "../src/core/workspace.ts";
+import { LicensePublicKey } from "../src/license.ts";
 
 /** What a core effect may need in tests: the workspace and the Bun platform services. */
 export type TestServices = Workspace | BunServices.BunServices;
@@ -46,6 +47,19 @@ export async function makeWorkspace(name = "test"): Promise<TestWorkspace> {
     remove: () => rm(root, { recursive: true, force: true }),
   };
 }
+
+/** A fresh folder with a cutfac.yaml as the workspace, removed when the test ends. */
+export const tempWorkspace = (name = "test") =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-test-" });
+
+      yield* fs.writeFileString(join(root, "cutfac.yaml"), `name: ${name}\n`);
+
+      return Workspace.layer(root);
+    }),
+  ).pipe(Layer.provideMerge(BunServices.layer), Layer.orDie);
 
 export interface FakeAgents {
   readonly dir: string;
@@ -102,6 +116,9 @@ export function signedGrant(
 
   return `${payload.toString("base64url")}.${sign(null, payload, privateKey).toString("base64url")}`;
 }
+
+/** Checks license grants against `licenseSigning`, so the tests' own grants unlock the plan. */
+export const testLicenseKey = Layer.succeed(LicensePublicKey, licenseSigning.publicKey);
 
 /** The thread a fake `codex app-server` starts, or resumes. */
 export const FAKE_THREAD = "0f9d3c1e-8b2a-4c5d-9e6f-7a8b9c0d1e2f";

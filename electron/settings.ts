@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { app } from "electron";
 
-import { decodeLicenseRecord, type LicenseRecord, type SavedLicense } from "../src/license.ts";
+import { LicenseRecord, savedLicenseOf } from "../src/license.ts";
 import type { OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, type Locale } from "../web/src/i18n/locale.ts";
 import { ONBOARDING_STEPS } from "./boardPages.ts";
+import { LicenseNotSaved, LicenseSettings } from "./license.ts";
 import { isSetAside, restore, setAside } from "./settingsAside.ts";
 import { decodeWindowPlace, type WindowPlace } from "./windowPlace.ts";
 
@@ -23,7 +24,7 @@ interface Settings {
   port: number;
   locale: Locale;
   licenseKey: string;
-  license: LicenseRecord | undefined;
+  license: typeof LicenseRecord.Encoded | undefined;
   window: WindowPlace;
   page: typeof Page.Type;
   /** Where the first launch got to, while there is no workspace yet. */
@@ -129,22 +130,25 @@ export async function loadLocale(): Promise<Locale | undefined> {
 
 export const saveLocale = (locale: Locale) => writeSettings({ locale });
 
+const encodeLicense = Schema.encodeEffect(Schema.UndefinedOr(LicenseRecord));
+
 /**
  * The license key and cutfac.com's last answer about it, which the app's agent tools read too. The
  * key stays on this computer and goes only to cutfac.com.
  */
-export async function loadLicense(): Promise<SavedLicense> {
-  const settings = await readSettings();
-
-  return {
-    key: Option.getOrUndefined(decodeText(settings.licenseKey)),
-    record: Option.getOrUndefined(decodeLicenseRecord(settings.license)),
-  };
-}
-
-/** Saves both together; an undefined record drops the old one. */
-export const saveLicense = (licenseKey: string, license: LicenseRecord | undefined) =>
-  writeSettings({ licenseKey, license });
+export const licenseSettings = Layer.succeed(
+  LicenseSettings,
+  LicenseSettings.of({
+    load: Effect.promise(readSettings).pipe(Effect.map(savedLicenseOf)),
+    save: (licenseKey, record) =>
+      encodeLicense(Option.getOrUndefined(record)).pipe(
+        Effect.flatMap((license) =>
+          Effect.tryPromise(() => writeSettings({ licenseKey, license })),
+        ),
+        Effect.mapError((cause) => new LicenseNotSaved({ cause })),
+      ),
+  }),
+);
 
 /** Where the window last was, at its normal size, and whether it filled the screen. */
 export async function loadWindowPlace(): Promise<WindowPlace | undefined> {
