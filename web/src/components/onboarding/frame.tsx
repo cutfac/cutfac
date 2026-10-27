@@ -62,7 +62,7 @@ function LinkWaiting() {
   if (!waiting) return null;
 
   return (
-    <p className="flex items-start gap-2 rounded-xl border bg-card px-3 py-2.5 text-sm text-muted-foreground">
+    <p className="flex items-start gap-2 rounded-2xl bg-muted px-3 py-2.5 text-sm text-muted-foreground">
       <LinkIcon className="mt-0.5 size-4 shrink-0" />
       {t.onboarding.linkWaiting}
     </p>

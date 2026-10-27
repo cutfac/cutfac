@@ -64,7 +64,7 @@ export function AccessStep({
   return (
     <>
       <StepHeader title={t.title} body={t.body} />
-      <ol className="flex flex-col gap-3 rounded-2xl bg-muted/60 p-4 text-sm">
+      <ol className="flex flex-col gap-3 rounded-2xl bg-muted p-4 text-sm">
         {t.howTo.map((line, index) => (
           <li key={line} className="flex gap-3">
             <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium tabular-nums">

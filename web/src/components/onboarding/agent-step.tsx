@@ -256,7 +256,7 @@ function FixFailed({ command, onCheck }: { command: string; onCheck: () => void 
       <p className="text-xs text-muted-foreground">{t.onboarding.agent.failed}</p>
       {command === "" ? null : (
         <SelectionArea
-          render={<code className="rounded-lg bg-muted px-2.5 py-2 font-mono text-xs break-all" />}
+          render={<code className="rounded-2xl bg-muted px-2.5 py-2 font-mono text-xs break-all" />}
         >
           {command}
         </SelectionArea>

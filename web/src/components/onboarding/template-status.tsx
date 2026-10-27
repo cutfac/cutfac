@@ -191,7 +191,7 @@ function Ready({
 
 function Panel({ children }: { children: ReactNode }) {
   return (
-    <section className="flex animate-in flex-col gap-3 rounded-2xl border p-4 text-sm duration-200 fade-in">
+    <section className="flex animate-in flex-col gap-3 rounded-2xl bg-card p-4 text-sm duration-200 fade-in">
       {children}
     </section>
   );
@@ -202,7 +202,7 @@ function Progress({ label }: { label: string }) {
   return (
     <section
       aria-live="polite"
-      className="flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-sm text-muted-foreground"
+      className="flex items-center gap-2.5 rounded-2xl bg-card px-4 py-3 text-sm text-muted-foreground"
     >
       <Spinner />
       <span key={label} className="animate-in duration-300 fade-in">

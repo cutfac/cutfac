@@ -172,7 +172,7 @@ export function FilesField({ files, dragging, onAdd, onRemove }: FilesFieldProps
         return (
           <div
             key={`${file.name}:${file.size}:${file.lastModified}`}
-            className="flex items-center gap-3 rounded-2xl border bg-muted/50 py-1.5 pr-1.5 pl-3 text-sm"
+            className="flex items-center gap-3 rounded-2xl bg-muted py-1.5 pr-1.5 pl-3 text-sm"
           >
             <Icon className="size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate">{file.name}</span>
