@@ -240,7 +240,7 @@ function Fakes({ fakes, onChange }: { fakes: DevFakes; onChange: (fakes: DevFake
       />
       <Choice
         label="Workspace folder"
-        hint="New each run suggests a dated folder in Documents/Cutfac Dev, as the released app suggests Documents/Cutfac, so a run never opens a real workspace."
+        hint="New each run suggests a dated Documents/Cutfac Dev folder where the released app suggests Documents/Cutfac, so a run never opens a real workspace. It is made only when the folder step creates it."
         options={FOLDERS}
         value={fakes.freshFolder ? "fresh" : "default"}
         onChange={(folder) => onChange({ ...fakes, freshFolder: folder === "fresh" })}

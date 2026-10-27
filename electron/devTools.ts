@@ -124,10 +124,10 @@ export function handleDevTools(host: DevToolsHost): DevTools {
     defaultFolder: () => {
       if (!fakes.freshFolder) return macChecks.defaultFolder();
 
+      // Beside where the released app suggests Documents/Cutfac, dated for when it was made.
       freshFolder ??= path.join(
         app.getPath("documents"),
-        "Cutfac Dev",
-        freshFolderName(new Date()),
+        `Cutfac Dev ${freshFolderName(new Date())}`,
       );
 
       return freshFolder;
