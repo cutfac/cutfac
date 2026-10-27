@@ -113,10 +113,11 @@ unanswered is not shared, and nothing else asks again. Settings has a switch for
 sent before a yes, and a no takes hold at once. A report is a
 PostHog `$exception`: the failure's type and message with the home folder as `~`, the operation
 that failed, the process (`app`, `server` or `mcp`), the app's version and platform, and the cause
-up to 4,000 characters. Its only identity is the install ID, a random ID made with the first
-answer that Settings can renew, and PostHog keeps no person profile for it. Each process reports
-each failure once a run, and at most 20 of them. Never a video, a prompt, a chat, a file's
-contents or a key.
+up to 4,000 characters. Reports are grouped into issues by process, operation and type, and each
+issue is named after them, such as `CommandFailed in render.run (server)`. Its only identity is
+the install ID, a random ID made with the first answer that Settings can renew, and PostHog keeps
+no person profile for it. Each process reports each failure once a run, and at most 20 of them.
+Never a video, a prompt, a chat, a file's contents or a key.
 
 The reports ride on the log: whatever the log keeps at error level, including a top-level
 operation that failed, also goes to `ErrorSink`, which `src/errorReports.ts` fills. Only a build

@@ -171,6 +171,7 @@ describe("sending error reports", () => {
             },
           ],
           $exception_fingerprint: "server:render.run:Error",
+          $issue_name: "Error in render.run (server)",
           $process_person_profile: false,
           process: "server",
           operation: "render.run",
@@ -203,7 +204,10 @@ describe("sending error reports", () => {
 
       expect(sent).toHaveLength(1);
       expect(sent[0]).toMatchObject({
-        properties: { $exception_list: [{ type: "TypeError", value: "x is undefined" }] },
+        properties: {
+          $exception_list: [{ type: "TypeError", value: "x is undefined" }],
+          $issue_name: "TypeError (server)",
+        },
       });
     }),
   );

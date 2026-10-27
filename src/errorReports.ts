@@ -175,6 +175,11 @@ const send = Effect.fnUntraced(function* (key: string, processName: string, repo
 
   const operation = Option.getOrElse(report.operation, () => "");
 
+  const where = Option.match(report.operation, {
+    onNone: () => "",
+    onSome: (name) => ` in ${name}`,
+  });
+
   const event = {
     api_key: key,
     event: "$exception",
@@ -191,6 +196,8 @@ const send = Effect.fnUntraced(function* (key: string, processName: string, repo
       $exception_level: "error",
       // Grouped by where and how it failed, not by a message that names files.
       $exception_fingerprint: `${processName}:${operation}:${report.type}`,
+      // Named as it is grouped, so the issue list says what failed and where, not just its type.
+      $issue_name: `${report.type}${where} (${processName})`,
       $process_person_profile: false,
       process: processName,
       operation,
