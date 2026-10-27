@@ -17,7 +17,8 @@ import {
   serverEnv,
   type Account,
 } from "../electron/env.ts";
-import { testEffect } from "./effect.ts";
+import { eventually, testEffect } from "./effect.ts";
+import { alive, killedAfter } from "./support.ts";
 
 const it = testEffect(BunServices.layer);
 
@@ -228,11 +229,11 @@ describe("reading the login shell", () => {
 
       const pid = Number((yield* fs.readFileString(pidFile)).trim());
 
-      yield* Effect.addFinalizer(() => Effect.sync(() => process.kill(pid, "SIGKILL")));
+      yield* killedAfter(pid);
       // A brief wait, as the spawner signals a process group as the shell's scope closes.
-      yield* Effect.promise(() => Bun.sleep(100));
+      yield* Effect.sleep("100 millis");
 
-      expect(() => process.kill(pid, 0)).not.toThrow();
+      expect(yield* alive(pid)).toBe(true);
     }),
   );
 
@@ -247,7 +248,7 @@ describe("reading the login shell", () => {
         readShellEnv(shell, cleanEnv({ ...ACCOUNT, home: dir }, {})),
       );
 
-      while (!(yield* fs.exists(started))) yield* Effect.promise(() => Bun.sleep(5));
+      yield* eventually(fs.exists(started));
 
       yield* TestClock.adjust("5 seconds");
 

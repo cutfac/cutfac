@@ -36,13 +36,15 @@ const it = testEffect(platform);
 
 const DEFAULT_LIBRARY = "/Users/ada/Movies/Cutfac";
 
+const decodeSettings = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json));
+
 /** A folder for the app's data, and the settings kept in it. */
 const appData = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-settings-" });
   const file = path.join(dir, "settings.json");
 
-  const saved = Effect.map(fs.readFileString(file), (text) => JSON.parse(text));
+  const saved = Effect.flatMap(fs.readFileString(file), decodeSettings);
 
   const settingsIn = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.provide(effect, Settings.layer({ dir, defaultLibrary: DEFAULT_LIBRARY }));

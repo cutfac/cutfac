@@ -10,8 +10,9 @@ import { TestClock } from "effect/testing";
 
 import { AgentFixes } from "../electron/agents.ts";
 import { Install, ServerEnv } from "../electron/sidecar.ts";
-import { testEffect } from "./effect.ts";
+import { eventually, testEffect } from "./effect.ts";
 import { fakeSidecar } from "./fakeSidecar.ts";
+import { alive } from "./support.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
 
@@ -62,23 +63,6 @@ const fixWithLines = (agent: "claude" | "codex") =>
   });
 
 const exists = (file: string) => Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(file));
-
-/** Waits until a fix's shell has written `file`. */
-const written = (file: string) =>
-  Effect.gen(function* () {
-    while (!(yield* exists(file))) yield* Effect.promise(() => Bun.sleep(5));
-  });
-
-const alive = (pid: number) =>
-  Effect.sync(() => {
-    try {
-      process.kill(pid, 0);
-
-      return true;
-    } catch {
-      return false;
-    }
-  });
 
 describe("fixing an agent", () => {
   it.live("runs only the fix the app's check named, and nothing before a check", () =>
@@ -181,7 +165,7 @@ describe("stopping fixes", () => {
 
         const fixing = yield* Effect.forkScoped(agents.fix("claude", () => Effect.void));
 
-        yield* written(pidFile);
+        yield* eventually(exists(pidFile));
 
         const installer = Number((yield* fs.readFileString(pidFile)).trim());
 
@@ -208,7 +192,7 @@ describe("stopping fixes", () => {
 
         const fixing = yield* Effect.forkScoped(agents.fix("claude", () => Effect.void));
 
-        yield* written(pidFile);
+        yield* eventually(exists(pidFile));
 
         const signIn = Number((yield* fs.readFileString(pidFile)).trim());
 

@@ -4,7 +4,7 @@ import path from "node:path";
 // Each check starts its own servers, with the fake and the environment that check needs.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
-import { Deferred, Effect, Fiber, FileSystem, Layer, Option } from "effect";
+import { Deferred, Effect, Fiber, FileSystem, Layer, Option, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock, TestConsole } from "effect/testing";
 
@@ -15,6 +15,13 @@ import { answers, fakeSidecar, printed } from "./fakeSidecar.ts";
 import { holdPort } from "./support.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
+
+/** What the fake's `env` command prints: where it ran, and its environment. */
+const decodePrinted = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({ cwd: Schema.String, env: Schema.Record(Schema.String, Schema.String) }),
+  ),
+);
 
 /** Options for a server on `workspace` that ignores a crash, unless the test asks. */
 const on = (workspace: string, more: Partial<SidecarOptions> = {}): SidecarOptions => ({
@@ -151,7 +158,7 @@ describe("running a server command", () => {
       const fs = yield* FileSystem.FileSystem;
       const { dir, asApp } = yield* fakeSidecar;
       const result = yield* runCli(["env"]).pipe(asApp());
-      const { cwd, env } = JSON.parse(result.stdout);
+      const { cwd, env } = yield* decodePrinted(result.stdout);
 
       expect(result.code).toEqual(Option.some(0));
       expect(cwd).toBe(yield* fs.realPath(dir));

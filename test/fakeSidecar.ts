@@ -4,6 +4,7 @@ import { Effect, FileSystem, Option } from "effect";
 import { HttpClient } from "effect/http";
 
 import { Install, ServerEnv, startSidecar, type SidecarOptions } from "../electron/sidecar.ts";
+import { eventually } from "./effect.ts";
 
 /**
  * The server's CLI as far as the app uses it, run by Bun: `init`, `serve`, and the commands
@@ -103,6 +104,4 @@ export const answers = (url: string) =>
 
 /** Waits until the fake has printed `line`, as the app's own output. */
 export const printed = (lines: Effect.Effect<ReadonlyArray<unknown>>, line: string) =>
-  Effect.gen(function* () {
-    while (!(yield* lines).includes(`[sidecar] ${line}`)) yield* Effect.promise(() => Bun.sleep(5));
-  });
+  eventually(Effect.map(lines, (all) => all.includes(`[sidecar] ${line}`)));

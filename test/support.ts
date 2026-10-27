@@ -114,6 +114,17 @@ export const holdPort = (port: number) =>
     (server) => Effect.callback<void>((resume) => void server.close(() => resume(Effect.void))),
   );
 
+/** Whether process `pid` is still there. */
+export const alive = (pid: number) =>
+  Effect.try(() => process.kill(pid, 0)).pipe(
+    Effect.as(true),
+    Effect.orElseSucceed(() => false),
+  );
+
+/** Kills process `pid` when the test ends, if it is still there then. */
+export const killedAfter = (pid: number) =>
+  Effect.addFinalizer(() => Effect.ignore(Effect.try(() => process.kill(pid, "SIGKILL"))));
+
 /** A key pair to sign license grants with, as cutfac.com does, made for each run. */
 export const licenseSigning = generateKeyPairSync("ed25519");
 

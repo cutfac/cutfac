@@ -2,7 +2,7 @@ import { test } from "bun:test";
 
 // Each test runs its effect to completion, so it is the entry point that provides layers.
 // @effect-diagnostics strictEffectProvide:off
-import { Cause, Effect, Exit, Layer, type Scope } from "effect";
+import { Cause, Clock, Effect, Exit, Layer, Schedule, type Scope } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock, TestConsole } from "effect/testing";
 
@@ -74,3 +74,13 @@ export const it = make(testEnv, TestConsole.layer);
 /** `it`, with `layer` built anew for each test, on the test clock or the real one. */
 export const testEffect = <R, E>(layer: Layer.Layer<R, E>) =>
   make(Layer.provideMerge(layer, testEnv), Layer.provideMerge(layer, TestConsole.layer));
+
+/**
+ * Waits on the real clock until `condition` holds, for a test that waits on another process. It
+ * works on the test clock too, which only moves when the test moves it.
+ */
+export const eventually = <E, R>(condition: Effect.Effect<boolean, E, R>) =>
+  Effect.repeat(condition, { schedule: Schedule.spaced("5 millis"), until: (met) => met }).pipe(
+    Effect.asVoid,
+    Effect.provideService(Clock.Clock, Clock.Clock.defaultValue()),
+  );
