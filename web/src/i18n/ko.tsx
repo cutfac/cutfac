@@ -46,6 +46,8 @@ export const ko: Messages = {
     inProgress: "진행 중",
     allVideos: "모든 영상",
     toggle: "사이드바 열고 닫기",
+    back: "뒤로",
+    forward: "앞으로",
     waiting: (count) => `확인할 영상 ${count}개`,
     videoTitle: (title, status, state) =>
       state === undefined ? `${title} (${status})` : `${title} (${status}, ${state})`,

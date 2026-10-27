@@ -1,11 +1,12 @@
 import { createContext, use, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { BackForward } from "@/components/back-forward";
 import { Hint } from "@/components/editor/hint";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-import { insetTitleBar } from "../desktop.ts";
+import { desktop, insetTitleBar } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 import { MOD_KEY } from "../lib/edit-commands.ts";
 
@@ -22,10 +23,14 @@ export function TitleBar({ children }: { children: ReactNode }) {
   const { state } = useSidebar();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
 
-  const toggle = (
-    <Hint label={t.nav.toggle} keys={`${MOD_KEY}B`}>
-      <SidebarTrigger aria-label={t.nav.toggle} />
-    </Hint>
+  // The desktop app's back and forward buttons, as a browser's are, then the sidebar toggle.
+  const controls = (
+    <div className="flex items-center gap-0.5">
+      {desktop ? <BackForward /> : null}
+      <Hint label={t.nav.toggle} keys={`${MOD_KEY}B`}>
+        <SidebarTrigger aria-label={t.nav.toggle} />
+      </Hint>
+    </div>
   );
 
   return (
@@ -39,27 +44,27 @@ export function TitleBar({ children }: { children: ReactNode }) {
             : cn(
                 "fixed inset-x-0 top-0 z-20 transition-all duration-200 ease-linear [-webkit-app-region:drag]",
                 // Over the open content's own padding (the 14rem sidebar, then 1.5rem), or past the
-                // window controls, the toggle and the divider.
-                state === "collapsed" ? "pl-37" : "pl-62",
+                // window controls, the buttons and the divider.
+                state === "collapsed" ? "pl-52" : "pl-62",
               ),
         )}
       >
         {insetTitleBar ? (
           // A short, faint line level with the title: over the open sidebar's edge, or just past
-          // the toggle.
+          // the buttons.
           <div
             aria-hidden
             className={cn(
               "absolute top-4 h-4 w-px bg-border transition-all duration-200 ease-linear",
-              state === "collapsed" ? "left-34" : "left-56",
+              state === "collapsed" ? "left-49" : "left-56",
             )}
           />
         ) : (
-          toggle
+          controls
         )}
         <div ref={setSlot} className="@container/title flex min-w-0 flex-1 items-center gap-2" />
         {/* Last in the bar, so the area it keeps from dragging is not dragged again over it. */}
-        {insetTitleBar ? <div className="fixed top-2.5 left-24 z-20">{toggle}</div> : null}
+        {insetTitleBar ? <div className="fixed top-2.5 left-24 z-20">{controls}</div> : null}
       </header>
       {children}
     </Slot>

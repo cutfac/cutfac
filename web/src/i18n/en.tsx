@@ -57,6 +57,8 @@ export const en = {
     inProgress: "In progress",
     allVideos: "All videos",
     toggle: "Toggle sidebar",
+    back: "Back",
+    forward: "Forward",
     waiting: (count: number) =>
       count === 1 ? "1 video waits for you" : `${count} videos wait for you`,
     videoTitle: (title: string, status: string, state: string | undefined) =>

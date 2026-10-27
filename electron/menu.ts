@@ -19,6 +19,9 @@ export interface MenuActions {
   openWorkspace: () => void;
   appCommand: (command: AppCommand) => void;
   editCommand: (command: EditCommand) => void;
+  /** Step through the pages the window has shown. */
+  goBack: () => void;
+  goForward: () => void;
   /** The dev build's Dev Panel; the released app has no Develop menu. */
   openDevTools?: (() => void) | undefined;
   /** The dev build's stand-in for a `cutfac://` link, which only the packaged app is sent. */
@@ -101,6 +104,10 @@ export function menuTemplate(actions: MenuActions): MenuItemConstructorOptions[]
           accelerator: "CmdOrCtrl+B",
           click: () => actions.appCommand("toggleSidebar"),
         },
+        separator,
+        // As Finder and Safari have them on a Mac, and browsers elsewhere.
+        { label: t.back, accelerator: isMac ? "Cmd+[" : "Alt+Left", click: actions.goBack },
+        { label: t.forward, accelerator: isMac ? "Cmd+]" : "Alt+Right", click: actions.goForward },
         separator,
         { label: t.board, accelerator: "CmdOrCtrl+1", click: () => actions.appCommand("board") },
         { label: t.learn, accelerator: "CmdOrCtrl+2", click: () => actions.appCommand("learn") },

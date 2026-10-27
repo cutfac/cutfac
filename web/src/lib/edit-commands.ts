@@ -3,7 +3,7 @@ import { desktop, type EditCommand } from "../desktop.ts";
 export type { EditCommand } from "../desktop.ts";
 
 /** Apple keyboards say ⌘ where others say Ctrl. */
-const APPLE = /Mac|iPhone|iPad/.test(navigator.userAgent);
+export const APPLE = /Mac|iPhone|iPad/.test(navigator.userAgent);
 
 export const SHIFT_KEY = APPLE ? "⇧" : "Shift+";
 

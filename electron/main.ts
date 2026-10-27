@@ -267,6 +267,8 @@ function setMenu(): void {
     openWorkspace: () => void chooseWorkspace(),
     appCommand: sendAppCommand,
     editCommand: sendEditCommand,
+    goBack: () => window?.webContents.navigationHistory.goBack(),
+    goForward: () => window?.webContents.navigationHistory.goForward(),
     openDevTools: devTools?.open,
     openCopiedLink:
       devTools && (() => void clipboard.readText().then((text) => links?.open(text.trim()))),
@@ -384,6 +386,8 @@ async function show(url: string, title: string): Promise<void> {
 
   try {
     await window.loadURL(url);
+    // Back never leaves the workspace just opened for the one before it, or for the first launch.
+    window.webContents.navigationHistory.clear();
   } catch (error) {
     window.show();
     throw new Error(`Could not load ${url}: ${describeError(error)}`, { cause: error });
