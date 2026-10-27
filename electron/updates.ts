@@ -1,4 +1,4 @@
-import { Context, Effect, Option, Ref, Schedule, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Ref, Schedule, Schema, Stream } from "effect";
 
 const CHECK_EVERY = "4 hours";
 
@@ -34,12 +34,6 @@ export interface UpdatePrompts {
   readonly failed: (message: string) => Effect.Effect<void>;
 }
 
-export interface Updates {
-  readonly enabled: boolean;
-  /** Checks now and says what it found, for the menu item. */
-  readonly checkNow: Effect.Effect<void>;
-}
-
 /**
  * Downloads new versions in the background and offers a restart once one is ready. Declining
  * installs it the next time the app quits. The free version gets updates as a paid plan does.
@@ -47,7 +41,7 @@ export interface Updates {
 export const startUpdates = Effect.fn("updates.start")(function* (prompts: UpdatePrompts) {
   const feed = yield* UpdateFeed;
 
-  if (!feed.enabled) return { enabled: false, checkNow: Effect.void } satisfies Updates;
+  if (!feed.enabled) return Updates.of({ enabled: false, checkNow: Effect.void });
 
   const offered = yield* Ref.make(Option.none<string>());
 
@@ -71,14 +65,14 @@ export const startUpdates = Effect.fn("updates.start")(function* (prompts: Updat
           : Effect.andThen(Ref.set(offered, Option.some(version)), Effect.forkDetach(ask(version))),
       ),
     ),
-    Effect.forkDetach,
+    Effect.forkScoped,
   );
 
   // The updater logs a failure itself; the next check tries again.
   yield* feed.check.pipe(
     Effect.ignore,
     Effect.repeat(Schedule.spaced(CHECK_EVERY)),
-    Effect.forkDetach,
+    Effect.forkScoped,
   );
 
   const checkNow = feed.check.pipe(
@@ -94,5 +88,17 @@ export const startUpdates = Effect.fn("updates.start")(function* (prompts: Updat
     Effect.catch((error) => prompts.failed(error.message)),
   );
 
-  return { enabled: true, checkNow } satisfies Updates;
+  return Updates.of({ enabled: true, checkNow });
 });
+
+/** Updating the app, for the menu: started with the app's services, on the feed it has. */
+export class Updates extends Context.Service<
+  Updates,
+  {
+    readonly enabled: boolean;
+    /** Checks now and says what it found, for the menu item. */
+    readonly checkNow: Effect.Effect<void>;
+  }
+>()("cutfac/desktop/Updates") {
+  static readonly layer = (prompts: UpdatePrompts) => Layer.effect(Updates, startUpdates(prompts));
+}

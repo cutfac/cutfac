@@ -15,7 +15,6 @@ import { AgentName } from "../src/core/schema.ts";
 import type { AgentFix, CreateFailure, Folder, Permission } from "../web/src/desktop.ts";
 import { KnownPermission } from "./accessWatch.ts";
 import { AgentFixes } from "./agents.ts";
-import { describeError } from "./dialogs.ts";
 import { FirstWorkspace, FirstWorkspaceFailed } from "./firstWorkspace.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
@@ -90,8 +89,8 @@ export interface OnboardingHost {
   preload: string;
   window: () => BrowserWindow | undefined;
   bringToFront: () => void;
-  /** Starts the workspace and opens the board on it. Throws why it couldn't. */
-  openWorkspace: (folder: string) => Promise<void>;
+  /** Starts the workspace and opens the board on it, failing with why it couldn't. */
+  openWorkspace: (folder: string) => Effect.Effect<void, Failure, AppServices>;
   /** The board's language, for the agent to write in. */
   locale: () => string;
   checks?: OnboardingChecks | undefined;
@@ -175,10 +174,7 @@ export function handleOnboarding(host: OnboardingHost): void {
         onNone: () => start(given),
       });
 
-      yield* Effect.tryPromise({
-        try: () => host.openWorkspace(ready),
-        catch: (cause) => new FirstWorkspaceFailed({ message: describeError(cause) }),
-      });
+      yield* host.openWorkspace(ready);
 
       return undefined;
     }).pipe(

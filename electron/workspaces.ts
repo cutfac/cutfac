@@ -1,5 +1,5 @@
-import { Effect, Option } from "effect";
-import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import { Effect, Option, Ref } from "effect";
+import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 
 import type { CreateFailure, LibraryWorkspaces } from "../web/src/desktop.ts";
 import { pickWorkspace } from "./dialogs.ts";
@@ -10,21 +10,17 @@ import {
   WORKSPACES_CHANNEL,
 } from "./ipc.ts";
 import { decodeWorkspaceName, listWorkspaces, prepareWorkspace } from "./library.ts";
-import { runInMain } from "./runtime.ts";
+import { MESSAGES } from "./messages.ts";
+import { appState, runInMain, type AppServices } from "./runtime.ts";
 import { loadLibrary } from "./settings.ts";
 
 export interface WorkspacesHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
-  window: () => BrowserWindow | undefined;
-  /** The workspace open now, if any. */
-  current: () => string | undefined;
-  /** Whether a switch is under way, so another waits for it. */
-  switching: () => boolean;
-  /** Opens a workspace, saying why it couldn't. Resolves false if it didn't open. */
-  activate: (workspace: string) => Promise<boolean>;
-  /** What the folder dialog says, in the board's language. */
-  chooseMessage: () => string;
+  /** Opens a workspace, saying why it couldn't. False if it didn't open. */
+  activate: (workspace: string) => Effect.Effect<boolean, never, AppServices>;
 }
+
+const { workspace: current, switching } = appState;
 
 /**
  * Switching workspaces from the board: the ones in the app's folder by name, a new one there by its
@@ -36,27 +32,25 @@ export function handleWorkspaces(host: WorkspacesHost) {
     if (!host.isFromApp(event)) throw new Error("Untrusted IPC sender");
   };
 
-  const activate = (workspace: string) => Effect.promise(() => host.activate(workspace));
-
   const switchTo = (workspace: string) =>
     Effect.gen(function* () {
-      const previous = host.current();
+      const previous = yield* Ref.get(current);
 
-      if (yield* activate(workspace)) return true;
+      if (yield* host.activate(workspace)) return true;
 
-      if (previous) yield* activate(previous);
+      if (Option.isSome(previous)) yield* host.activate(previous.value);
 
       return false;
     });
 
   /** Asks for a folder and switches to it. False if cancelled or if it failed to start. */
   const choose = Effect.gen(function* () {
-    if (host.switching()) return false;
+    if (yield* Ref.get(switching)) return false;
 
     const picked = yield* pickWorkspace(
-      host.window(),
-      host.chooseMessage(),
-      Option.fromNullishOr(host.current()),
+      Option.getOrUndefined(yield* Ref.get(appState.window)),
+      MESSAGES[yield* Ref.get(appState.locale)].chooseWorkspace,
+      yield* Ref.get(current),
     );
 
     return Option.isSome(picked) ? yield* switchTo(picked.value) : false;
@@ -72,15 +66,20 @@ export function handleWorkspaces(host: WorkspacesHost) {
   ipcMain.handle(WORKSPACES_CHANNEL, (event) => {
     fromApp(event);
 
-    const current = host.current();
-
     return runInMain(
-      Effect.map(inLibrary, (found): LibraryWorkspaces => ({
-        workspaces: found.map((workspace) => ({
-          ...workspace,
-          current: workspace.path === current,
-        })),
-      })),
+      Effect.gen(function* () {
+        const found = yield* inLibrary;
+        const open = yield* Ref.get(current);
+
+        const listed: LibraryWorkspaces = {
+          workspaces: found.map((workspace) => ({
+            ...workspace,
+            current: Option.contains(open, workspace.path),
+          })),
+        };
+
+        return listed;
+      }),
     );
   });
   ipcMain.handle(SWITCH_WORKSPACE_CHANNEL, (event, name) => {
@@ -88,14 +87,18 @@ export function handleWorkspaces(host: WorkspacesHost) {
 
     // Only a workspace the app's folder holds, by name, never a path a page sends.
     return runInMain(
-      Effect.flatMap(inLibrary, (found) => {
-        const named = found.find((one) => one.name === name);
+      Effect.gen(function* () {
+        const named = (yield* inLibrary).find((one) => one.name === name);
 
-        if (named === undefined || host.switching() || named.path === host.current()) {
-          return Effect.succeed(false);
+        if (
+          named === undefined ||
+          (yield* Ref.get(switching)) ||
+          Option.contains(yield* Ref.get(current), named.path)
+        ) {
+          return false;
         }
 
-        return switchTo(named.path);
+        return yield* switchTo(named.path);
       }),
     );
   });

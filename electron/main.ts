@@ -1,32 +1,36 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Effect, Option } from "effect";
+import { Effect, Option, Queue, Ref, Schema } from "effect";
 import {
   app,
-  BrowserWindow,
   clipboard,
   dialog,
   ipcMain,
   Menu,
   nativeTheme,
-  screen,
-  type IpcMainEvent,
+  type BrowserWindow,
   type IpcMainInvokeEvent,
 } from "electron";
 
 import type { AppCommand, EditCommand, OnboardingStep } from "../web/src/desktop.ts";
-import { isLocale, resolveLocale, type Locale } from "../web/src/i18n/locale.ts";
+import { isLocale, resolveLocale } from "../web/src/i18n/locale.ts";
 import { handleAttention } from "./attention.ts";
-import { BOARD_URL, onboardingPage, onboardingStep, originOf } from "./boardPages.ts";
+import { BOARD_URL, onboardingPage, originOf } from "./boardPages.ts";
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
+import {
+  bringToFront,
+  createBoardWindow,
+  isAppUrl,
+  isFromApp,
+  rememberPlace,
+} from "./boardWindow.ts";
 import { DEV_APP } from "./devApp.ts";
 import { handleDevTools } from "./devTools.ts";
 import { describeError, pickSource, showStartFailure } from "./dialogs.ts";
 import {
   APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,
-  LICENSE_CHANGE_CHANNEL,
   LICENSE_KEY_REQUEST_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
   PICK_PATH_CHANNEL,
@@ -35,15 +39,14 @@ import {
   SET_LOCALE_CHANNEL,
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
-import { startLicense, type License } from "./licenseRuntime.ts";
-import { handleLinks, type Links } from "./links.ts";
-import { menuTemplate, showTextMenu } from "./menu.ts";
+import { License } from "./license.ts";
+import { handleLinks } from "./links.ts";
+import { menuTemplate } from "./menu.ts";
 import { MESSAGES } from "./messages.ts";
-import { keepInsideApp } from "./navigation.ts";
 import { handleOnboarding } from "./onboarding.ts";
-import { limitPermissions, sandboxed } from "./permissions.ts";
-import { guardQuit, guardWindow } from "./quitGuard.ts";
-import { forkInMain, runInMain } from "./runtime.ts";
+import { limitPermissions } from "./permissions.ts";
+import { guardQuit } from "./quitGuard.ts";
+import { appState, boardWindow, forkInMain, readNow, runInMain } from "./runtime.ts";
 import {
   loadLocale,
   loadOnboarding,
@@ -51,27 +54,18 @@ import {
   loadWindowPlace,
   loadWorkspace,
   saveLocale,
-  saveOnboarding,
-  savePage,
-  saveWindowPlace,
   saveWorkspace,
   settingsWritten,
 } from "./settings.ts";
-import {
-  boardDir,
-  killWorkspaceServer,
-  markQuitting,
-  stopFixes,
-  serveWorkspace,
-  stopWorkspaceServer,
-  watchServerCrashes,
-} from "./sidecarRuntime.ts";
-import { SystemAccess } from "./systemAccess.ts";
-import { updatePrompts } from "./updateFeed.ts";
-import { startUpdates, type Updates } from "./updates.ts";
-import { placeWindow, type WindowPlace } from "./windowPlace.ts";
+import { boardDir, killWorkspaceServer, stopFixes } from "./sidecarRuntime.ts";
+import { Updates } from "./updates.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 import { handleWorkspaces } from "./workspaces.ts";
+import { WorkspaceServer } from "./workspaceServer.ts";
+
+class BoardNotShown extends Schema.TaggedError<BoardNotShown>()("BoardNotShown", {
+  message: Schema.String,
+}) {}
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
 // packaged app ignores it, so another program can't open the app on a page of its choosing.
@@ -85,32 +79,9 @@ const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 /** The board before there is a workspace: the app's own copy, or Vite's in dev. */
 const boardUrl = devUrl ?? BOARD_URL;
 
-let window: BrowserWindow | undefined;
+const messages = () => MESSAGES[readNow(appState.locale)];
 
-let updates: Updates | undefined;
-
-let links: Links | undefined;
-
-let workspaces: ReturnType<typeof handleWorkspaces> | undefined;
-
-/** Only the packaged app checks its license key; a dev build leaves the saved one alone. */
-let license: License | undefined;
-
-let workspaceRoot: string | undefined;
-
-let appOrigin = "";
-
-let switching = false;
-
-let quitting = false;
-
-/** The server is stopped and the settings saved, so the quit may go ahead. */
-let quitReady = false;
-
-/** A move or resize waiting to be saved, so a drag saves once when it stops. */
-let placeTimer: ReturnType<typeof setTimeout> | undefined;
-
-let locale: Locale = "en";
+const openWorkspace = () => readNow(appState.workspace);
 
 // The Dev Panel, for trying the app as a new user would; never in the released app.
 const devTools = app.isPackaged
@@ -118,39 +89,62 @@ const devTools = app.isPackaged
   : handleDevTools({
       boardUrl,
       preload: preloadPath,
-      window: () => window,
-      showOnboarding,
-      activate,
+      window: boardWindow,
+      showOnboarding: (step) => runInMain(showOnboarding(step)),
+      activate: (workspace) => runInMain(activate(workspace)),
     });
 
 // The name picks the userData folder, and with it the single-instance lock. The dev build keeps
 // its own, so it runs beside the released app and the Dev Panel never resets the user's settings.
 app.setName(app.isPackaged ? "Cutfac" : DEV_APP.name);
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
+/** Set up by `start`, as the window's close is guarded with the quit. */
+const guardWindow = Ref.makeUnsafe<(window: BrowserWindow) => void>(() => undefined);
+
+if (!app.requestSingleInstanceLock()) app.quit();
+else start();
+
+function start(): void {
   registerBoardScheme();
   app.on("second-instance", bringToFront);
 
   app.on("window-all-closed", () => app.quit());
-  guardQuit({ window: () => window, locale: () => locale });
-  app.on("before-quit", (event) => {
-    if (quitReady || event.defaultPrevented) return;
+  Effect.runSync(
+    Ref.set(
+      guardWindow,
+      guardQuit({ window: boardWindow, locale: () => readNow(appState.locale) }),
+    ),
+  );
 
-    quitting = true;
-    markQuitting();
+  /** The server is stopped and the settings saved, so the quit may go ahead. */
+  const quitReady = Ref.makeUnsafe(false);
+
+  app.on("before-quit", (event) => {
+    if (readNow(quitReady) || event.defaultPrevented) return;
+
+    // A server that finishes starting now is stopped, not served.
+    Effect.runSync(Ref.set(appState.quitting, true));
 
     // The window closes only after this, too late for its place to reach the disk.
+    const window = boardWindow();
+
     if (window) rememberPlace(window);
 
     // Hold the quit until the server is gone and the settings saved, the first launch's step too,
     // then quit again with nothing left to stop.
     event.preventDefault();
-    void Promise.allSettled([stopWorkspaceServer(), runInMain(settingsWritten)]).then(() => {
-      quitReady = true;
-      app.quit();
-    });
+    forkInMain(
+      Effect.all(
+        [
+          Effect.exit(Effect.flatMap(WorkspaceServer, (server) => server.stop)),
+          Effect.exit(settingsWritten),
+        ],
+        { concurrency: "unbounded" },
+      ).pipe(
+        Effect.andThen(Ref.set(quitReady, true)),
+        Effect.andThen(Effect.sync(() => app.quit())),
+      ),
+    );
   });
 
   // Last resort so a crash in this process never leaves the server behind.
@@ -162,328 +156,233 @@ if (!app.requestSingleInstanceLock()) {
   process.on("SIGINT", () => app.quit());
 
   // `bun run desktop:dev` rebuilt the preload script, which a reload runs in the page.
-  if (devUrl) process.on("SIGUSR2", () => window?.webContents.reloadIgnoringCache());
+  if (devUrl) process.on("SIGUSR2", () => boardWindow()?.webContents.reloadIgnoringCache());
 
-  workspaces = handleWorkspaces({
-    isFromApp,
-    window: () => window,
-    current: () => workspaceRoot,
-    switching: () => switching,
-    activate,
-    chooseMessage: () => MESSAGES[locale].chooseWorkspace,
+  const workspaces = handleWorkspaces({ isFromApp, activate });
+  const links = handleLinks({ isFromApp, bringToFront, window: boardWindow });
+
+  const setMenu = Effect.gen(function* () {
+    const updates = yield* Updates;
+
+    const template = menuTemplate({
+      messages: messages(),
+      updatesEnabled: updates.enabled,
+      checkForUpdates: () => forkInMain(updates.checkNow),
+      requestLicenseKey,
+      openWorkspace: () => void workspaces.choose(),
+      appCommand: sendAppCommand,
+      editCommand: sendEditCommand,
+      goBack: () => boardWindow()?.webContents.navigationHistory.goBack(),
+      goForward: () => boardWindow()?.webContents.navigationHistory.goForward(),
+      openDevTools: devTools?.open,
+      openCopiedLink:
+        devTools && (() => void clipboard.readText().then((text) => links.open(text.trim()))),
+    });
+
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   });
+
   ipcMain.handle(REVEAL_PATH_CHANNEL, (event, target: string) => {
     assertFromApp(event);
 
-    return revealInWorkspace(workspaceRoot, target);
+    return revealInWorkspace(Option.getOrUndefined(openWorkspace()), target);
   });
   ipcMain.on(START_DRAG_CHANNEL, (event, target: string) => {
     if (!isFromApp(event)) return;
 
     // A file gone since the board showed it just doesn't drag.
-    dragOut(workspaceRoot, event.sender, target).catch(() => undefined);
+    dragOut(Option.getOrUndefined(openWorkspace()), event.sender, target).catch(() => undefined);
   });
   ipcMain.handle(PICK_PATH_CHANNEL, (event) => {
     assertFromApp(event);
 
     return runInMain(
-      Effect.map(pickSource(window, MESSAGES[locale].chooseSource), Option.getOrUndefined),
+      Effect.map(pickSource(boardWindow(), messages().chooseSource), Option.getOrUndefined),
     );
   });
   ipcMain.handle(SET_LICENSE_KEY_CHANNEL, (event, input: string) => {
     assertFromApp(event);
 
-    return license?.setKey(input) ?? "unavailable";
+    return runInMain(Effect.flatMap(License, (license) => license.setKey(input)));
   });
   ipcMain.on(OPEN_LICENSE_KEY_CHANNEL, (event) => {
     if (isFromApp(event)) requestLicenseKey();
   });
   ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
-    if (!isFromApp(event) || !isLocale(next) || next === locale) return;
+    if (!isFromApp(event) || !isLocale(next) || next === readNow(appState.locale)) return;
 
-    locale = next;
-    setMenu();
-    forkInMain(Effect.ignore(saveLocale(next)));
+    Effect.runSync(Ref.set(appState.locale, next));
+    forkInMain(Effect.andThen(setMenu, Effect.ignore(saveLocale(next))));
   });
-  handleAttention({ isFromApp, bringToFront, sendAppCommand, locale: () => locale });
-  links = handleLinks({ isFromApp, bringToFront, window: () => window });
+  handleAttention({
+    isFromApp,
+    bringToFront,
+    sendAppCommand,
+    locale: () => readNow(appState.locale),
+  });
   handleOnboarding({
     isFromApp,
     boardUrl,
     preload: preloadPath,
-    window: () => window,
+    window: boardWindow,
     bringToFront,
-    openWorkspace: async (folder) => {
-      if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
-    },
-    locale: () => locale,
+    openWorkspace: (folder) =>
+      Effect.flatMap(open(folder), (opened) =>
+        opened
+          ? Effect.void
+          : Effect.fail(new BoardNotShown({ message: messages().couldNotStart })),
+      ),
+    locale: () => readNow(appState.locale),
     checks: devTools?.checks,
   });
 
-  void app.whenReady().then(boot);
-}
-
-/** Whether `url` is on the board shown now, as opposed to a page it linked to. */
-const isAppUrl = (url: string) => Option.contains(originOf(url), appOrigin);
-
-function isFromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
-  const sender = event.senderFrame?.url;
-
-  return sender !== undefined && isAppUrl(sender);
+  void app.whenReady().then(() => runInMain(boot(setMenu)));
 }
 
 function assertFromApp(event: IpcMainInvokeEvent): void {
   if (!isFromApp(event)) throw new Error("Untrusted IPC sender");
 }
 
-async function boot(): Promise<void> {
-  watchServerCrashes(handleCrash);
+const boot = Effect.fn("main.boot")(function* (setMenu: Effect.Effect<void, never, Updates>) {
+  const server = yield* WorkspaceServer;
+
+  yield* Queue.take(server.crashes).pipe(
+    Effect.flatMap(showCrash),
+    Effect.forever,
+    Effect.forkDetach,
+  );
   limitPermissions(isAppUrl);
   // The board is dark only; this keeps the title bar, menus and dialogs dark with it.
   nativeTheme.themeSource = "dark";
-  locale =
-    Option.getOrUndefined(await runInMain(loadLocale)) ??
-    resolveLocale(undefined, app.getPreferredSystemLanguages());
 
-  if (app.isPackaged) {
-    license = await startLicense(() => window?.webContents.send(LICENSE_CHANGE_CHANNEL));
-  }
-
-  updates = await runInMain(
-    startUpdates(
-      updatePrompts(
-        () => MESSAGES[locale],
-        () => window,
-      ),
-    ),
+  const locale = Option.getOrElse(yield* loadLocale, () =>
+    resolveLocale(undefined, app.getPreferredSystemLanguages()),
   );
-  setMenu();
+
+  yield* Ref.set(appState.locale, locale);
+  yield* setMenu;
 
   // In dev, Vite serves the board instead.
   if (!devUrl) serveBoard(boardDir());
 
-  const saved = Option.getOrUndefined(await runInMain(loadWorkspace));
+  const saved = yield* loadWorkspace;
 
-  if ((saved !== undefined && (await activate(saved))) || quitting) return;
+  if (Option.isSome(saved) && (yield* activate(saved.value))) return;
+
+  if (yield* Ref.get(appState.quitting)) return;
 
   // No workspace yet, or the saved one wouldn't start: the first launch, where it was left. Someone
   // who had a workspace already has been through it, so they only choose a folder.
-  const step =
-    Option.getOrUndefined(await runInMain(loadOnboarding)) ??
-    (saved === undefined ? "welcome" : "folder");
+  const step = Option.getOrElse(yield* loadOnboarding, (): OnboardingStep =>
+    Option.isNone(saved) ? "welcome" : "folder",
+  );
 
-  try {
-    await showOnboarding(step);
-  } catch (error) {
-    await runInMain(showStartFailure(MESSAGES[locale].couldNotStart, describeError(error)));
-    app.quit();
-  }
-}
-
-function setMenu(): void {
-  const template = menuTemplate({
-    messages: MESSAGES[locale],
-    updatesEnabled: updates?.enabled ?? false,
-    checkForUpdates: () => {
-      if (updates) forkInMain(updates.checkNow);
-    },
-    requestLicenseKey,
-    openWorkspace: () => void workspaces?.choose(),
-    appCommand: sendAppCommand,
-    editCommand: sendEditCommand,
-    goBack: () => window?.webContents.navigationHistory.goBack(),
-    goForward: () => window?.webContents.navigationHistory.goForward(),
-    openDevTools: devTools?.open,
-    openCopiedLink:
-      devTools && (() => void clipboard.readText().then((text) => links?.open(text.trim()))),
-  });
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
+  yield* showOnboarding(step).pipe(
+    Effect.catch((error) =>
+      Effect.andThen(
+        showStartFailure(messages().couldNotStart, error.message),
+        Effect.sync(() => app.quit()),
+      ),
+    ),
+  );
+});
 
 function sendEditCommand(command: EditCommand): void {
-  window?.webContents.send(EDIT_COMMAND_CHANNEL, command);
+  boardWindow()?.webContents.send(EDIT_COMMAND_CHANNEL, command);
 }
 
 function sendAppCommand(command: AppCommand): void {
-  window?.webContents.send(APP_COMMAND_CHANNEL, command);
-}
-
-function bringToFront(): void {
-  if (!window) return;
-
-  if (window.isMinimized()) window.restore();
-
-  window.show();
-  window.focus();
+  boardWindow()?.webContents.send(APP_COMMAND_CHANNEL, command);
 }
 
 /** Has the board ask for a license key; Electron has no text field dialog of its own. */
 function requestLicenseKey(): void {
   bringToFront();
-  window?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, license?.hasKey() ?? false);
-}
-
-/** Opens `workspace`, or says why it couldn't. Resolves false if it didn't open. */
-async function activate(workspace: string): Promise<boolean> {
-  try {
-    return await open(workspace);
-  } catch (error) {
-    await runInMain(showStartFailure(MESSAGES[locale].couldNotStart, describeError(error)));
-
-    return false;
-  }
-}
-
-/**
- * Replaces the running server with one on `workspace`, then points the window at the page last
- * shown there. Resolves false if the app quit meanwhile; throws why it couldn't start.
- */
-async function open(workspace: string): Promise<boolean> {
-  switching = true;
-
-  try {
-    const url = await serveWorkspace(workspace);
-
-    if (url === undefined) return false;
-
-    workspaceRoot = workspace;
-    await runInMain(saveWorkspace(workspace));
-
-    const page = Option.getOrElse(await runInMain(loadPage(workspace)), () => "");
-
-    await show(new URL(page, devUrl ?? url).href, path.basename(workspace));
-
-    return true;
-  } finally {
-    switching = false;
-  }
-}
-
-/** Closes the workspace, if one is open, and shows the first launch on `step`. */
-async function showOnboarding(step: OnboardingStep): Promise<void> {
-  await stopWorkspaceServer();
-  workspaceRoot = undefined;
-  await show(new URL(onboardingPage(step), boardUrl).href, "Cutfac");
-}
-
-async function show(url: string, title: string): Promise<void> {
-  appOrigin = Option.getOrElse(originOf(url), () => "");
-  window ??= createWindow(Option.getOrUndefined(await runInMain(loadWindowPlace)));
-  window.setTitle(title);
-
-  try {
-    await window.loadURL(url);
-    // Back never leaves the workspace just opened for the one before it, or for the first launch.
-    window.webContents.navigationHistory.clear();
-  } catch (error) {
-    window.show();
-    throw new Error(`Could not load ${url}: ${describeError(error)}`, { cause: error });
-  }
-}
-
-function createWindow(place: WindowPlace | undefined): BrowserWindow {
-  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
-
-  const created = new BrowserWindow({
-    ...(place ? placeWindow(place, workAreas) : { width: 1280, height: 860 }),
-    minWidth: 960,
-    minHeight: 640,
-    show: false,
-    // On macOS the board draws to the top edge and leaves a strip for the window controls, as
-    // Finder and Notes do, instead of sitting under a separate gray title bar.
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // macOS only; elsewhere the system title bar stays. Centred in the board's 48px title bar.
-    trafficLightPosition: { x: 18, y: 18 },
-    // macOS: the system's sidebar material behind the whole window, as Finder's has. The board
-    // leaves its own background off there, so its sidebar shows the desktop through it, blurred.
-    ...(process.platform === "darwin" && {
-      vibrancy: "sidebar",
-      backgroundColor: "#00000000",
-    }),
-    webPreferences: sandboxed(preloadPath, devTools?.boardArguments),
-  });
-
-  const { webContents } = created;
-
-  created.once("ready-to-show", () => {
-    if (place?.maximized) created.maximize();
-
-    if (devRestart) created.showInactive();
-    else created.show();
-  });
-  created.on("focus", () => {
-    license?.refresh();
-    // Back from System Settings: the board checks the access itself.
-    forkInMain(Effect.flatMap(SystemAccess, (access) => access.stopWatching));
-  });
-
-  const rememberSoon = () => {
-    clearTimeout(placeTimer);
-    placeTimer = setTimeout(() => rememberPlace(created), 500);
-  };
-
-  guardWindow(created);
-  created.on("move", rememberSoon);
-  created.on("resize", rememberSoon);
-  created.on("maximize", () => rememberPlace(created));
-  created.on("unmaximize", () => rememberPlace(created));
-  // Quitting saved it already, before the window closed.
-  created.on("close", () => {
-    if (!quitting) rememberPlace(created);
-  });
-  created.on("closed", () => {
-    window = undefined;
-    forkInMain(Effect.flatMap(SystemAccess, (access) => access.stopWatching));
-  });
-  // The title is the workspace folder, not whatever the board's <title> says.
-  created.on("page-title-updated", (event) => event.preventDefault());
-
-  keepInsideApp(webContents, isAppUrl);
-  webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
-    if (isMainFrame) rememberPage(url);
-  });
-  webContents.on("context-menu", (_event, params) =>
-    showTextMenu(created, params, MESSAGES[locale]),
-  );
-
-  return created;
-}
-
-/** Saves where the window is, so the next launch opens it there; one that fails is just forgotten. */
-function rememberPlace(target: BrowserWindow): void {
-  clearTimeout(placeTimer);
-
-  if (target.isDestroyed()) return;
-
   forkInMain(
-    Effect.ignore(
-      saveWindowPlace({ ...target.getNormalBounds(), maximized: target.isMaximized() }),
+    Effect.flatMap(License, (license) => license.hasKey).pipe(
+      Effect.map((hasKey) => boardWindow()?.webContents.send(LICENSE_KEY_REQUEST_CHANNEL, hasKey)),
     ),
   );
 }
 
+/** Opens `workspace`, or says why it couldn't. False if it didn't open. */
+const activate = (workspace: string) =>
+  open(workspace).pipe(
+    Effect.catch((error) =>
+      Effect.as(showStartFailure(messages().couldNotStart, describeError(error)), false),
+    ),
+  );
+
 /**
- * Saves the board page just opened, so the workspace opens on it next time; before there is one,
- * the first-launch step, so it picks up there.
+ * Replaces the running server with one on `workspace`, then points the window at the page last
+ * shown there. False if the app quit meanwhile; fails with why it couldn't start.
  */
-function rememberPage(url: string): void {
-  // While switching, the page still shown belongs to the other workspace.
-  if (!isAppUrl(url) || switching) return;
+const open = Effect.fn("main.open")(
+  function* (workspace: string) {
+    yield* Ref.set(appState.switching, true);
 
-  const { hash } = new URL(url);
+    const served = yield* Effect.flatMap(WorkspaceServer, (server) => server.serve(workspace));
 
-  if (workspaceRoot !== undefined) {
-    forkInMain(Effect.ignore(savePage(workspaceRoot, hash)));
+    if (Option.isNone(served)) return false;
 
-    return;
-  }
+    yield* Ref.set(appState.workspace, Option.some(workspace));
+    yield* saveWorkspace(workspace);
 
-  Option.map(onboardingStep(hash), (step) => forkInMain(Effect.ignore(saveOnboarding(step))));
-}
+    const page = Option.getOrElse(yield* loadPage(workspace), () => "");
 
-function handleCrash(message: string): void {
-  void dialog
-    .showMessageBox({ type: "error", message: MESSAGES[locale].serverStopped, detail: message })
-    .then(() => app.quit());
-}
+    yield* show(new URL(page, devUrl ?? served.value.url).href, path.basename(workspace));
+
+    return true;
+  },
+  Effect.ensuring(Ref.set(appState.switching, false)),
+);
+
+/** Closes the workspace, if one is open, and shows the first launch on `step`. */
+const showOnboarding = Effect.fn("main.showOnboarding")(function* (step: OnboardingStep) {
+  yield* Effect.flatMap(WorkspaceServer, (server) => server.stop);
+  yield* Ref.set(appState.workspace, Option.none());
+  yield* show(new URL(onboardingPage(step), boardUrl).href, "Cutfac");
+});
+
+/** The board's window, opened where it was last time when there is none yet. */
+const windowNow = Effect.gen(function* () {
+  const shown = yield* Ref.get(appState.window);
+
+  if (Option.isSome(shown)) return shown.value;
+
+  const created = createBoardWindow(yield* loadWindowPlace, {
+    preload: preloadPath,
+    boardArguments: devTools?.boardArguments,
+    inactive: devRestart,
+    guard: readNow(guardWindow),
+  });
+
+  yield* Ref.set(appState.window, Option.some(created));
+
+  return created;
+});
+
+const show = Effect.fn("main.show")(function* (url: string, title: string) {
+  yield* Ref.set(
+    appState.origin,
+    Option.getOrElse(originOf(url), () => ""),
+  );
+
+  const window = yield* windowNow;
+
+  window.setTitle(title);
+
+  yield* Effect.tryPromise({
+    try: () => window.loadURL(url),
+    catch: (cause) =>
+      new BoardNotShown({ message: `Could not load ${url}: ${describeError(cause)}` }),
+  }).pipe(Effect.tapError(() => Effect.sync(() => window.show())));
+
+  // Back never leaves the workspace just opened for the one before it, or for the first launch.
+  window.webContents.navigationHistory.clear();
+});
+
+const showCrash = (message: string) =>
+  Effect.promise(() =>
+    dialog.showMessageBox({ type: "error", message: messages().serverStopped, detail: message }),
+  ).pipe(Effect.andThen(Effect.sync(() => app.quit())));

@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Effect, Layer, ManagedRuntime, Option, Predicate } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Predicate, Ref } from "effect";
 import { FetchHttpClient } from "effect/http";
 import type { PlatformError } from "effect/PlatformError";
 import { app } from "electron";
@@ -11,11 +11,15 @@ import { errorReports } from "../src/errorReports.ts";
 import { AgentFixes } from "./agents.ts";
 import { AppState } from "./appState.ts";
 import { FirstWorkspace } from "./firstWorkspace.ts";
+import { LICENSE_CHANGE_CHANNEL } from "./ipc.ts";
+import { License } from "./license.ts";
+import { MESSAGES } from "./messages.ts";
 import { platform } from "./platform.ts";
-import { Settings } from "./settings.ts";
+import { licenseSettings, Settings } from "./settings.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
 import { SystemAccess } from "./systemAccess.ts";
-import { updateFeed } from "./updateFeed.ts";
+import { updateFeed, updatePrompts } from "./updateFeed.ts";
+import { Updates } from "./updates.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
 
 export const installInfo = (): InstallInfo => ({
@@ -52,7 +56,21 @@ const settings = Layer.unwrap(
   ),
 );
 
-const base = Layer.mergeAll(platform, Layer.sync(Install, installInfo), appData, AppState.layer);
+/** The main process's own state, which Electron's callbacks read as they come. */
+export const appState = Effect.runSync(AppState.make);
+
+/** What `ref` of the app's state holds now, for a callback that can't wait. */
+export const readNow = <A>(ref: Ref.Ref<A>) => Effect.runSync(Ref.get(ref));
+
+/** The board's window, if it is open. */
+export const boardWindow = () => Option.getOrUndefined(readNow(appState.window));
+
+const base = Layer.mergeAll(
+  platform,
+  Layer.sync(Install, installInfo),
+  appData,
+  Layer.succeed(AppState, appState),
+);
 
 const services = Layer.mergeAll(
   settings,
@@ -62,18 +80,30 @@ const services = Layer.mergeAll(
   updateFeed,
 ).pipe(Layer.provideMerge(base));
 
+/** Only the packaged app checks its license key; a dev build leaves the saved one alone. */
+const license = Layer.unwrap(
+  Effect.sync(() =>
+    app.isPackaged
+      ? License.layer(
+          Effect.sync(() => boardWindow()?.webContents.send(LICENSE_CHANGE_CHANNEL)),
+        ).pipe(Layer.provide(licenseSettings))
+      : License.unavailable,
+  ),
+);
+
+const updates = Updates.layer(updatePrompts(() => MESSAGES[readNow(appState.locale)], boardWindow));
+
 export const appServices = Layer.mergeAll(
   FirstWorkspace.layer,
   AgentFixes.layer,
   SystemAccess.layer,
+  license,
+  updates,
 ).pipe(Layer.provideMerge(WorkspaceServer.layer), Layer.provideMerge(services));
 
 export type AppServices = Layer.Success<typeof appServices>;
 
-/** Shared by the main process's runtimes, so they build the app's services once between them. */
-export const memoMap = Layer.makeMemoMapUnsafe();
-
-const runtime = ManagedRuntime.make(appServices, { memoMap });
+const runtime = ManagedRuntime.make(appServices);
 
 /**
  * The error a handler rejects with: Node's own for a file system call, else a plain `Error`.
