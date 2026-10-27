@@ -15,19 +15,19 @@ import { ATTENTION_CHANNEL } from "./ipc.ts";
 import { MESSAGES } from "./messages.ts";
 import { busyWork } from "./quitQuestion.ts";
 
-const decodeAttention = Schema.decodeUnknownOption(
-  Schema.Struct({
-    waiting: Schema.Finite,
-    busy: Schema.Finite,
-    asking: Schema.Array(
-      Schema.Struct({
-        id: Schema.String,
-        title: Schema.String,
-        about: Schema.Literals(["approval", "question"]),
-      }),
-    ),
-  }),
-);
+const Attention = Schema.Struct({
+  waiting: Schema.Finite,
+  busy: Schema.Finite,
+  asking: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      title: Schema.String,
+      about: Schema.Literals(["approval", "question"]),
+    }),
+  ),
+});
+
+const decodeAttention = Schema.decodeUnknownOption(Attention);
 
 export interface AttentionHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
@@ -72,29 +72,27 @@ export function handleAttention(host: AttentionHost): void {
       notice.show();
     });
 
-  const update = (next: unknown) =>
-    Option.match(decodeAttention(next), {
-      onNone: () => Effect.void,
-      onSome: (attention) =>
-        Effect.gen(function* () {
-          app.setBadgeCount(attention.waiting);
-          yield* Ref.set(busyWork, attention.busy);
+  const update = (attention: typeof Attention.Type) =>
+    Effect.gen(function* () {
+      app.setBadgeCount(attention.waiting);
+      yield* Ref.set(busyWork, attention.busy);
 
-          const away = BrowserWindow.getFocusedWindow() === null && Notification.isSupported();
-          const changes = askingChanges(yield* Ref.get(asking), attention.asking, away);
+      const away = BrowserWindow.getFocusedWindow() === null && Notification.isSupported();
+      const changes = askingChanges(yield* Ref.get(asking), attention.asking, away);
 
-          yield* Effect.forEach(changes.notify, notify, { discard: true });
+      yield* Effect.forEach(changes.notify, notify, { discard: true });
 
-          // What was answered, wherever, no longer waits in Notification Center.
-          for (const [notice, key] of yield* Ref.get(shown)) {
-            if (!changes.now.has(key)) notice.close();
-          }
+      // What was answered, wherever, no longer waits in Notification Center.
+      for (const [notice, key] of yield* Ref.get(shown)) {
+        if (!changes.now.has(key)) notice.close();
+      }
 
-          yield* Ref.set(asking, changes.now);
-        }),
+      yield* Ref.set(asking, changes.now);
     });
 
   ipcMain.on(ATTENTION_CHANNEL, (event, next) => {
-    if (host.isFromApp(event)) Effect.runSync(update(next));
+    if (!host.isFromApp(event)) return;
+
+    Option.map(decodeAttention(next), (attention) => Effect.runSync(update(attention)));
   });
 }
