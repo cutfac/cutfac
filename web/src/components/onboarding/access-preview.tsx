@@ -64,8 +64,8 @@ export function AccessPreview({ app }: { app: App | undefined }) {
       {/* The card on its way up, and the pointer that comes in, takes it and lets it go. */}
       <div className="absolute top-42 right-0 bottom-0 left-1/3 flex flex-col gap-1.5 p-2 motion-reduce:hidden">
         <p className="invisible text-xs">{t.drop}</p>
-        <div className="relative">
-          <div className="animate-access-drag">
+        <div className="relative animate-access-carry">
+          <div className="animate-access-card">
             <DragCard app={app} lifted />
           </div>
           <div className="absolute top-2.5 left-8 size-6 animate-access-pointer">
