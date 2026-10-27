@@ -245,10 +245,25 @@ describe("attention", () => {
 
     expect(attention(items)).toEqual({
       waiting: 3,
+      busy: 2,
       asking: [
         { id: "asking", title: "Asking", about: "approval" },
         { id: "question", title: "Question", about: "question" },
       ],
     });
+  });
+
+  test("counts the videos an agent or a render is at work on, which quitting would stop", () => {
+    const failed: RenderState = { ...render, status: "failed", endedAt: 1, code: 1 };
+
+    expect(
+      attention([
+        summary({ id: "agent", running: true }),
+        summary({ id: "render", render }),
+        summary({ id: "both", running: true, render }),
+        summary({ id: "failed", render: failed }),
+        summary({ id: "quiet" }),
+      ]).busy,
+    ).toBe(3);
   });
 });
