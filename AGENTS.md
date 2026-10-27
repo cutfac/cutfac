@@ -49,6 +49,9 @@ Engineering:
 - Test Effect code with `test/effect.ts`, as OpenCode's tests do: `it.effect` runs on a `TestClock`
   the test moves, `it.live` on the real clock, and `testEffect(layer)` provides the services a file
   needs. Pure functions keep plain `test`.
+- Write fewer comments. Make the code say it with names, types and structure; keep a comment only
+  for what the code cannot say, such as a platform quirk or a public API contract. New code doesn't
+  copy the comment density around it. `/no-comments` sweeps a diff.
 - Keep each source file under 500 lines. When one grows past that, split it by responsibility into
   cohesive modules, not at arbitrary line boundaries. Split large intermediate work, such as
   generator scripts and generated files, the same way.
