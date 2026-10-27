@@ -45,6 +45,18 @@ export const dayLogs = Effect.fnUntraced(function* (dir: string) {
     .toSorted((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
 });
 
+/**
+ * Where this process's errors go beside its log file: nowhere unless the app reports them, which
+ * the person chooses. It sees every line the file does and keeps what it wants.
+ */
+export const ErrorSink = Context.Reference<Option.Option<Logger.Logger<unknown, void>>>(
+  "cutfac/ErrorSink",
+  { defaultValue: () => Option.none() },
+);
+
+/** The log annotation that names the top-level operation a line is about. */
+export const OPERATION = "operation";
+
 /** The folder the desktop app keeps its logs in. None for the open-source CLI, which keeps none. */
 export const LogDir = Context.Reference<Option.Option<string>>("cutfac/LogDir", {
   defaultValue: () => Option.none(),
@@ -52,6 +64,16 @@ export const LogDir = Context.Reference<Option.Option<string>>("cutfac/LogDir", 
 
 const env = (name: string) =>
   Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none<string>));
+
+/** Shows the home folder as `~` in text, as the log does, so what it holds says less of who. */
+export const homeScrubber = Effect.map(
+  env("HOME"),
+  (home) => (text: string) =>
+    Option.match(home, {
+      onNone: () => text,
+      onSome: (folder) => (folder.length > 1 ? text.replaceAll(folder, "~") : text),
+    }),
+);
 
 /**
  * `~/Library/Logs/Cutfac` for the binary the desktop app bundles. Electron's main process, and the
@@ -169,7 +191,7 @@ const record = ({ name, took, exit, error }: Ended) => {
         onSome: (message) => Effect.logWarning(`${line} and answered with an error: ${message}`),
       }),
     onFailure: (cause) => Effect.logError(`${line} and failed`, cause),
-  });
+  }).pipe(Effect.annotateLogs(OPERATION, name));
 };
 
 /**
@@ -188,32 +210,28 @@ export const logToFile = (name: string) =>
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const today = yield* DateTime.now;
-      const home = yield* env("HOME");
+      const scrub = yield* homeScrubber;
 
       yield* fs.makeDirectory(dir.value, { recursive: true });
       yield* prune(dir.value, today);
 
-      const scrubbed = Logger.map(Logger.formatJson, (line) =>
-        Option.match(home, {
-          onNone: () => line,
-          onSome: (folder) => (folder.length > 1 ? line.replaceAll(folder, "~") : line),
-        }),
-      );
+      const scrubbed = Logger.map(Logger.formatJson, scrub);
 
       const file = path.join(dir.value, `${name}-${DateTime.formatIsoDateUtc(today)}.log`);
       const fileLogger = yield* Logger.toFile(scrubbed, file);
+      const loggers = [fileLogger, ...Option.toArray(yield* ErrorSink)];
       const ended = yield* Queue.unbounded<Ended>();
       const base = yield* Tracer.Tracer;
 
       yield* Queue.take(ended).pipe(
         Effect.flatMap((one) => (worthKeeping(one) ? record(one) : Effect.void)),
         Effect.forever,
-        Effect.provideService(Logger.CurrentLoggers, new Set([fileLogger])),
+        Effect.provideService(Logger.CurrentLoggers, new Set(loggers)),
         Effect.forkScoped,
       );
 
       return Layer.mergeAll(
-        Logger.layer([fileLogger], { mergeWithExisting: true }),
+        Logger.layer(loggers, { mergeWithExisting: true }),
         Layer.succeed(Tracer.Tracer, tracking(base, ended)),
       );
     }).pipe(Effect.orElseSucceed(() => Layer.empty)),
