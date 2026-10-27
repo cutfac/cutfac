@@ -92,11 +92,11 @@ export const FOCUS_DRAG_HELPER_CHANNEL = "cutfac:focus-drag-helper";
 /** The app's icon, for the helper window to show as the thing to drag. */
 export const APP_ICON_CHANNEL = "cutfac:app-icon";
 
-/** The folder the workspace step suggests. */
-export const DEFAULT_FOLDER_CHANNEL = "cutfac:default-folder";
+/** Make the first workspace from the answers so far, and start the agent reading. */
+export const START_WORKSPACE_CHANNEL = "cutfac:start-workspace";
 
-/** Ask for another folder for the workspace. */
-export const CHOOSE_FOLDER_CHANNEL = "cutfac:choose-folder";
+/** Where the first workspace was made, once it is. */
+export const WORKSPACE_FOLDER_CHANNEL = "cutfac:workspace-folder";
 
 /** Make the workspace folder and open the board on it. */
 export const CREATE_WORKSPACE_CHANNEL = "cutfac:create-workspace";

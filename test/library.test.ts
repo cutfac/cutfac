@@ -3,9 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { Effect, FileSystem, Option, Path } from "effect";
 
 import {
+  candidateNames,
   decodeWorkspaceName,
   listWorkspaces,
   prepareWorkspace,
+  readingAgent,
+  sameSource,
   WORKSPACES,
 } from "../electron/library.ts";
 import { nameFromSources } from "../web/src/lib/onboarding.ts";
@@ -91,4 +94,36 @@ describe("the app's folder", () => {
       expect(yield* prepareWorkspace(library, "Photos", true)).toEqual({ kind: "taken" });
     }),
   );
+});
+
+describe("the first workspace's reading", () => {
+  test("is run by Claude Code when it is ready, else by the agent that is", () => {
+    expect(
+      readingAgent([
+        { agent: "codex", state: "ready" },
+        { agent: "claude", state: "ready" },
+      ]),
+    ).toBe("claude");
+    expect(
+      readingAgent([
+        { agent: "claude", state: "signedOut" },
+        { agent: "codex", state: "ready" },
+      ]),
+    ).toBe("codex");
+    expect(readingAgent([{ agent: "claude", state: "missing" }])).toBeUndefined();
+  });
+
+  test("learns a source once, however the user typed it", () => {
+    expect(sameSource("cutfac.com", "https://www.cutfac.com/")).toBe(true);
+    expect(sameSource(" https://cutfac.com ", "https://cutfac.com")).toBe(true);
+    expect(sameSource("cutfac.com/pricing", "https://cutfac.com")).toBe(false);
+  });
+
+  test("tries the next name when one is taken", () => {
+    expect(candidateNames("cutfac.com").slice(0, 3)).toEqual([
+      "cutfac.com",
+      "cutfac.com 2",
+      "cutfac.com 3",
+    ]);
+  });
 });

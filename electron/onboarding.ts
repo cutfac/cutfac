@@ -13,14 +13,14 @@ import {
 import { AgentName } from "../src/core/schema.ts";
 import type { CreateFailure, Folder } from "../web/src/desktop.ts";
 import { agentSetups, fixAgent } from "./agents.ts";
-import { pickLibrary } from "./dialogs.ts";
+import { firstWorkspace } from "./firstWorkspace.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   AGENTS_CHANNEL,
   APP_ICON_CHANNEL,
-  CHOOSE_FOLDER_CHANNEL,
   CREATE_WORKSPACE_CHANNEL,
-  DEFAULT_FOLDER_CHANNEL,
+  START_WORKSPACE_CHANNEL,
+  WORKSPACE_FOLDER_CHANNEL,
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
   PERMISSION_CHANNEL,
@@ -35,7 +35,7 @@ import {
   FOCUS_DRAG_HELPER_CHANNEL,
 } from "./ipc.ts";
 import { decodeWorkspaceName } from "./library.ts";
-import { clearDraft, isDraft, loadDraft, loadLibrary, saveDraft, saveLibrary } from "./settings.ts";
+import { clearDraft, isDraft, loadDraft, loadLibrary, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
 import {
   appBadge,
@@ -46,11 +46,8 @@ import {
   openAccessSettings,
   systemVersion,
 } from "./systemAccess.ts";
-import { prepareWorkspaceFolder } from "./workspaces.ts";
 
 const isAgentName = Schema.is(AgentName);
-
-const isText = Schema.is(Schema.String);
 
 const isSample = Schema.is(Schema.Struct({ title: Schema.String, body: Schema.String }));
 
@@ -68,7 +65,7 @@ export interface OnboardingChecks {
   agentSetups: typeof agentSetups;
   fixAgent: typeof fixAgent;
   hasPermission: typeof hasPermission;
-  /** The app's folder the last step suggests, and a name for the workspace when it has one. */
+  /** The app's folder for the first workspace, and a name for it when the build has one. */
   suggestion: () => Promise<{ library: string; name: string | undefined }>;
 }
 
@@ -86,10 +83,12 @@ export interface OnboardingHost {
   preload: string;
   window: () => BrowserWindow | undefined;
   bringToFront: () => void;
-  /** What the dialog for the app's folder says, in the board's language. */
-  chooseMessage: () => string;
+  /** Starts the server on a workspace without showing it. Resolves its address. */
+  serve: (folder: string) => Promise<string>;
   /** Starts the workspace and opens the board on it. Throws why it couldn't. */
   openWorkspace: (folder: string) => Promise<void>;
+  /** The board's language, for the agent to write in. */
+  locale: () => string;
   checks?: OnboardingChecks | undefined;
 }
 
@@ -97,13 +96,28 @@ export interface OnboardingHost {
 export function handleOnboarding(host: OnboardingHost): void {
   const checks = host.checks ?? macChecks;
 
-  // Only a folder the step was given here may hold the workspace, never any path a page sends.
-  const offered = new Set<string>();
+  const first = firstWorkspace({
+    serve: host.serve,
+    agents: () => checks.agentSetups(),
+    locale: host.locale,
+  });
 
-  const offer = (target: string): Folder => {
-    offered.add(target);
+  /**
+   * Makes the workspace for the answers so far, in the app's folder, named as the dev build says
+   * or as the board suggests; the main process picks the place, never a page.
+   */
+  const start = async (given: Option.Option<string>) => {
+    const draft = await loadDraft();
+    const suggested = await checks.suggestion();
+    const name = suggested.name ?? Option.getOrUndefined(given);
 
-    return folder(target);
+    if (draft === undefined || name === undefined) throw new Error("Say what to make first");
+
+    const made = await first.start(suggested.library, name, draft);
+
+    if (made === undefined) throw new Error("The workspace wasn't made");
+
+    return made;
   };
 
   const assertFromApp = (event: IpcMainInvokeEvent) => {
@@ -193,39 +207,30 @@ export function handleOnboarding(host: OnboardingHost): void {
 
     return appBadge();
   });
-  ipcMain.handle(DEFAULT_FOLDER_CHANNEL, async (event) => {
+  ipcMain.handle(START_WORKSPACE_CHANNEL, (event, name) => {
     assertFromApp(event);
 
-    const { library, name } = await checks.suggestion();
-
-    return name === undefined ? { library: offer(library) } : { library: offer(library), name };
+    // It runs while the user goes on; the last step waits for it, and tries again if it failed.
+    start(decodeWorkspaceName(name)).catch(() => undefined);
   });
-  ipcMain.handle(CHOOSE_FOLDER_CHANNEL, async (event) => {
+  ipcMain.handle(WORKSPACE_FOLDER_CHANNEL, async (event) => {
     assertFromApp(event);
 
-    const chosen = await pickLibrary(host.window(), host.chooseMessage());
+    const ready = await first.ready().catch(() => undefined);
 
-    return chosen === undefined ? undefined : offer(chosen);
+    return ready === undefined ? undefined : folder(ready);
   });
   ipcMain.handle(
     CREATE_WORKSPACE_CHANNEL,
-    async (event, library, input): Promise<CreateFailure | undefined> => {
+    async (event, name): Promise<CreateFailure | undefined> => {
       assertFromApp(event);
 
-      if (!isText(library) || !offered.has(library)) return { kind: "invalid" };
-
-      const name = Option.getOrUndefined(decodeWorkspaceName(input));
-
-      if (name === undefined) return { kind: "invalid" };
-
       try {
-        // A workspace of that name already there is opened, as after a reinstall.
-        const prepared = await prepareWorkspaceFolder(library, name, true);
+        // After a relaunch, as screen recording asks for, nothing was started in this run.
+        const ready =
+          (await first.ready().catch(() => undefined)) ?? (await start(decodeWorkspaceName(name)));
 
-        if (prepared.kind === "taken") return { kind: "taken" };
-
-        await saveLibrary(library);
-        await host.openWorkspace(prepared.path);
+        await host.openWorkspace(ready);
 
         return undefined;
       } catch (error) {

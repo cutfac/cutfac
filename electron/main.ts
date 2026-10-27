@@ -47,23 +47,22 @@ import {
   loadLocale,
   loadOnboarding,
   loadPage,
-  loadPort,
   loadWindowPlace,
   loadWorkspace,
   saveLocale,
   saveOnboarding,
   savePage,
-  savePort,
   saveWindowPlace,
   saveWorkspace,
   settingsWritten,
 } from "./settings.ts";
-import { boardDir, startSidecar, type Sidecar } from "./sidecarRuntime.ts";
+import { boardDir } from "./sidecarRuntime.ts";
 import { stopWatching } from "./systemAccess.ts";
 import { startUpdates, type Updates } from "./updates.ts";
 import { placeWindow, type WindowPlace } from "./windowPlace.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 import { handleWorkspaces } from "./workspaces.ts";
+import { workspaceServer } from "./workspaceServer.ts";
 
 // Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
 // packaged app ignores it, so another program can't open the app on a page of its choosing.
@@ -81,7 +80,11 @@ const boardUrl = devUrl ?? BOARD_URL;
 
 let window: BrowserWindow | undefined;
 
-let sidecar: Sidecar | undefined;
+const server = workspaceServer({
+  devPort: devUrl ? devPort : undefined,
+  quitting: () => quitting,
+  onCrash: handleCrash,
+});
 
 let updates: Updates | undefined;
 
@@ -142,8 +145,7 @@ if (!app.requestSingleInstanceLock()) {
     // Hold the quit until the server is gone and the settings saved, the first launch's step too,
     // then quit again with nothing left to stop.
     event.preventDefault();
-    void Promise.allSettled([sidecar?.stop(), settingsWritten()]).then(() => {
-      sidecar = undefined;
+    void Promise.allSettled([server.stop(), settingsWritten()]).then(() => {
       quitReady = true;
       app.quit();
     });
@@ -151,7 +153,7 @@ if (!app.requestSingleInstanceLock()) {
 
   // Last resort so a crash in this process never leaves the server behind.
   process.on("exit", () => {
-    sidecar?.kill();
+    server.kill();
     stopFixes();
   });
   process.on("SIGTERM", () => app.quit());
@@ -207,10 +209,17 @@ if (!app.requestSingleInstanceLock()) {
     preload: preloadPath,
     window: () => window,
     bringToFront,
-    chooseMessage: () => MESSAGES[locale].chooseLibrary,
+    serve: async (folder) => {
+      const started = await server.serve(folder);
+
+      if (started === undefined) throw new Error(MESSAGES[locale].couldNotStart);
+
+      return started.url;
+    },
     openWorkspace: async (folder) => {
       if (!(await open(folder))) throw new Error(MESSAGES[locale].couldNotStart);
     },
+    locale: () => locale,
     checks: devTools?.checks,
   });
 
@@ -323,28 +332,12 @@ async function open(workspace: string): Promise<boolean> {
   switching = true;
 
   try {
-    await sidecar?.stop();
-    sidecar = undefined;
+    const started = await server.serve(workspace);
 
-    const started = await startSidecar({
-      workspace,
-      // A fixed dev port held by a stale server fails here instead of passing the health check.
-      port: devUrl ? { fixed: devPort } : { last: await loadPort() },
-      onCrash: handleCrash,
-      watch: devUrl !== undefined,
-    });
+    if (started === undefined) return false;
 
-    if (quitting) {
-      await started.stop();
-
-      return false;
-    }
-
-    sidecar = started;
     workspaceRoot = workspace;
     await saveWorkspace(workspace);
-
-    if (!devUrl) await savePort(started.port);
 
     const page = (await loadPage(workspace)) ?? "";
 
@@ -358,8 +351,7 @@ async function open(workspace: string): Promise<boolean> {
 
 /** Closes the workspace, if one is open, and shows the first launch on `step`. */
 async function showOnboarding(step: OnboardingStep): Promise<void> {
-  await sidecar?.stop();
-  sidecar = undefined;
+  await server.stop();
   workspaceRoot = undefined;
   await show(new URL(onboardingPage(step), boardUrl).href, "Cutfac");
 }
@@ -480,7 +472,6 @@ function rememberPage(url: string): void {
 }
 
 function handleCrash(message: string): void {
-  sidecar = undefined;
   void dialog
     .showMessageBox({ type: "error", message: MESSAGES[locale].serverStopped, detail: message })
     .then(() => app.quit());

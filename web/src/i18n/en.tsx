@@ -110,6 +110,11 @@ export const en = {
       titles.length === 1
         ? `Your agent knows ${titles[0]}`
         : `Your agent knows ${titles.length} sources`,
+    /** While the agent reads the first launch's material into about.md. */
+    reading: (titles: ReadonlyArray<string>) =>
+      titles.length === 1
+        ? `Your agent is reading ${titles[0]}…`
+        : `Your agent is reading ${titles.length} sources…`,
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
     selected: "selected",

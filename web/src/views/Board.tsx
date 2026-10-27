@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -126,21 +127,52 @@ function LearnHint() {
   );
 }
 
+/** How often the empty board looks again while the agent reads; the file watcher skips imports. */
+const READING_POLL_MS = 3000;
+
 /**
- * On the empty board, what the agent already knows from the first launch: the material it learned,
- * with a way to see all of it, so the answers given there visibly went somewhere.
+ * On the empty board, what the agent knows from the first launch: the material it learned, or that
+ * it is still reading it, with a way to see all of it, so the answers given there visibly went
+ * somewhere.
  */
 function KnownLine() {
   const t = useMessages();
-  const { data } = useLive("learned", api.learned);
-  const titles = data?.learned.map((learned) => learned.doc.title) ?? [];
+  const learned = useLive("learned", api.learned);
+  const imports = useLive("imports", api.imports);
+  const titles = learned.data?.learned.map((one) => one.doc.title) ?? [];
+
+  const reading =
+    imports.data?.some(({ doc, running }) => doc.kind === "learn" && !doc.closed && running) ??
+    false;
+
+  const reload = useEffectEvent(() => {
+    learned.reload();
+    imports.reload();
+  });
+
+  useEffect(() => {
+    if (!reading) return;
+
+    const timer = setInterval(reload, READING_POLL_MS);
+
+    return () => clearInterval(timer);
+  }, [reading]);
+
+  // Once the reading ends, what it wrote shows.
+  const wasReading = useRef(false);
+
+  useEffect(() => {
+    if (wasReading.current && !reading) reload();
+
+    wasReading.current = reading;
+  }, [reading]);
 
   if (titles.length === 0) return null;
 
   return (
     <a href={href("learn")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-      <BookOpenIcon data-icon="inline-start" />
-      <span className="truncate">{t.board.known(titles)}</span>
+      {reading ? <Spinner data-icon="inline-start" /> : <BookOpenIcon data-icon="inline-start" />}
+      <span className="truncate">{reading ? t.board.reading(titles) : t.board.known(titles)}</span>
     </a>
   );
 }

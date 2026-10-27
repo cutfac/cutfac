@@ -27,18 +27,6 @@ export function pickWorkspace(
   });
 }
 
-/** Asks for the app's own folder, where its workspaces go, starting in Movies. */
-export function pickLibrary(
-  owner: BrowserWindow | undefined,
-  message: string,
-): Promise<string | undefined> {
-  return pickOne(owner, {
-    properties: ["openDirectory", "createDirectory"],
-    message,
-    defaultPath: app.getPath("videos"),
-  });
-}
-
 /**
  * Asks for a folder or file for agents to read. macOS lets one dialog pick either; elsewhere it
  * picks a folder, and a file can still be typed or pasted in the chat.

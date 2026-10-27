@@ -27,6 +27,10 @@ export function nameFromSources(sources: ReadonlyArray<string>): string | undefi
   return undefined;
 }
 
+/** The first workspace's name: the website's address, else the default the board names. */
+export const suggestedName = (sources: ReadonlyArray<string>, fallback: string) =>
+  nameFromSources(sources) ?? fallback;
+
 const skipKey = (root: string) => `cutfac.start.skipped.${root}`;
 
 /**

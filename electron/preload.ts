@@ -15,9 +15,9 @@ import {
   APP_COMMAND_CHANNEL,
   APP_ICON_CHANNEL,
   ATTENTION_CHANNEL,
-  CHOOSE_FOLDER_CHANNEL,
   CREATE_WORKSPACE_CHANNEL,
-  DEFAULT_FOLDER_CHANNEL,
+  START_WORKSPACE_CHANNEL,
+  WORKSPACE_FOLDER_CHANNEL,
   DEV_BUILD_FLAG,
   DEV_OPEN_STEP_CHANNEL,
   DEV_RESTORE_CHANNEL,
@@ -116,9 +116,9 @@ const onboarding = {
   startAppDrag: () => ipcRenderer.send(START_APP_DRAG_CHANNEL),
   focusDragHelper: () => ipcRenderer.send(FOCUS_DRAG_HELPER_CHANNEL),
   appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
-  defaultFolder: () => ipcRenderer.invoke(DEFAULT_FOLDER_CHANNEL),
-  chooseFolder: () => ipcRenderer.invoke(CHOOSE_FOLDER_CHANNEL),
-  createWorkspace: (library, name) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, library, name),
+  startWorkspace: (name) => ipcRenderer.invoke(START_WORKSPACE_CHANNEL, name),
+  workspaceFolder: () => ipcRenderer.invoke(WORKSPACE_FOLDER_CHANNEL),
+  createWorkspace: (name) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, name),
 } satisfies CutfacOnboarding;
 
 /** The Dev Panel's tools; the dev build passes the flag to that window alone. */

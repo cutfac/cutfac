@@ -1,5 +1,8 @@
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
 
+import type { AgentName } from "../src/core/schema.ts";
+import type { AgentSetup } from "../web/src/desktop.ts";
+
 // Where the app keeps its workspaces: one folder of its own, `~/Movies/Cutfac` by default, with each
 // workspace a folder in its `workspaces`. Movies, as macOS's video apps keep their libraries there:
 // iCloud doesn't sync it as it can Desktop and Documents, and macOS doesn't ask before an agent
@@ -98,3 +101,31 @@ export const prepareWorkspace = Effect.fn("library.prepare")(function* (
 
   return { kind: "ready", path: target } as const;
 });
+
+/** How many names it tries, `name`, `name 2` and on, before giving up on a free one. */
+const MAX_TRIES = 9;
+
+/** The agents in the order the first one ready runs the reading. */
+const ORDER: ReadonlyArray<AgentName> = ["claude", "codex"];
+
+/** `name`, then `name 2`, `name 3` and on. */
+export const candidateNames = (name: string): string[] =>
+  Array.from({ length: MAX_TRIES }, (_, index) => (index === 0 ? name : `${name} ${index + 1}`));
+
+/** The agent that reads: Claude Code when it is ready, else the first that is. */
+export const readingAgent = (
+  setups: ReadonlyArray<Pick<AgentSetup, "agent" | "state">>,
+): AgentName | undefined =>
+  ORDER.find((agent) => setups.some((setup) => setup.agent === agent && setup.state === "ready"));
+
+/** A source as the user typed it and as learning saved it, to tell one learned already. */
+export const sameSource = (given: string, saved: string) => {
+  const bare = (text: string) =>
+    text
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/$/, "");
+
+  return bare(given) === bare(saved);
+};

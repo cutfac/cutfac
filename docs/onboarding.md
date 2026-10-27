@@ -27,16 +27,17 @@ The agent comes first, since everything after it runs on it, then what the user 
 the permissions the agent works under, and where everything is kept. Each step checks what is already true
 and passes on its own when it is: a second Mac, a reinstall or a workspace that already has
 templates goes straight to what is missing. Closing the window keeps the progress. Steps 1 to 5
-save the step the user is on, and the next launch opens on it. Once the workspace is made, the
-board saves the answers into it and opens: nothing is made yet, so nothing is waited on.
+save the step the user is on, and the next launch opens on it. The workspace is made as soon as
+the user said what they make, and the agent starts reading their material while they finish, so
+the board opens on what it learned.
 
-| Step            | Shows                                                                                                                                                                                                                                                                                   | Done when                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                                                                                                                               | Start is pressed                        |
-| 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                                                                                       | One agent is ready, and Next is pressed |
-| 3. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                                                                                     | Next is pressed on the last part        |
-| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                                                                                  | Both are on, or Skip                    |
-| 5. Ready        | The workspace's name, filled in, with where it goes under it (`~/Movies/Cutfac/workspaces/<name>`) and Change, whether to share error reports and usage statistics with the Cutfac team, each on its own, and Start making. The folder is made and the agents from step 2 connect to it | The board opens on the folder           |
+| Step            | Shows                                                                                                                                                                                                                            | Done when                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                                                                        | Start is pressed                        |
+| 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                                | One agent is ready, and Next is pressed |
+| 3. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                              | Next is pressed on the last part        |
+| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                           | Both are on, or Skip                    |
+| 5. Ready        | Where the workspace was made (`~/Movies/Cutfac/workspaces/<name>`), whether to share error reports and usage statistics with the Cutfac team, each on its own, and Start making. The agents from step 2 connect to the workspace | The board opens on the folder           |
 
 ### Before the workspace
 
@@ -44,19 +45,24 @@ Steps 1 to 5 run before there is a workspace, so before there is a server. Elect
 built board on its own `cutfac://` scheme, which keeps storage and fetch as a web origin does, and
 answers those steps itself over the preload bridge. Agent detection runs as a CLI command that
 needs no workspace (`cutfac agents --json`), so the server and Electron share one implementation.
-What to make has nowhere to be saved yet, so the app keeps the answers in its settings, where they
-last through the relaunch screen recording asks for. Step 5 starts the server on the folder; the
-board then forgets the answers, saves the brief and learns the material, which takes seconds, and
-opens. A browser has no steps before the workspace, so it asks what to make on Start.
+The app keeps the answers in its settings, where they last through the relaunch screen recording
+asks for. When step 3 ends, the app makes the workspace and starts its server in the background,
+without showing it: it saves the brief, learns each website and folder into `about.md`, and starts
+a learn run, in which the agent reads what `about.md` lists and writes it in, and nothing else.
+Answering again, or reopening the app, adds only what is new: a source learned already isn't
+learned again, and a reading under way isn't started twice. Step 5 waits for that, making the
+workspace then if the app reopened since, and opens the board on the same server; the board saves
+only what to share, and forgets the answers. A browser has no steps before the workspace, so it
+asks what to make on Start.
 
 ### Where workspaces are kept
 
 The app has one folder of its own, `~/Movies/Cutfac` (`Cutfac Dev` for the dev build), and every
-workspace it makes is a folder in its `workspaces`, named for the workspace. People pick a name,
-never a place: Ready fills in the website's address or "My videos", and the switcher at the top of
-the sidebar lists the workspaces there and makes a new one from a name. Change on Ready picks
-another folder for the app; Open a folder in the switcher still opens one anywhere else, such as a
-project folder.
+workspace it makes is a folder in its `workspaces`, named for the workspace. The first launch names
+it for the website's address, or "My videos", and makes it before Ready, so nothing asks for a name
+or a place then; the next free name follows if one is taken. The switcher at the top of the sidebar
+lists the workspaces there and makes a new one from a name, and Open a folder still opens one
+anywhere else, such as a project folder.
 
 Movies is where macOS's video apps keep their libraries: Final Cut Pro, iMovie, CapCut and
 Camtasia. iCloud's Desktop and Documents sync doesn't move it, so large media isn't uploaded or
@@ -153,8 +159,10 @@ Nothing is made from it during the first launch. A template took the agent minut
 out was a spec for the agent that the user couldn't judge yet. Instead the answers are context:
 `brief.md` and the material in `about.md`, which the agent reads before every template and video.
 The first video is asked for on the board in the user's own words, with or without a template, and
-a template can come from a video the user likes later, through Templates. A learned source marks its
-section in `about.md` as not read yet, so the first agent that works reads it and rewrites it.
+a template can come from a video the user likes later, through Templates. The agent reads the
+material during the rest of the first launch (see Before the workspace); the empty board says it
+is still reading, then what it knows, which opens the Brief page. A source it couldn't read keeps
+its section marked not read yet, so the next agent that works reads it.
 
 ### The brief
 

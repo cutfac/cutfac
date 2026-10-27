@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { saveReportChoices } from "@/components/error-reports";
-import { type Answers, saveAnswers } from "@/components/onboarding/answers";
+import type { Answers } from "@/components/onboarding/answers";
 import { ONBOARDING_STEPS, OnboardingFrame, StepHeader } from "@/components/onboarding/frame";
 import { StartStep } from "@/components/onboarding/start-step";
 import { ListSkeleton } from "@/components/page";
@@ -16,7 +16,6 @@ import {
 import { href, type Live } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
-import { errorText } from "../lib/notify.ts";
 import { skipStart } from "../lib/onboarding.ts";
 
 const SHARING_PURPOSES: ReadonlyArray<SharingPurpose> = ["errorReports", "usageStats"];
@@ -36,12 +35,11 @@ export function Start({ ws, brief }: { ws: WorkspaceInfo | undefined; brief: Liv
 type Begun = { kind: "starting" } | { kind: "ask"; answers: Answers; error?: string };
 
 /**
- * Saves what the first launch asked, if it did, and opens the board. The answers are forgotten
+ * Hands on what the first launch asked, if it did, and opens the board. The answers are forgotten
  * first, so a reload meanwhile can't save them twice; if they can't be saved, the questions open
  * on them.
  */
 function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
-  const { whatToMake: t } = useMessages().start;
   const onboarding = desktop?.onboarding;
   const asked: Begun = { kind: "ask", answers: { brief: initial, sources: [] } };
 
@@ -61,16 +59,10 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
       async (draft) => {
         if (draft === undefined) return setBegun(asked);
 
+        // The app saved the brief and the material when it made the workspace; only what to
+        // share is left for the board to save.
         await onboarding.clearDraft();
         await handOnSharing(onboarding, draft).catch(() => undefined);
-
-        try {
-          await saveAnswers(draft, t);
-        } catch (cause) {
-          setBegun({ kind: "ask", answers: draft, error: errorText(cause) });
-
-          return;
-        }
 
         skipStart(ws.root);
         location.hash = href("board");

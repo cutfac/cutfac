@@ -125,17 +125,17 @@ export interface CutfacOnboarding {
   /** The app as a list in System Settings shows it, for the helper window to show as the thing to drag. */
   appIcon: () => Promise<{ icon: string; name: string }>;
   /**
-   * The app's own folder, where the first workspace goes, and a name for that workspace when the
-   * app suggests one, as the dev build does.
+   * Make the first workspace from the answers so far, named `name` unless the build names it, and
+   * start the agent reading the material while the user goes on. Resolves at once.
    */
-  defaultFolder: () => Promise<{ library: Folder; name?: string }>;
-  /** Ask for another folder for the app to keep its workspaces in. Resolves it, or undefined. */
-  chooseFolder: () => Promise<Folder | undefined>;
+  startWorkspace: (name: string) => Promise<void>;
+  /** Where the first workspace was made, once it is; undefined if it wasn't. */
+  workspaceFolder: () => Promise<Folder | undefined>;
   /**
-   * Make the workspace `name` in the app's folder `library` and open the board on it; the window
-   * moves on by itself. Resolves why it couldn't, or undefined.
+   * Open the board on the first workspace, making it now if it wasn't, as after a relaunch; the
+   * window moves on by itself. Resolves why it couldn't, or undefined.
    */
-  createWorkspace: (library: string, name: string) => Promise<CreateFailure | undefined>;
+  createWorkspace: (name: string) => Promise<CreateFailure | undefined>;
 }
 
 /** What the Dev Panel has an agent be, or `real` to check this Mac for it. */

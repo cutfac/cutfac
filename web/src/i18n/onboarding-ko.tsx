@@ -70,11 +70,9 @@ export const onboardingKo: OnboardingMessages = {
   ready: {
     title: "첫 영상을 만들 준비가 됐어요",
     body: "에이전트는 영상을 만들 때마다 알려 주신 내용을 먼저 읽어요. 영상과 템플릿은 한 폴더에 일반 파일로 보관돼요.",
-    nameLabel: "워크스페이스 이름",
+    savedIn: "저장 위치",
+    failed: "워크스페이스를 만들지 못했어요. 다시 시도해 주세요.",
     defaultName: "내 영상",
-    taken: "같은 이름의 폴더가 이미 있어요. 다른 이름을 써 주세요.",
-    invalidName: "/나 :가 없고 점으로 시작하지 않는 이름을 써 주세요.",
-    change: "변경…",
     start: "만들기 시작",
     creating: "준비하는 중…",
   },
