@@ -192,6 +192,12 @@ const GLOW = {
   codex: "bg-linear-to-br from-codex-from via-codex-via to-codex-to",
 } satisfies Record<AgentName, string>;
 
+/** A faint wash of the same color across the row, fading out before its far end. */
+const WASH = {
+  claude: "from-claude/20",
+  codex: "from-codex-via/20",
+} satisfies Record<AgentName, string>;
+
 /**
  * One agent, with its own mark on a soft glow of its colors that brightens once it is ready, so
  * the step reads as the two apps the user knows rather than two lines of text.
@@ -220,14 +226,23 @@ function AgentRow({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute top-1/2 -left-8 size-32 -translate-y-1/2 rounded-full blur-2xl transition-opacity duration-700",
-          GLOW[setup.agent],
-          state === "ready" ? "opacity-45" : "opacity-15",
+          "pointer-events-none absolute inset-0 bg-linear-to-r via-transparent to-transparent transition-opacity duration-700",
+          WASH[setup.agent],
+          state === "ready" ? "opacity-100" : "opacity-40",
         )}
       />
-      <ItemMedia variant="image" className="relative">
-        <span className="flex size-full items-center justify-center bg-background/70">
-          <AgentLogo agent={setup.agent} className="size-7" />
+      <ItemMedia className="relative">
+        {/* The glow sits right behind the mark, so the light comes from it. */}
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute top-1/2 left-1/2 size-20 -translate-1/2 rounded-full blur-xl transition-opacity duration-700",
+            GLOW[setup.agent],
+            state === "ready" ? "opacity-50" : "opacity-20",
+          )}
+        />
+        <span className="relative flex size-14 items-center justify-center rounded-2xl bg-background/80">
+          <AgentLogo agent={setup.agent} className="size-9" />
         </span>
       </ItemMedia>
       <ItemContent className="relative min-w-0">
