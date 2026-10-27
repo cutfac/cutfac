@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect } from "bun:test";
 import { join } from "node:path";
 
-import { ConfigProvider, Effect, type Layer } from "effect";
+import { ConfigProvider, Effect, FileSystem } from "effect";
 
 import {
   type McpPlugin,
@@ -13,31 +11,36 @@ import {
   pluginFingerprint,
   pluginLogo,
 } from "../src/core/mcpPlugins.ts";
-import { pluginFolder, setUpClaudePlugins, writeFiles } from "./pluginFixtures.ts";
-import { makeWorkspace, type TestServices, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import {
+  type Files,
+  pluginFolder,
+  setUpClaudePlugins,
+  writeFiles as writeFixtures,
+} from "./pluginFixtures.ts";
+import { tempWorkspace } from "./support.ts";
 
-let t: TestWorkspace;
+const it = testEffect(tempWorkspace("Plugins"));
 
-/** Claude Code's and Codex's config folder at once, as `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. */
-let config: string;
+const writeFiles = (root: string, files: Files) => Effect.promise(() => writeFixtures(root, files));
 
-let env: Layer.Layer<never>;
+/**
+ * The test's workspace and a folder that is Claude Code's and Codex's config at once, as
+ * `CLAUDE_CONFIG_DIR` and `CODEX_HOME`; `read` runs an effect that finds the agents' config there.
+ */
+const pluginsSetup = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const ws = yield* Workspace;
+  const config = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-agent-config-" });
 
-beforeEach(async () => {
-  t = await makeWorkspace("Plugins");
-  config = await mkdtemp(join(tmpdir(), "cutfac-agent-config-"));
+  const env = ConfigProvider.fromEnv({ env: { CLAUDE_CONFIG_DIR: config, CODEX_HOME: config } });
 
-  env = ConfigProvider.layer(
-    ConfigProvider.fromEnv({ env: { CLAUDE_CONFIG_DIR: config, CODEX_HOME: config } }),
-  );
+  const read = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.provideService(effect, ConfigProvider.ConfigProvider, env);
+
+  return { ws, config, read };
 });
-
-afterEach(async () => {
-  await rm(config, { recursive: true, force: true });
-  await t.remove();
-});
-
-const read = <A, E>(effect: Effect.Effect<A, E, TestServices>) => t.runWith(env, effect);
 
 const serverNames = (plugin: McpPlugin | undefined) => plugin?.servers.map((server) => server.name);
 
@@ -46,9 +49,13 @@ const SEARCH = {
   args: ["--cache", "${CLAUDE_PLUGIN_DATA}"],
 };
 
-describe("Claude Code's plugins", () => {
-  beforeEach(async () => {
-    await setUpClaudePlugins(
+/** The set-up of `pluginsSetup`, with the plugins Claude Code has installed here. */
+const claudeSetup = Effect.gen(function* () {
+  const setup = yield* pluginsSetup;
+  const { ws, config } = setup;
+
+  yield* Effect.promise(() =>
+    setUpClaudePlugins(
       config,
       {
         "docs@market": {
@@ -63,7 +70,7 @@ describe("Claude Code's plugins", () => {
           },
         },
         "mine@market": {
-          projectPath: t.root,
+          projectPath: ws.root,
           files: {
             ".claude-plugin/plugin.json": {
               mcpServers: ["../../escape.json", { inline: { url: "https://mine.example/mcp" } }],
@@ -86,89 +93,105 @@ describe("Claude Code's plugins", () => {
         "quiet@market": true,
         "skills@market": true,
       },
-    );
+    ),
+  );
 
-    await writeFiles(t.root, {
-      ".claude/settings.json": { enabledPlugins: { "quiet@market": false } },
-    });
-
-    await writeFiles(join(config, "plugins", "cache", "market"), {
-      "escape.json": { mcpServers: { escaped: { command: "escaped" } } },
-    });
+  yield* writeFiles(ws.root, {
+    ".claude/settings.json": { enabledPlugins: { "quiet@market": false } },
   });
 
-  test("are the ones on here that bring servers Claude Code can start on its own", async () => {
-    const plugins = await read(claudePlugins());
-
-    expect(plugins.map((plugin) => [plugin.id, plugin.title, plugin.description])).toEqual([
-      ["docs@market", "Docs", "Search the docs"],
-      ["mine@market", "mine", undefined],
-    ]);
-    // A server that asks the user for a value when the plugin is turned on can't start in a run.
-    expect(serverNames(plugins[0])).toEqual(["search"]);
-    // Nor is a file outside the plugin read.
-    expect(serverNames(plugins[1])).toEqual(["inline"]);
+  yield* writeFiles(join(config, "plugins", "cache", "market"), {
+    "escape.json": { mcpServers: { escaped: { command: "escaped" } } },
   });
 
-  test("start in a run as Claude Code starts them, named for the plugin", async () => {
-    const [docs, mine] = await read(claudePlugins());
-    const root = pluginFolder(config, "docs@market");
-    const data = join(config, "plugins", "data", "docs-market");
-
-    expect(docs === undefined ? [] : claudePluginRunServers(docs)).toEqual([
-      {
-        agent: "claude",
-        name: "plugin:docs:search",
-        source: "user",
-        entry: {
-          command: `${root}/bin/search`,
-          args: ["--cache", data],
-          env: { CLAUDE_PLUGIN_ROOT: root, CLAUDE_PLUGIN_DATA: data },
-        },
-      },
-    ]);
-
-    expect(mine === undefined ? [] : claudePluginRunServers(mine)).toEqual([
-      {
-        agent: "claude",
-        name: "plugin:mine:inline",
-        source: "user",
-        entry: { url: "https://mine.example/mcp" },
-      },
-    ]);
-  });
-
-  test("are named again for a change in what they start, but not in how they're described", async () => {
-    const [before] = await read(claudePlugins());
-    const files = pluginFolder(config, "docs@market");
-
-    await writeFiles(files, {
-      ".claude-plugin/plugin.json": { name: "docs", description: "Find things in the docs" },
-    });
-
-    const [described] = await read(claudePlugins());
-
-    await writeFiles(files, {
-      ".mcp.json": { mcpServers: { search: { ...SEARCH, args: ["--all"] } } },
-    });
-
-    const [changed] = await read(claudePlugins());
-
-    const [first, second, third] = await read(
-      Effect.forEach([before, described, changed], (plugin) =>
-        plugin === undefined ? Effect.succeed("") : pluginFingerprint(plugin),
-      ),
-    );
-
-    expect(second).toBe(first ?? "");
-    expect(third).not.toBe(first ?? "");
-  });
+  return setup;
 });
 
-describe("Codex's plugins", () => {
-  beforeEach(async () => {
-    await writeFiles(config, {
-      "config.toml": `[mcp_servers.web]
+describe("Claude Code's plugins", () => {
+  it.live("are the ones on here that bring servers Claude Code can start on its own", () =>
+    Effect.gen(function* () {
+      const { read } = yield* claudeSetup;
+      const plugins = yield* read(claudePlugins());
+
+      expect(plugins.map((plugin) => [plugin.id, plugin.title, plugin.description])).toEqual([
+        ["docs@market", "Docs", "Search the docs"],
+        ["mine@market", "mine", undefined],
+      ]);
+      // A server that asks the user for a value when the plugin is turned on can't start in a run.
+      expect(serverNames(plugins[0])).toEqual(["search"]);
+      // Nor is a file outside the plugin read.
+      expect(serverNames(plugins[1])).toEqual(["inline"]);
+    }),
+  );
+
+  it.live("start in a run as Claude Code starts them, named for the plugin", () =>
+    Effect.gen(function* () {
+      const { config, read } = yield* claudeSetup;
+      const [docs, mine] = yield* read(claudePlugins());
+      const root = pluginFolder(config, "docs@market");
+      const data = join(config, "plugins", "data", "docs-market");
+
+      expect(docs === undefined ? [] : claudePluginRunServers(docs)).toEqual([
+        {
+          agent: "claude",
+          name: "plugin:docs:search",
+          source: "user",
+          entry: {
+            command: `${root}/bin/search`,
+            args: ["--cache", data],
+            env: { CLAUDE_PLUGIN_ROOT: root, CLAUDE_PLUGIN_DATA: data },
+          },
+        },
+      ]);
+
+      expect(mine === undefined ? [] : claudePluginRunServers(mine)).toEqual([
+        {
+          agent: "claude",
+          name: "plugin:mine:inline",
+          source: "user",
+          entry: { url: "https://mine.example/mcp" },
+        },
+      ]);
+    }),
+  );
+
+  it.live("are named again for a change in what they start, but not in how they're described", () =>
+    Effect.gen(function* () {
+      const { config, read } = yield* claudeSetup;
+      const [before] = yield* read(claudePlugins());
+      const files = pluginFolder(config, "docs@market");
+
+      yield* writeFiles(files, {
+        ".claude-plugin/plugin.json": { name: "docs", description: "Find things in the docs" },
+      });
+
+      const [described] = yield* read(claudePlugins());
+
+      yield* writeFiles(files, {
+        ".mcp.json": { mcpServers: { search: { ...SEARCH, args: ["--all"] } } },
+      });
+
+      const [changed] = yield* read(claudePlugins());
+
+      const [first, second, third] = yield* read(
+        Effect.forEach([before, described, changed], (plugin) =>
+          plugin === undefined ? Effect.succeed("") : pluginFingerprint(plugin),
+        ),
+      );
+
+      expect(second).toBe(first ?? "");
+      expect(third).not.toBe(first ?? "");
+    }),
+  );
+});
+
+/** The set-up of `pluginsSetup`, with the plugins Codex's config turns on and off. */
+const codexSetup = Effect.gen(function* () {
+  const setup = yield* pluginsSetup;
+  const { config } = setup;
+
+  yield* writeFiles(config, {
+    "config.toml": `[mcp_servers.web]
 url = "https://x"
 
 [plugins."notes@local"]
@@ -182,69 +205,78 @@ enabled = false
 [plugins."apps@openai-curated"]
 enabled = true
 `,
-    });
+  });
 
-    await writeFiles(pluginFolder(config, "notes@local", "1.2.0"), {
-      ".mcp.json": { mcpServers: { stale: { command: "stale" } } },
-    });
+  yield* writeFiles(pluginFolder(config, "notes@local", "1.2.0"), {
+    ".mcp.json": { mcpServers: { stale: { command: "stale" } } },
+  });
 
-    await writeFiles(pluginFolder(config, "notes@local", "1.10.0"), {
-      ".codex-plugin/plugin.json": {
-        name: "notes",
-        interface: {
-          displayName: "Notes",
-          shortDescription: "Your notes",
-          logo: "./assets/logo.png",
-        },
-        mcpServers: "./servers.json",
+  yield* writeFiles(pluginFolder(config, "notes@local", "1.10.0"), {
+    ".codex-plugin/plugin.json": {
+      name: "notes",
+      interface: {
+        displayName: "Notes",
+        shortDescription: "Your notes",
+        logo: "./assets/logo.png",
       },
-      "servers.json": {
-        mcpServers: {
-          notes: { command: "notes-mcp" },
-          web: { url: "https://y" },
-          quiet: { command: "quiet", enabled: false },
-        },
+      mcpServers: "./servers.json",
+    },
+    "servers.json": {
+      mcpServers: {
+        notes: { command: "notes-mcp" },
+        web: { url: "https://y" },
+        quiet: { command: "quiet", enabled: false },
       },
-      "assets/logo.png": "PNG",
-    });
-
-    await writeFiles(pluginFolder(config, "old@local", "2.0.0"), {
-      ".mcp.json": { mcpServers: { newer: { command: "newer" } } },
-    });
-
-    await writeFiles(pluginFolder(config, "old@local", "latest"), {
-      "mcp.json": { later: { command: "later" } },
-    });
-
-    for (const id of ["gone@local", "apps@openai-curated"]) {
-      await writeFiles(pluginFolder(config, id), {
-        ".mcp.json": { mcpServers: { [id]: { command: "x" } } },
-      });
-    }
+    },
+    "assets/logo.png": "PNG",
   });
 
-  test("are the ones on in its config that bring servers, in the version Codex loads", async () => {
-    const plugins = await read(codexPlugins());
-
-    expect(plugins.map((plugin) => [plugin.id, plugin.title, plugin.description])).toEqual([
-      ["notes@local", "Notes", "Your notes"],
-      ["old@local", "old", undefined],
-    ]);
-    // A server of the config's own is offered on its own, and one the plugin turns off isn't.
-    expect(serverNames(plugins[0])).toEqual(["notes"]);
-    expect(serverNames(plugins[1])).toEqual(["later"]);
+  yield* writeFiles(pluginFolder(config, "old@local", "2.0.0"), {
+    ".mcp.json": { mcpServers: { newer: { command: "newer" } } },
   });
 
-  test("show their picture, when it's one the board can", async () => {
-    const [notes] = await read(codexPlugins());
-    const logo = notes?.logoFile ?? "";
-
-    expect(await read(pluginLogo(logo))).toBe(`data:image/png;base64,${btoa("PNG")}`);
-
-    await writeFiles(config, { "big.png": "x".repeat(256 * 1024 + 1), "logo.gif": "GIF" });
-
-    expect(await read(pluginLogo(join(config, "big.png")))).toBeUndefined();
-    expect(await read(pluginLogo(join(config, "logo.gif")))).toBeUndefined();
-    expect(await read(pluginLogo(join(config, "missing.png")))).toBeUndefined();
+  yield* writeFiles(pluginFolder(config, "old@local", "latest"), {
+    "mcp.json": { later: { command: "later" } },
   });
+
+  for (const id of ["gone@local", "apps@openai-curated"]) {
+    yield* writeFiles(pluginFolder(config, id), {
+      ".mcp.json": { mcpServers: { [id]: { command: "x" } } },
+    });
+  }
+
+  return setup;
+});
+
+describe("Codex's plugins", () => {
+  it.live("are the ones on in its config that bring servers, in the version Codex loads", () =>
+    Effect.gen(function* () {
+      const { read } = yield* codexSetup;
+      const plugins = yield* read(codexPlugins());
+
+      expect(plugins.map((plugin) => [plugin.id, plugin.title, plugin.description])).toEqual([
+        ["notes@local", "Notes", "Your notes"],
+        ["old@local", "old", undefined],
+      ]);
+      // A server of the config's own is offered on its own, and one the plugin turns off isn't.
+      expect(serverNames(plugins[0])).toEqual(["notes"]);
+      expect(serverNames(plugins[1])).toEqual(["later"]);
+    }),
+  );
+
+  it.live("show their picture, when it's one the board can", () =>
+    Effect.gen(function* () {
+      const { config, read } = yield* codexSetup;
+      const [notes] = yield* read(codexPlugins());
+      const logo = notes?.logoFile ?? "";
+
+      expect(yield* read(pluginLogo(logo))).toBe(`data:image/png;base64,${btoa("PNG")}`);
+
+      yield* writeFiles(config, { "big.png": "x".repeat(256 * 1024 + 1), "logo.gif": "GIF" });
+
+      expect(yield* read(pluginLogo(join(config, "big.png")))).toBeUndefined();
+      expect(yield* read(pluginLogo(join(config, "logo.gif")))).toBeUndefined();
+      expect(yield* read(pluginLogo(join(config, "missing.png")))).toBeUndefined();
+    }),
+  );
 });

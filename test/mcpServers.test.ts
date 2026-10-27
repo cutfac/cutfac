@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { ConfigProvider, type Schema } from "effect";
+import { ConfigProvider, Effect, FileSystem, type Schema } from "effect";
 
 import {
   type McpServer,
@@ -15,7 +13,11 @@ import {
   serverFingerprint,
   shownUrl,
 } from "../src/core/mcpServers.ts";
-import { makeWorkspace, type TestWorkspace } from "./support.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
+import { tempWorkspace } from "./support.ts";
+
+const it = testEffect(tempWorkspace("Claude servers"));
 
 const claude = (name: string, entry: Schema.JsonObject): McpServer => ({
   agent: "claude",
@@ -32,34 +34,36 @@ const codex = (name: string, entry: Schema.JsonObject): McpServer => ({
 });
 
 describe("the name of how an MCP server starts", () => {
-  let t: TestWorkspace;
-  const print = (server: McpServer) => t.run(serverFingerprint(server));
+  it.live("changes with what it runs and the secrets it gets, not their values", () =>
+    Effect.gen(function* () {
+      const entry = { command: "npx", args: ["-y", "srv"], env: { TOKEN: "a", REGION: "eu" } };
+      const first = yield* serverFingerprint(claude("srv", entry));
 
-  beforeEach(async () => {
-    t = await makeWorkspace();
-  });
+      // A rotated key, or the same settings in another order, is the same agreement.
+      expect(
+        yield* serverFingerprint(claude("srv", { ...entry, env: { REGION: "us", TOKEN: "b" } })),
+      ).toBe(first);
+      expect(
+        yield* serverFingerprint(
+          claude("srv", { args: ["-y", "srv"], env: entry.env, command: "npx" }),
+        ),
+      ).toBe(first);
 
-  afterEach(() => t.remove());
+      expect(yield* serverFingerprint(claude("srv", { ...entry, command: "bunx" }))).not.toBe(
+        first,
+      );
+      expect(
+        yield* serverFingerprint(claude("srv", { ...entry, args: ["-y", "srv", "--all"] })),
+      ).not.toBe(first);
+      expect(
+        yield* serverFingerprint(claude("srv", { ...entry, env: { ...entry.env, EXTRA: "1" } })),
+      ).not.toBe(first);
+    }),
+  );
 
-  test("changes with what it runs and the secrets it gets, not their values", async () => {
-    const entry = { command: "npx", args: ["-y", "srv"], env: { TOKEN: "a", REGION: "eu" } };
-    const first = await print(claude("srv", entry));
-
-    // A rotated key, or the same settings in another order, is the same agreement.
-    expect(await print(claude("srv", { ...entry, env: { REGION: "us", TOKEN: "b" } }))).toBe(first);
-    expect(
-      await print(claude("srv", { args: ["-y", "srv"], env: entry.env, command: "npx" })),
-    ).toBe(first);
-
-    expect(await print(claude("srv", { ...entry, command: "bunx" }))).not.toBe(first);
-    expect(await print(claude("srv", { ...entry, args: ["-y", "srv", "--all"] }))).not.toBe(first);
-    expect(await print(claude("srv", { ...entry, env: { ...entry.env, EXTRA: "1" } }))).not.toBe(
-      first,
-    );
-  });
-
-  test("reads the same for a Codex server from its config as from Codex's own list", async () => {
-    const [fromConfig] = configServers(`
+  it.live("reads the same for a Codex server from its config as from Codex's own list", () =>
+    Effect.gen(function* () {
+      const [fromConfig] = configServers(`
 [mcp_servers.docs]
 command = "npx"
 args = ["-y", "docs-mcp"]
@@ -67,25 +71,28 @@ env = { KEY = "secret" }
 startup_timeout_sec = 20
 `);
 
-    const [fromList] = codexCandidates([
-      {
-        name: "docs",
-        enabled: true,
-        entry: {
-          type: "stdio",
-          command: "npx",
-          args: ["-y", "docs-mcp"],
-          env: { KEY: "other" },
-          env_vars: [],
-          cwd: null,
+      const [fromList] = codexCandidates([
+        {
+          name: "docs",
+          enabled: true,
+          entry: {
+            type: "stdio",
+            command: "npx",
+            args: ["-y", "docs-mcp"],
+            env: { KEY: "other" },
+            env_vars: [],
+            cwd: null,
+          },
         },
-      },
-    ]);
+      ]);
 
-    expect(fromConfig).toBeDefined();
-    expect(fromList).toBeDefined();
-    expect(await print(fromConfig ?? codex("x", {}))).toBe(await print(fromList ?? codex("y", {})));
-  });
+      expect(fromConfig).toBeDefined();
+      expect(fromList).toBeDefined();
+      expect(yield* serverFingerprint(fromConfig ?? codex("x", {}))).toBe(
+        yield* serverFingerprint(fromList ?? codex("y", {})),
+      );
+    }),
+  );
 });
 
 describe("a Codex config's servers", () => {
@@ -223,75 +230,81 @@ describe("the servers a Claude run loads", () => {
 });
 
 describe("the servers Claude Code would load in a workspace", () => {
-  let t: TestWorkspace;
-  let config: string;
+  /** The workspace, a folder for Claude Code's config, and the servers Claude Code would load there. */
+  const claudeHome = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const ws = yield* Workspace;
+    const config = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-claude-config-" });
 
-  const found = () =>
-    t.runWith(
-      ConfigProvider.layer(ConfigProvider.fromEnv({ env: { CLAUDE_CONFIG_DIR: config } })),
-      claudeServers(),
-    );
+    const env = ConfigProvider.fromEnv({ env: { CLAUDE_CONFIG_DIR: config } });
 
-  beforeEach(async () => {
-    t = await makeWorkspace("Claude servers");
-    config = await mkdtemp(join(tmpdir(), "cutfac-claude-config-"));
+    const found = Effect.provideService(claudeServers(), ConfigProvider.ConfigProvider, env);
+
+    return { fs, ws, config, found };
   });
 
-  afterEach(async () => {
-    await rm(config, { recursive: true, force: true });
-    await t.remove();
-  });
+  it.live("are the user's, the workspace's, then this folder's own, without Cutfac's", () =>
+    Effect.gen(function* () {
+      const { fs, ws, config, found } = yield* claudeHome;
 
-  test("are the user's, the workspace's, then this folder's own, without Cutfac's", async () => {
-    await writeFile(
-      join(config, ".claude.json"),
-      JSON.stringify({
-        mcpServers: {
-          shared: { command: "user-shared" },
-          mine: { command: "user-mine" },
-          cutfac: { command: "/opt/cutfac" },
-        },
-        projects: {
-          [t.root]: { mcpServers: { shared: { command: "local-shared" } } },
-          "/elsewhere": { mcpServers: { other: { command: "other" } } },
-        },
-      }),
-    );
+      yield* fs.writeFileString(
+        join(config, ".claude.json"),
+        JSON.stringify({
+          mcpServers: {
+            shared: { command: "user-shared" },
+            mine: { command: "user-mine" },
+            cutfac: { command: "/opt/cutfac" },
+          },
+          projects: {
+            [ws.root]: { mcpServers: { shared: { command: "local-shared" } } },
+            "/elsewhere": { mcpServers: { other: { command: "other" } } },
+          },
+        }),
+      );
 
-    await writeFile(
-      join(t.root, ".mcp.json"),
-      JSON.stringify({
-        mcpServers: {
-          mine: { command: "project-mine" },
-          "cutfac-test": { command: "/opt/cutfac" },
-          broken: "not a server",
-        },
-      }),
-    );
+      yield* ws.writeText(
+        ".mcp.json",
+        JSON.stringify({
+          mcpServers: {
+            mine: { command: "project-mine" },
+            "cutfac-test": { command: "/opt/cutfac" },
+            broken: "not a server",
+          },
+        }),
+      );
 
-    const { servers, problems } = await found();
+      const { servers, problems } = yield* found;
 
-    expect(problems).toEqual([]);
-    expect(servers).toEqual([
-      { agent: "claude", name: "shared", source: "local", entry: { command: "local-shared" } },
-      { agent: "claude", name: "mine", source: "project", entry: { command: "project-mine" } },
-    ]);
-  });
+      expect(problems).toEqual([]);
+      expect(servers).toEqual([
+        { agent: "claude", name: "shared", source: "local", entry: { command: "local-shared" } },
+        { agent: "claude", name: "mine", source: "project", entry: { command: "project-mine" } },
+      ]);
+    }),
+  );
 
-  test("are none, saying why, when a config isn't JSON", async () => {
-    await writeFile(join(config, ".claude.json"), "{ nope");
-    await writeFile(join(t.root, ".mcp.json"), "{ nope");
+  it.live("are none, saying why, when a config isn't JSON", () =>
+    Effect.gen(function* () {
+      const { fs, ws, config, found } = yield* claudeHome;
 
-    expect(await found()).toEqual({
-      servers: [],
-      problems: [
-        "Claude Code's .claude.json is not JSON Cutfac can read",
-        ".mcp.json is not JSON Cutfac can read",
-      ],
-    });
-  });
+      yield* fs.writeFileString(join(config, ".claude.json"), "{ nope");
+      yield* ws.writeText(".mcp.json", "{ nope");
 
-  test("are none while the user has no Claude Code config", async () => {
-    expect(await found()).toEqual({ servers: [], problems: [] });
-  });
+      expect(yield* found).toEqual({
+        servers: [],
+        problems: [
+          "Claude Code's .claude.json is not JSON Cutfac can read",
+          ".mcp.json is not JSON Cutfac can read",
+        ],
+      });
+    }),
+  );
+
+  it.live("are none while the user has no Claude Code config", () =>
+    Effect.gen(function* () {
+      const { found } = yield* claudeHome;
+
+      expect(yield* found).toEqual({ servers: [], problems: [] });
+    }),
+  );
 });
