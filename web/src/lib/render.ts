@@ -1,34 +1,33 @@
+import { Schema } from "effect";
+
+import {
+  RENDER_STAGES,
+  RenderProgress,
+  type RenderStage,
+} from "../../../src/core/renderProgress.ts";
 import { toolKind, type RunStep } from "./run.ts";
 
-/** How far a render is: getting ready, drawing its frames, then writing the file. */
-export const RENDER_STAGES = ["preparing", "frames", "encoding"] as const;
-
-export type RenderStage = (typeof RENDER_STAGES)[number];
+export { RENDER_STAGES, type RenderStage };
 
 /** A render the agent runs through Cutfac, as the server streams it; see `src/core/render.ts`. */
-export interface RenderState {
-  readonly item: string;
-  readonly command: string;
-  readonly cwd: string;
+export const RenderState = Schema.Struct({
+  item: Schema.String,
+  command: Schema.String,
+  cwd: Schema.String,
   /** The media file it writes, workspace-relative, when the agent said. */
-  readonly output?: string;
+  output: Schema.optionalKey(Schema.String),
   /** Which version it makes, such as `v2`, when it is one of several. */
-  readonly label?: string;
-  readonly status: "running" | "done" | "failed" | "stopped";
-  readonly progress: {
-    readonly stage: RenderStage;
-    readonly done?: number;
-    readonly total?: number;
-    readonly unit?: "frames" | "seconds";
-    /** The stage's share done, from 0 to 1. */
-    readonly percent?: number;
-  };
+  label: Schema.optionalKey(Schema.String),
+  status: Schema.Literals(["running", "done", "failed", "stopped"]),
+  progress: RenderProgress,
   /** Epoch milliseconds. */
-  readonly startedAt: number;
-  readonly endedAt?: number;
-  readonly code?: number;
-  readonly log: ReadonlyArray<string>;
-}
+  startedAt: Schema.Finite,
+  endedAt: Schema.optionalKey(Schema.Finite),
+  code: Schema.optionalKey(Schema.Finite),
+  log: Schema.Array(Schema.String),
+});
+
+export type RenderState = typeof RenderState.Type;
 
 /** Each stage's share of the whole render; drawing the frames is most of it. */
 const WEIGHTS: Record<RenderStage, number> = { preparing: 0.1, frames: 0.7, encoding: 0.2 };

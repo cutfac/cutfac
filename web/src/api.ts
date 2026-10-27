@@ -1,5 +1,9 @@
-import type { Approval } from "./approvalsApi.ts";
+import { Option, Schema } from "effect";
+
+import { RunEvent } from "../../src/core/agentParse.ts";
 import type { RenderState } from "./lib/render.ts";
+
+export { RunEvent };
 
 /**
  * The SPA talks to the local Cutfac server. Same-origin by default; a hosted UI can point
@@ -32,19 +36,17 @@ export function fileUrl(rel: string, version?: number): string {
 }
 
 /** Every failed /api request answers with this body. */
-interface ApiFailure {
-  readonly error: string;
-}
+const ApiFailure = Schema.fromJsonString(Schema.Struct({ error: Schema.String }));
+
+const decodeFailure = Schema.decodeUnknownOption(ApiFailure);
 
 async function failure(res: Response): Promise<Error> {
-  try {
-    // SAFETY: the server encodes every failed /api response as `{ error }`.
-    const body = (await res.json()) as ApiFailure;
+  const body = await res.text().catch(() => "");
 
-    return new Error(body.error);
-  } catch {
-    return new Error(`${res.status} ${res.statusText}`);
-  }
+  return Option.match(decodeFailure(body), {
+    onSome: ({ error }) => new Error(error),
+    onNone: () => new Error(`${res.status} ${res.statusText}`),
+  });
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -237,24 +239,11 @@ export interface Feedback {
   decision?: "approved" | "restored";
 }
 
-/** What the board shows while an agent works: on a request on an item, or on a turn of an import. */
-export type RunEvent =
-  | ({ type: "start"; subject: string; agent: AgentName } & ModelSettings)
-  | { type: "text"; text: string }
-  | { type: "tool"; name: string; detail?: string }
-  | { type: "done"; reply: string }
-  | { type: "stopped" }
-  | { type: "error"; error: string }
-  | { type: "compaction"; state: "running" | "done" | "failed" }
-  /** The agent asks before using a tool; settled once answered, taken back, or the run stops. */
-  | ({ type: "approval" } & Approval)
-  | { type: "approval-settled"; id: string };
-
 /**
  * What a run stream says: what the run is about (first on every connect), then its events. On an
  * item the subject is a request; on an import, a turn.
  */
-export type RunMessage = RunEvent | { type: "run"; subject: string };
+export type RunMessage = RunEvent | { readonly type: "run"; readonly subject: string };
 
 /** An edit request: what to change and, optionally, where. Without media it asks for new media. */
 export interface EditInput extends ModelSettings {
@@ -878,6 +867,8 @@ export function eventData(event: Event): string {
 /** A stream of server-sent events from the local server. */
 export const openEvents = (path: string) => new EventSource(`${API_BASE}${path}`);
 
+const decodeRunEvent = Schema.decodeUnknownOption(Schema.fromJsonString(RunEvent));
+
 /**
  * The latest agent run at `path`: a `run` message naming what it is about, its events from the
  * start, then live ones. A reconnect replays it all again from `run`.
@@ -890,8 +881,9 @@ function onRun(path: string, listener: (message: RunMessage) => void): () => voi
   });
 
   source.addEventListener("agent", (e) => {
-    // SAFETY: the server writes each `agent` event as one JSON-encoded RunEvent.
-    listener(JSON.parse(eventData(e)) as RunEvent);
+    const event = decodeRunEvent(eventData(e));
+
+    if (Option.isSome(event)) listener(event.value);
   });
 
   return () => source.close();
