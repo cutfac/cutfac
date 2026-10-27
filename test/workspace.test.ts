@@ -1,70 +1,78 @@
-// Each test opens a workspace it made by hand, so it provides the layers itself.
+// Each test opens a workspace it made by hand, so it provides the layer itself.
 // @effect-diagnostics strictEffectProvide:off
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { expect } from "bun:test";
 import { dirname, join } from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import { Workspace, initWorkspace } from "../src/core/workspace.ts";
+import { testEffect } from "./effect.ts";
 
-let root: string;
+const it = testEffect(BunServices.layer);
 
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "cutfac-workspace-"));
-});
+/** A folder that is no workspace yet, which opening may rename the files of. */
+const folder = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const root = yield* fs.makeTempDirectoryScoped({ prefix: "cutfac-workspace-" });
 
-afterEach(() => rm(root, { recursive: true, force: true }));
+  const write = (rel: string, text: string) =>
+    Effect.andThen(
+      fs.makeDirectory(dirname(join(root, rel)), { recursive: true }),
+      fs.writeFileString(join(root, rel), text),
+    );
 
-const write = async (rel: string, text: string) => {
-  await mkdir(dirname(join(root, rel)), { recursive: true });
-  await writeFile(join(root, rel), text);
-};
+  const exists = (rel: string) => fs.exists(join(root, rel));
+  const read = (rel: string) => fs.readFileString(join(root, rel));
 
-const exists = (rel: string) => Bun.file(join(root, rel)).exists();
-
-/** Open the workspace at `root` and return its name. */
-const openName = () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const ws = yield* Workspace;
-
-      return ws.config.name;
-    }).pipe(Effect.provide(Workspace.layer(root).pipe(Layer.provide(BunServices.layer)))),
+  /** Open the workspace at `root` and return its name. */
+  const openName = Effect.map(Workspace, (ws) => ws.config.name).pipe(
+    Effect.provide(Workspace.layer(root)),
   );
 
-test("opening a workspace from before the rename to Cutfac renames its files", async () => {
-  await write("factory.yaml", "name: Old\n");
-  await write(".factory/imports/0badf00d.yaml", "link: https://example.com\n");
-  await write(".agents/skills/content-factory/SKILL.md", "agents copy");
-  await write(".claude/skills/content-factory/SKILL.md", "claude copy");
-
-  expect(await openName()).toBe("Old");
-
-  expect(await exists("factory.yaml")).toBe(false);
-  expect(await readFile(join(root, "cutfac.yaml"), "utf8")).toBe("name: Old\n");
-  expect(await exists(".cutfac/imports/0badf00d.yaml")).toBe(true);
-  expect(await readFile(join(root, ".agents/skills/cutfac/SKILL.md"), "utf8")).toBe("agents copy");
-  expect(await readFile(join(root, ".claude/skills/cutfac/SKILL.md"), "utf8")).toBe("claude copy");
+  return { root, write, exists, read, openName };
 });
 
-test("a file that already has its new name is never replaced", async () => {
-  await write("factory.yaml", "name: Old\n");
-  await write("cutfac.yaml", "name: New\n");
+it.live("opening a workspace from before the rename to Cutfac renames its files", () =>
+  Effect.gen(function* () {
+    const { write, exists, read, openName } = yield* folder;
 
-  expect(await openName()).toBe("New");
-  expect(await readFile(join(root, "factory.yaml"), "utf8")).toBe("name: Old\n");
-});
+    yield* write("factory.yaml", "name: Old\n");
+    yield* write(".factory/imports/0badf00d.yaml", "link: https://example.com\n");
+    yield* write(".agents/skills/content-factory/SKILL.md", "agents copy");
+    yield* write(".claude/skills/content-factory/SKILL.md", "claude copy");
 
-test("init leaves a workspace from before the rename as it is", async () => {
-  await write("factory.yaml", "name: Old\n");
+    expect(yield* openName).toBe("Old");
 
-  const created = await Effect.runPromise(
-    initWorkspace(root, { name: "New" }).pipe(Effect.provide(BunServices.layer)),
-  );
+    expect(yield* exists("factory.yaml")).toBe(false);
+    expect(yield* read("cutfac.yaml")).toBe("name: Old\n");
+    expect(yield* exists(".cutfac/imports/0badf00d.yaml")).toBe(true);
+    expect(yield* read(".agents/skills/cutfac/SKILL.md")).toBe("agents copy");
+    expect(yield* read(".claude/skills/cutfac/SKILL.md")).toBe("claude copy");
+  }),
+);
 
-  expect(created).toBe(false);
-  expect(await exists("cutfac.yaml")).toBe(false);
-});
+it.live("a file that already has its new name is never replaced", () =>
+  Effect.gen(function* () {
+    const { write, read, openName } = yield* folder;
+
+    yield* write("factory.yaml", "name: Old\n");
+    yield* write("cutfac.yaml", "name: New\n");
+
+    expect(yield* openName).toBe("New");
+    expect(yield* read("factory.yaml")).toBe("name: Old\n");
+  }),
+);
+
+it.live("init leaves a workspace from before the rename as it is", () =>
+  Effect.gen(function* () {
+    const { root, write, exists } = yield* folder;
+
+    yield* write("factory.yaml", "name: Old\n");
+
+    const created = yield* initWorkspace(root, { name: "New" });
+
+    expect(created).toBe(false);
+    expect(yield* exists("cutfac.yaml")).toBe(false);
+  }),
+);
