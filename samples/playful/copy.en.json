@@ -1,13 +1,14 @@
 {
-  "title": "Puff",
-  "tagline": "Our new cream bun is here",
-  "stickers": [
-    "So fluffy",
-    "So sweet",
-    "So soft"
+  "title": "Steady",
+  "whatsNew": "What's new",
+  "features": [
+    { "name": "Widgets", "detail": "Your habits, without opening the app" },
+    { "name": "Rest days", "detail": "Take a day off, keep your streak" },
+    { "name": "Dark mode", "detail": "Easy on the eyes at night" }
   ],
-  "cream": "Cream all the way through",
-  "price": "$2.80",
-  "deal": "2 for 1 today",
-  "ending": "Puff, your corner bakery"
+  "days": "days in a row",
+  "rest": "Rest day",
+  "version": "v2.0",
+  "tagline": "One more box today",
+  "cta": "Update now"
 }

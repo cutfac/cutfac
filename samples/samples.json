@@ -1,8 +1,11 @@
 {
+  "files": ["motion.js", "render.mjs", "package.json"],
   "samples": [
     {
       "id": "bold",
       "fonts": [
+        "Archivo.ttf",
+        "OFL-Archivo.txt",
         "Pretendard-SemiBold.otf",
         "Pretendard-Bold.otf",
         "Pretendard-Black.otf",
@@ -15,7 +18,7 @@
     },
     {
       "id": "playful",
-      "fonts": ["Jua.ttf", "OFL-Jua.txt"]
+      "fonts": ["Jua.ttf", "OFL-Jua.txt", "Pretendard-Bold.otf", "OFL-Pretendard.txt"]
     }
   ]
 }

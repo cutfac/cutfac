@@ -31,22 +31,28 @@ describe("samples", () => {
       const en = yield* listSamples("en");
 
       expect(ko.map((sample) => sample.id)).toEqual(en.map((sample) => sample.id));
-      expect(ko.find((sample) => sample.id === "calm")?.title).toBe("숨");
-      expect(en.find((sample) => sample.id === "calm")?.title).toBe("Still");
+      expect(ko.find((sample) => sample.id === "playful")?.title).toBe("꾸준");
+      expect(en.find((sample) => sample.id === "playful")?.title).toBe("Steady");
     }),
   );
 
   it.live("one copied in has its video and the code to render it, in the language asked", () =>
     Effect.gen(function* () {
       const ws = yield* Workspace;
-      const item = yield* addSample("calm", "en", "Sample: Still");
+      const item = yield* addSample("playful", "en", "Sample: Steady");
       const copy = yield* ws.readText(`${item.dir}/src/copy.json`);
 
-      expect(item.doc.title).toBe("Sample: Still");
-      expect(item.media.map((media) => media.name)).toEqual(["[9x16] calm.mp4"]);
-      expect(JSON.parse(copy)).toMatchObject({ title: "Still" });
+      expect(item.doc.title).toBe("Sample: Steady");
+      expect(item.media.map((media) => media.name)).toEqual(["[9x16] playful.mp4"]);
+      expect(JSON.parse(copy)).toMatchObject({ title: "Steady" });
 
-      for (const file of ["reel.py", "motion.py", "fonts/GowunBatang-Regular.ttf"]) {
+      for (const file of [
+        "index.html",
+        "motion.js",
+        "render.mjs",
+        "package.json",
+        "fonts/Jua.ttf",
+      ]) {
         expect(yield* ws.exists(`${item.dir}/src/${file}`)).toBe(true);
       }
     }),

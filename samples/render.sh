@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Renders each sample's preview in each language, laid out as the app copies a sample into a video's
-# folder: the code, its fonts and copy.json in src/. Needs python3 with Pillow and numpy, and ffmpeg.
+# folder: its page, the shared code, its fonts and copy.json in src/. Needs Playwright installed here
+# (`bun install`, then `bunx playwright install chromium`), Node, and ffmpeg.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 
-for reel in "$here"/*/reel.py; do
-  sample="$(dirname "$reel")"
+for page in "$here"/*/index.html; do
+  sample="$(dirname "$page")"
   name="$(basename "$sample")"
 
   for copy in "$sample"/copy.*.json; do
@@ -14,10 +15,11 @@ for reel in "$here"/*/reel.py; do
     lang="${lang#copy.}"
     build="$(mktemp -d)"
     mkdir "$build/src"
-    cp -R "$here/motion.py" "$here/fonts" "$reel" "$build/src/"
+    cp "$here/motion.js" "$here/render.mjs" "$here/package.json" "$page" "$build/src/"
+    cp -R "$here/fonts" "$build/src/"
     cp "$copy" "$build/src/copy.json"
-    python3 "$build/src/reel.py" "$sample/preview.$lang.mp4"
+    ln -s "$here/node_modules" "$build/src/node_modules"
+    node "$build/src/render.mjs" "$sample/preview.$lang.mp4" 2>&1 | grep -v '^frame' || true
     rm -rf "$build"
-    echo "$name/preview.$lang.mp4"
   done
 done

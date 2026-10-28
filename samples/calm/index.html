@@ -1,0 +1,218 @@
+<!doctype html>
+<!-- Calm: a slow reveal, where a wordmark breaks into facets that drift and assemble into its mark. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Calm</title>
+    <style>
+      @font-face { font-family: Batang; src: url(fonts/GowunBatang-Regular.ttf); }
+      html, body { margin: 0; height: 100%; background: #000; }
+      canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <script type="module">
+      import { start, text, measure, progress, ease, mix, hash, clamp, mixColor } from "./motion.js";
+
+      const W = 1080, H = 1920, SECONDS = 15;
+      const CX = W / 2, CY = 860, R = 300;
+      // When the facets start to gather, and how long each takes: the last is in place by 8.3s.
+      const GATHER = 3.2, GATHERING = 3;
+      const DARK_GOLD = "#8a6c40", LIGHT_GOLD = "#f7ecd6", IVORY = "#f4ede0";
+
+      /** The mark: a ring cut into facets, as triangles of points around the centre. */
+      const SHARDS = (() => {
+        const ring = (count, radius, turn) =>
+          Array.from({ length: count }, (_, i) => {
+            const a = (i / count) * Math.PI * 2 + turn - Math.PI / 2;
+            return [CX + Math.cos(a) * radius, CY + Math.sin(a) * radius];
+          });
+        const inner = ring(10, R * 0.56, 0), outer = ring(20, R, -Math.PI / 20);
+        const tris = [];
+        for (let i = 0; i < 10; i++) {
+          const a = inner[i], b = inner[(i + 1) % 10];
+          const [o0, o1, o2] = [outer[2 * i], outer[2 * i + 1], outer[(2 * i + 2) % 20]];
+          tris.push([a, o0, o1], [a, o1, b], [b, o1, o2]);
+        }
+        return tris.map((points, i) => {
+          const cx = (points[0][0] + points[1][0] + points[2][0]) / 3;
+          const cy = (points[0][1] + points[1][1] + points[2][1]) / 3;
+          const angle = Math.atan2(cy - CY, cx - CX);
+          // Lit from the upper left, with each facet a shade apart.
+          const tone = clamp(0.5 + 0.38 * Math.cos(angle + 2.3) + (hash(i) - 0.5) * 0.35);
+          const scatter = 0.9 + hash(i + 40) * 0.9;
+          return {
+            points: points.map(([x, y]) => [x - cx, y - cy]),
+            target: [cx, cy],
+            // Where it starts, inside the wordmark, and where it drifts out to before it assembles.
+            from: [CX + (hash(i + 7) - 0.5) * 640, 900 + (hash(i + 9) - 0.5) * 140],
+            far: [CX + Math.cos(angle * 1.7 + i) * 520 * scatter, CY + Math.sin(angle * 1.3 + i) * 760 * scatter],
+            spin: (hash(i + 3) - 0.5) * 9,
+            depth: 0.55 + hash(i + 5) * 0.8,
+            tone,
+            delay: ((angle + Math.PI) / (Math.PI * 2)) * 1.6 + hash(i + 11) * 0.5,
+          };
+        });
+      })();
+
+      function background(ctx, t) {
+        const glow = 0.5 + 0.5 * ease.inOut(progress(t, 7.6, 1.6));
+        const g = ctx.createRadialGradient(CX, CY, 40, CX, CY, 1400);
+        g.addColorStop(0, mixColor("#1a2140", "#2a2a44", glow));
+        g.addColorStop(0.55, "#0d1226");
+        g.addColorStop(1, "#05070f");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+        // Dust in the light, rising slowly and twinkling.
+        for (let i = 0; i < 90; i++) {
+          const x = hash(i) * W + Math.sin(t * 0.4 + i) * 20;
+          const y = ((hash(i + 100) * H - t * (12 + hash(i + 200) * 22)) % H + H) % H;
+          const a = 0.12 + 0.25 * (0.5 + 0.5 * Math.sin(t * 1.5 + i * 2.1));
+          ctx.fillStyle = `rgba(247,236,214,${a})`;
+          ctx.beginPath();
+          ctx.arc(x, y, 1 + hash(i + 300) * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      /** The wordmark, letter by letter, sharpening as it opens up from wide tracking. */
+      function wordmark(ctx, copy, y, { alpha, blur = 0, tracking = 36, size = 150 }) {
+        if (alpha <= 0) return;
+        ctx.save();
+        ctx.filter = blur > 0.2 ? `blur(${blur}px)` : "none";
+        text(ctx, copy.title, CX, y, { size, family: "Batang", weight: 400, color: IVORY, alpha, tracking });
+        ctx.restore();
+      }
+
+      function opening(ctx, t, copy) {
+        if (t >= 3.4) return;
+        const show = ease.inOut(progress(t, 0.1, 0.9)) * (1 - ease.inOut(progress(t, 2.3, 0.9)));
+        wordmark(ctx, copy, 900, { alpha: show, blur: 10 * (1 - ease.out(progress(t, 0.1, 1.1))) + 14 * progress(t, 2.3, 0.9), tracking: mix(60, 36, ease.out(progress(t, 0, 2.4))) });
+        // A glint passes across the letters: the wordmark again, filled with a moving band of light.
+        const glint = progress(t, 1.0, 1.1);
+        if (glint > 0 && glint < 1) {
+          const x = mix(CX - 460, CX + 460, ease.inOut(glint));
+          const g = ctx.createLinearGradient(x - 110, 0, x + 110, 0);
+          g.addColorStop(0, "rgba(255,226,170,0)");
+          g.addColorStop(0.5, "rgba(255,226,170,1)");
+          g.addColorStop(1, "rgba(255,226,170,0)");
+          text(ctx, copy.title, CX, 900, { size: 150, family: "Batang", weight: 400, color: g, alpha: show, tracking: mix(60, 36, ease.out(progress(t, 0, 2.4))) });
+        }
+        text(ctx, copy.eyebrow, CX, 1020, { size: 40, family: "Batang", weight: 400, color: IVORY, alpha: show * 0.6, tracking: 8 });
+      }
+
+      /** Where a shard is at `t`: drifting out of the wordmark, then gathering into the mark. */
+      function shardAt(s, t) {
+        const out = ease.out(progress(t, 2.4 + s.delay * 0.15, 1.6));
+        const gather = ease.inOut(progress(t, GATHER + s.delay, GATHERING));
+        const [fx, fy] = s.from, [mx, my] = s.far, [tx, ty] = s.target;
+        // Gathering, each shard swings round the centre as it comes in, so the mark winds itself up.
+        const swing = (1 - gather) * 0.9;
+        const gx = mix(mix(fx, mx, out), tx, gather), gy = mix(mix(fy, my, out), ty, gather);
+        const dx = gx - CX, dy = gy - CY;
+        return {
+          x: CX + dx * Math.cos(swing) - dy * Math.sin(swing),
+          y: CY + dx * Math.sin(swing) + dy * Math.cos(swing),
+          rotate: s.spin * (1 - gather) + Math.sin(t * 0.8 + s.delay) * 0.3 * (1 - gather),
+          scale: mix(mix(0.15, s.depth, out), 1, gather),
+          alpha: clamp(out * 1.5),
+          settled: gather,
+        };
+      }
+
+      function shards(ctx, t) {
+        if (t < 2.4) return;
+        const lift = ease.inOut(progress(t, 9.3, 1.6));
+        ctx.save();
+        ctx.translate(CX, CY - 250 * lift);
+        ctx.scale(mix(1, 0.62, lift), mix(1, 0.62, lift));
+        ctx.translate(-CX, -CY);
+        for (const s of SHARDS) {
+          const at = shardAt(s, t);
+          if (at.alpha <= 0) continue;
+          // Facets catch the light as they turn, then keep their own shade once in place.
+          const flicker = 0.5 + 0.5 * Math.cos(at.rotate * 2 + t);
+          const tone = mix(flicker, s.tone, at.settled);
+          ctx.save();
+          ctx.translate(at.x, at.y);
+          ctx.rotate(at.rotate);
+          ctx.scale(at.scale, at.scale);
+          ctx.globalAlpha = at.alpha;
+          ctx.beginPath();
+          s.points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.closePath();
+          ctx.fillStyle = mixColor(DARK_GOLD, LIGHT_GOLD, tone);
+          ctx.fill();
+          ctx.strokeStyle = `rgba(255,248,232,${0.25 + 0.3 * at.settled})`;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.restore();
+        }
+        sweep(ctx, t);
+        ctx.restore();
+      }
+
+      /** Once the mark is whole, a band of light crosses it and a soft ring of light opens out. */
+      function sweep(ctx, t) {
+        const p = progress(t, 8.4, 1.3);
+        if (p <= 0) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(CX, CY, R + 2, 0, Math.PI * 2);
+        ctx.arc(CX, CY, R * 0.56 - 2, 0, Math.PI * 2, true);
+        ctx.clip();
+        ctx.globalCompositeOperation = "lighter";
+        const x = mix(CX - R * 1.6, CX + R * 1.6, ease.inOut(p));
+        const g = ctx.createLinearGradient(x - 120, CY - 120, x + 120, CY + 120);
+        g.addColorStop(0, "rgba(255,244,220,0)");
+        g.addColorStop(0.5, `rgba(255,244,220,${0.55 * (1 - p * 0.3)})`);
+        g.addColorStop(1, "rgba(255,244,220,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(CX - R * 2, CY - R * 2, R * 4, R * 4);
+        ctx.restore();
+        const bloom = ease.out(progress(t, 8.5, 2.2));
+        ctx.strokeStyle = `rgba(247,236,214,${0.35 * (1 - bloom)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(CX, CY, R * mix(1, 1.9, bloom), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function ending(ctx, t, copy) {
+        const word = ease.out(progress(t, 9.8, 1.8));
+        wordmark(ctx, copy, 1180, { alpha: word, blur: 12 * (1 - word), tracking: mix(70, 30, word), size: 130 });
+        const line = ease.inOut(progress(t, 10.9, 1.4));
+        ctx.fillStyle = `rgba(247,236,214,${0.5 * line})`;
+        ctx.fillRect(CX - 90 * line, 1290, 180 * line, 2);
+        text(ctx, copy.tagline, CX, 1370, { size: 54, family: "Batang", weight: 400, color: IVORY, alpha: ease.out(progress(t, 11.3, 1.5)) * 0.85, tracking: 4 });
+        text(ctx, copy.eyebrow, CX, 1040, { size: 36, family: "Batang", weight: 400, color: IVORY, alpha: ease.out(progress(t, 10.4, 1.5)) * 0.55, tracking: 10 });
+      }
+
+      function draw(ctx, t, copy) {
+        background(ctx, t);
+        opening(ctx, t, copy);
+        shards(ctx, t);
+        ending(ctx, t, copy);
+      }
+
+      function sound(s) {
+        const chords = [[174.61, 220, 261.63, 329.63], [130.81, 196, 246.94, 329.63], [146.83, 220, 261.63, 349.23], [130.81, 196, 261.63, 392]];
+        chords.forEach((chord, i) => s.chord(i * 3.8, chord, 4.6, 0.05));
+        // A bell as each facet settles, quieter as more arrive.
+        SHARDS.forEach((shard, i) => {
+          const at = GATHER + shard.delay + GATHERING;
+          s.tone(at - 0.2, [1046.5, 1174.66, 1318.51, 1567.98, 1760][i % 5], { gain: 0.025, decay: 1.4 });
+        });
+        s.whoosh(2.4, 1.6, 0.08);
+        s.hiss(4.5, { gain: 0.05, decay: 4, filter: "bandpass", freq: 200, to: 2400, q: 1.5 });
+        s.tone(8.45, 55, { gain: 0.5, decay: 2.5, to: 40 });
+        s.chord(8.45, [261.63, 329.63, 392, 523.25], 5, 0.06);
+        [1318.51, 1567.98, 2093].forEach((f, i) => s.tone(8.5 + i * 0.12, f, { gain: 0.05, decay: 2.2 }));
+        [784, 1046.5].forEach((f, i) => s.tone(9.9 + i * 0.4, f, { gain: 0.04, decay: 2 }));
+      }
+
+      start({ seconds: SECONDS, name: "calm", fonts: ["400 100px Batang"], draw, sound });
+    </script>
+  </body>
+</html>

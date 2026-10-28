@@ -1,18 +1,9 @@
 {
-  "title": "FLOW",
-  "tagline": "할 일, 한 번에",
-  "words": [
-    "정리하고",
-    "미루고",
-    "까먹고"
-  ],
-  "stop": "이제 그만.",
-  "today": "오늘 할 일",
-  "tasks": [
-    "메일 답장",
-    "회의 준비",
-    "운동 30분"
-  ],
-  "left": "남은 할 일",
-  "ending": "오늘부터 가볍게"
+  "title": "VOLT",
+  "tagline": "움직이는 모든 것",
+  "pulse": "MOVE",
+  "marquee": "MOTION",
+  "ring": "모든 프레임을 박자에 맞춰",
+  "lines": ["생각하고", "그리고", "움직여요"],
+  "url": "volt.studio"
 }

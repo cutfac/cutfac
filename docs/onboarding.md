@@ -161,7 +161,10 @@ Nothing is made from it during the first launch. A template took the agent minut
 out was a spec for the agent that the user couldn't judge yet. Instead the answers are context:
 `brief.md` and the material in `about.md`, which the agent reads before every template and video.
 The first launch ends by offering a sample to try while the agent reads: three short motion
-graphics made with code (bold, calm, playful, in `samples/`), shown playing side by side. The one
+graphics made with code (bold, calm, playful, in `samples/`), shown playing side by side. Each is
+one HTML canvas page drawn as a pure function of time, after prompts creators ran on Opus 5.5 (a
+showreel, a logo that assembles itself, an app's update reel), rendered frame by frame in headless
+Chromium by `render.mjs`, the way those videos were made; its words are in `copy.json`. The one
 picked is copied into the workspace in the user's language, with its code, fonts and words, and
 opens in the editor with a guide card that moves on as the user does each part of the core loop:
 play it, draw a box on the title, send the suggested request to change it to their product's name,

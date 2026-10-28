@@ -24,6 +24,8 @@ export type SampleLanguage = (typeof SAMPLE_LANGUAGES)[number];
 
 const Manifest = Schema.fromJsonString(
   Schema.Struct({
+    /** The code every sample renders with, beside its own page. */
+    files: Schema.Array(Schema.NonEmptyString),
     samples: Schema.Array(
       Schema.Struct({ id: Schema.NonEmptyString, fonts: Schema.Array(Schema.NonEmptyString) }),
     ),
@@ -46,9 +48,9 @@ const manifest = Effect.gen(function* () {
   const dir = yield* SamplesDir;
   const text = yield* Effect.option(ws.peekText(`${dir}/samples.json`, SMALL_FILE_BYTES));
 
-  if (Option.isNone(text)) return [];
+  if (Option.isNone(text)) return { files: [], samples: [] };
 
-  return (yield* Schema.decodeEffect(Manifest)(text.value)).samples;
+  return yield* Schema.decodeEffect(Manifest)(text.value);
 });
 
 const copyFile = (dir: string, id: string, lang: SampleLanguage) =>
@@ -59,7 +61,7 @@ export const listSamples = Effect.fn("samples.list")(function* (lang: SampleLang
   const ws = yield* Workspace;
   const dir = yield* SamplesDir;
 
-  return yield* Effect.forEach(yield* manifest, ({ id }) =>
+  return yield* Effect.forEach((yield* manifest).samples, ({ id }) =>
     Effect.map(
       Effect.flatMap(
         ws.peekText(copyFile(dir, id, lang), SMALL_FILE_BYTES),
@@ -77,7 +79,7 @@ export const samplePreview = Effect.fn("samples.preview")(function* (
 ) {
   const dir = yield* SamplesDir;
 
-  if (!(yield* manifest).some((sample) => sample.id === id)) {
+  if (!(yield* manifest).samples.some((sample) => sample.id === id)) {
     return yield* new NotFound({ message: `No sample named ${id}` });
   }
 
@@ -87,10 +89,11 @@ export const samplePreview = Effect.fn("samples.preview")(function* (
 const notes = (media: string) =>
   [
     "One of Cutfac's samples, a motion graphic made with code, for the user to try editing.",
-    "Its words are in src/copy.json, its motion, colors and timing in src/reel.py (with helpers",
-    "in src/motion.py), and its fonts in src/fonts. Render it from this folder with",
-    `\`python3 src/reel.py\`, which writes \`${media}\`; it needs python3 with Pillow and numpy,`,
-    "and ffmpeg. Install what is missing first.",
+    "Its words are in src/copy.json, and its look, motion and sound in src/index.html, a canvas",
+    "drawn as a pure function of time with helpers in src/motion.js; its fonts are in src/fonts.",
+    `Render it with \`node src/render.mjs\` from this folder, which writes \`${media}\`. That`,
+    "needs Node, Playwright and its Chromium (`npm install` and `npx playwright install chromium`",
+    "in src/), and ffmpeg: install what is missing first.",
   ].join(" ");
 
 /**
@@ -105,7 +108,8 @@ export const addSample = Effect.fn("samples.add")(function* (
   const ws = yield* Workspace;
   const path = yield* Path.Path;
   const dir = yield* SamplesDir;
-  const sample = (yield* manifest).find((entry) => entry.id === id);
+  const { files: shared, samples } = yield* manifest;
+  const sample = samples.find((entry) => entry.id === id);
 
   if (sample === undefined) return yield* new InvalidRequest({ message: `No sample named ${id}` });
 
@@ -114,9 +118,9 @@ export const addSample = Effect.fn("samples.add")(function* (
 
   const files: ReadonlyArray<readonly [string, string]> = [
     [`${dir}/${id}/preview.${lang}.mp4`, media],
-    [`${dir}/${id}/reel.py`, "src/reel.py"],
+    [`${dir}/${id}/index.html`, "src/index.html"],
     [copyFile(dir, id, lang), "src/copy.json"],
-    [`${dir}/motion.py`, "src/motion.py"],
+    ...shared.map((file) => [`${dir}/${file}`, `src/${file}`] as const),
     ...sample.fonts.map((font) => [`${dir}/fonts/${font}`, `src/fonts/${font}`] as const),
   ];
 

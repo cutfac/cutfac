@@ -1,18 +1,9 @@
 {
-  "title": "FLOW",
-  "tagline": "Every task, one place",
-  "words": [
-    "Plan it",
-    "Push it",
-    "Forget it"
-  ],
-  "stop": "Not anymore.",
-  "today": "TODAY",
-  "tasks": [
-    "Answer email",
-    "Prep meeting",
-    "30-min run"
-  ],
-  "left": "tasks left",
-  "ending": "Lighter, starting today"
+  "title": "VOLT",
+  "tagline": "Everything in motion",
+  "pulse": "MOVE",
+  "marquee": "MOTION",
+  "ring": "EVERY FRAME ON THE BEAT",
+  "lines": ["THINK IT", "DRAW IT", "MOVE IT"],
+  "url": "volt.studio"
 }

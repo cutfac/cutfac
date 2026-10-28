@@ -1,0 +1,271 @@
+<!doctype html>
+<!-- Bold: a kinetic-type showreel in black, red and paper white, cut to 120 BPM. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Bold</title>
+    <style>
+      @font-face { font-family: Archivo; src: url(fonts/Archivo.ttf); font-weight: 100 900; font-stretch: 62% 125%; }
+      @font-face { font-family: Pretendard; src: url(fonts/Pretendard-Black.otf); font-weight: 900; }
+      @font-face { font-family: Pretendard; src: url(fonts/Pretendard-Bold.otf); font-weight: 700; }
+      @font-face { font-family: Pretendard; src: url(fonts/Pretendard-SemiBold.otf); font-weight: 600; }
+      html, body { margin: 0; height: 100%; background: #000; }
+      canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <script type="module">
+      import { start, text, measure, progress, ease, spring, mix, hash, clamp } from "./motion.js";
+
+      const W = 1080, H = 1920, BEAT = 0.5, SECONDS = 15;
+      const INK = "#0b0b0c", RED = "#ff3a1f", PAPER = "#f3efe6";
+
+      /** Latin words set in Archivo, condensed; anything else in Pretendard. */
+      const face = (words) => (/^[\x00-\x7F]*$/.test(words) ? { family: "Archivo", stretch: "extra-condensed" } : { family: "Pretendard" });
+
+      /** How far into the beat that `t` falls in, from 0 to 1. */
+      const inBeat = (t) => (t % BEAT) / BEAT;
+
+      function fill(ctx, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      /** The title's letters side by side, each dropping in on its own spring. */
+      function title(ctx, t, copy, at, { y = 880, size = 360, color = PAPER, from = -700 }) {
+        const letters = [...copy.title];
+        const style = { size, weight: 900, ...face(copy.title) };
+        const widths = letters.map((letter) => measure(ctx, letter, style));
+        const fit = Math.min(1, 980 / widths.reduce((a, b) => a + b, 0));
+        let x = W / 2 - (widths.reduce((a, b) => a + b, 0) * fit) / 2;
+        letters.forEach((letter, i) => {
+          const p = progress(t, at + i * 0.07, 0.55);
+          const drop = mix(from, 0, spring(p, 0.25));
+          // A short trail while it falls fast, as a motion-blurred letter would leave.
+          for (let k = 3; k >= 0; k--) {
+            const lag = k === 0 ? drop : mix(from, 0, spring(clamp(p - k * 0.035), 0.25));
+            const alpha = k === 0 ? clamp(p * 4) : clamp(p * 4) * (1 - p) * 0.18 * (4 - k);
+            text(ctx, letter, x + (widths[i] * fit) / 2, y + lag, { ...style, size: size * fit, color, alpha });
+          }
+          x += widths[i] * fit;
+        });
+      }
+
+      function intro(ctx, t, copy) {
+        if (t >= 2.5) return;
+        fill(ctx, INK);
+        const out = ease.inExpo(progress(t, 2.1, 0.4));
+        ctx.save();
+        ctx.translate(W / 2, 880);
+        ctx.scale(1 + out * 7, 1 + out * 7);
+        ctx.translate(-W / 2, -880);
+        title(ctx, t, copy, 0.1, {});
+        const bar = ease.outExpo(progress(t, 0.75, 0.5));
+        ctx.fillStyle = RED;
+        ctx.fillRect(W / 2 - 360 * bar, 1060, 720 * bar, 18);
+        const shown = Math.floor([...copy.tagline].length * progress(t, 0.95, 0.5));
+        text(ctx, [...copy.tagline].slice(0, shown).join(""), W / 2, 1150, { size: 60, weight: 600, color: PAPER, alpha: 0.8 });
+        ctx.restore();
+        corners(ctx, t, copy, PAPER);
+        if (out > 0.6) fill(ctx, `rgba(255,58,31,${(out - 0.6) * 2.5})`);
+      }
+
+      /** A reel's frame: its number, tempo, address and a running timecode in the corners. */
+      function corners(ctx, t, copy, color) {
+        const label = { size: 32, weight: 700, family: "Pretendard", color, align: "left", alpha: 0.8 };
+        const frames = Math.floor(t * 30);
+        const code = [Math.floor(frames / 30), frames % 30].map((n) => String(n).padStart(2, "0")).join(":");
+        text(ctx, "REEL 2026", 70, 110, label);
+        text(ctx, "120 BPM", W - 70, 110, { ...label, align: "right" });
+        text(ctx, copy.url, 70, H - 110, label);
+        text(ctx, `00:${code}`, W - 70, H - 110, { ...label, align: "right" });
+      }
+
+      /** Outlined text, for the rows that echo a filled word. */
+      function outline(ctx, words, x, y, { size, family, stretch = "normal", color, wide = 1, align = "center" }) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(wide, 1);
+        ctx.font = `900 ${size}px ${family}`;
+        ctx.fontStretch = stretch;
+        ctx.textAlign = align;
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = 4 / wide;
+        ctx.strokeStyle = color;
+        ctx.strokeText(words, 0, 0);
+        ctx.restore();
+      }
+
+      /** The pulse word, stacked three high, squashes and stretches on every beat as the frame flips red and black. */
+      function pulse(ctx, t, copy) {
+        if (t < 2.5 || t >= 4.5) return;
+        const red = Math.floor(t / BEAT) % 2 === 0;
+        const color = red ? INK : PAPER;
+        fill(ctx, red ? RED : INK);
+        const style = { size: 330, ...face(copy.pulse) };
+        const fit = Math.min(1, 900 / measure(ctx, copy.pulse, { ...style, weight: 900 }));
+        [-1, 0, 1].forEach((row) => {
+          // The echoes lag the middle word by a quarter beat, so the stack ripples.
+          const p = ease.outExpo(((t - Math.abs(row) * BEAT * 0.25) % BEAT) / BEAT);
+          const wide = mix(1.9, 0.92, p) * fit;
+          const y = H / 2 + row * 470;
+          if (row === 0) text(ctx, copy.pulse, W / 2, y, { ...style, weight: 900, color, wide, scale: mix(0.8, 1, p) });
+          else outline(ctx, copy.pulse, W / 2, y, { ...style, size: style.size * mix(0.8, 1, p), color, wide });
+        });
+        corners(ctx, t, copy, color);
+      }
+
+      /** A grid of shapes that ripples from circles to squares in a wave, with a red band crossing. */
+      function grid(ctx, t) {
+        if (t < 4.5 || t >= 6.5) return;
+        fill(ctx, INK);
+        const cols = 6, rows = 11, cell = W / cols;
+        const collapse = ease.inExpo(progress(t, 6.1, 0.4));
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cx = (c + 0.5) * cell, cy = (r + 0.5) * cell + (H - rows * cell) / 2;
+            const d = Math.hypot(c - (cols - 1) / 2, r - (rows - 1) / 2);
+            const pop = spring(progress(t, 4.5 + d * 0.05, 0.5));
+            const wave = Math.sin((t - 4.5) * 5 - (c + r) * 0.55) * 0.5 + 0.5;
+            const band = Math.abs(((c - r * 0.6 + (t - 4.5) * 6) % 9 + 9) % 9 - 4.5) < 0.9;
+            const size = cell * 0.78 * pop * mix(0.45, 1, wave) * (1 - collapse);
+            if (size <= 0.5) continue;
+            ctx.save();
+            ctx.translate(mix(cx, W / 2, collapse), mix(cy, H / 2, collapse));
+            ctx.rotate(wave * Math.PI * 0.5);
+            ctx.beginPath();
+            ctx.roundRect(-size / 2, -size / 2, size, size, (size / 2) * (1 - wave));
+            ctx.fillStyle = band ? RED : PAPER;
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+      }
+
+      /** Rows of the marquee word sliding past each other on a tilt, faster as it goes. */
+      function marquee(ctx, t, copy) {
+        if (t < 6.5 || t >= 9) return;
+        fill(ctx, PAPER);
+        const local = t - 6.5;
+        const style = { size: 230, weight: 900, ...face(copy.marquee), align: "left" };
+        const word = `${copy.marquee} `;
+        const span = measure(ctx, word, style);
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate(-0.17);
+        for (let row = -6; row <= 6; row++) {
+          const speed = (row % 2 ? 1 : -1) * (500 + local * 420);
+          const offset = ((local * speed) % span + span) % span;
+          const enter = ease.outExpo(progress(t, 6.5 + Math.abs(row) * 0.04, 0.5));
+          for (let k = -4; k <= 4; k++) {
+            const x = -W + k * span + offset + (row % 2 ? -1 : 1) * (1 - enter) * W;
+            const color = row % 3 === 0 ? RED : INK;
+            if (row % 2) outline(ctx, word, x, row * 210, { ...style, color, align: "left" });
+            else text(ctx, word, x, row * 210, { ...style, color, width: 9999 });
+          }
+        }
+        ctx.restore();
+        const wipe = ease.inOut(progress(t, 8.6, 0.4));
+        ctx.fillStyle = INK;
+        ctx.fillRect(0, 0, W, H * wipe);
+      }
+
+      /** Words running round a turning ring, with the title held in the middle. */
+      function ring(ctx, t, copy) {
+        if (t < 9 || t >= 11) return;
+        fill(ctx, INK);
+        const open = ease.outExpo(progress(t, 9, 0.7));
+        const radius = 380 * open;
+        ctx.strokeStyle = RED;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(W / 2, H / 2, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * open);
+        ctx.stroke();
+        const letters = [...`${copy.ring} · `.repeat(3)];
+        const turn = (t - 9) * 0.9;
+        letters.forEach((letter, i) => {
+          const angle = (i / letters.length) * Math.PI * 2 + turn;
+          ctx.save();
+          ctx.translate(W / 2 + Math.cos(angle) * (radius + 70), H / 2 + Math.sin(angle) * (radius + 70));
+          ctx.rotate(angle + Math.PI / 2);
+          text(ctx, letter, 0, 0, { size: 52, weight: 700, family: "Pretendard", color: PAPER, alpha: open });
+          ctx.restore();
+        });
+        const beat = spring(inBeat(t), 0.4);
+        text(ctx, copy.title, W / 2, H / 2, { size: 230, weight: 900, ...face(copy.title), color: PAPER, scale: mix(1.12, 1, beat) * open, width: 620 });
+        corners(ctx, t, copy, PAPER);
+      }
+
+      /** Three short lines slam in one per beat on a red field wiped in on the diagonal. */
+      function lines(ctx, t, copy) {
+        if (t < 11 || t >= 13.35) return;
+        fill(ctx, INK);
+        const wipe = ease.outExpo(progress(t, 11, 0.45));
+        ctx.fillStyle = RED;
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        ctx.lineTo(0, H - H * 2 * wipe);
+        ctx.lineTo(W * 2 * wipe, H);
+        ctx.fill();
+        copy.lines.forEach((line, i) => {
+          const p = ease.outExpo(progress(t, 11.5 + i * BEAT, 0.35));
+          const x = mix(-W, 80, p);
+          text(ctx, line, x, 620 + i * 300, { size: 250, weight: 900, ...face(line), color: INK, align: "left", alpha: p > 0 ? 1 : 0, width: 920 });
+        });
+      }
+
+      /** A black iris closes over the red, and the title springs back with its line. */
+      function outro(ctx, t, copy) {
+        if (t < 13) return;
+        const iris = ease.inOut(progress(t, 13, 0.35));
+        ctx.fillStyle = INK;
+        ctx.beginPath();
+        ctx.arc(W / 2, H / 2, Math.hypot(W, H) * iris, 0, Math.PI * 2);
+        ctx.fill();
+        if (t < 13.3) return;
+        title(ctx, t, copy, 13.3, { from: 0, size: 300 });
+        const bar = ease.outExpo(progress(t, 13.75, 0.5));
+        ctx.fillStyle = RED;
+        ctx.fillRect(W / 2 - 330 * bar, 1050, 660 * bar, 16);
+        const line = ease.out(progress(t, 13.95, 0.5));
+        text(ctx, copy.tagline, W / 2, 1140 + 20 * (1 - line), { size: 58, weight: 600, color: PAPER, alpha: line * 0.85 });
+        corners(ctx, t, copy, PAPER);
+      }
+
+      function draw(ctx, t, copy) {
+        intro(ctx, t, copy);
+        pulse(ctx, t, copy);
+        grid(ctx, t);
+        marquee(ctx, t, copy);
+        ring(ctx, t, copy);
+        lines(ctx, t, copy);
+        outro(ctx, t, copy);
+      }
+
+      function sound(s, copy) {
+        [...copy.title].forEach((_, i) => s.pop(0.25 + i * 0.07, 0.18));
+        s.whoosh(0.7, 0.45, 0.18);
+        s.whoosh(2.0, 0.5, 0.3);
+        const notes = [220, 261.63, 329.63, 392, 329.63, 261.63, 196, 246.94];
+        for (let beat = 5; beat < 26; beat++) {
+          const at = beat * BEAT;
+          s.kick(at);
+          if (beat % 2 === 0) s.snare(at);
+          s.hat(at + BEAT / 2);
+          s.tone(at, [55, 55, 65.41, 49][Math.floor(beat / 2) % 4], { gain: 0.35, type: "triangle", decay: 0.45 });
+          s.pluck(at, notes[beat % notes.length], 0.07);
+          s.pluck(at + BEAT / 2, notes[(beat + 3) % notes.length] * 2, 0.04);
+        }
+        for (const at of [4.2, 6.2, 8.7, 10.7]) s.whoosh(at, 0.4, 0.22);
+        s.hiss(12, { gain: 0.16, decay: 1, filter: "bandpass", freq: 400, to: 9000, q: 2 });
+        s.kick(13, 1.2);
+        s.snare(13, 0.5);
+        s.chord(13, [220, 277.18, 329.63, 440], 2, 0.05);
+        [...copy.title].forEach((_, i) => s.pop(13.45 + i * 0.07, 0.16));
+      }
+
+      start({ seconds: SECONDS, name: "bold", fonts: ["900 100px Archivo", "900 100px Pretendard", "700 100px Pretendard", "600 100px Pretendard"], draw, sound });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,380 @@
+<!doctype html>
+<!-- Playful: an update reel for a habit app, three new features shown on a bouncing phone. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Playful</title>
+    <style>
+      @font-face { font-family: Jua; src: url(fonts/Jua.ttf); }
+      @font-face { font-family: Pretendard; src: url(fonts/Pretendard-Bold.otf); font-weight: 700; }
+      html, body { margin: 0; height: 100%; background: #000; }
+      canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <script type="module">
+      import { start, text, measure, progress, ease, spring, mix, hash, clamp, roundRect } from "./motion.js";
+
+      const W = 1080, H = 1920, BEAT = 0.5, SECONDS = 15;
+      const CREAM = "#fff6e9", INK = "#25212c", CORAL = "#ff6b4a", MINT = "#33d1a0", SKY = "#5b8cff", SUN = "#ffc83d";
+      const COLORS = [CORAL, MINT, SKY, SUN];
+      // The phone, and when each feature is on its screen.
+      const PHONE = { x: 250, y: 470, w: 580, h: 1150, r: 86 };
+      const FEATURES = [2.5, 5, 7.5];
+
+      const label = (o) => ({ family: "Jua", weight: 400, color: INK, ...o });
+
+      /** The app's icon: a coral tile with a check that draws itself. */
+      function icon(ctx, x, y, size, check = 1) {
+        roundRect(ctx, x - size / 2, y - size / 2, size, size, size * 0.27, CORAL);
+        ctx.save();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = size * 0.11;
+        ctx.lineCap = ctx.lineJoin = "round";
+        const path = [[-0.22, 0.02], [-0.06, 0.18], [0.24, -0.16]];
+        const length = 0.23 + 0.45;
+        let left = check * length;
+        ctx.beginPath();
+        ctx.moveTo(x + path[0][0] * size, y + path[0][1] * size);
+        for (let i = 1; i < path.length && left > 0; i++) {
+          const [ax, ay] = path[i - 1], [bx, by] = path[i];
+          const part = Math.hypot(bx - ax, by - ay);
+          const p = Math.min(1, left / part);
+          ctx.lineTo(x + mix(ax, bx, p) * size, y + mix(ay, by, p) * size);
+          left -= part;
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      /** Confetti thrown up from a point at `at`, falling under gravity and tumbling. */
+      function confetti(ctx, t, at, x0, y0, count = 46) {
+        const age = t - at;
+        if (age < 0 || age > 2.6) return;
+        for (let i = 0; i < count; i++) {
+          const angle = -Math.PI / 2 + (hash(i) - 0.5) * 2.4;
+          const speed = 900 + hash(i + 50) * 900;
+          const x = x0 + Math.cos(angle) * speed * age;
+          const y = y0 + Math.sin(angle) * speed * age + 1500 * age * age;
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(age * (4 + hash(i + 9) * 8));
+          ctx.globalAlpha = clamp(2.6 - age);
+          roundRect(ctx, -9, -16, 18, 32 * Math.abs(Math.cos(age * 6 + i)), 4, COLORS[i % 4]);
+          ctx.restore();
+        }
+      }
+
+      /** The title's letters bouncing in one after another. */
+      function bounceTitle(ctx, t, copy, at, y, size) {
+        const letters = [...copy.title];
+        const style = label({ size });
+        const widths = letters.map((l) => measure(ctx, l, style));
+        let x = W / 2 - widths.reduce((a, b) => a + b, 0) / 2;
+        letters.forEach((letter, i) => {
+          const p = progress(t, at + i * 0.1, 0.7);
+          const squash = 1 + 0.18 * Math.sin(p * Math.PI * 3) * (1 - p);
+          ctx.save();
+          ctx.translate(x + widths[i] / 2, y + mix(-260, 0, spring(p, 0.4)));
+          ctx.scale(1 / squash, squash);
+          text(ctx, letter, 0, 0, { ...style, alpha: p > 0 ? 1 : 0 });
+          ctx.restore();
+          x += widths[i];
+        });
+      }
+
+      function intro(ctx, t, copy) {
+        if (t >= 2.4) return;
+        const out = ease.inExpo(progress(t, 1.95, 0.45));
+        ctx.save();
+        ctx.translate(0, -out * 900);
+        const pop = spring(progress(t, 0.15, 0.6), 0.45);
+        icon(ctx, W / 2, 620, 300 * pop, ease.out(progress(t, 0.5, 0.4)));
+        bounceTitle(ctx, t, copy, 0.55, 960, 230);
+        const chip = spring(progress(t, 1.2, 0.5));
+        roundRect(ctx, W / 2 - 200 * chip, 1120, 400 * chip, 100, 50, INK);
+        text(ctx, copy.whatsNew, W / 2, 1172, label({ size: 56 * chip, color: CREAM }));
+        ctx.restore();
+        confetti(ctx, t, 0.6, W / 2, 640);
+      }
+
+      /** The phone's screen for one feature, drawn at the phone's top left. */
+      function widgets(ctx, t, x, y) {
+        const tile = 240, gap = 30;
+        [0, 1, 2, 3].forEach((i) => {
+          const p = spring(progress(t, 2.9 + i * BEAT * 0.5, 0.5), 0.4);
+          const tx = x + 35 + (i % 2) * (tile + gap) + tile / 2, ty = y + 230 + Math.floor(i / 2) * (tile + gap) + tile / 2;
+          ctx.save();
+          ctx.translate(tx, ty);
+          ctx.scale(p, p);
+          roundRect(ctx, -tile / 2, -tile / 2, tile, tile, 44, "#fff");
+          ctx.lineWidth = 22;
+          ctx.lineCap = "round";
+          ctx.strokeStyle = "#f1e8da";
+          ctx.beginPath();
+          ctx.arc(0, -14, 66, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = COLORS[i];
+          ctx.beginPath();
+          const fill = [0.8, 0.55, 1, 0.35][i] * ease.out(progress(t, 3.3 + i * 0.2, 0.8));
+          ctx.arc(0, -14, 66, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill);
+          ctx.stroke();
+          roundRect(ctx, -60, 82, 120, 16, 8, "#e9dfd0");
+          ctx.restore();
+        });
+        roundRect(ctx, x + 35, y + 140, 300, 44, 22, "#e9dfd0");
+        // A wide widget under them: the week as bars that grow one after another.
+        const wide = spring(progress(t, 3.9, 0.5), 0.4);
+        ctx.save();
+        ctx.translate(x + PHONE.w / 2, y + 920);
+        ctx.scale(wide, wide);
+        roundRect(ctx, -255, -150, 510, 300, 44, "#fff");
+        [0.5, 0.8, 0.35, 0.95, 0.6, 0.75, 0.45].forEach((height, i) => {
+          const grow = ease.outBack(progress(t, 4.1 + i * 0.08, 0.45));
+          const bar = 170 * height * grow;
+          roundRect(ctx, -205 + i * 62, 100 - bar, 40, bar, 14, i === 3 ? CORAL : "#ffd9c9");
+        });
+        ctx.restore();
+      }
+
+      function streak(ctx, t, x, y, copy) {
+        const day = Math.floor(clamp((t - 5.6) / BEAT, 0, 6));
+        const count = 12 + day;
+        const bump = spring(progress(t, 5.6 + day * BEAT, 0.4), 0.5);
+        ctx.save();
+        ctx.translate(x + PHONE.w / 2, y + 380);
+        ctx.scale(mix(1.15, 1, bump), mix(1.15, 1, bump));
+        ctx.fillStyle = SUN;
+        ctx.beginPath();
+        ctx.arc(0, 0, 150, 0, Math.PI * 2);
+        ctx.fill();
+        text(ctx, String(count), 0, 10, label({ size: 170 }));
+        ctx.restore();
+        text(ctx, copy.days, x + PHONE.w / 2, y + 600, label({ size: 48 }));
+        for (let i = 0; i < 7; i++) {
+          const cx = x + 70 + i * 74, cy = y + 760;
+          const done = progress(t, 5.6 + i * BEAT, 0.3);
+          const rest = i === 4;
+          ctx.fillStyle = done > 0 ? (rest ? SKY : MINT) : "#efe5d6";
+          ctx.beginPath();
+          ctx.arc(cx, cy, 30 * mix(1, 1.0, done) * (done > 0 ? spring(done, 0.5) * 0.25 + 0.75 : 1), 0, Math.PI * 2);
+          ctx.fill();
+          if (done > 0 && rest) snowflake(ctx, cx, cy, 18 * spring(done));
+        }
+        const badge = spring(progress(t, 7.0, 0.5), 0.45);
+        roundRect(ctx, x + PHONE.w / 2 - 190 * badge, y + 870, 380 * badge, 96, 48, SKY);
+        text(ctx, copy.rest, x + PHONE.w / 2, y + 920, label({ size: 44 * badge, color: "#fff" }));
+      }
+
+      function snowflake(ctx, x, y, size) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 5;
+        ctx.lineCap = "round";
+        for (let k = 0; k < 3; k++) {
+          ctx.rotate(Math.PI / 3);
+          ctx.beginPath();
+          ctx.moveTo(-size, 0);
+          ctx.lineTo(size, 0);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      /** A list that a switch turns dark, the dark spreading from the switch in a circle. */
+      function darkMode(ctx, t, x, y) {
+        const flip = ease.inOut(progress(t, 8.3, 0.7));
+        const knob = ease.outBack(progress(t, 8.0, 0.4));
+        const screen = (dark) => {
+          ctx.fillStyle = dark ? "#1d1a24" : CREAM;
+          ctx.fillRect(x, y, PHONE.w, PHONE.h);
+          for (let i = 0; i < 6; i++) {
+            const ry = y + 330 + i * 120;
+            roundRect(ctx, x + 40, ry, PHONE.w - 80, 96, 30, dark ? "#2c2836" : "#fff");
+            ctx.fillStyle = COLORS[i % 4];
+            ctx.beginPath();
+            ctx.arc(x + 100, ry + 48, 22, 0, Math.PI * 2);
+            ctx.fill();
+            roundRect(ctx, x + 150, ry + 38, 180 + hash(i) * 120, 20, 10, dark ? "#4a4458" : "#ebe1d2");
+          }
+          if (dark) {
+            for (let i = 0; i < 16; i++) {
+              const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 3 + i));
+              ctx.fillStyle = `rgba(255,236,170,${a})`;
+              ctx.beginPath();
+              ctx.arc(x + hash(i) * PHONE.w, y + 120 + hash(i + 9) * 160, 3 + hash(i + 4) * 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        };
+        screen(false);
+        const sx = x + PHONE.w - 120, sy = y + 190;
+        if (flip > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(sx, sy, Math.hypot(PHONE.w, PHONE.h) * flip, 0, Math.PI * 2);
+          ctx.clip();
+          screen(true);
+          ctx.restore();
+        }
+        roundRect(ctx, sx - 60, sy - 34, 120, 68, 34, knob > 0.5 ? SUN : "#d9cfbf");
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(sx + mix(-26, 26, knob), sy, 26, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      /** The phone, sliding from one feature's screen to the next, with the feature named above it. */
+      function phone(ctx, t, copy) {
+        if (t < 2.4 || t >= 10.4) return;
+        const enter = spring(progress(t, 2.4, 0.7), 0.3);
+        const leave = ease.inExpo(progress(t, 9.9, 0.5));
+        const lift = mix(1400, 0, enter) + leave * 1500;
+        const { x, y, w, h, r } = PHONE;
+        ctx.save();
+        ctx.translate(0, lift);
+        ctx.rotate(-leave * 0.2);
+        roundRect(ctx, x - 22, y - 22, w + 44, h + 44, r + 22, INK);
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        ctx.clip();
+        ctx.fillStyle = CREAM;
+        ctx.fillRect(x, y, w, h);
+        // Each screen pushes the last one off to the left.
+        const page = FEATURES.reduce((at, start, i) => at + (i ? ease.inOut(progress(t, start - 0.25, 0.5)) : 0), 0);
+        [widgets, streak, darkMode].forEach((screen, i) => {
+          const offset = (i - page) * w;
+          if (Math.abs(offset) >= w) return;
+          ctx.save();
+          ctx.translate(offset, 0);
+          screen(ctx, t, x, y, copy);
+          ctx.restore();
+        });
+        roundRect(ctx, x + w / 2 - 80, y + 26, 160, 44, 22, INK);
+        ctx.restore();
+        ctx.restore();
+        FEATURES.forEach((start, i) => {
+          const feature = copy.features[i];
+          const p = spring(progress(t, start + 0.1, 0.55), 0.35);
+          const out = ease.in(progress(t, (FEATURES[i + 1] ?? 9.9) - 0.25, 0.3));
+          if (p <= 0 || out >= 1) return;
+          const dy = (1 - p) * 120 - out * 120;
+          roundRect(ctx, W / 2 - 80, 150 + dy, 160, 64, 32, COLORS[i + 1]);
+          text(ctx, "NEW", W / 2, 183 + dy, label({ size: 38, color: "#fff", alpha: 1 - out }));
+          text(ctx, feature.name, W / 2, 310 + dy, label({ size: 104, alpha: 1 - out }));
+          text(ctx, feature.detail, W / 2, 1760 - dy, label({ size: 54, alpha: (1 - out) * 0.8, color: "#6b6275" }));
+        });
+      }
+
+      /** The three features stacked as chips, then the version badge bursting in. */
+      function recap(ctx, t, copy) {
+        if (t < 10.2 || t >= 12.7) return;
+        const out = ease.inExpo(progress(t, 12.3, 0.4));
+        copy.features.forEach((feature, i) => {
+          const p = spring(progress(t, 10.3 + i * BEAT * 0.5, 0.6), 0.45);
+          const style = label({ size: 70, color: "#fff" });
+          const w = measure(ctx, feature.name, style) + 120;
+          const y = 700 + i * 170 - out * 1400;
+          ctx.save();
+          ctx.translate(W / 2 + (i - 1) * 40, y);
+          ctx.rotate([-0.06, 0.05, -0.03][i]);
+          ctx.scale(p, p);
+          roundRect(ctx, -w / 2, -64, w, 128, 64, COLORS[i + 1]);
+          text(ctx, feature.name, 0, 4, style);
+          ctx.restore();
+        });
+        const badge = spring(progress(t, 11.4, 0.6), 0.5);
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          const p = ease.out(progress(t, 11.45, 0.5));
+          ctx.strokeStyle = COLORS[k % 4];
+          ctx.lineWidth = 12;
+          ctx.lineCap = "round";
+          ctx.globalAlpha = 1 - p;
+          ctx.beginPath();
+          ctx.moveTo(W / 2 + Math.cos(a) * mix(150, 260, p), 1320 + Math.sin(a) * mix(150, 260, p) - out * 1400);
+          ctx.lineTo(W / 2 + Math.cos(a) * mix(190, 330, p), 1320 + Math.sin(a) * mix(190, 330, p) - out * 1400);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        ctx.save();
+        ctx.translate(W / 2, 1320 - out * 1400);
+        ctx.scale(badge, badge);
+        ctx.rotate(-0.08);
+        roundRect(ctx, -170, -100, 340, 200, 100, INK);
+        text(ctx, copy.version, 0, 8, label({ size: 120, color: SUN }));
+        ctx.restore();
+      }
+
+      function outro(ctx, t, copy) {
+        if (t < 12.5) return;
+        const pop = spring(progress(t, 12.6, 0.6), 0.45);
+        icon(ctx, W / 2, 640, 260 * pop, ease.out(progress(t, 12.9, 0.4)));
+        bounceTitle(ctx, t, copy, 12.8, 960, 200);
+        text(ctx, copy.tagline, W / 2, 1120, label({ size: 66, alpha: ease.out(progress(t, 13.3, 0.5)) }));
+        const button = spring(progress(t, 13.6, 0.6), 0.4) * (1 + 0.04 * Math.sin(Math.max(0, t - 14.2) * 8));
+        ctx.save();
+        ctx.translate(W / 2, 1400);
+        ctx.scale(button, button);
+        roundRect(ctx, -250, -70, 500, 140, 70, CORAL);
+        text(ctx, copy.cta, 0, 5, label({ size: 64, color: "#fff" }));
+        ctx.restore();
+        confetti(ctx, t, 12.7, W / 2, 660, 60);
+      }
+
+      function draw(ctx, t, copy) {
+        ctx.fillStyle = CREAM;
+        ctx.fillRect(0, 0, W, H);
+        // Soft dots drifting behind everything.
+        for (let i = 0; i < 18; i++) {
+          ctx.fillStyle = COLORS[i % 4];
+          ctx.globalAlpha = 0.16;
+          ctx.beginPath();
+          ctx.arc(hash(i) * W, ((hash(i + 30) * H - t * 30 * (1 + hash(i + 3))) % H + H) % H, 14 + hash(i + 7) * 26, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        intro(ctx, t, copy);
+        phone(ctx, t, copy);
+        recap(ctx, t, copy);
+        outro(ctx, t, copy);
+      }
+
+      function sound(s) {
+        const melody = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880, 783.99];
+        for (let beat = 0; beat < 30; beat++) {
+          const at = beat * BEAT;
+          if (beat >= 5 && beat < 25) {
+            s.kick(at, beat % 2 ? 0.5 : 0.7);
+            if (beat % 2) s.snare(at, 0.22);
+            s.hat(at + BEAT / 2, 0.08);
+          }
+          s.pluck(at, melody[beat % 8], 0.05);
+          if (beat % 2 === 0) s.tone(at, [130.81, 174.61, 196, 146.83][(beat / 2) % 4], { gain: 0.22, type: "triangle", decay: 0.8 });
+        }
+        s.pop(0.2, 0.3);
+        [0.55, 0.65, 0.75].forEach((at) => s.pop(at, 0.2));
+        s.tone(0.6, 1318.5, { gain: 0.08, decay: 0.6 });
+        s.whoosh(2.05, 0.4, 0.18);
+        [2.9, 3.15, 3.4, 3.65].forEach((at) => s.pop(at, 0.16));
+        FEATURES.slice(1).forEach((at) => s.whoosh(at - 0.3, 0.45, 0.16));
+        for (let i = 0; i < 7; i++) s.tone(5.6 + i * BEAT, 880 * 2 ** (i / 12), { gain: 0.07, decay: 0.3 });
+        s.tone(8.0, 600, { gain: 0.12, decay: 0.08, to: 900 });
+        [8.4, 8.55, 8.7].forEach((at, i) => s.tone(at, [1567.98, 2093, 2637][i], { gain: 0.04, decay: 0.8 }));
+        s.whoosh(9.8, 0.5, 0.2);
+        [10.3, 10.55, 10.8].forEach((at) => s.pop(at, 0.18));
+        s.kick(11.45, 0.9);
+        s.chord(11.45, [523.25, 659.25, 783.99], 1, 0.05);
+        s.whoosh(12.2, 0.4, 0.2);
+        s.pop(12.65, 0.3);
+        s.chord(12.7, [261.63, 329.63, 392, 523.25], 2.2, 0.05);
+        s.tone(13.65, 1046.5, { gain: 0.08, decay: 0.5 });
+      }
+
+      start({ seconds: SECONDS, name: "playful", fonts: ["400 100px Jua", "700 100px Pretendard"], draw, sound });
+    </script>
+  </body>
+</html>
