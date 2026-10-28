@@ -3,9 +3,20 @@ import { generateKeyPairSync } from "node:crypto";
 
 // A workspace made for one check is provided where that check runs.
 // @effect-diagnostics strictEffectProvide:off
-import { Clock, Duration, Effect, FileSystem, Layer, Option, Path, Redacted } from "effect";
+import {
+  Clock,
+  ConfigProvider,
+  Duration,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Redacted,
+} from "effect";
 import { TestClock } from "effect/testing";
 
+import { AppData } from "../src/core/appData.ts";
 import { createItem, listItemIds } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import {
@@ -18,6 +29,7 @@ import {
   paidInSettings,
 } from "../src/license.ts";
 import {
+  appData,
   DesktopData,
   FREE_VIDEOS,
   FreeLimitReached,
@@ -164,6 +176,21 @@ describe("paid plan", () => {
 });
 
 describe("plan", () => {
+  it.effect("a checkout keeps its records apart from the released app's", () =>
+    Effect.gen(function* () {
+      const env = ConfigProvider.fromEnv({
+        env: { HOME: "/home/someone", APPDATA: "/appdata", XDG_CONFIG_HOME: "/config" },
+      });
+
+      const folder = yield* Effect.flatMap(AppData, Effect.succeed).pipe(
+        Effect.provide(appData.pipe(Layer.provide(Path.layer))),
+        Effect.provideService(ConfigProvider.ConfigProvider, env),
+      );
+
+      expect(Option.map(folder, (dir) => dir.endsWith("Cutfac Dev"))).toEqual(Option.some(true));
+    }),
+  );
+
   it.effect("a paid plan has no count", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(NOW);

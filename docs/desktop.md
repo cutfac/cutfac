@@ -145,5 +145,6 @@ On macOS it runs as Cutfac Dev (`com.cutfac.app.dev`), a copy of Electron under 
 so the permissions you grant it, such as an agent's computer use, stay with it and not with every
 app built on Electron. It keeps its settings in `~/Library/Application Support/Cutfac Dev`, apart
 from the released app's, so the two can run at once and the Dev Panel's Start over leaves the
-released app as it was. Its icon is the Cutfac icon with a DEV band across the bottom, compiled with
+released app as it was. The server, agent tools and `cutfac init` run from source keep their records
+there too, such as which workspaces are trusted. Its icon is the Cutfac icon with a DEV band across the bottom, compiled with
 Xcode 26's `actool`; without it the app keeps Electron's icon.

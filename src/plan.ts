@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Option, Path, Schema } from "effect";
 
 import { AppData, appendAppRecord } from "./core/appData.ts";
-import { BUNDLED } from "./core/build.ts";
+import { BUNDLED, COMPILED } from "./core/build.ts";
 import { envVar } from "./core/env.ts";
 import { type Item, type NewItemInput, createItem, getItem } from "./core/items.ts";
 import { nowIso } from "./core/time.ts";
@@ -83,7 +83,8 @@ export const desktopData = Layer.effect(
 
 /**
  * Where the app keeps its own records: the desktop app's data folder, or, for the CLI, the folder
- * the desktop app uses on this platform, so the two agree on which workspaces the user trusts.
+ * the desktop app uses on this platform, so the two agree on which workspaces the user trusts; run
+ * from source, the dev build's.
  */
 export const appData = Layer.effect(
   AppData,
@@ -93,20 +94,22 @@ export const appData = Layer.effect(
     if (Option.isSome(desktop)) return desktop;
     const path = yield* Path.Path;
     const home = yield* envVar("HOME");
+    // Run from source, it is the dev build's, so a checkout never writes into the released app's.
+    const folder = COMPILED ? "Cutfac" : "Cutfac Dev";
 
     if (process.platform === "win32") {
-      return Option.map(yield* envVar("APPDATA"), (dir) => path.join(dir, "Cutfac"));
+      return Option.map(yield* envVar("APPDATA"), (dir) => path.join(dir, folder));
     }
 
     if (process.platform === "darwin") {
-      return Option.map(home, (dir) => path.join(dir, "Library", "Application Support", "Cutfac"));
+      return Option.map(home, (dir) => path.join(dir, "Library", "Application Support", folder));
     }
 
     const config = Option.orElse(yield* envVar("XDG_CONFIG_HOME"), () =>
       Option.map(home, (dir) => path.join(dir, ".config")),
     );
 
-    return Option.map(config, (dir) => path.join(dir, "Cutfac"));
+    return Option.map(config, (dir) => path.join(dir, folder));
   }),
 ).pipe(Layer.provideMerge(desktopData));
 
