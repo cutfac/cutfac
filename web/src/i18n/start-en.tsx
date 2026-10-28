@@ -81,7 +81,7 @@ export const startEn = {
         title: "Any folder your agent should read?",
         body: "Like a brand kit or your footage. It stays where it is.",
       },
-      placeholder: "https://your-site.com",
+      placeholder: "https://yourwebsite.com",
       add: "Add",
       choose: "Choose folder…",
       remove: (source: string) => `Remove ${source}`,
