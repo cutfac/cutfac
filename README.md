@@ -1,25 +1,36 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
-    <img alt="Cutfac logo" src=".github/assets/logo-light.svg" width="88">
-  </picture>
+  <a href="https://cutfac.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
+      <img alt="Cutfac logo" src=".github/assets/logo-light.svg" width="88">
+    </picture>
+  </a>
 </p>
 
 <h1 align="center">Cutfac</h1>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL%203.0-blue.svg" alt="License: AGPL-3.0"></a>
-  <img src="https://img.shields.io/badge/macOS-app-000000?logo=apple&logoColor=white" alt="macOS app">
+  <a href="https://cutfac.com/download"><img src="https://img.shields.io/badge/macOS-app-000000?logo=apple&logoColor=white" alt="macOS app"></a>
   <img src="https://img.shields.io/badge/Bun-1.3%2B-000000?logo=bun&logoColor=white" alt="Bun 1.3+">
   <img src="https://img.shields.io/badge/MCP-server-000000?logo=modelcontextprotocol&logoColor=white" alt="MCP server">
 </p>
 
 <p align="center">
-  <strong>A local-first studio for short-form videos. Your own coding agent makes them; you point at what to change.</strong>
+  <strong><a href="https://cutfac.com">Cutfac</a> is a local-first studio for short-form videos. Your own coding agent makes them; you point at what to change.</strong>
 </p>
 
 <p align="center">
-  <a href="#quick-start"><strong>Quick start »</strong></a>
+  Download the signed Mac app, or build it yourself from this repository. Both have every feature.
+</p>
+
+<p align="center">
+  <a href="https://cutfac.com/download"><strong>Download for Mac »</strong></a>
+  <br />
+  <br />
+  <a href="https://cutfac.com">Website</a>
+  ·
+  <a href="#quick-start">Build from source</a>
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
@@ -67,7 +78,8 @@ Oksana Kyzyma and Sergei Starostin.</sub>
 
 ## Quick start
 
-Install [Bun](https://bun.sh) 1.3+ and ffmpeg, then:
+For the signed Mac app, download it from [cutfac.com](https://cutfac.com). To run it from source,
+install [Bun](https://bun.sh) 1.3+ and ffmpeg, then:
 
 ```sh
 bun install && bun run build
