@@ -55,7 +55,6 @@ export const onboardingEn = {
     body: "Your agent records your apps for your videos, and uses them when you ask. It works under Cutfac's permissions, so turn these on for Cutfac.",
     turnOn: "Turn on",
     on: "On",
-    granted: "Both are on",
     link: "Turn on screen recording and app use",
     settingsTitle: "Mac permissions",
     skip: "Skip for now",

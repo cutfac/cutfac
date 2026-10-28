@@ -7,7 +7,7 @@ import type { CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { AccessPreview } from "./access-preview.tsx";
 import { AccessRows, useAccess } from "./access-rows.tsx";
-import { StepActions, StepDone, StepHeader } from "./frame.tsx";
+import { StepActions, StepHeader } from "./frame.tsx";
 
 /**
  * Screen recording and accessibility, which the agents act under: recording the user's screen and
@@ -44,7 +44,6 @@ export function AccessStep({
         <AccessPreview app={access.app} list={access.copy[shown].list} />
         <AccessRows access={access} />
       </div>
-      {access.allGranted ? <StepDone label={t.granted} /> : null}
       <StepActions onBack={onBack}>
         {access.allGranted ? (
           <Button ref={next} size="lg" onClick={onDone}>

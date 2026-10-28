@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { CheckIcon, LinkIcon } from "lucide-react";
+import { LinkIcon } from "lucide-react";
 import {
   createContext,
   type CSSProperties,
@@ -152,18 +152,6 @@ export function StepHeader({ title, body }: { title: string; body: ReactNode }) 
       <h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>
       <p className="text-sm/relaxed text-pretty text-muted-foreground">{body}</p>
     </header>
-  );
-}
-
-/** What a step shows for the moment between being done and the next step opening. */
-export function StepDone({ label }: { label: string }) {
-  return (
-    <div className="flex animate-in items-center gap-2 text-sm font-medium duration-200 zoom-in-95 fade-in">
-      <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-        <CheckIcon className="size-3.5" />
-      </span>
-      {label}
-    </div>
   );
 }
 

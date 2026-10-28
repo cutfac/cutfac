@@ -50,7 +50,6 @@ export const onboardingKo: OnboardingMessages = {
     body: "에이전트는 영상에 쓸 앱 화면을 녹화하고, 부탁하면 앱을 직접 써요. 에이전트는 컷팩의 권한으로 움직이니, 컷팩에 이 두 가지를 켜 주세요.",
     turnOn: "켜기",
     on: "켜짐",
-    granted: "둘 다 켰어요",
     skip: "나중에 하기",
     next: "다음",
     link: "화면 녹화·앱 쓰기 켜기",
