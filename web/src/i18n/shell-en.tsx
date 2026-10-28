@@ -11,6 +11,16 @@ export const shellEn = {
     quitting: "Cutfac is quitting",
     quittingDetail: "Stopping the local server and agent work. This can take a moment.",
   },
+  updates: {
+    downloading: (version: string) => `Downloading Cutfac ${version}`,
+    ready: (version: string) => `Cutfac ${version} is ready`,
+    readyDetail: "It installs the next time you quit, or now with a restart.",
+    restart: "Restart to update",
+    upToDate: (version: string) => `You're up to date. Cutfac ${version} is the newest version.`,
+    checkFailed: "Couldn't check for updates",
+    updated: (version: string) => `Cutfac updated to ${version}`,
+    whatsNew: "What's new",
+  },
   nav: {
     appName: "Cutfac",
     openWorkspace: "Open workspace…",

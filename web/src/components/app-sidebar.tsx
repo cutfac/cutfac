@@ -38,6 +38,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar-menu";
 import { useSidebar } from "@/components/ui/sidebar-provider";
+import { UpdateCard } from "@/components/update-card";
 import { workDot, workText } from "@/components/work-state";
 import { WorkspaceMenu } from "@/components/workspace-menu";
 
@@ -298,6 +299,7 @@ export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarPro
         ) : null}
       </SidebarContent>
       <SidebarFooter>
+        <UpdateCard />
         <PlanCard plan={plan.data} />
         <SidebarMenu>
           <LinkRow to={href("setup")} active={view === "setup"} tooltip={t.nav.setup}>

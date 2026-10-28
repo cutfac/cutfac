@@ -61,6 +61,7 @@ import {
   settingsWritten,
 } from "./settings.ts";
 import { boardDir, killWorkspaceServer, stopFixes } from "./sidecarRuntime.ts";
+import { handleUpdates } from "./updateHandlers.ts";
 import { Updates } from "./updates.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 import { handleWorkspaces } from "./workspaces.ts";
@@ -218,6 +219,7 @@ function start(): void {
       yield* Effect.ignore(saveLocale(next));
     }),
   );
+  handleUpdates();
   handleAttention({
     isFromApp,
     bringToFront,

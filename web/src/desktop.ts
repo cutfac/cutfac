@@ -1,6 +1,9 @@
 import type { AgentName } from "./api.ts";
 import type { Locale } from "./i18n/locale.ts";
 import type { BriefDraft } from "./lib/brief.ts";
+import type { UpdateNotice, UpdateStatus } from "./lib/updates.ts";
+
+export type { UpdateNotice, UpdateStatus };
 
 export type EditCommand = "undo" | "redo";
 
@@ -174,6 +177,22 @@ export interface DevState {
   bundleId: string;
 }
 
+/** What the Dev Panel has the dev build's pretend update feed do next. */
+export type FakeUpdate = "found" | "none" | "fails" | "background" | "updated";
+
+/** The app's updates as the board shows them. */
+export interface CutfacUpdates {
+  status: () => Promise<UpdateStatus>;
+  /** What `status` resolves changed. Returns an unsubscribe. */
+  onStatus: (listener: (status: UpdateStatus) => void) => () => void;
+  /** A check from the menu found nothing newer, or failed. Returns an unsubscribe. */
+  onNotice: (listener: (notice: UpdateNotice) => void) => () => void;
+  /** Quit and install the version that is ready. */
+  restart: () => Promise<void>;
+  /** The version the app updated to since the board last asked, once. */
+  updatedTo: () => Promise<string | undefined>;
+}
+
 /** The dev build's own tools, for trying the first launch as a new user. Never in the released app. */
 export interface CutfacDevTools {
   state: () => Promise<DevState>;
@@ -188,6 +207,8 @@ export interface CutfacDevTools {
   openStep: (step: OnboardingStep) => Promise<void>;
   /** Show a file or folder in Finder. */
   reveal: (path: string) => Promise<void>;
+  /** Play out an update, which the dev build has no feed for, to see how the board shows it. */
+  fakeUpdate: (update: FakeUpdate) => Promise<void>;
   /** Forget the videos the free version counted, to try it from its first video again. */
   resetFreeCount: () => Promise<void>;
 }
@@ -271,6 +292,8 @@ export interface CutfacDesktop {
    * is kept already. Returns an unsubscribe.
    */
   onLicenseKeyRequest: (listener: (saved: boolean) => void) => () => void;
+  /** Updates, shown at the foot of the sidebar rather than in dialogs. */
+  updates: CutfacUpdates;
   /** The first launch, before there is a workspace. */
   onboarding: CutfacOnboarding;
   /** Only in the dev build's Dev Panel window. */

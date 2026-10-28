@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Clock, Duration, Effect, FileSystem, Option, Ref, Schema } from "effect";
+import { Clock, Duration, Effect, FileSystem, Match, Option, Ref, Schema } from "effect";
 import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
 
 import type { AgentName } from "../src/core/schema.ts";
@@ -18,9 +18,11 @@ import {
   NO_FAKES,
   withFakes,
 } from "./devFakes.ts";
+import { fakeDownloaded, fakeNextCheck } from "./devUpdates.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
   DEV_BUILD_FLAG,
+  DEV_FAKE_UPDATE_CHANNEL,
   DEV_OPEN_STEP_CHANNEL,
   DEV_RESET_FREE_COUNT_CHANNEL,
   DEV_RESTORE_CHANNEL,
@@ -45,11 +47,13 @@ import {
   loadOnboarding,
   loadWorkspace,
   restoreSettings,
+  saveSeenVersion,
   setSettingsAside,
   settingsFile,
   settingsSetAside,
 } from "./settings.ts";
 import { hasPermission } from "./systemAccess.ts";
+import { Updates } from "./updates.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
 
 const PANEL_SIZE = { width: 420, height: 760 };
@@ -72,6 +76,11 @@ const FAKES = {
 };
 
 const STEP = { schema: Schema.Literals(ONBOARDING_STEPS), what: "step" };
+
+const FAKE_UPDATE = {
+  schema: Schema.Literals(["found", "none", "fails", "background", "updated"]),
+  what: "update",
+};
 
 const PATH = { schema: Schema.String, what: "path" };
 
@@ -276,6 +285,24 @@ export function handleDevTools(host: DevToolsHost): DevTools {
       yield* fs.remove(path.join(app.getPath("userData"), VIDEOS_FILE), { force: true });
       host.window()?.webContents.send(LICENSE_CHANGE_CHANNEL);
     }),
+  );
+  answer(DEV_FAKE_UPDATE_CHANNEL, fromPanel, FAKE_UPDATE, (update) =>
+    Match.value(update).pipe(
+      Match.when("background", () => fakeDownloaded),
+      Match.when("updated", () =>
+        Effect.andThen(
+          saveSeenVersion("0.0.0"),
+          Effect.sync(() => host.window()?.webContents.reload()),
+        ),
+      ),
+      Match.orElse((check) =>
+        Effect.gen(function* () {
+          yield* fakeNextCheck(check);
+          yield* Effect.flatMap(Updates, (updates) => updates.checkNow);
+          yield* fakeNextCheck("none");
+        }),
+      ),
+    ),
   );
   answer(DEV_REVEAL_CHANNEL, fromPanel, PATH, (target) =>
     Effect.sync(() => {

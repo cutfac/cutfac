@@ -13,6 +13,7 @@ import {
   type AgentFake,
   type CutfacDevTools,
   type DevFakes,
+  type FakeUpdate,
   type DevState,
   type OnboardingStep,
 } from "../desktop.ts";
@@ -60,6 +61,14 @@ const SHARING: Options<DevFakes["sharing"]> = [
 const LIMIT: Options<"off" | "on"> = [
   ["off", "Off"],
   ["on", "On"],
+];
+
+const FAKE_UPDATES: Options<FakeUpdate> = [
+  ["found", "Find an update"],
+  ["background", "Ready in the background"],
+  ["none", "Up to date"],
+  ["fails", "Check fails"],
+  ["updated", "Say it updated"],
 ];
 
 const STEPS: Options<OnboardingStep> = [
@@ -185,6 +194,25 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
               onChange={setFakes}
               onReset={() => run(dev.resetFreeCount, "The count starts over")}
             />
+            <Separator />
+            <Section
+              title="Updates"
+              description="This build has no update feed, so these play one out with a pretend 9.9.9. Find an update shows its download as Check for Updates does; Ready in the background shows only the restart. Say it updated reloads the board as after an update. Restart to update only quits."
+            >
+              <div className="grid grid-cols-2 gap-2">
+                {FAKE_UPDATES.map(([update, label]) => (
+                  <Button
+                    key={update}
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => run(() => dev.fakeUpdate(update))}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </Section>
             <Separator />
             <Section title="Where things are">
               <PathRow label="Settings" path={state.settingsFile} onReveal={dev.reveal} />

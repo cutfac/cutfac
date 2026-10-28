@@ -5,9 +5,12 @@ import type {
   AppCommand,
   CutfacDesktop,
   CutfacDevTools,
+  CutfacUpdates,
   CutfacOnboarding,
   NewVideoLink,
   Permission,
+  UpdateNotice,
+  UpdateStatus,
 } from "../web/src/desktop.ts";
 import {
   ACCESS_GRANTED_CHANNEL,
@@ -19,6 +22,7 @@ import {
   START_WORKSPACE_CHANNEL,
   WORKSPACE_FOLDER_CHANNEL,
   DEV_BUILD_FLAG,
+  DEV_FAKE_UPDATE_CHANNEL,
   DEV_OPEN_STEP_CHANNEL,
   DEV_RESET_FREE_COUNT_CHANNEL,
   DEV_RESTORE_CHANNEL,
@@ -57,6 +61,11 @@ import {
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
   START_DRAG_CHANNEL,
+  UPDATE_NOTICE_CHANNEL,
+  UPDATE_RESTART_CHANNEL,
+  UPDATE_STATUS_CHANGED_CHANNEL,
+  UPDATE_STATUS_CHANNEL,
+  UPDATED_TO_CHANNEL,
   TAKE_NEW_VIDEO_LINK_CHANNEL,
 } from "./ipc.ts";
 
@@ -123,6 +132,30 @@ const onboarding = {
   createWorkspace: (name, agent) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, { name, agent }),
 } satisfies CutfacOnboarding;
 
+const updates = {
+  status: () => ipcRenderer.invoke(UPDATE_STATUS_CHANNEL),
+  onStatus: (listener) => {
+    const forward = (_event: IpcRendererEvent, status: UpdateStatus) => listener(status);
+
+    ipcRenderer.on(UPDATE_STATUS_CHANGED_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(UPDATE_STATUS_CHANGED_CHANNEL, forward);
+    };
+  },
+  onNotice: (listener) => {
+    const forward = (_event: IpcRendererEvent, notice: UpdateNotice) => listener(notice);
+
+    ipcRenderer.on(UPDATE_NOTICE_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(UPDATE_NOTICE_CHANNEL, forward);
+    };
+  },
+  restart: () => ipcRenderer.invoke(UPDATE_RESTART_CHANNEL),
+  updatedTo: () => ipcRenderer.invoke(UPDATED_TO_CHANNEL),
+} satisfies CutfacUpdates;
+
 /** The Dev Panel's tools; the dev build passes the flag to that window alone. */
 const dev = {
   state: () => ipcRenderer.invoke(DEV_STATE_CHANNEL),
@@ -140,6 +173,7 @@ const dev = {
   restore: () => ipcRenderer.invoke(DEV_RESTORE_CHANNEL),
   openStep: (step) => ipcRenderer.invoke(DEV_OPEN_STEP_CHANNEL, step),
   reveal: (target) => ipcRenderer.invoke(DEV_REVEAL_CHANNEL, target),
+  fakeUpdate: (update) => ipcRenderer.invoke(DEV_FAKE_UPDATE_CHANNEL, update),
   resetFreeCount: () => ipcRenderer.invoke(DEV_RESET_FREE_COUNT_CHANNEL),
 } satisfies CutfacDevTools;
 
@@ -233,6 +267,7 @@ const bridge = {
     };
   },
   onboarding,
+  updates,
   ...(process.argv.includes(DEV_TOOLS_FLAG) && { dev }),
   ...(process.argv.includes(DEV_BUILD_FLAG) && {
     openDevPanel: () => ipcRenderer.send(OPEN_DEV_PANEL_CHANNEL),

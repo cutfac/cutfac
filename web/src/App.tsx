@@ -11,6 +11,7 @@ import { QuittingOverlay } from "@/components/quitting-overlay";
 import { TitleBar } from "@/components/title-bar";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar-provider";
+import { UpdateToasts } from "@/components/update-card";
 import { cn } from "@/lib/utils";
 
 import { api } from "./api.ts";
@@ -48,6 +49,7 @@ export function App() {
       ) : (
         <Shell view={view} id={id} />
       )}
+      <UpdateToasts />
       <QuittingOverlay />
     </>
   );

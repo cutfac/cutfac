@@ -13,6 +13,16 @@ export const shellKo: ShellMessages = {
     quitting: "컷팩을 종료하고 있어요",
     quittingDetail: "로컬 서버와 에이전트 작업을 멈추고 있어요. 잠시 걸릴 수 있어요.",
   },
+  updates: {
+    downloading: (version) => `컷팩 ${version} 버전을 내려받고 있어요`,
+    ready: (version) => `컷팩 ${version} 버전이 준비됐어요`,
+    readyDetail: "다음에 종료할 때 설치되고, 지금 재시작하면 바로 설치돼요.",
+    restart: "재시작해서 업데이트",
+    upToDate: (version) => `최신 버전이에요. 컷팩 ${version} 버전이 가장 최신이에요.`,
+    checkFailed: "업데이트를 확인하지 못했어요",
+    updated: (version) => `컷팩을 ${version} 버전으로 업데이트했어요`,
+    whatsNew: "새로운 점",
+  },
   nav: {
     appName: "컷팩",
     openWorkspace: "워크스페이스 열기…",

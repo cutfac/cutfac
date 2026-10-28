@@ -14,13 +14,12 @@ import { devLaunchOf, type DevLaunch } from "./devEnv.ts";
 import { FirstWorkspace } from "./firstWorkspace.ts";
 import { LICENSE_CHANGE_CHANNEL } from "./ipc.ts";
 import { License } from "./license.ts";
-import { MESSAGES } from "./messages.ts";
 import { platform } from "./platform.ts";
 import { licenseSettings, Settings } from "./settings.ts";
 import { shutDown } from "./shutdown.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
 import { SystemAccess } from "./systemAccess.ts";
-import { updateFeed, updatePrompts } from "./updateFeed.ts";
+import { boardNotices, updateFeed } from "./updateFeed.ts";
 import { Updates } from "./updates.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
 
@@ -88,7 +87,7 @@ const license = Layer.unwrap(
   ),
 );
 
-const updates = Updates.layer(updatePrompts(() => MESSAGES[readNow(appState.locale)], boardWindow));
+const updates = Updates.layer(boardNotices(boardWindow));
 
 export const appServices = Layer.mergeAll(
   FirstWorkspace.layer,

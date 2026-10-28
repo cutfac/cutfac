@@ -43,6 +43,20 @@ export const LICENSE_CHANGE_CHANNEL = "cutfac:license-change";
 /** The app is quitting, for the board to say so while it stops its work. */
 export const QUITTING_CHANNEL = "cutfac:quitting";
 
+/** What the board shows about updates, asked for and as it changes. */
+export const UPDATE_STATUS_CHANNEL = "cutfac:update-status";
+
+export const UPDATE_STATUS_CHANGED_CHANNEL = "cutfac:update-status-changed";
+
+/** A check from the menu found nothing newer, or failed. */
+export const UPDATE_NOTICE_CHANNEL = "cutfac:update-notice";
+
+/** Quit and install the version that is ready. */
+export const UPDATE_RESTART_CHANNEL = "cutfac:update-restart";
+
+/** The version the app updated to since the board last asked, if it did. */
+export const UPDATED_TO_CHANNEL = "cutfac:updated-to";
+
 /** The board asks for its license key dialog, as License Key… in the app menu does. */
 export const OPEN_LICENSE_KEY_CHANNEL = "cutfac:open-license-key";
 
@@ -131,5 +145,7 @@ export const DEV_RESTORE_CHANNEL = "cutfac:dev-restore";
 export const DEV_OPEN_STEP_CHANNEL = "cutfac:dev-open-step";
 
 export const DEV_REVEAL_CHANNEL = "cutfac:dev-reveal";
+
+export const DEV_FAKE_UPDATE_CHANNEL = "cutfac:dev-fake-update";
 
 export const DEV_RESET_FREE_COUNT_CHANNEL = "cutfac:dev-reset-free-count";

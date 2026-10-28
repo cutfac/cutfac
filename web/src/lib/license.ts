@@ -7,7 +7,7 @@ import type { Locale } from "../i18n/locale.ts";
 export const CUSTOMER_PORTAL_URL = "https://polar.sh/wyverselabs/portal";
 
 /** A cutfac.com page in the language the board is showing. */
-const siteUrl = (locale: Locale, page: "pricing" | "download") =>
+const siteUrl = (locale: Locale, page: "pricing" | "download" | "changelog") =>
   locale === "en" ? `https://cutfac.com/${page}` : `https://cutfac.com/${locale}/${page}`;
 
 /** cutfac.com's plans. */
@@ -15,6 +15,9 @@ export const pricingUrl = (locale: Locale) => siteUrl(locale, "pricing");
 
 /** Where the desktop app is downloaded. */
 export const downloadUrl = (locale: Locale) => siteUrl(locale, "download");
+
+/** What changed in each release. */
+export const changelogUrl = (locale: Locale) => siteUrl(locale, "changelog");
 
 /** The desktop app's free version and the videos it has made, or none on any other plan. */
 export const freeVersion = (plan: Plan | undefined) =>

@@ -45,6 +45,8 @@ interface Saved {
   page: typeof Page.Type;
   onboarding: OnboardingStep | undefined;
   onboardingDraft: typeof OnboardingDraft.Encoded | undefined;
+  /** The app version the board last heard it was running, to say once that it updated. */
+  seenVersion: string;
 }
 
 export class SettingsNotSaved extends Schema.TaggedError<SettingsNotSaved>()("SettingsNotSaved", {
@@ -166,6 +168,10 @@ export const savePort = (port: number) => save({ port });
 export const loadLocale = Effect.map(saved("locale"), decodeLocale);
 
 export const saveLocale = (locale: Locale) => save({ locale });
+
+export const loadSeenVersion = Effect.map(saved("seenVersion"), decodeText);
+
+export const saveSeenVersion = (seenVersion: string) => save({ seenVersion });
 
 const encodeLicense = Schema.encodeEffect(Schema.UndefinedOr(LicenseRecord));
 
