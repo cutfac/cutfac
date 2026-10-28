@@ -12,22 +12,25 @@ import {
   type Plan,
 } from "./api.ts";
 import { desktop } from "./desktop.ts";
+import { failedAfter, LiveState, shownOf } from "./lib/live.ts";
 import type { ModelPicks } from "./lib/models.ts";
 import { errorText } from "./lib/notify.ts";
 import { routeOf, type Route } from "./lib/route.ts";
 import { readStored, removeStored, writeStored } from "./lib/storage.ts";
 
+const LOADING = LiveState.Loading();
+
 interface Loaded<T> {
   key: string;
   /** Which reload produced this, so a reload refetches even for the same key. */
   version: number;
-  data?: T;
-  error?: string;
+  state: LiveState<T>;
 }
 
 export interface Live<T> {
+  state: LiveState<T>;
+  /** What `state` has to show, for code that needs only the value. */
   data: T | undefined;
-  error: string | undefined;
   reload: () => void;
   /** Show a server response right away instead of waiting for the change event. */
   setData: (data: T) => void;
@@ -39,7 +42,7 @@ export interface Live<T> {
  */
 export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
   const [version, setVersion] = useState(0);
-  const [loaded, setLoaded] = useState<Loaded<T>>({ key, version });
+  const [loaded, setLoaded] = useState<Loaded<T>>({ key, version, state: LOADING });
   const fetchData = useEffectEvent(load);
 
   useEffect(() => onWorkspaceChange(() => setVersion((v) => v + 1)), []);
@@ -48,19 +51,17 @@ export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
     let current = true;
     fetchData().then(
       (data) => {
-        if (current) setLoaded({ key, version, data });
+        if (current) setLoaded({ key, version, state: LiveState.Loaded({ data }) });
       },
       (cause) => {
         if (!current) return;
 
-        // A failed reload keeps what this key last showed; another key's data never carries over.
-        setLoaded((prev) => {
-          const next: Loaded<T> = { key, version, error: errorText(cause) };
-
-          if (prev.key === key && prev.data !== undefined) next.data = prev.data;
-
-          return next;
-        });
+        // Another key's data never carries over.
+        setLoaded((prev) => ({
+          key,
+          version,
+          state: failedAfter(errorText(cause), prev.key === key ? prev.state : LOADING),
+        }));
       },
     );
 
@@ -69,13 +70,13 @@ export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
     };
   }, [key, version]);
 
-  const fresh = loaded.key === key;
+  const state = loaded.key === key ? loaded.state : LOADING;
 
   return {
-    data: fresh ? loaded.data : undefined,
-    error: fresh ? loaded.error : undefined,
+    state,
+    data: Option.getOrUndefined(shownOf(state)),
     reload: () => setVersion((v) => v + 1),
-    setData: (data) => setLoaded({ key, version, data }),
+    setData: (data) => setLoaded({ key, version, state: LiveState.Loaded({ data }) }),
   };
 }
 

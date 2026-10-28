@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { type CSSProperties, useEffect } from "react";
 
 import { AnnouncementDialog } from "@/components/announcement-dialog";
@@ -16,6 +17,7 @@ import { briefApi } from "./briefApi.ts";
 import { desktop, insetTitleBar } from "./desktop.ts";
 import { href, useHashRoute, useLive, usePlan, useSidebarOpen, useSidebarWidth } from "./hooks.ts";
 import { useMessages } from "./i18n/index.ts";
+import { LiveState } from "./lib/live.ts";
 import { agentsToConnect, needsStart, startSkipped } from "./lib/onboarding.ts";
 import { Board } from "./views/Board.tsx";
 import { DevTools } from "./views/DevTools.tsx";
@@ -48,7 +50,8 @@ export function App() {
 /** The board on a workspace: the sidebar and the page, or the first template while it has none. */
 function Shell({ view, id }: { view: string; id: string | undefined }) {
   const t = useMessages();
-  const { data: ws, error } = useLive("workspace", api.workspace);
+  const workspace = useLive("workspace", api.workspace);
+  const ws = workspace.data;
   const brief = useLive("brief", briefApi.brief);
   const plan = usePlan();
   useConnectAgents();
@@ -59,11 +62,12 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
   // Opened with no page in mind, a workspace with no template yet starts on making one. Unknown
   // until both have loaded; a brief that can't be read doesn't hold that up.
   const startFirst =
-    ws === undefined || (brief.data === undefined && brief.error === undefined)
+    ws === undefined || LiveState.$is("Loading")(brief.state)
       ? undefined
       : needsStart(ws.formats.length, brief.data?.exists ?? true, startSkipped(ws.root));
 
-  const landing = location.hash === "" && error === undefined && startFirst !== false;
+  const landing =
+    location.hash === "" && !LiveState.$is("Failed")(workspace.state) && startFirst !== false;
 
   // Opened with no page in mind, a new workspace starts on its first template. Once; after that
   // the user roams freely.
@@ -95,11 +99,14 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
       />
       <SidebarInset className="min-h-0 min-w-0 [view-transition-name:page]">
         <TitleBar>
-          {error ? (
-            <div className="shrink-0 px-6 pb-2">
-              <ErrorAlert title={t.app.unreachable} message={error} />
-            </div>
-          ) : null}
+          {Match.value(workspace.state).pipe(
+            Match.tag("Failed", ({ error }) => (
+              <div className="shrink-0 px-6 pb-2">
+                <ErrorAlert title={t.app.unreachable} message={error} />
+              </div>
+            )),
+            Match.orElse(() => null),
+          )}
           {editing !== undefined ? (
             // Keyed by item so the selection, playback and chat start fresh for each one.
             <ItemView key={editing} id={editing} defaultAgent={ws?.config.agent.default} />

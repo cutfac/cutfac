@@ -18,6 +18,7 @@ import { api } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { importIdOf, importState, isWorking } from "../lib/imports.ts";
+import { LiveState } from "../lib/live.ts";
 import { NO_RUN } from "../lib/run.ts";
 import { sortTemplates } from "../lib/templates.ts";
 import { AddTemplate } from "./AddTemplate.tsx";
@@ -74,7 +75,7 @@ function EmptyTemplates({
 
 export function Templates({ selected }: { selected: string | undefined }) {
   const t = useMessages();
-  const { data: statuses, error } = useLive("formats-status", api.formatStatuses);
+  const { state: load, data: statuses } = useLive("formats-status", api.formatStatuses);
   const { data: ws } = useLive("workspace", api.workspace);
   const imports = useOpenImports();
   const templates = statuses === undefined ? undefined : sortTemplates(statuses);
@@ -100,8 +101,8 @@ export function Templates({ selected }: { selected: string | undefined }) {
         )
       }
     >
-      {error ? (
-        <ErrorAlert title={t.templates.loadError} message={error} />
+      {LiveState.$is("Failed")(load) ? (
+        <ErrorAlert title={t.templates.loadError} message={load.error} />
       ) : templates === undefined ? (
         <ListSkeleton rows={4} />
       ) : empty ? (

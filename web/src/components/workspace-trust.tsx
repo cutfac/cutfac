@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api, type AgentChoice, type TrustItem } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { LiveState } from "../lib/live.ts";
 import { errorText } from "../lib/notify.ts";
 
 /** A setting as the user reads it: the file's own text when it is not JSON, else its JSON. */
@@ -33,10 +34,11 @@ const keyOf = (item: TrustItem) => ("key" in item ? item.key : undefined);
  */
 export function TrustCard() {
   const t = useMessages();
-  const { data: trust, error, reload } = useLive("trust", api.trust);
+  const { state: load, data: trust, reload } = useLive("trust", api.trust);
   const [busy, setBusy] = useState(false);
 
-  if (error !== undefined) return <ErrorAlert title={t.trust.error} message={error} />;
+  if (LiveState.$is("Failed")(load))
+    return <ErrorAlert title={t.trust.error} message={load.error} />;
 
   if (trust?.needed !== true) return null;
 

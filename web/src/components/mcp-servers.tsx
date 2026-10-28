@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { LiveState } from "../lib/live.ts";
 import { errorText } from "../lib/notify.ts";
 import {
   type McpLaunchView,
@@ -51,11 +52,11 @@ interface Kept {
  */
 export function McpServersCard() {
   const t = useMessages();
-  const { data: status, error, reload } = useLive("mcp-servers", mcpApi.servers);
+  const { state: load, data: status, reload } = useLive("mcp-servers", mcpApi.servers);
   const [kept, setKept] = useState<Kept>({ states: {} });
   const [open, setOpen] = useState(false);
 
-  if (error !== undefined) return <ErrorAlert title={t.mcp.error} message={error} />;
+  if (LiveState.$is("Failed")(load)) return <ErrorAlert title={t.mcp.error} message={load.error} />;
 
   if (
     status === undefined ||

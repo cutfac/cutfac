@@ -28,6 +28,7 @@ import { useMessages } from "../i18n/index.ts";
 import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { editorKey, type EditorKey } from "../lib/editor-keys.ts";
 import { redoable, undoable } from "../lib/history.ts";
+import { LiveState } from "../lib/live.ts";
 import { pickedSettings } from "../lib/models.ts";
 import { Player, usePlayer } from "../lib/player.ts";
 import { renderedName, shellRender } from "../lib/render.ts";
@@ -57,7 +58,7 @@ interface ItemViewProps {
  * request with its result to keep or undo.
  */
 export function ItemView({ id, defaultAgent }: ItemViewProps) {
-  const { data: item, error, setData } = useLive(`item:${id}`, () => api.item(id));
+  const { state: load, data: item, setData } = useLive(`item:${id}`, () => api.item(id));
   const [player] = useState(() => new Player());
   const [mediaName, setMediaName] = useState<string | undefined>(undefined);
   const [target, setTarget] = useState<Target>(NO_TARGET);
@@ -224,10 +225,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     return () => removeEventListener("keydown", listener);
   }, []);
 
-  if (error !== undefined && item === undefined) {
+  if (LiveState.$is("Failed")(load) && item === undefined) {
     return (
       <div className="flex-1 p-6">
-        <ErrorAlert title={t.item.openError} message={error} />
+        <ErrorAlert title={t.item.openError} message={load.error} />
       </div>
     );
   }

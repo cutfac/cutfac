@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -26,11 +27,10 @@ export function BriefCard({ brief }: { brief: Live<BriefView> }) {
 
   return (
     <Section title={t.title} description={t.body} body="card">
-      {brief.data === undefined && brief.error === undefined ? (
-        <ListSkeleton rows={2} />
-      ) : (
+      {Match.value(brief.state).pipe(
+        Match.tag("Loading", () => <ListSkeleton rows={2} />),
         // The form starts over from the file whenever the file changes, as the agent may write it.
-        <BriefEditor key={JSON.stringify(brief.data ?? null)} brief={brief} />
+        Match.orElse(() => <BriefEditor key={JSON.stringify(brief.data ?? null)} brief={brief} />),
       )}
     </Section>
   );

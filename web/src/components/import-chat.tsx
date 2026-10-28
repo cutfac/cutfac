@@ -57,6 +57,7 @@ import { href, useLive } from "../hooks.ts";
 import { useLocale, useMessages } from "../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../lib/feedback.ts";
 import { importState, isWorking, turnRun, type ImportState } from "../lib/imports.ts";
+import { LiveState } from "../lib/live.ts";
 import { agentLabel } from "../lib/models.ts";
 import { sendFailed } from "../lib/notify.ts";
 import { replyMarkdown } from "../lib/replyBlocks.ts";
@@ -80,7 +81,13 @@ interface ImportChatProps {
  * dropped anywhere on it go with the next reply.
  */
 export function ImportChat({ id, onChange }: ImportChatProps) {
-  const { data: detail, error, reload, setData } = useLive(`import:${id}`, () => api.import(id));
+  const {
+    state: load,
+    data: detail,
+    reload,
+    setData,
+  } = useLive(`import:${id}`, () => api.import(id));
+
   const [run, setRun] = useState<LiveRun>(NO_RUN);
   const files = useHeldFiles(detail?.references.map(({ path }) => path.split("/").at(-1) ?? path));
   const openFiles = useRef<() => void>(null);
@@ -117,10 +124,10 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
   }
 
   if (detail === undefined) {
-    return error === undefined ? (
-      <ListSkeleton rows={3} />
+    return LiveState.$is("Failed")(load) ? (
+      <ErrorAlert title={t.imports.loadError} message={load.error} />
     ) : (
-      <ErrorAlert title={t.imports.loadError} message={error} />
+      <ListSkeleton rows={3} />
     );
   }
 

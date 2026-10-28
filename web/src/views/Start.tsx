@@ -16,6 +16,7 @@ import {
 import { href, type Live } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
+import { LiveState } from "../lib/live.ts";
 import { skipStart } from "../lib/onboarding.ts";
 
 const SHARING_PURPOSES: ReadonlyArray<SharingPurpose> = ["errorReports", "usageStats"];
@@ -27,7 +28,7 @@ const SHARING_PURPOSES: ReadonlyArray<SharingPurpose> = ["errorReports", "usageS
  */
 export function Start({ ws, brief }: { ws: WorkspaceInfo | undefined; brief: Live<BriefView> }) {
   // The form starts from the brief already there; one that can't be read starts empty.
-  const loaded = ws !== undefined && (brief.data !== undefined || brief.error !== undefined);
+  const loaded = ws !== undefined && !LiveState.$is("Loading")(brief.state);
 
   return loaded ? <Begin ws={ws} initial={brief.data ?? EMPTY_BRIEF} /> : <Starting />;
 }

@@ -54,6 +54,7 @@ import { briefApi } from "../briefApi.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { LiveState } from "../lib/live.ts";
 import { errorText, sendFailed } from "../lib/notify.ts";
 
 /** Learn from a link or path, a dropped or chosen file, or (in the desktop app) a picked folder. */
@@ -348,7 +349,7 @@ function LearnedCard({
 export function Learn() {
   const t = useMessages();
   const brief = useLive("brief", briefApi.brief);
-  const { data, error, reload, setData } = useLive("learned", api.learned);
+  const { state: load, data, reload, setData } = useLive("learned", api.learned);
   const about = data?.about;
 
   return (
@@ -357,8 +358,8 @@ export function Learn() {
       <Section title={t.learn.materials} description={t.learn.materialsBody} body="open">
         <div className="flex flex-col gap-4">
           <AddSource onLearned={reload} />
-          {error ? (
-            <ErrorAlert title={t.learn.loadError} message={error} />
+          {LiveState.$is("Failed")(load) ? (
+            <ErrorAlert title={t.learn.loadError} message={load.error} />
           ) : data === undefined ? (
             <ListSkeleton rows={3} />
           ) : data.learned.length === 0 ? (

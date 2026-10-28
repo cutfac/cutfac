@@ -27,16 +27,17 @@ import { api, type AgentStatus } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { LiveState } from "../lib/live.ts";
 import { errorText, sendFailed } from "../lib/notify.ts";
 import { type PermissionView, permissionsApi } from "../permissionsApi.ts";
 
 /** Settings: the agents and what their runs may do, the workspace folder, and the tools for video work. */
 export function Setup() {
   const t = useMessages();
-  const { data: agents, error: agentsError, reload } = useLive("agents", api.agents);
+  const { state: agentsLoad, data: agents, reload } = useLive("agents", api.agents);
   const { data: ws } = useLive("workspace", api.workspace);
 
-  const { data: permissions, error: permissionsError } = useLive(
+  const { state: permissionsLoad, data: permissions } = useLive(
     "agent-permissions",
     permissionsApi.list,
   );
@@ -45,9 +46,9 @@ export function Setup() {
     <Page width="narrow" title={t.setup.title} description={t.setup.description}>
       <TrustCard />
       <Section title={t.setup.connectTitle} description={t.setup.connectBody}>
-        {agentsError ? (
+        {LiveState.$is("Failed")(agentsLoad) ? (
           <div className="py-3">
-            <ErrorAlert title={t.setup.agentsError} message={agentsError} />
+            <ErrorAlert title={t.setup.agentsError} message={agentsLoad.error} />
           </div>
         ) : agents === undefined ? (
           <div className="flex flex-col gap-2 py-3" aria-busy="true">
@@ -64,9 +65,9 @@ export function Setup() {
                 onChange={reload}
               />
             ))}
-            {permissionsError ? (
+            {LiveState.$is("Failed")(permissionsLoad) ? (
               <div className="pb-3">
-                <ErrorAlert title={t.permissions.error} message={permissionsError} />
+                <ErrorAlert title={t.permissions.error} message={permissionsLoad.error} />
               </div>
             ) : null}
           </ItemGroup>

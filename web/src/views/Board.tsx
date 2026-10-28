@@ -34,6 +34,7 @@ import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { gridColumns } from "../lib/board-keys.ts";
 import { moveItems } from "../lib/items.ts";
+import { LiveState } from "../lib/live.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { readStored, writeStored } from "../lib/storage.ts";
 import { byWork, isBusy, itemWork } from "../lib/work.ts";
@@ -158,7 +159,7 @@ function KnownLine() {
 
 export function Board() {
   const t = useMessages();
-  const { data: items, error, reload, setData } = useLive("items", api.items);
+  const { state: load, data: items, reload, setData } = useLive("items", api.items);
   const { data: formats } = useLive("formats", api.formats);
   const [showArchived, setShowArchived] = useState(false);
   const [format, setFormat] = useState<string | null>(null);
@@ -175,11 +176,11 @@ export function Board() {
     return () => clearInterval(timer);
   }, [busy]);
 
-  if (error) {
+  if (LiveState.$is("Failed")(load)) {
     return (
       <div className="px-6 pt-2">
         <PageHeader title={t.board.title} />
-        <ErrorAlert title={t.board.loadError} message={error} />
+        <ErrorAlert title={t.board.loadError} message={load.error} />
       </div>
     );
   }
