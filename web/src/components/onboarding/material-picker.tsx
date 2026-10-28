@@ -15,6 +15,7 @@ import { desktop } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { linkLabel } from "../../lib/imports.ts";
 import { sendFailed } from "../../lib/notify.ts";
+import { asWebsite } from "../../lib/onboarding.ts";
 
 export const isLink = (source: string) => /^https?:\/\//i.test(source);
 
@@ -58,7 +59,7 @@ export function WebsitePicker({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          onSources(added(sources, draft));
+          onSources(added(sources, asWebsite(draft)));
           onDraft("");
         }}
       >

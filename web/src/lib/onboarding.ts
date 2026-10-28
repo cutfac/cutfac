@@ -13,6 +13,13 @@ export const agentsToConnect = (statuses: ReadonlyArray<AgentStatus>): AgentName
     status.installed && status.outdated === undefined && !status.connected ? [status.agent] : [],
   );
 
+/** A website as typed, with `https://` added when it is left out, such as `yourwebsite.com`. */
+export const asWebsite = (typed: string) => {
+  const text = typed.trim();
+
+  return text === "" || text.includes("://") ? text : `https://${text}`;
+};
+
 /**
  * A name for the first workspace from the website the user gave, as its address reads without
  * `www.`, such as `cutfac.com`; none without one.
@@ -21,7 +28,7 @@ export const nameFromSources = (sources: ReadonlyArray<string>): Option.Option<s
   Array.findFirst(sources, (source) => {
     const text = source.trim();
 
-    return urlOf(text.includes("://") ? text : `https://${text}`).pipe(
+    return urlOf(asWebsite(text)).pipe(
       Option.map(({ hostname }) => hostname),
       Option.filter((hostname) => hostname.includes(".")),
       Option.map((hostname) => hostname.replace(/^www\./, "")),

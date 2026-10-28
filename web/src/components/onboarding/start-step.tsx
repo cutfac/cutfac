@@ -11,7 +11,7 @@ import { href } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { briefReady } from "../../lib/brief.ts";
 import { errorText } from "../../lib/notify.ts";
-import { skipStart } from "../../lib/onboarding.ts";
+import { asWebsite, skipStart } from "../../lib/onboarding.ts";
 import { type Answers, saveAnswers } from "./answers.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
 import { StepHeader } from "./frame.tsx";
@@ -117,7 +117,7 @@ export function BriefQuestions({
         <Button
           size="lg"
           disabled={busy || !briefReady(brief)}
-          onClick={() => onFinish({ brief, sources: [...sources, typed.trim()] })}
+          onClick={() => onFinish({ brief, sources: [...sources, asWebsite(typed)] })}
         >
           {busy ? <Spinner data-icon="inline-start" /> : null}
           {busy ? finish.busyLabel : finish.label}

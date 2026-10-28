@@ -70,7 +70,7 @@ export const startKo: StartMessages = {
         title: "에이전트가 읽을 폴더가 있나요?",
         body: "브랜드 키트나 영상 소재처럼요. 폴더는 옮기지 않아요.",
       },
-      placeholder: "https://yourwebsite.com",
+      placeholder: "yourwebsite.com",
       add: "추가",
       choose: "폴더 선택…",
       remove: (source) => `${source} 빼기`,
