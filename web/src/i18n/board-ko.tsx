@@ -40,12 +40,12 @@ export const boardKo: BoardMessages = {
       titles.length === 1
         ? `에이전트가 ${withParticle(titles[0] ?? "", "을/를")} 읽고 있어요…`
         : `에이전트가 자료 ${titles.length}개를 읽고 있어요…`,
-    ideaPrompt: (platform, seconds, title) => {
-      const lead = [seconds === undefined ? undefined : `${seconds}초`, platform]
+    ideaPrompt: (platform, seconds, about) => {
+      const lead = [seconds === undefined ? undefined : `${seconds}초`, platform ?? "영상"]
         .filter((part) => part !== undefined)
         .join(" ");
 
-      return lead === "" ? title : `${lead}: ${title}`;
+      return `${withParticle(lead, "을/를")} 만들어 주세요. ${about}`;
     },
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,

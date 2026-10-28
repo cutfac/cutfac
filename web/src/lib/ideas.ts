@@ -4,20 +4,24 @@ import type { ImportSummary } from "../api/imports.ts";
 import { PLATFORMS, type Platform } from "./brief.ts";
 import { replyBlocks } from "./replyBlocks.ts";
 
-/** A first video the agent suggests: where it goes, how long it runs, and what it shows. */
+/**
+ * A first video the agent suggests: where it goes, how long it runs, a short title, and a
+ * sentence on what it shows.
+ */
 export interface Idea {
   readonly platform: Option.Option<Platform>;
   readonly seconds: Option.Option<number>;
   readonly title: string;
+  readonly about: Option.Option<string>;
 }
 
-const LINE = /^(\S+)\s+(\d{1,3})\s*\|\s*(.+)$/;
+const LINE = /^(\S+)\s+(\d{1,3})\s*\|\s*([^|]+?)\s*(?:\|\s*(.+))?$/;
 
 const decodePlatform = Schema.decodeUnknownOption(Schema.Literals(PLATFORMS));
 
 /**
- * An `ideas` line as the reading writes it, `tiktok 15 | what it shows`; a line in any other shape
- * is all title.
+ * An `ideas` line as the reading writes it, `tiktok 15 | title | what it shows`, or as an earlier
+ * reading wrote it, without the sentence; a line in any other shape is all title.
  */
 export function parseIdea(line: string): Idea {
   const text = line.trim();
@@ -25,13 +29,14 @@ export function parseIdea(line: string): Idea {
   const platform = decodePlatform(match?.[1]?.toLowerCase());
 
   if (match === null || Option.isNone(platform)) {
-    return { platform: Option.none(), seconds: Option.none(), title: text };
+    return { platform: Option.none(), seconds: Option.none(), title: text, about: Option.none() };
   }
 
   return {
     platform,
     seconds: Option.some(Number(match[2])),
     title: (match[3] ?? "").trim(),
+    about: Option.filter(Option.fromNullishOr(match[4]?.trim()), (text) => text !== ""),
   };
 }
 

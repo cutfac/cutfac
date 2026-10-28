@@ -40,12 +40,12 @@ export const boardEn = {
         ? `Your agent is reading ${titles[0]}…`
         : `Your agent is reading ${titles.length} sources…`,
     /** The request a suggested first video writes into the request box. */
-    ideaPrompt: (platform: string | undefined, seconds: number | undefined, title: string) => {
-      const lead = [seconds === undefined ? undefined : `${seconds}-second`, platform]
+    ideaPrompt: (platform: string | undefined, seconds: number | undefined, about: string) => {
+      const lead = [seconds === undefined ? undefined : `${seconds}-second`, platform ?? "video"]
         .filter((part) => part !== undefined)
         .join(" ");
 
-      return lead === "" ? title : `A ${lead}: ${title}`;
+      return `Make a ${lead}. ${about}`;
     },
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,

@@ -113,9 +113,14 @@ function ChipRow({ children }: { children: ReactNode }) {
 
 function IdeaChip({ idea, onPick }: { idea: Idea; onPick: (idea: PickedIdea) => void }) {
   const t = useMessages();
-  const platform = Option.map(idea.platform, (one) => t.start.brief.platform[one]);
+  const platform = Option.filter(idea.platform, (one) => one !== "other");
   const seconds = Option.getOrUndefined(idea.seconds);
-  const prompt = t.board.ideaPrompt(Option.getOrUndefined(platform), seconds, idea.title);
+
+  const prompt = t.board.ideaPrompt(
+    Option.getOrUndefined(Option.map(platform, (one) => t.start.brief.platform[one])),
+    seconds,
+    Option.getOrElse(idea.about, () => idea.title),
+  );
 
   return (
     <Button
