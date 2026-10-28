@@ -30,18 +30,10 @@ export function OnboardingFrame({
 }) {
   return (
     <div className="flex h-dvh flex-col bg-background">
-      <div
-        className={cn(
-          "flex shrink-0 items-center px-6",
-          // The window has no title bar of its own; this strip drags it and keeps the controls clear.
-          insetTitleBar ? "h-14 [-webkit-app-region:drag]" : "pt-3",
-        )}
-      >
-        {/* Lined up with the column's right edge, so it stays near the step without moving with it. */}
-        <div className={cn("mx-auto flex w-full justify-end", wide ? "max-w-lg" : "max-w-md")}>
-          <LanguagePicker />
-        </div>
-      </div>
+      {insetTitleBar ? (
+        // The window has no title bar of its own; this strip drags it and keeps the controls clear.
+        <div aria-hidden className="h-10 shrink-0 [-webkit-app-region:drag]" />
+      ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6">
         <div
           key={step}
@@ -50,6 +42,9 @@ export function OnboardingFrame({
             wide ? "max-w-lg" : "max-w-md",
           )}
         >
+          <div className="-mb-6 flex justify-end">
+            <LanguagePicker />
+          </div>
           <LinkWaiting />
           {children}
         </div>

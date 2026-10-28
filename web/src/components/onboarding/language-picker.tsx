@@ -1,6 +1,13 @@
 import { LanguagesIcon } from "lucide-react";
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import {
   isLocale,
@@ -16,22 +23,26 @@ export function LanguagePicker() {
   const locale = useLocale();
 
   return (
-    <div className="flex items-center gap-1.5 text-muted-foreground [-webkit-app-region:no-drag]">
-      <LanguagesIcon className="size-3.5" aria-hidden />
-      <ToggleGroup
-        size="sm"
-        aria-label={t.language.label}
-        value={[locale]}
-        onValueChange={([picked]) => {
-          if (picked !== undefined && isLocale(picked)) setLocale(picked);
-        }}
-      >
-        {LOCALES.map((option) => (
-          <ToggleGroupItem key={option} value={option} lang={option}>
-            {LOCALE_NAMES[option]}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button size="sm" variant="ghost" className="-me-3" />}>
+        <LanguagesIcon data-icon="inline-start" />
+        <span className="sr-only">{t.language.label}: </span>
+        {LOCALE_NAMES[locale]}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-40">
+        <DropdownMenuRadioGroup
+          value={locale}
+          onValueChange={(value) => {
+            if (isLocale(value)) setLocale(value);
+          }}
+        >
+          {LOCALES.map((option) => (
+            <DropdownMenuRadioItem key={option} value={option} lang={option}>
+              {LOCALE_NAMES[option]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
