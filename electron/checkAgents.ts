@@ -39,7 +39,7 @@ import { codexServers } from "../src/core/mcpServers.ts";
 import { commandOptions, which } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
-import { runScript } from "./script.ts";
+import { runScript, scriptLog } from "./script.ts";
 
 const root = path.resolve(import.meta.dir, "..");
 
@@ -299,7 +299,7 @@ const runTurn = Effect.fnUntraced(function* (invocation: AgentInvocation, cwd: s
   return output;
 });
 
-const log = (message: string) => Console.log(`[check:agents] ${message}`);
+const log = scriptLog("check:agents");
 
 /** A workspace to run the agents in: just enough for this workspace's MCP server to start. */
 const checkWorkspace = Effect.gen(function* () {

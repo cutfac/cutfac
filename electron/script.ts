@@ -2,6 +2,9 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Console, Effect, Exit, Predicate, Runtime } from "effect";
 
+/** A line from the script `name`, marked with it as its failures are. */
+export const scriptLog = (name: string) => (message: string) => Console.log(`[${name}] ${message}`);
+
 /**
  * Runs a script's program, whose success is its exit code. Ctrl+C interrupts the program so its
  * cleanup runs, and the script exits 130.

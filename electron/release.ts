@@ -11,10 +11,11 @@
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
-import { Console, Effect, FileSystem, Option, Redacted, Schema } from "effect";
+import { Console, Effect, FileSystem, Option, Redacted } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { run as runCaptured } from "../src/core/process.ts";
+import { packageVersion } from "./packageJson.ts";
 import { publishBuild, ReleaseBucket } from "./releaseBucket.ts";
 import {
   BRANCH,
@@ -55,10 +56,6 @@ const CHECKS = [
  * nothing, so the tree stays what the release is tagged at.
  */
 const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"] as const;
-
-const decodePackage = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Struct({ version: Schema.NonEmptyString })),
-);
 
 const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -171,12 +168,6 @@ const preflight = Effect.gen(function* () {
   return problems.flatMap(Option.toArray);
 });
 
-const packageVersion = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-
-  return (yield* fs.readFileString(packageFile).pipe(Effect.flatMap(decodePackage))).version;
-});
-
 /** Refuses a version that is already tagged, or not newer than the one the bucket serves. */
 const refuseReleased = Effect.fnUntraced(function* (version: string) {
   const tagged = yield* output([
@@ -211,7 +202,7 @@ const checkedVersion = Effect.fnUntraced(function* ({ increment, checkAgents }: 
   }
 
   const checked = Effect.gen(function* () {
-    const version = yield* packageVersion;
+    const version = yield* packageVersion(packageFile);
 
     yield* refuseReleased(version);
     yield* log(`Running CI's checks on ${version}.`);

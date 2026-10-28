@@ -29,6 +29,7 @@ import { DEV_APP, devElectron } from "./devApp.ts";
 import { DEV_ENV } from "./devEnv.ts";
 import { type AppProcess, launchApp } from "./devLaunch.ts";
 import { bindPort, freePort } from "./ports.ts";
+import { scriptLog } from "./script.ts";
 
 const root = path.resolve(import.meta.dir, "..");
 
@@ -40,7 +41,7 @@ const RESTART_DEBOUNCE = "300 millis";
 
 const bin = (name: string) => path.join(root, "node_modules", ".bin", name);
 
-const log = (message: string) => Console.log(`[desktop:dev] ${message}`);
+const log = scriptLog("desktop:dev");
 
 const DEV_SCRIPTS = new Set([path.basename(import.meta.path), "devApp.ts", "devLaunch.ts"]);
 

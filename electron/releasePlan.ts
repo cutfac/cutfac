@@ -1,14 +1,15 @@
 import path from "node:path";
 
-import { Config, Console, Effect, Option, Redacted, Result, Schema } from "effect";
+import { Config, Effect, Option, Redacted, Result, Schema } from "effect";
 
 import { fromYamlString } from "../src/core/configText.ts";
+import { scriptLog } from "./script.ts";
 
 export class ReleaseFailed extends Schema.TaggedError<ReleaseFailed>()("ReleaseFailed", {
   message: Schema.String,
 }) {}
 
-export const log = (message: string) => Console.log(`[release] ${message}`);
+export const log = scriptLog("release");
 
 export const BRANCH = "main";
 

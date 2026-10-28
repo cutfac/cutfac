@@ -10,16 +10,13 @@ import { Console, Crypto, Effect, FileSystem, Option, Path, Schema } from "effec
 import { Hex } from "effect/encoding";
 
 import { run } from "../src/core/process.ts";
+import { packageVersion } from "./packageJson.ts";
 
 export const DEV_APP = { name: "Cutfac Dev", bundleId: "com.cutfac.app.dev" };
 
 export class DevAppFailed extends Schema.TaggedError<DevAppFailed>()("DevAppFailed", {
   message: Schema.String,
 }) {}
-
-const decodePackage = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Struct({ version: Schema.NonEmptyString })),
-);
 
 /** An object schema that keeps the keys it does not name, so a rewrite drops nothing. */
 const openStruct = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
@@ -79,9 +76,7 @@ export const devElectron = Effect.fn("devApp.devElectron")(function* (root: stri
     band: path.join(root, "build", "icon-dev-badge.svg"),
   };
 
-  const { version } = yield* fs
-    .readFileString(path.join(electron, "package.json"))
-    .pipe(Effect.flatMap(decodePackage));
+  const version = yield* packageVersion(path.join(electron, "package.json"));
 
   const stamp = JSON.stringify({ electron: version, ...DEV_APP, icon: yield* hashIcon(icon) });
 
