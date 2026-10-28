@@ -72,6 +72,8 @@ export const settingsEn = {
     limitTitle: (limit: number) => `You've made all ${limit} free videos`,
     limitBody:
       "Upgrade to make new videos. You can keep editing the ones you have and make new versions of them.",
+    limitReached:
+      "You've used all of the free version's videos. Upgrade to make new ones or to work on a video made outside Cutfac. The videos Cutfac made stay editable.",
   },
 };
 

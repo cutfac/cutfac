@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect";
 
 import { readStored, writeStored } from "../lib/storage.ts";
+import { FreeLimitReached } from "./errors.ts";
 
 const API_BASE = readApiBase();
 
@@ -22,6 +23,8 @@ export function fileUrl(rel: string, version?: number): string {
 
 export const q = (id: string) => `?id=${encodeURIComponent(id)}`;
 
+const FREE_LIMIT = 402;
+
 const ApiFailure = Schema.fromJsonString(Schema.Struct({ error: Schema.String }));
 
 const decodeFailure = Schema.decodeUnknownOption(ApiFailure);
@@ -29,10 +32,12 @@ const decodeFailure = Schema.decodeUnknownOption(ApiFailure);
 async function failure(res: Response): Promise<Error> {
   const body = await res.text().catch(() => "");
 
-  return Option.match(decodeFailure(body), {
-    onSome: ({ error }) => new Error(error),
-    onNone: () => new Error(`${res.status} ${res.statusText}`),
+  const message = Option.match(decodeFailure(body), {
+    onSome: ({ error }) => error,
+    onNone: () => `${res.status} ${res.statusText}`,
   });
+
+  return res.status === FREE_LIMIT ? new FreeLimitReached({ message }) : new Error(message);
 }
 
 export async function request<A>(

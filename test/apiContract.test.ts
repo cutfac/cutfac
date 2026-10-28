@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { resolveEdit } from "../src/core/edits.ts";
 import { saveVariant } from "../src/core/editVariants.ts";
+import { FreeLimitReached } from "../web/src/api/errors.ts";
 import { api, startBoardServer, type BoardServer } from "./boardServer.ts";
 import {
   makeFakeAgents,
@@ -288,13 +289,17 @@ notes: [No audio]
     ]);
   });
 
-  test("the plan is the open-source one, or the desktop app's free version and then its paid one", async () => {
+  test("the plan is the open-source one, or the desktop app's free version, refusing a video past its limit, and then its paid one", async () => {
     expect(await api.plan()).toEqual({ edition: "open-source" });
 
     const data = await server.tempFolder("desktop");
 
     await server.onDesktop(data, async () => {
       expect(await api.plan()).toEqual({ edition: "desktop", paid: false, used: 0, limit: 3 });
+
+      await writeFile(join(data, "videos.log"), "a\nb\nc\n");
+
+      await expect(api.createItem({ title: "Four" })).rejects.toBeInstanceOf(FreeLimitReached);
 
       await writeFile(
         join(data, "settings.json"),
