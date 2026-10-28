@@ -81,4 +81,21 @@ describe("samples", () => {
       );
     }),
   );
+
+  it.live(
+    "only the first sample on this Mac is free: another counts, and past the limit is refused",
+    () =>
+      Effect.gen(function* () {
+        yield* addSample("bold", "en", "Sample: VOLT");
+        yield* addSample("calm", "en", "Sample: HALO");
+
+        expect(yield* planStatus()).toMatchObject({ used: 1 });
+
+        yield* Effect.forEach(["One", "Two"], (title) => createCountedItem({ title }));
+
+        expect(yield* Effect.flip(addSample("bold", "en", "Sample: VOLT"))).toBeInstanceOf(
+          FreeLimitReached,
+        );
+      }),
+  );
 });

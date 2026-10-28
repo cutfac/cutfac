@@ -291,7 +291,10 @@ export const createEmptyItem = Effect.fn("plan.createEmptyItem")(function* (inpu
   return yield* createWithin(input, "onWork");
 });
 
-const createWithin = Effect.fnUntraced(function* (input: NewItemInput, counted: "now" | "onWork") {
+const createWithin = Effect.fnUntraced(function* (
+  input: NewItemInput,
+  counted: "now" | "onWork" | "sample",
+) {
   const ws = yield* Workspace;
   const dir = yield* DesktopData;
 
@@ -301,13 +304,24 @@ const createWithin = Effect.fnUntraced(function* (input: NewItemInput, counted: 
   return yield* ws.exclusive(
     "plan:videos",
     Effect.gen(function* () {
-      if (atFreeLimit(yield* planOf(...(yield* readRecords(data))))) {
+      const [settings, videos] = yield* readRecords(data);
+
+      // The Mac's first sample is free, even past the limit; another is a video like any new one.
+      if (counted === "sample" && countOf(videos).samples.size === 0) {
+        const item = yield* createItem(input);
+
+        yield* record(data, "sample", videoKey(item));
+
+        return item;
+      }
+
+      if (atFreeLimit(yield* planOf(settings, videos))) {
         return yield* new FreeLimitReached({ message: LIMIT_MESSAGE });
       }
 
       const item = yield* createItem(input);
 
-      if (counted === "now") yield* record(data, "made", videoKey(item));
+      if (counted !== "onWork") yield* record(data, "made", videoKey(item));
 
       return item;
     }),
@@ -315,17 +329,13 @@ const createWithin = Effect.fnUntraced(function* (input: NewItemInput, counted: 
 });
 
 /**
- * Makes `input` as one of the app's samples: an item the free version never counts, made even past
- * its limit, and marked in the app's data rather than the item, so editing a folder can't make
- * another video one.
+ * Makes `input` as one of the app's samples. The first on this Mac is practice: the free version
+ * never counts it, it is made even past the limit, and it is marked in the app's data rather than
+ * the item, so editing a folder can't make another video one. Any after it count as new videos, so
+ * copying samples is no way around the limit.
  */
 export const createSampleItem = Effect.fn("plan.createSampleItem")(function* (input: NewItemInput) {
-  const item = yield* createItem(input);
-  const dir = yield* DesktopData;
-
-  if (Option.isSome(dir)) yield* record(dir.value, "sample", videoKey(item));
-
-  return item;
+  return yield* createWithin(input, "sample");
 });
 
 const atFreeLimit = (plan: Plan) =>

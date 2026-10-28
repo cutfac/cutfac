@@ -173,7 +173,7 @@ play it, draw a box on the title, send the suggested request to change it to the
 then ask for two versions and compare. The copy is practice, so it uses none of the free version's
 videos: the app's `videos.log` (and its keychain copy) marks it a sample, so neither copying it in
 nor working on it counts, and it stays editable past the limit; editing its folder can't make
-another video one. While
+another video one. Only the first sample on a Mac is free: copying another counts as a new video. While
 the user picks, one quiet line beside Skip says the agent reads in the background and nothing waits
 on it, then that it is done; a line under the heading read as a loading screen to wait out.
 The guide's last card,
