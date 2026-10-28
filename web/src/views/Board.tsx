@@ -2,6 +2,7 @@ import { Option, Schema } from "effect";
 import { ArchiveIcon, BookOpenIcon, KanbanIcon, LayoutGridIcon, PlusIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
+import { FirstIdeas } from "@/components/first-ideas";
 import { ItemMenu } from "@/components/item-menu";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { NotifyRow } from "@/components/notify-row";
@@ -299,6 +300,7 @@ export function Board() {
             <EmptyContent>
               <NewItemTrigger />
               <KnownLine />
+              <FirstIdeas />
               <NotifyRow />
             </EmptyContent>
           </Empty>

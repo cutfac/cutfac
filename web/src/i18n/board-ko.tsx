@@ -40,6 +40,7 @@ export const boardKo: BoardMessages = {
       titles.length === 1
         ? `에이전트가 ${withParticle(titles[0] ?? "", "을/를")} 읽고 있어요…`
         : `에이전트가 자료 ${titles.length}개를 읽고 있어요…`,
+    ideas: "이렇게 시작해 봐도 좋아요",
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,
     selected: "선택됨",

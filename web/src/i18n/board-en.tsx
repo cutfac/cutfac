@@ -39,6 +39,8 @@ export const boardEn = {
       titles.length === 1
         ? `Your agent is reading ${titles[0]}…`
         : `Your agent is reading ${titles.length} sources…`,
+    /** Above the first videos the agent suggests from what it read; one opens New video with it. */
+    ideas: "Or start from one of these",
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
     selected: "selected",

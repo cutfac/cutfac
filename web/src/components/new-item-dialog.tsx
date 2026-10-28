@@ -1,5 +1,5 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { LinkIcon, PlusIcon } from "lucide-react";
 import {
   useEffect,
@@ -82,6 +82,15 @@ const handle = DialogPrimitive.createHandle();
 /** Open the new item dialog, as from a shortcut or the command palette. */
 export const openNewItem = (): void => handle.open(null);
 
+const prompts = new EventTarget();
+
+const isText = Schema.is(Schema.String);
+
+/** Open the new item dialog with `prompt` written in, for the user to look over and send. */
+export const openNewItemWith = (prompt: string): void => {
+  prompts.dispatchEvent(new CustomEvent("prompt", { detail: prompt }));
+};
+
 /** A button that opens the new item dialog. Defaults to a "New video" button. */
 export function NewItemTrigger({ render }: { render?: ReactElement }) {
   const t = useMessages();
@@ -157,6 +166,22 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   });
 
   useEffect(() => desktop?.onNewVideoLink(receive), []);
+
+  const prompted = useEffectEvent((prompt: string) => {
+    setText(prompt);
+    setLinked(undefined);
+    openNewItem();
+  });
+
+  useEffect(() => {
+    const listen = (event: Event) => {
+      if (event instanceof CustomEvent && isText(event.detail)) prompted(event.detail);
+    };
+
+    prompts.addEventListener("prompt", listen);
+
+    return () => prompts.removeEventListener("prompt", listen);
+  }, []);
 
   /** Add the files and links, then send the description; the item is there whatever fails. */
   async function fill(item: ItemDetail) {

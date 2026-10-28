@@ -163,7 +163,10 @@ The first video is asked for on the board in the user's own words, with or witho
 a template can come from a video the user likes later, through Templates. The agent reads the
 material during the rest of the first launch (see Before the workspace); the empty board says it
 is still reading, then what it knows, which opens the Brief page. A source it couldn't read keeps
-its section marked not read yet, so the next agent that works reads it.
+its section marked not read yet, so the next agent that works reads it. The reading ends with three
+first videos for the platforms in the brief, in an `ideas` block; the empty board shows them under
+what the agent knows, and one opens New video with it written in, so the first video is the user's
+own and only asks for a pick.
 
 ### The brief
 
