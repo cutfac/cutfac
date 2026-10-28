@@ -1,5 +1,7 @@
-import { Crypto, Effect, FileSystem, Path } from "effect";
+import { Effect, FileSystem, Path } from "effect";
 import type { PlatformError } from "effect/PlatformError";
+
+import { newUuid } from "./crypto.ts";
 
 /**
  * Have `write` fill a temp file beside `full`, then rename it over `full` in one step, so a reader
@@ -12,8 +14,7 @@ export const replaceFile = Effect.fnUntraced(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
-  const temp = path.join(path.dirname(full), `.${yield* Effect.orDie(crypto.randomUUIDv4())}.tmp`);
+  const temp = path.join(path.dirname(full), `.${yield* newUuid}.tmp`);
 
   yield* write(temp).pipe(
     Effect.andThen(fs.rename(temp, full)),

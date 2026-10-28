@@ -2,6 +2,7 @@ import { Effect, Option, Path, Predicate, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 
 import { claudeConfigDir, codexHome } from "./agentConfig.ts";
+import { sha256 } from "./crypto.ts";
 import { byName, canonicalJson, isJsonObject, lenient } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import {
@@ -14,7 +15,6 @@ import {
   peekConfig,
 } from "./mcpServers.ts";
 import type { AgentName } from "./schema.ts";
-import { sha256 } from "./skill.ts";
 import { Workspace } from "./workspace.ts";
 import { SETTINGS_FILES } from "./workspaceTrust.ts";
 

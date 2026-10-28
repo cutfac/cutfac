@@ -1,7 +1,6 @@
 import {
   Cause,
   Context,
-  Crypto,
   Effect,
   Layer,
   LogLevel,
@@ -17,6 +16,7 @@ import { HttpClient, HttpClientRequest } from "effect/http";
 
 import { peekAppStore, updateAppStore } from "./core/appStore.ts";
 import { APP_VERSION } from "./core/build.ts";
+import { newUuid } from "./core/crypto.ts";
 import { ErrorSink, OPERATION, homeScrubber } from "./core/logFile.ts";
 
 // The desktop app's error reports, which go to the Cutfac team's PostHog project once the person
@@ -74,8 +74,6 @@ export const reportSettings = Effect.gen(function* () {
   } satisfies ReportSettings;
 });
 
-const newId = Effect.flatMap(Crypto.Crypto, (crypto) => crypto.randomUUIDv4());
-
 /** What the person chose to send; a choice left out stays as it was. */
 export interface ReportChoices {
   readonly errorReports?: boolean;
@@ -84,7 +82,7 @@ export interface ReportChoices {
 
 /** Saves the person's choices, making this install's ID with the first one. */
 export const setReportChoices = Effect.fn("errorReports.set")(function* (choices: ReportChoices) {
-  const id = yield* newId;
+  const id = yield* newUuid;
 
   yield* updateAppStore(STORE, "what to send the Cutfac team", (store) => ({
     ...store,
@@ -97,7 +95,7 @@ export const setReportChoices = Effect.fn("errorReports.set")(function* (choices
 
 /** Gives this install a new ID, so later reports and feedback no longer match the earlier ones. */
 export const resetInstallId = Effect.fn("errorReports.resetInstallId")(function* () {
-  const id = yield* newId;
+  const id = yield* newUuid;
 
   yield* updateAppStore(STORE, "the install ID", (store) => ({ ...store, installId: id }));
 

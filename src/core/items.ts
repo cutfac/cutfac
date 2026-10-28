@@ -1,5 +1,6 @@
-import { Crypto, Effect, Option, Path, Schema } from "effect";
+import { Effect, Option, Path, Schema } from "effect";
 
+import { newUuid } from "./crypto.ts";
 import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import { inputFieldsOf, resolveInputs } from "./formatSpec.ts";
 import { aspectOf, extension, type MediaFile, mediaKind, probe, toMediaFiles } from "./media.ts";
@@ -67,8 +68,7 @@ const checkItemId = (id: string) =>
 
 /** A short random id for feedback entries. */
 export const shortId = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const uuid = yield* Effect.orDie(crypto.randomUUIDv4());
+  const uuid = yield* newUuid;
 
   return uuid.replaceAll("-", "").slice(0, 8);
 });

@@ -1,6 +1,6 @@
 import { Crypto, Effect, Schema } from "effect";
-import { Hex } from "effect/encoding";
 
+import { sha256 } from "./crypto.ts";
 import { readOptionalText } from "./library.ts";
 import { SKILL_MARKDOWN } from "./templates.ts";
 import { Workspace, foldersWith } from "./workspace.ts";
@@ -55,14 +55,6 @@ export const BUNDLED_SKILL: BundledSkill = {
     "5b954933a0e67d960beea321e6e7b1b6b8900fe893e6f1b4f60e4b143b62596f",
   ]),
 };
-
-/** Hex SHA-256, as `BundledSkill.shipped` lists them. */
-export const sha256 = Effect.fn("skill.sha256")(function* (text: string) {
-  const crypto = yield* Crypto.Crypto;
-  const digest = yield* Effect.orDie(crypto.digest("SHA-256", new TextEncoder().encode(text)));
-
-  return Hex.encode(digest);
-});
 
 /** Outdated: an earlier shipped version. Edited: anything else, which only a person may replace. */
 export const SkillState = Schema.Literals(["missing", "current", "outdated", "edited"]);

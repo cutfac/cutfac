@@ -2,11 +2,11 @@ import { Effect, Option, Ref, Schema } from "effect";
 
 import type { Ask } from "./approval.ts";
 import { appStoreFile, peekAppStore, updateAppStore } from "./appStore.ts";
+import { sha256 } from "./crypto.ts";
 import { Conflict } from "./errors.ts";
 import { byName, canonicalJson, isEmptyJson, isJsonObject } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import type { AgentName } from "./schema.ts";
-import { sha256 } from "./skill.ts";
 import { Workspace } from "./workspace.ts";
 
 /** Claude Code's settings in a workspace, which it loads on every run there. */

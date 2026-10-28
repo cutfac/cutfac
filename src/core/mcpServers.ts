@@ -3,13 +3,13 @@ import { Effect, Option, Path, Predicate, Schema } from "effect";
 import { codexHome } from "./agentConfig.ts";
 import { LEGACY_SERVER_NAME, SERVER_NAME } from "./agents.ts";
 import { fromTomlString } from "./configText.ts";
+import { sha256 } from "./crypto.ts";
 import { envVar } from "./env.ts";
 import { CommandFailed } from "./errors.ts";
 import { canonicalJson, isEmptyJson, isJsonObject, lenient } from "./json.ts";
 import { readOptionalText } from "./library.ts";
 import { run } from "./process.ts";
 import type { AgentName } from "./schema.ts";
-import { sha256 } from "./skill.ts";
 import { Workspace } from "./workspace.ts";
 
 /**

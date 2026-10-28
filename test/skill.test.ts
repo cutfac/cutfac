@@ -3,11 +3,11 @@ import { join } from "node:path";
 
 import { Effect, FileSystem } from "effect";
 
+import { sha256 } from "../src/core/crypto.ts";
 import {
   BUNDLED_SKILL,
   type BundledSkill,
   SKILL_PATHS,
-  sha256,
   skillCopies,
   skillNotices,
   syncSkill,

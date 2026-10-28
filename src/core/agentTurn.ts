@@ -1,10 +1,11 @@
-import { type Cause, Crypto, Effect, FiberMap, Queue, Ref, type Scope, Stream } from "effect";
+import { type Cause, Effect, FiberMap, Queue, Ref, type Scope, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { type AgentInvocation, type SessionArgs, isSessionId } from "./agentCommand.ts";
 import type { AgentControl, RunEvent } from "./agentParse.ts";
 import { detectAgentRelease, unreadableOutputMessage } from "./agentVersion.ts";
 import { type Ask, refuse } from "./approval.ts";
+import { newUuid } from "./crypto.ts";
 import type { CutfacError } from "./errors.ts";
 import { commandOptions, spawnFailure, STOP_GRACE, tail } from "./process.ts";
 import type { Emit } from "./runRegistry.ts";
@@ -224,11 +225,10 @@ export interface TurnResult {
 
 /** Run one turn, starting a fresh session when the stored one is gone. */
 export const converse = Effect.fnUntraced(function* <R>(conversation: Conversation<R>) {
-  const crypto = yield* Crypto.Crypto;
   const { agent, stored, save } = conversation;
 
   const attempt = Effect.fnUntraced(function* (sessionId: string | undefined) {
-    const newSessionId = yield* Effect.orDie(crypto.randomUUIDv4());
+    const newSessionId = yield* newUuid;
     const invocation = yield* conversation.invocation({ sessionId, newSessionId });
 
     return yield* attemptAgent(agent, invocation, sessionId, conversation);
