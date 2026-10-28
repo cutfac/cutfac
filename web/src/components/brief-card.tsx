@@ -10,6 +10,7 @@ import { briefApi } from "../briefApi.ts";
 import type { Live } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { briefPatch, EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
+import { errorText } from "../lib/notify.ts";
 
 const sameBrief = (a: BriefDraft, b: BriefDraft) =>
   a.purpose === b.purpose &&
@@ -48,7 +49,7 @@ function BriefEditor({ brief }: { brief: Live<BriefView> }) {
       brief.setData(await briefApi.updateBrief(briefPatch(draft)));
       toast.success(t.saved);
     } catch (cause) {
-      toast.error(t.saveFailed(cause instanceof Error ? cause.message : String(cause)));
+      toast.error(t.saveFailed(errorText(cause)));
     } finally {
       setSaving(false);
     }

@@ -11,10 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, type ItemDetail, type ItemPatch } from "../../api.ts";
 import { href, useLive } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
-
-const showError = (cause: Error) => {
-  toast.error(cause.message);
-};
+import { sendFailed } from "../../lib/notify.ts";
 
 interface TextFieldProps {
   id: string;
@@ -141,7 +138,7 @@ export function Details({
     return [{ id, label: field?.title ?? id, value: choice?.title ?? value }];
   });
 
-  const save = (patch: ItemPatch) => api.updateItem(item.id, patch).then(onItem, showError);
+  const save = (patch: ItemPatch) => api.updateItem(item.id, patch).then(onItem, sendFailed);
 
   return (
     <div className="flex flex-col gap-6">

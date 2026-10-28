@@ -1,12 +1,12 @@
 import { CheckIcon, MonitorIcon, PointerIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
 import type { CutfacOnboarding, Permission } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { AccessPreview } from "./access-preview.tsx";
 import { DONE_PAUSE_MS, StepActions, StepDone, StepHeader } from "./frame.tsx";
 
@@ -94,9 +94,9 @@ export function AccessStep({
 
   const open = (permission: Permission) => {
     setWaiting(permission);
-    onboarding.openAccessSettings(permission).catch((cause: Error) => {
+    onboarding.openAccessSettings(permission).catch((cause) => {
       setWaiting(undefined);
-      toast.error(cause.message);
+      sendFailed(cause);
     });
   };
 

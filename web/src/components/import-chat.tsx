@@ -16,7 +16,6 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
 import { ErrorAlert, ListSkeleton } from "@/components/page";
@@ -66,6 +65,7 @@ import { useLocale, useMessages } from "../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../lib/feedback.ts";
 import { importState, isWorking, turnRun, type ImportState } from "../lib/imports.ts";
 import { agentLabel } from "../lib/models.ts";
+import { sendFailed } from "../lib/notify.ts";
 import { replyMarkdown } from "../lib/replyBlocks.ts";
 import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import { clockTime } from "../lib/time.ts";
@@ -113,7 +113,7 @@ export function ImportChat({ id, onChange }: ImportChatProps) {
 
       return true;
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : String(cause));
+      sendFailed(cause);
 
       return false;
     }
@@ -393,8 +393,8 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
 
     return sendSlashFeedback(feedback.value, agent).then(
       () => true,
-      (cause: Error) => {
-        toast.error(cause.message);
+      (cause) => {
+        sendFailed(cause);
 
         return false;
       },

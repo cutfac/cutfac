@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api, type AgentChoice, type TrustItem } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { errorText } from "../lib/notify.ts";
 
 /** A setting as the user reads it: the file's own text when it is not JSON, else its JSON. */
 const shown = (item: TrustItem) =>
@@ -44,7 +45,7 @@ export function TrustCard() {
     api
       .trustWorkspace(trust.fingerprint)
       .then(() => toast.success(t.trust.trusted))
-      .catch((cause: Error) => toast.error(t.trust.failed, { description: cause.message }))
+      .catch((cause) => toast.error(t.trust.failed, { description: errorText(cause) }))
       .finally(() => {
         setBusy(false);
         reload();

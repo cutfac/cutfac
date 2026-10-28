@@ -52,6 +52,7 @@ import {
   versionGroups,
   type ChangeState,
 } from "../../lib/history.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { dayLabel, formatAgo } from "../../lib/time.ts";
 
 /** Same as the server's image extensions; everything else it keeps is video. */
@@ -66,10 +67,6 @@ const CAUSE_ICONS: Record<MediaCause, LucideIcon> = {
 
 const iconOf = (entry: HistoryEntry) =>
   entry.kind === "details" ? PencilLineIcon : CAUSE_ICONS[entry.cause];
-
-const showError = (cause: Error) => {
-  toast.error(cause.message);
-};
 
 /** Undo, redo, and jumps through an item's history, each named in a toast. */
 export function useItemHistory(onItem: (item: ItemDetail) => void) {
@@ -90,7 +87,7 @@ export function useItemHistory(onItem: (item: ItemDetail) => void) {
       .then((item) => {
         onItem(item);
         announce(item);
-      }, showError)
+      }, sendFailed)
       .finally(() => {
         pending.current = false;
       });

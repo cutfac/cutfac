@@ -1,7 +1,6 @@
 import { Match } from "effect";
 import { CheckIcon, ChevronsUpDownIcon, FolderOpenIcon, PlusIcon } from "lucide-react";
 import { useId, useState, type SubmitEvent } from "react";
-import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
 import { Button } from "@/components/ui/button";
@@ -30,11 +29,12 @@ import type { WorkspaceInfo } from "../api.ts";
 import { desktop, type LibraryWorkspaces } from "../desktop.ts";
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { errorText, sendFailed } from "../lib/notify.ts";
 
 /** Ask for any folder to open as a workspace, beyond the ones in the app's folder. */
 export function openWorkspace() {
   // The desktop shell reloads the window itself once the new workspace is serving.
-  desktop?.openWorkspace().catch((cause: Error) => toast.error(cause.message));
+  desktop?.openWorkspace().catch(sendFailed);
 }
 
 /**
@@ -129,8 +129,7 @@ export function WorkspaceMenu({ ws }: { ws: WorkspaceInfo | undefined }) {
       () => setList([]),
     );
 
-  const switchTo = (workspace: string) =>
-    shell.switchWorkspace(workspace).catch((cause: Error) => toast.error(cause.message));
+  const switchTo = (workspace: string) => shell.switchWorkspace(workspace).catch(sendFailed);
 
   return (
     <>
@@ -216,9 +215,9 @@ function NewWorkspaceDialog({
           ),
         );
       },
-      (cause: Error) => {
+      (cause) => {
         setBusy(false);
-        setError(cause.message);
+        setError(errorText(cause));
       },
     );
   };

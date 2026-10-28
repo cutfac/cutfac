@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { errorText } from "../lib/notify.ts";
 import {
   type McpLaunchView,
   type McpPluginView,
@@ -335,8 +336,8 @@ function Decision({ name, state, send, done, failed, kept }: DecisionProps) {
         toast.success(done(on));
         kept(view.state);
       })
-      .catch((cause: Error) => {
-        toast.error(failed, { description: cause.message });
+      .catch((cause) => {
+        toast.error(failed, { description: errorText(cause) });
         kept(undefined);
       })
       .finally(() => setBusy(undefined));

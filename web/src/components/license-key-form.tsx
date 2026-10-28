@@ -16,6 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 import type { CutfacDesktop } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 import { CUSTOMER_PORTAL_URL } from "../lib/license.ts";
+import { sendFailed } from "../lib/notify.ts";
 
 interface LicenseKeyFormProps {
   desktop: CutfacDesktop;
@@ -56,7 +57,7 @@ export function LicenseKeyForm({ desktop, saved, onSaved }: LicenseKeyFormProps)
         if (check === "granted") toast.success(t.license.granted);
         else toast.warning(check === "ended" ? t.license.ended : t.license.unavailable);
       })
-      .catch((cause: Error) => toast.error(cause.message))
+      .catch(sendFailed)
       .finally(() => setBusy(false));
   }
 

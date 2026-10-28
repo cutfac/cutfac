@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import type { CutfacOnboarding, Folder, Sharing, SharingPurpose } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { EMPTY_BRIEF } from "../../lib/brief.ts";
+import { errorText } from "../../lib/notify.ts";
 import { suggestedName } from "../../lib/onboarding.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
 import { SharingChoice } from "./sharing-choice.tsx";
@@ -64,7 +65,7 @@ export function ReadyStep({
 
         return onboarding.saveDraft({ ...kept, sharing: { ...kept.sharing, [purpose]: answer } });
       })
-      .catch((cause: Error) => setError(cause.message));
+      .catch((cause) => setError(errorText(cause)));
   };
 
   const create = () => {
@@ -78,8 +79,8 @@ export function ReadyStep({
         setError(failure.kind === "failed" ? failure.message : t.failed);
         setBusy(false);
       },
-      (cause: Error) => {
-        setError(cause.message);
+      (cause) => {
+        setError(errorText(cause));
         setBusy(false);
       },
     );

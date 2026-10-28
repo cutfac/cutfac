@@ -1,6 +1,5 @@
 import { PlusIcon } from "lucide-react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { StackMark } from "@/components/stack-mark";
 import { Button } from "@/components/ui/button";
@@ -17,11 +16,8 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { api, fileUrl, type ItemDetail, type Media } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { FileStrip } from "./attachments.tsx";
-
-const showError = (cause: Error) => {
-  toast.error(cause.message);
-};
 
 /** The media to show: the chosen one, else the first video, else whatever there is. */
 export function shownMedia(item: ItemDetail, name: string | undefined): Media | undefined {
@@ -58,7 +54,7 @@ function useUpload(
         );
 
         if (added !== undefined) onUploaded(added.name);
-      }, showError)
+      }, sendFailed)
       .finally(() => setUploading(false));
   }
 

@@ -8,7 +8,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
 
 import { SelectionArea } from "@/components/selection-area";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 import { useMessages, type Messages } from "../../i18n/index.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { failureSeen, seeFailure } from "../../lib/render-seen.ts";
 import {
   RENDER_STAGES,
@@ -121,7 +121,7 @@ export function useItemRender(
   }, [render]);
 
   const stop = () => {
-    stopRender(id).catch((cause: Error) => toast.error(cause.message));
+    stopRender(id).catch(sendFailed);
   };
 
   const versions = [...(seen?.live.values() ?? [])].filter(

@@ -32,7 +32,7 @@ import { agentInstalled } from "../../hooks.ts";
 import { messages, useMessages } from "../../i18n/index.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
-import { sendFailed } from "../../lib/notify.ts";
+import { errorText, sendFailed } from "../../lib/notify.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
@@ -78,7 +78,7 @@ export function copyPrompt(prompt: string) {
           onClick: () => {
             navigator.clipboard.writeText(prompt).then(
               () => toast.success(t.composer.promptCopied),
-              (cause: Error) => toast.error(t.common.couldNotCopy(cause.message)),
+              (cause) => toast.error(t.common.couldNotCopy(errorText(cause))),
             );
           },
         },

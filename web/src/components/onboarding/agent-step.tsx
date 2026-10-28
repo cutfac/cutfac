@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import type { AgentName } from "../../api.ts";
 import type { AgentSetup, CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { errorText } from "../../lib/notify.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
 
 /** A fix in flight shows the last line it printed; one that failed, the command to run instead. */
@@ -80,8 +81,8 @@ export function AgentStep({
         setSetups(found.toSorted(byOrder));
         setError(undefined);
       },
-      (cause: Error) => {
-        if (seq === checks.current) setError(cause.message);
+      (cause) => {
+        if (seq === checks.current) setError(errorText(cause));
       },
     );
   };
@@ -293,7 +294,7 @@ function FixFailed({ command, onCheck }: { command: string; onCheck: () => void 
   const copyCommand = () =>
     navigator.clipboard.writeText(command).then(
       () => toast.success(t.onboarding.agent.copied),
-      (cause: Error) => toast.error(t.common.couldNotCopy(cause.message)),
+      (cause) => toast.error(t.common.couldNotCopy(errorText(cause))),
     );
 
   return (

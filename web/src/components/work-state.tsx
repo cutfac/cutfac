@@ -1,11 +1,11 @@
 import { Option } from "effect";
 import { SquareIcon } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 
 import { api, type ItemSummary } from "../api.ts";
 import { useMessages, type Messages } from "../i18n/index.ts";
+import { sendFailed } from "../lib/notify.ts";
 import { isBusy, needsYou, type ItemWork } from "../lib/work.ts";
 import { stopRender } from "../renderApi.ts";
 
@@ -63,9 +63,7 @@ export function StopButton({
   const t = useMessages().render;
 
   const stop = () =>
-    (work.kind === "rendering" ? stopRender(item.id) : api.stopEdit(item.id)).catch(
-      (cause: Error) => toast.error(cause.message),
-    );
+    (work.kind === "rendering" ? stopRender(item.id) : api.stopEdit(item.id)).catch(sendFailed);
 
   return (
     <span

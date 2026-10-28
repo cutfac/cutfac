@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { api, type ErrorReports, type ReportChoices } from "../api.ts";
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { errorText } from "../lib/notify.ts";
 
 /** Each view of the settings on screen, so an answer given in one shows in the others too. */
 const views = new Set<(data: ErrorReports) => void>();
@@ -42,8 +43,8 @@ function useErrorReports() {
   }, [setData]);
 
   const save = (choices: ReportChoices) =>
-    saveReportChoices(choices).catch((cause: Error) =>
-      toast.error(`${t.reports.failed}: ${cause.message}`),
+    saveReportChoices(choices).catch((cause) =>
+      toast.error(`${t.reports.failed}: ${errorText(cause)}`),
     );
 
   const resetId = () =>
@@ -52,7 +53,7 @@ function useErrorReports() {
       .then((saved) => {
         for (const show of views) show(saved);
       })
-      .catch((cause: Error) => toast.error(`${t.reports.failed}: ${cause.message}`));
+      .catch((cause) => toast.error(`${t.reports.failed}: ${errorText(cause)}`));
 
   return { data, save, resetId };
 }

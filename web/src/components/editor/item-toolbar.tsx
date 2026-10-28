@@ -1,6 +1,5 @@
 import { Option } from "effect";
 import { ArrowLeftIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
-import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -19,12 +18,9 @@ import { useMessages } from "../../i18n/index.ts";
 import { EDIT_KEYS, type EditCommand } from "../../lib/edit-commands.ts";
 import { redoable, undoable } from "../../lib/history.ts";
 import { agentTitle } from "../../lib/models.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import type { LiveRun } from "../../lib/run.ts";
 import { Hint, keepFocus } from "./hint.tsx";
-
-const showError = (cause: Error) => {
-  toast.error(cause.message);
-};
 
 /** The item's title bar: back to the board, what the agent is doing, undo and redo, and status. */
 export function Toolbar({
@@ -107,7 +103,7 @@ export function Toolbar({
         items={statuses}
         value={item.doc.status}
         onValueChange={(status: Status | null) => {
-          if (status !== null) api.updateItem(item.id, { status }).then(onItem, showError);
+          if (status !== null) api.updateItem(item.id, { status }).then(onItem, sendFailed);
         }}
       >
         <SelectTrigger size="sm" variant="ghost" aria-label={t.item.status}>

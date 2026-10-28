@@ -27,6 +27,7 @@ import { api, type AgentStatus } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { errorText, sendFailed } from "../lib/notify.ts";
 import { type PermissionView, permissionsApi } from "../permissionsApi.ts";
 
 /** Settings: the agents and what their runs may do, the workspace folder, and the tools for video work. */
@@ -99,11 +100,7 @@ export function Setup() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      desktop
-                        ?.revealPath(ws.root)
-                        .catch((cause: Error) => toast.error(cause.message))
-                    }
+                    onClick={() => desktop?.revealPath(ws.root).catch(sendFailed)}
                   >
                     <FolderOpenIcon data-icon="inline-start" />
                     {t.setup.showFolder}
@@ -153,8 +150,8 @@ function AgentRow({ status, permissions, onChange }: AgentRowProps) {
         else toast.error(t.setup.connectFailed(label));
         onChange();
       })
-      .catch((cause: Error) => {
-        setOutcome({ ok: false, detail: cause.message });
+      .catch((cause) => {
+        setOutcome({ ok: false, detail: errorText(cause) });
         toast.error(t.setup.connectFailed(label));
       })
       .finally(() => setBusy(false));

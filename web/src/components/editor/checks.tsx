@@ -6,7 +6,6 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +25,7 @@ import {
 } from "../../api.ts";
 import { href, useLive } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { fixPrompt, templateState } from "../../lib/templates.ts";
 import { formatAgo, formatTime } from "../../lib/time.ts";
 import { copyPrompt } from "./composer.tsx";
@@ -37,10 +37,6 @@ const inPercent = (zone: SafeZone): SafeZone => ({
   left: Math.round(zone.left * 100),
   right: Math.round(zone.right * 100),
 });
-
-const showError = (cause: Error) => {
-  toast.error(cause.message);
-};
 
 function Section({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
@@ -251,7 +247,7 @@ function UploadChecks({ id }: { id: string }) {
     setChecking(true);
     api
       .verify(id)
-      .then(setReports, showError)
+      .then(setReports, sendFailed)
       .finally(() => setChecking(false));
   }
 

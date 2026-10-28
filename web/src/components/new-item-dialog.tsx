@@ -50,6 +50,7 @@ import { type Messages, useMessages } from "../i18n/index.ts";
 import { freeVersion } from "../lib/license.ts";
 import { pickedSettings } from "../lib/models.ts";
 import { draftTitle, withoutLink, writtenLinks } from "../lib/newVideo.ts";
+import { errorText } from "../lib/notify.ts";
 import { filledInputs, missingInputs } from "../lib/templates.ts";
 import { copyPrompt, preferredAgent } from "./editor/composer.tsx";
 import {
@@ -166,7 +167,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
     for (const file of files.filter(isMedia)) {
       await api
         .uploadMedia(item.id, file)
-        .catch((cause: Error) => toast.error(t.newItem.uploadFailed(file.name, cause.message)));
+        .catch((cause) => toast.error(t.newItem.uploadFailed(file.name, errorText(cause))));
     }
 
     if (others.length > 0) {
@@ -176,7 +177,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
           others.map((file) => ({ file, path: file.name })),
         )
         .then(({ added }) => attachments.push(...added))
-        .catch((cause: Error) => toast.error(t.newItem.filesFailed(cause.message)));
+        .catch((cause) => toast.error(t.newItem.filesFailed(errorText(cause))));
     }
 
     const videos = links.filter((link) => link.video);
@@ -191,9 +192,9 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
     downloads.forEach((download, at) => {
       if (download.status === "fulfilled") attachments.push(...download.value.added);
       else {
-        const reason = download.reason instanceof Error ? download.reason.message : "";
-
-        toast.warning(t.newItem.linkFailed(videos[at]?.url ?? ""), { description: reason });
+        toast.warning(t.newItem.linkFailed(videos[at]?.url ?? ""), {
+          description: errorText(download.reason),
+        });
       }
     });
 
@@ -210,7 +211,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
 
         if (receipt.sent === "queue") copyPrompt(receipt.prompt);
       },
-      (cause: Error) => toast.error(t.newItem.sendFailed, { description: cause.message }),
+      (cause) => toast.error(t.newItem.sendFailed, { description: errorText(cause) }),
     );
   }
 
@@ -252,8 +253,8 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
     setError(undefined);
     create()
       .then(reset)
-      .catch((cause: Error) => {
-        setError(cause.message);
+      .catch((cause) => {
+        setError(errorText(cause));
         // Another workspace may have made the last free video, which this one hasn't heard of.
         plan.reload();
       })

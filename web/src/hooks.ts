@@ -13,6 +13,7 @@ import {
 } from "./api.ts";
 import { desktop } from "./desktop.ts";
 import type { ModelPicks } from "./lib/models.ts";
+import { errorText } from "./lib/notify.ts";
 import { routeOf, type Route } from "./lib/route.ts";
 import { readStored } from "./lib/storage.ts";
 
@@ -32,8 +33,6 @@ export interface Live<T> {
   setData: (data: T) => void;
 }
 
-const messageOf = (cause: Error | string) => (cause instanceof Error ? cause.message : cause);
-
 /**
  * Load data for `key` and reload whenever the workspace changes on disk, so agent writes show
  * up without a refresh. A new key drops the previous key's data instead of showing it stale.
@@ -51,12 +50,12 @@ export function useLive<T>(key: string, load: () => Promise<T>): Live<T> {
       (data) => {
         if (current) setLoaded({ key, version, data });
       },
-      (cause: Error) => {
+      (cause) => {
         if (!current) return;
 
         // A failed reload keeps what this key last showed; another key's data never carries over.
         setLoaded((prev) => {
-          const next: Loaded<T> = { key, version, error: messageOf(cause) };
+          const next: Loaded<T> = { key, version, error: errorText(cause) };
 
           if (prev.key === key && prev.data !== undefined) next.data = prev.data;
 

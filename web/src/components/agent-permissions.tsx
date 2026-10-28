@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import { type Messages, useMessages } from "../i18n/index.ts";
+import { errorText } from "../lib/notify.ts";
 import {
   type Access,
   type PermissionMode,
@@ -58,8 +59,8 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
         setKept({ from: view, view: chosen });
         toast.success(t.permissions.saved(agent, t.permissions.modes[next]));
       })
-      .catch((cause: Error) => {
-        toast.error(t.permissions.failed(agent), { description: cause.message });
+      .catch((cause) => {
+        toast.error(t.permissions.failed(agent), { description: errorText(cause) });
       })
       .finally(() => setBusy(undefined));
   };

@@ -22,6 +22,7 @@ import { api, type AgentChoice, type TeamFeedback } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { currentLocale, messages, useMessages } from "../i18n/index.ts";
+import { errorText } from "../lib/notify.ts";
 import { SelectionArea } from "./selection-area.tsx";
 
 interface Extras {
@@ -138,7 +139,7 @@ function FeedbackForm({ message, email, onMessage, onEmail, onSent }: FeedbackFo
         toast.success(t.teamFeedback.sent);
         onSent();
       })
-      .catch((cause: Error) => setError(cause.message))
+      .catch((cause) => setError(errorText(cause)))
       .finally(() => setBusy(false));
   }
 

@@ -54,6 +54,7 @@ import { briefApi } from "../briefApi.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { errorText, sendFailed } from "../lib/notify.ts";
 
 /** Learn from a link or path, a dropped or chosen file, or (in the desktop app) a picked folder. */
 function AddSource({ onLearned }: { onLearned: () => void }) {
@@ -76,7 +77,7 @@ function AddSource({ onLearned }: { onLearned: () => void }) {
         toast.success(t.learn.learned(result.learned.doc.title));
         onLearned();
       })
-      .catch((cause: Error) => setError(cause.message))
+      .catch((cause) => setError(errorText(cause)))
       .finally(() => setBusy(undefined));
   }
 
@@ -167,7 +168,7 @@ function AddSource({ onLearned }: { onLearned: () => void }) {
                 (path) => {
                   if (path !== undefined) learn(() => api.learn(path), path);
                 },
-                (cause: Error) => setError(cause.message),
+                (cause) => setError(errorText(cause)),
               );
             }}
           >
@@ -243,7 +244,7 @@ function ForgetButton({
         toast.success(t.learn.forgotten(entry.doc.title));
         onForgot(rest);
       })
-      .catch((cause: Error) => toast.error(`${t.learn.forgetError}: ${cause.message}`))
+      .catch((cause) => toast.error(`${t.learn.forgetError}: ${errorText(cause)}`))
       .finally(() => setBusy(false));
   }
 
@@ -389,11 +390,7 @@ export function Learn() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  desktop
-                    ?.revealPath(about.path)
-                    .catch((cause: Error) => toast.error(cause.message))
-                }
+                onClick={() => desktop?.revealPath(about.path).catch(sendFailed)}
               >
                 <FolderOpenIcon data-icon="inline-start" />
                 {t.learn.showFile}

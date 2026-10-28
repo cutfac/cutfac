@@ -1,7 +1,6 @@
 import { Match, Option } from "effect";
 import { CopyIcon, LinkIcon, PaperclipIcon, PlusIcon } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
-import { toast } from "sonner";
 
 import { HeldChips, useHeldFiles } from "@/components/editor/attachments";
 import { Button } from "@/components/ui/button";
@@ -40,6 +39,7 @@ import { useLocale, useMessages } from "../i18n/index.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { importAgent, importRouteId } from "../lib/imports.ts";
 import { AGENTS } from "../lib/models.ts";
+import { sendFailed } from "../lib/notify.ts";
 import { importPrompt } from "../lib/templates.ts";
 
 interface AddTemplateProps {
@@ -125,7 +125,7 @@ function AddTemplateForm({
         await api.startImport({ link: trimmed, agent: agent.value, locale }, files.uploads),
       );
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : String(cause));
+      sendFailed(cause);
       setSending(false);
     }
   }

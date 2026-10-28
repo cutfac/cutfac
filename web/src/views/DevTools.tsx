@@ -17,6 +17,7 @@ import {
   type OnboardingStep,
 } from "../desktop.ts";
 import { ANNOUNCEMENTS, showNewestAgain } from "../lib/announcements.ts";
+import { sendFailed } from "../lib/notify.ts";
 
 /** A choice's values in the order shown, each with its label. */
 type Options<T extends string> = ReadonlyArray<readonly [T, string]>;
@@ -68,7 +69,7 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
   const [busy, setBusy] = useState(false);
 
   const load = () => {
-    dev.state().then(setState, (cause: Error) => toast.error(cause.message));
+    dev.state().then(setState, sendFailed);
   };
 
   // The app changes what the panel shows too: a faked fix leaves its agent ready, and the first
@@ -92,12 +93,9 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
   const run = (action: () => Promise<void>, done?: string) => {
     setBusy(true);
     action()
-      .then(
-        () => {
-          if (done !== undefined) toast.success(done);
-        },
-        (cause: Error) => toast.error(cause.message),
-      )
+      .then(() => {
+        if (done !== undefined) toast.success(done);
+      }, sendFailed)
       .finally(() => {
         setBusy(false);
         load();
@@ -107,8 +105,8 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
   const setFakes = (fakes: DevFakes) => {
     // Shown at once; the app's answer follows.
     setState((current) => current && { ...current, fakes });
-    dev.setFakes(fakes).then(setState, (cause: Error) => {
-      toast.error(cause.message);
+    dev.setFakes(fakes).then(setState, (cause) => {
+      sendFailed(cause);
       load();
     });
   };
@@ -341,8 +339,7 @@ function PathRow({
         aria-label={`Show ${label.toLowerCase()} in Finder`}
         disabled={path === undefined}
         onClick={() => {
-          if (path !== undefined)
-            onReveal(path).catch((cause: Error) => toast.error(cause.message));
+          if (path !== undefined) onReveal(path).catch(sendFailed);
         }}
       >
         <FolderOpenIcon />
@@ -354,10 +351,7 @@ function PathRow({
 /** A command to run in a terminal, to read and copy. */
 function Command({ command }: { command: string }) {
   const copy = () =>
-    navigator.clipboard.writeText(command).then(
-      () => toast.success("Copied"),
-      (cause: Error) => toast.error(cause.message),
-    );
+    navigator.clipboard.writeText(command).then(() => toast.success("Copied"), sendFailed);
 
   return (
     <div className="flex items-start gap-2">
