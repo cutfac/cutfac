@@ -146,7 +146,7 @@ function StepDots({ current, within }: { current: number; within: Option.Option<
 }
 
 /** A step's title and the sentence under it. */
-export function StepHeader({ title, body }: { title: string; body: ReactNode }) {
+export function StepHeader({ title, body }: { title: ReactNode; body: ReactNode }) {
   return (
     <header className="flex flex-col gap-2">
       <h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>

@@ -87,7 +87,9 @@ export const startKo: StartMessages = {
     sample: { title: "컷팩", body: "에이전트가 기다리면 이렇게 알려 드릴게요." },
   },
   sample: {
-    title: "에이전트가 준비하고 있어요. 먼저 샘플을 만져 보세요",
+    gettingReady: "에이전트가 준비하고 있어요.",
+    ready: "에이전트가 준비됐어요.",
+    title: "먼저 샘플을 만져 보세요",
     body: "짧은 샘플 영상을 말로 고쳐 보세요.",
     moods: { bold: "강렬함", calm: "차분함", playful: "발랄함" },
     reading: "에이전트가 뒤에서 자료를 읽고 있어요 · 기다리지 않아도 돼요",

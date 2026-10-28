@@ -465,3 +465,33 @@
     opacity: 0.3;
   }
 }
+
+/* The agent's line on the sample offer: a wave runs through its letters while the agent reads,
+   lifting and tinting each in turn, and the line pops once when the agent is ready. */
+@media (prefers-reduced-motion: no-preference) {
+  .agent-wave {
+    animation: agent-wave 2s ease-in-out calc(var(--letter, 0) * 80ms) infinite;
+  }
+
+  .agent-pop {
+    animation: agent-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
+@keyframes agent-wave {
+  0%,
+  22%,
+  100% {
+    translate: 0 0;
+  }
+  10% {
+    translate: 0 -0.14em;
+    color: var(--brand);
+  }
+}
+
+@keyframes agent-pop {
+  from {
+    scale: 0.94;
+  }
+}

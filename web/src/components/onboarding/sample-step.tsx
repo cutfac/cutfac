@@ -1,5 +1,5 @@
 import { CheckIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 
 import { useFirstReading } from "@/components/first-ideas";
 import { ErrorAlert } from "@/components/page";
@@ -54,7 +54,15 @@ export function SampleStep({ onSkip }: { onSkip: () => void }) {
 
   return (
     <div className="flex animate-in flex-col gap-8 duration-300 fade-in slide-in-from-bottom-2">
-      <StepHeader title={t.title} body={t.body} />
+      <StepHeader
+        title={
+          <>
+            <AgentLine />
+            <span className="block">{t.title}</span>
+          </>
+        }
+        body={t.body}
+      />
       <div className="grid grid-cols-3 gap-3">
         {(samples ?? []).map((sample) => (
           <button
@@ -128,6 +136,104 @@ function ReadingNote() {
         <CheckIcon className="size-3.5 shrink-0 text-brand" />
       )}
       {reading ? t.reading : t.read}
+    </span>
+  );
+}
+
+/** How long the letters take to settle when the line changes. */
+const SCRAMBLE_MS = 520;
+
+/** How much later each letter after the first settles. */
+const SCRAMBLE_STAGGER_MS = 22;
+
+const LATIN = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/** A stand-in for a letter while it settles, picked by `roll` in [0, 1): a Latin letter, or a Hangul syllable. */
+const stand = (letter: string, roll: number) =>
+  /[\uac00-\ud7a3]/.test(letter)
+    ? String.fromCharCode(0xac00 + Math.floor(roll * 11172))
+    : LATIN[Math.floor(roll * LATIN.length)];
+
+/** `words` part way to settled: the letters not landed yet as stand-ins; spaces and punctuation stay. */
+const settle = (words: string, elapsed: number, roll: (i: number) => number) =>
+  [...words]
+    .map((letter, i) =>
+      !/\p{L}/u.test(letter) || elapsed > SCRAMBLE_MS + i * SCRAMBLE_STAGGER_MS
+        ? letter
+        : stand(letter, roll(i)),
+    )
+    .join("");
+
+const stillMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * `words` as they settle after each change: every letter flickers through stand-ins, then lands in
+ * order, as if decoded. Asked for less motion, the words just change.
+ */
+function useScramble(words: string) {
+  // What shows for the words now, until they have settled into themselves.
+  const [settling, setSettling] = useState<{ words: string; shown: string }>();
+
+  useEffect(() => {
+    if (stillMotion()) return;
+
+    const began = performance.now();
+    const end = SCRAMBLE_MS + [...words].length * SCRAMBLE_STAGGER_MS;
+    let frame = 0;
+
+    const tick = () => {
+      const elapsed = performance.now() - began;
+
+      setSettling({ words, shown: settle(words, elapsed, () => Math.random()) });
+
+      if (elapsed < end) frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frame);
+  }, [words]);
+
+  if (settling?.words === words) return settling.shown;
+
+  // Before the first frame of new words, every letter is a stand-in, so they never show whole first.
+  return stillMotion() ? words : settle(words, 0, (i) => (i * 0.6180339887) % 1);
+}
+
+/**
+ * The title's first line, alive with the agent: while it reads, a wave runs through the letters and
+ * tints each as it passes; once it is done, the line decodes into its ready words with a small pop.
+ */
+function AgentLine() {
+  const t = useMessages().start.sample;
+  const { titles, reading } = useFirstReading();
+  const words = reading || titles.length === 0 ? t.gettingReady : t.ready;
+  const shown = useScramble(words);
+  let index = 0;
+
+  return (
+    <span key={words} className={cn("block", !reading && "agent-pop")} aria-label={words}>
+      {shown.split(" ").map((word, w) => (
+        <span key={w} aria-hidden>
+          {w > 0 ? " " : null}
+          <span className="inline-block whitespace-nowrap">
+            {[...word].map((letter) => {
+              const i = index++;
+
+              return (
+                <span
+                  key={i}
+                  className={cn("inline-block", reading && "agent-wave")}
+                  // SAFETY: CSSProperties has no index signature for custom properties; the value is a number.
+                  style={{ "--letter": i } as CSSProperties}
+                >
+                  {letter}
+                </span>
+              );
+            })}
+          </span>
+        </span>
+      ))}
     </span>
   );
 }
