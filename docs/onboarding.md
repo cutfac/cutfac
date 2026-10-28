@@ -29,11 +29,12 @@ and passes on its own when it is: a second Mac, a reinstall or a workspace that 
 templates goes straight to what is missing. Closing the window keeps the progress. Steps 1 to 5
 save the step the user is on, and the next launch opens on it. The workspace is made as soon as
 the user said what they make, and the agent starts reading their material while they finish, so
-the board opens on what it learned.
+the board opens on what it learned. The language can be switched at the top of every step, in line
+with the step's right edge, out of the way of its buttons and of the toasts at the bottom.
 
 | Step            | Shows                                                                                                                                                                                                                            | Done when                               |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| 1. Welcome      | What Cutfac does in one sentence, Start, and the language                                                                                                                                                                        | Start is pressed                        |
+| 1. Welcome      | What Cutfac does in one sentence, and Start                                                                                                                                                                                      | Start is pressed                        |
 | 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it                                                                                                | One agent is ready, and Next is pressed |
 | 3. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                              | Next is pressed on the last part        |
 | 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                           | Both are on, or Skip                    |
