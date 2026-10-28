@@ -1,6 +1,4 @@
-import { CheckIcon } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import type { Sharing, SharingPurpose } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -34,18 +32,7 @@ export function SharingChoice({
         <p className="text-xs text-pretty text-muted-foreground">{t.askBody}</p>
       </div>
       {PURPOSES.map((purpose) => {
-        const answer = (share: boolean, label: string) => (
-          <Button
-            size="sm"
-            variant="secondary"
-            aria-pressed={value[purpose] === share}
-            disabled={disabled}
-            onClick={() => onChange(purpose, share)}
-          >
-            {value[purpose] === share ? <CheckIcon data-icon="inline-start" /> : null}
-            {label}
-          </Button>
-        );
+        const answered = value[purpose];
 
         return (
           <div key={purpose} className="flex items-center gap-3">
@@ -55,10 +42,22 @@ export function SharingChoice({
                 {copy[purpose].hint}
               </span>
             </div>
-            <div className="grid shrink-0 grid-cols-2 gap-2">
-              {answer(false, t.dontShare)}
-              {answer(true, t.share)}
-            </div>
+            {/* Picked as the other choices on the first launch are, so the row doesn't move. */}
+            <ToggleGroup
+              variant="choice"
+              size="sm"
+              spacing={2}
+              disabled={disabled}
+              aria-label={copy[purpose].title}
+              value={answered === null ? [] : [answered ? "share" : "keep"]}
+              onValueChange={([picked]) => {
+                if (picked !== undefined) onChange(purpose, picked === "share");
+              }}
+              className="grid shrink-0 grid-cols-2"
+            >
+              <ToggleGroupItem value="keep">{t.dontShare}</ToggleGroupItem>
+              <ToggleGroupItem value="share">{t.share}</ToggleGroupItem>
+            </ToggleGroup>
           </div>
         );
       })}

@@ -44,7 +44,8 @@ export const onboardingEn = {
     failed: "That didn't finish. You can run it in Terminal instead:",
     copied: "Copied. Paste it into Terminal, then come back.",
     checkAgain: "Check again",
-    subscription: "Each needs its own subscription. Getting the one you already pay for ready is enough.",
+    subscription:
+      "Each needs its own subscription. Getting the one you already pay for ready is enough.",
     pick: "Both are ready. Pick the one to make your videos with, the one you pay for.",
     picked: "Makes your videos",
     next: "Next",

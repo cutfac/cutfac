@@ -14,7 +14,7 @@ export const reportsKo: ReportsMessages = {
   toggle: "오류 보고 보내기",
   toggleHint: "무엇이 어디서 실패했는지 그때그때 보내요.",
   usageToggle: "사용 통계 보내기",
-  usageHint: "만든 영상, 요청한 수정, 고른 버전처럼 어떤 기능을 쓰는지 세요.",
+  usageHint: "만든 영상, 요청한 수정, 고른 버전처럼 어떤 기능을 몇 번 쓰는지만 보내요.",
   installId: "설치 ID",
   installIdHint:
     "보내 주신 피드백과 오류 보고를 이어 보는 데 써요. 새로 만들면 이전 보고와는 이어지지 않아요.",
