@@ -17,6 +17,7 @@ import { License } from "./license.ts";
 import { MESSAGES } from "./messages.ts";
 import { platform } from "./platform.ts";
 import { licenseSettings, Settings } from "./settings.ts";
+import { shutDown } from "./shutdown.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
 import { SystemAccess } from "./systemAccess.ts";
 import { updateFeed, updatePrompts } from "./updateFeed.ts";
@@ -118,3 +119,6 @@ export const forkInMain = <A, E>(effect: Effect.Effect<A, E, AppServices>) =>
 export const runNow = (effect: Effect.Effect<void, never, AppServices>) => {
   if (runtime.cachedContext !== undefined) runtime.runSync(effect);
 };
+
+export const shutDownMain = <E>(save: Effect.Effect<void, E, AppServices>) =>
+  shutDown(runtime, save);

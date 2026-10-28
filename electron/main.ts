@@ -40,7 +40,15 @@ import { MESSAGES } from "./messages.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions } from "./permissions.ts";
 import { guardQuit } from "./quitGuard.ts";
-import { appState, boardWindow, devLaunch, forkInMain, readNow, runInMain } from "./runtime.ts";
+import {
+  appState,
+  boardWindow,
+  devLaunch,
+  forkInMain,
+  readNow,
+  runInMain,
+  shutDownMain,
+} from "./runtime.ts";
 import {
   loadLocale,
   loadOnboarding,
@@ -116,17 +124,11 @@ function start(): void {
 
     if (window) rememberPlace(window);
 
-    // Hold the quit until the server is gone and the settings saved, the first launch's step too,
-    // then quit again with nothing left to stop.
+    // Hold the quit until the settings are saved, the first launch's step too, and the services
+    // have stopped the server and all else they opened, then quit again with nothing left to stop.
     event.preventDefault();
     forkInMain(
-      Effect.all(
-        [
-          Effect.exit(Effect.flatMap(WorkspaceServer, (server) => server.stop)),
-          Effect.exit(settingsWritten),
-        ],
-        { concurrency: "unbounded" },
-      ).pipe(
+      shutDownMain(settingsWritten).pipe(
         Effect.andThen(Ref.set(quitReady, true)),
         Effect.andThen(Effect.sync(() => app.quit())),
       ),
