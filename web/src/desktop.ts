@@ -253,9 +253,10 @@ export interface CutfacDesktop {
   startDrag: (path: string) => void;
   /**
    * Save a copy of a workspace file where the user picks, starting in Downloads, and show it in
-   * Finder. `path` is from the workspace's root. Resolves whether it was saved.
+   * Finder. `path` is from the workspace's root, and `name` is what to suggest saving it as.
+   * Resolves whether it was saved.
    */
-  downloadFile: (path: string) => Promise<boolean>;
+  downloadFile: (path: string, name: string) => Promise<boolean>;
   /** Tell the app which language the board shows, so its menus and dialogs match. */
   setLocale: (locale: Locale) => void;
   /**

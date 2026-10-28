@@ -70,6 +70,11 @@ import { WorkspaceServer } from "./workspaceServer.ts";
 
 const PATH = { schema: Schema.String.check(Schema.isMaxLength(4096)), what: "path" };
 
+const DOWNLOAD = {
+  schema: Schema.Struct({ path: PATH.schema, name: Schema.String.check(Schema.isMaxLength(255)) }),
+  what: "file to export",
+};
+
 const LICENSE_KEY = { schema: Schema.String.check(Schema.isMaxLength(256)), what: "license key" };
 
 const LOCALE = { schema: Schema.Literals(LOCALES), what: "language" };
@@ -210,8 +215,8 @@ function start(): void {
   listen(START_DRAG_CHANNEL, isFromApp, PATH, (target, event) =>
     Effect.ignore(dragOut(Option.getOrUndefined(openWorkspace()), event.sender, target)),
   );
-  answer(DOWNLOAD_FILE_CHANNEL, isFromApp, PATH, (target) =>
-    downloadFile(Option.getOrUndefined(openWorkspace()), boardWindow(), target),
+  answer(DOWNLOAD_FILE_CHANNEL, isFromApp, DOWNLOAD, ({ path, name }) =>
+    downloadFile(Option.getOrUndefined(openWorkspace()), boardWindow(), path, name),
   );
   answer(PICK_PATH_CHANNEL, isFromApp, ANY_INPUT, () =>
     Effect.map(pickSource(boardWindow(), messages().chooseSource), Option.getOrUndefined),

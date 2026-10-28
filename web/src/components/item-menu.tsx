@@ -27,6 +27,7 @@ import { desktop } from "../desktop.ts";
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { downloadFile } from "../lib/download.ts";
+import { exportName } from "../lib/exportName.ts";
 import { revealItem } from "../lib/items.ts";
 
 /**
@@ -48,9 +49,16 @@ export function ItemMenu({
   const t = useMessages();
   const single = items.length === 1 ? items[0] : undefined;
   const archivable = items.filter((i) => i.status !== "archived");
-  // The video it shows, else its picture: what Download in the editor would save.
+  // The video it shows, else its picture: what Export in the editor would save.
   const shown = single?.media.find((media) => media.kind === "video") ?? single?.media[0];
-  const download = single && shown ? `${single.dir}/${shown.name}` : undefined;
+
+  const download =
+    single && shown
+      ? {
+          path: `${single.dir}/${shown.name}`,
+          name: exportName(single.title, shown.name, single.media.length > 1),
+        }
+      : undefined;
 
   return (
     <ContextMenuContent>
@@ -91,7 +99,7 @@ export function ItemMenu({
         </ContextMenuSubContent>
       </ContextMenuSub>
       {download === undefined ? null : (
-        <ContextMenuItem onClick={() => downloadFile(download)}>
+        <ContextMenuItem onClick={() => downloadFile(download.path, download.name)}>
           <DownloadIcon />
           {t.item.download}
         </ContextMenuItem>

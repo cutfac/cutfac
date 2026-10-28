@@ -17,6 +17,7 @@ import { href } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { downloadFile } from "../../lib/download.ts";
 import { EDIT_KEYS, type EditCommand } from "../../lib/edit-commands.ts";
+import { exportName } from "../../lib/exportName.ts";
 import { redoable, undoable } from "../../lib/history.ts";
 import { agentTitle } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
@@ -107,7 +108,13 @@ export function Toolbar({
         </Hint>
       </div>
       {media === undefined ? null : (
-        <Button variant="outline" size="sm" onClick={() => downloadFile(media)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            downloadFile(media, exportName(item.doc.title, media, item.media.length > 1))
+          }
+        >
           <DownloadIcon data-icon="inline-start" />
           {t.item.download}
         </Button>

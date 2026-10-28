@@ -51,12 +51,13 @@ export const downloadFile = Effect.fn("downloadFile")(function* (
   root: string | undefined,
   owner: BrowserWindow | undefined,
   target: string,
+  name: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = yield* inWorkspace(workspaceRoot(root), target);
-  const name = path.basename(file).replace(/^\[\d+x\d+\]\s*/, "");
-  const options = { defaultPath: path.join(app.getPath("downloads"), name) };
+  // The board's suggestion stays a name in Downloads, however it is spelled.
+  const options = { defaultPath: path.join(app.getPath("downloads"), path.basename(name)) };
 
   const { canceled, filePath } = yield* Effect.promise(() =>
     owner ? dialog.showSaveDialog(owner, options) : dialog.showSaveDialog(options),
