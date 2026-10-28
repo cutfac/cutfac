@@ -47,7 +47,7 @@ export const onboardingEn = {
     subscription:
       "Each needs its own subscription. Getting the one you already pay for ready is enough.",
     pick: "Both are ready. Pick the one to make your videos with, the one you pay for.",
-    picked: "Makes your videos",
+    picked: "Using this one",
     next: "Next",
   },
   access: {

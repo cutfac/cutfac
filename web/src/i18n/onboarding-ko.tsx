@@ -42,7 +42,7 @@ export const onboardingKo: OnboardingMessages = {
     checkAgain: "다시 확인",
     subscription: "각각 따로 구독이 필요해요. 이미 구독 중인 쪽 하나만 준비하면 돼요.",
     pick: "둘 다 준비됐어요. 영상을 만들 쪽을 골라 주세요. 구독 중인 쪽이면 돼요.",
-    picked: "이걸로 만들어요",
+    picked: "이걸로 쓸게요",
     next: "다음",
   },
   access: {
