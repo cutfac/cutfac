@@ -10,6 +10,7 @@ export const NO_FAKES: DevFakes = {
   access: "real",
   freshFolder: true,
   sharing: "real",
+  freeVersion: false,
 };
 
 const VERB: Record<Fixable, string> = {

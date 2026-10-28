@@ -62,6 +62,31 @@ describe("the workspace's server", () => {
     }),
   );
 
+  it.live(
+    "counts videos in the dev build's folder while its Dev Panel tries the free version",
+    () =>
+      Effect.gen(function* () {
+        const { dir, fake, folder } = yield* fakeSidecar;
+        const fs = yield* FileSystem.FileSystem;
+        const workspace = yield* folder("a", ["cutfac.yaml"]);
+        const countsIn = fs.readFileString(path.join(workspace, "counts-in"));
+
+        yield* Effect.gen(function* () {
+          const server = yield* WorkspaceServer;
+
+          yield* served(workspace);
+
+          expect(yield* countsIn).toBe("");
+
+          yield* Ref.set((yield* AppState).freeVersionData, Option.some(dir));
+          yield* server.stop;
+          yield* served(workspace);
+
+          expect(yield* countsIn).toBe(dir);
+        }).pipe(Effect.provide(serverFor(dir, fake)));
+      }),
+  );
+
   it.live("stops the server it had before serving another workspace", () =>
     Effect.gen(function* () {
       const { dir, fake, folder } = yield* fakeSidecar;

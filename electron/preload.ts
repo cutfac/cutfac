@@ -20,6 +20,7 @@ import {
   WORKSPACE_FOLDER_CHANNEL,
   DEV_BUILD_FLAG,
   DEV_OPEN_STEP_CHANNEL,
+  DEV_RESET_FREE_COUNT_CHANNEL,
   DEV_RESTORE_CHANNEL,
   DEV_REVEAL_CHANNEL,
   DEV_SET_FAKES_CHANNEL,
@@ -138,6 +139,7 @@ const dev = {
   restore: () => ipcRenderer.invoke(DEV_RESTORE_CHANNEL),
   openStep: (step) => ipcRenderer.invoke(DEV_OPEN_STEP_CHANNEL, step),
   reveal: (target) => ipcRenderer.invoke(DEV_REVEAL_CHANNEL, target),
+  resetFreeCount: () => ipcRenderer.invoke(DEV_RESET_FREE_COUNT_CHANNEL),
 } satisfies CutfacDevTools;
 
 const bridge = {

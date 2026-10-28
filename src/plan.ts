@@ -25,7 +25,7 @@ const VIDEOS_BYTES = 1024 * 1024;
  * made, `<time> seen <key>` for one first worked on without being made by it, as a folder an
  * agent wrote by hand. Lines from before keys hold the time alone.
  */
-const VIDEOS_FILE = "videos.log";
+export const VIDEOS_FILE = "videos.log";
 
 /** What names a video in the count. A copy of its folder under another id is another video. */
 const videoKey = (item: Item) => `${item.id}@${item.doc.created ?? ""}`;

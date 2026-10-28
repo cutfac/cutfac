@@ -158,6 +158,8 @@ export interface DevFakes {
    * is sent whatever the answer.
    */
   sharing: "real" | "available";
+  /** Count videos and stop at the limit as the released app's free version does; from source there is none. */
+  freeVersion: boolean;
 }
 
 /** Where the dev build keeps things, and what it is faking. */
@@ -186,6 +188,8 @@ export interface CutfacDevTools {
   openStep: (step: OnboardingStep) => Promise<void>;
   /** Show a file or folder in Finder. */
   reveal: (path: string) => Promise<void>;
+  /** Forget the videos the free version counted, to try it from its first video again. */
+  resetFreeCount: () => Promise<void>;
 }
 
 /** What waits for the user on the board, as the app's Dock badge and notifications tell it. */

@@ -12,6 +12,8 @@ export class AppState extends Context.Service<
     readonly origin: Ref.Ref<string>;
     readonly switching: Ref.Ref<boolean>;
     readonly locale: Ref.Ref<Locale>;
+    /** The dev build's data folder while its Dev Panel tries the free version, where the server counts videos. */
+    readonly freeVersionData: Ref.Ref<Option.Option<string>>;
   }
 >()("cutfac/desktop/AppState") {
   static readonly make = Effect.all({
@@ -21,6 +23,7 @@ export class AppState extends Context.Service<
     origin: Ref.make(""),
     switching: Ref.make(false),
     locale: Ref.make<Locale>("en"),
+    freeVersionData: Ref.make(Option.none<string>()),
   }).pipe(Effect.map(AppState.of));
 
   static readonly layer = Layer.effect(AppState, AppState.make);

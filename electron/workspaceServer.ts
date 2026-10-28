@@ -51,7 +51,7 @@ export class WorkspaceServer extends Context.Service<
 
 const make = Effect.gen(function* () {
   const { devPort } = yield* Install;
-  const { quitting } = yield* AppState;
+  const { quitting, freeVersionData } = yield* AppState;
 
   const services = yield* Effect.context<
     | ChildProcessSpawner.ChildProcessSpawner
@@ -79,6 +79,10 @@ const make = Effect.gen(function* () {
     const sidecar = yield* startSidecar({
       workspace,
       agent,
+      env: Option.match(yield* Ref.get(freeVersionData), {
+        onNone: () => ({}),
+        onSome: (data) => ({ CUTFAC_DESKTOP_DATA: data }),
+      }),
       port: Option.isSome(devPort) ? { fixed: devPort.value } : { last: yield* loadPort },
       watch: Option.isSome(devPort),
       onCrash: (message) =>

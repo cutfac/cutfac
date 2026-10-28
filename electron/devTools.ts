@@ -1,11 +1,13 @@
 import path from "node:path";
 
-import { Clock, Duration, Effect, Option, Ref, Schema } from "effect";
-import { BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
+import { Clock, Duration, Effect, FileSystem, Option, Ref, Schema } from "effect";
+import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from "electron";
 
 import type { AgentName } from "../src/core/schema.ts";
+import { VIDEOS_FILE } from "../src/plan.ts";
 import type { AgentFix, DevState, OnboardingStep } from "../web/src/desktop.ts";
 import { AgentFixes, NothingToFix } from "./agents.ts";
+import { AppState } from "./appState.ts";
 import { ONBOARDING_STEPS, originOf } from "./boardPages.ts";
 import { DEV_APP } from "./devApp.ts";
 import {
@@ -20,6 +22,7 @@ import {
   ACCESS_GRANTED_CHANNEL,
   DEV_BUILD_FLAG,
   DEV_OPEN_STEP_CHANNEL,
+  DEV_RESET_FREE_COUNT_CHANNEL,
   DEV_RESTORE_CHANNEL,
   DEV_REVEAL_CHANNEL,
   DEV_SET_FAKES_CHANNEL,
@@ -27,6 +30,7 @@ import {
   DEV_STATE_CHANGED_CHANNEL,
   DEV_STATE_CHANNEL,
   DEV_TOOLS_FLAG,
+  LICENSE_CHANGE_CHANNEL,
   OPEN_DEV_PANEL_CHANNEL,
 } from "./ipc.ts";
 import { ANY_INPUT } from "./ipcCall.ts";
@@ -46,6 +50,7 @@ import {
   settingsSetAside,
 } from "./settings.ts";
 import { hasPermission } from "./systemAccess.ts";
+import { WorkspaceServer } from "./workspaceServer.ts";
 
 const PANEL_SIZE = { width: 420, height: 760 };
 
@@ -61,6 +66,7 @@ const FAKES = {
     access: Schema.Literals(["real", "granted", "denied"]),
     freshFolder: Schema.Boolean,
     sharing: Schema.Literals(["real", "available"]),
+    freeVersion: Schema.Boolean,
   }),
   what: "fakes",
 };
@@ -195,12 +201,28 @@ export function handleDevTools(host: DevToolsHost): DevTools {
 
   const stopAgentFixes = Effect.flatMap(AgentFixes, (agents) => agents.stopAll);
 
+  /** Serves the open workspace again, counting videos in this build's own folder or not at all. */
+  const tryFreeVersion = Effect.fnUntraced(function* (on: boolean) {
+    const { freeVersionData, workspace } = yield* AppState;
+
+    yield* Ref.set(freeVersionData, on ? Option.some(app.getPath("userData")) : Option.none());
+
+    const open = yield* Ref.get(workspace);
+
+    if (Option.isNone(open)) return;
+
+    yield* Effect.flatMap(WorkspaceServer, (server) => server.stop);
+    yield* host.activate(open.value);
+  });
+
   answer(DEV_STATE_CHANNEL, fromPanel, ANY_INPUT, () => state);
   answer(DEV_SET_FAKES_CHANNEL, fromPanel, FAKES, (next) =>
     Effect.gen(function* () {
       const before = yield* Ref.getAndSet(fakes, next);
 
       if (!next.freshFolder) yield* forgetFreshName;
+
+      if (before.freeVersion !== next.freeVersion) yield* tryFreeVersion(next.freeVersion);
 
       if (before.access !== "granted" && next.access === "granted") {
         for (const permission of ["screen", "accessibility"] as const) {
@@ -246,6 +268,14 @@ export function handleDevTools(host: DevToolsHost): DevTools {
   );
   answer(DEV_OPEN_STEP_CHANNEL, fromPanel, STEP, (step) =>
     Effect.andThen(forgetFreshName, host.showOnboarding(step)),
+  );
+  answer(DEV_RESET_FREE_COUNT_CHANNEL, fromPanel, ANY_INPUT, () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+
+      yield* fs.remove(path.join(app.getPath("userData"), VIDEOS_FILE), { force: true });
+      host.window()?.webContents.send(LICENSE_CHANGE_CHANNEL);
+    }),
   );
   answer(DEV_REVEAL_CHANNEL, fromPanel, PATH, (target) =>
     Effect.sync(() => {

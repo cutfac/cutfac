@@ -57,6 +57,11 @@ const SHARING: Options<DevFakes["sharing"]> = [
   ["available", "Offered"],
 ];
 
+const LIMIT: Options<"off" | "on"> = [
+  ["off", "Off"],
+  ["on", "On"],
+];
+
 const STEPS: Options<OnboardingStep> = [
   ["welcome", "Welcome"],
   ["make", "Make"],
@@ -174,6 +179,13 @@ export function DevTools({ dev }: { dev: CutfacDevTools }) {
             <Separator />
             <Fakes fakes={state.fakes} onChange={setFakes} />
             <Separator />
+            <FreeVersion
+              fakes={state.fakes}
+              busy={busy}
+              onChange={setFakes}
+              onReset={() => run(dev.resetFreeCount, "The count starts over")}
+            />
+            <Separator />
             <Section title="Where things are">
               <PathRow label="Settings" path={state.settingsFile} onReveal={dev.reveal} />
               <PathRow label="Workspace" path={state.workspace} onReveal={dev.reveal} />
@@ -258,6 +270,39 @@ function Fakes({ fakes, onChange }: { fakes: DevFakes; onChange: (fakes: DevFake
         value={fakes.sharing}
         onChange={(sharing) => onChange({ ...fakes, sharing })}
       />
+    </Section>
+  );
+}
+
+/** The free version's video limit, which a build from source doesn't have. */
+function FreeVersion({
+  fakes,
+  busy,
+  onChange,
+  onReset,
+}: {
+  fakes: DevFakes;
+  busy: boolean;
+  onChange: (fakes: DevFakes) => void;
+  onReset: () => void;
+}) {
+  return (
+    <Section
+      title="Free version"
+      description="From source there is no video limit. On counts videos as the released app's free version does, in this build's own folder, and opens the workspace again with it. Agents the board runs count too; one run in a terminal doesn't, and a license key can't be tried here."
+    >
+      <Choice
+        label="Video limit"
+        options={LIMIT}
+        value={fakes.freeVersion ? "on" : "off"}
+        onChange={(limit) => onChange({ ...fakes, freeVersion: limit === "on" })}
+      />
+      <div>
+        <Button variant="outline" disabled={busy} onClick={onReset}>
+          <RotateCcwIcon data-icon="inline-start" />
+          Reset the count
+        </Button>
+      </div>
     </Section>
   );
 }

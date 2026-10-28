@@ -175,13 +175,14 @@ const spawn = Effect.fnUntraced(function* (
   args: ReadonlyArray<string>,
   cwd: string,
   what: string,
+  env: Env,
 ) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
   const command = ChildProcess.make(
     launch.command,
     [...launch.args, ...args],
-    childOptions(cwd, yield* ServerEnv),
+    childOptions(cwd, { ...(yield* ServerEnv), ...env }),
   );
 
   const handle = yield* spawner
@@ -268,7 +269,7 @@ const untilHealthy = (url: string, server: Running) => {
   });
 };
 
-const setUp = (launch: Launch, workspace: string, agent: AgentName | undefined) =>
+const setUp = (launch: Launch, workspace: string, agent: AgentName | undefined, env: Env) =>
   Effect.scoped(
     Effect.gen(function* () {
       const init = yield* spawn(
@@ -276,6 +277,7 @@ const setUp = (launch: Launch, workspace: string, agent: AgentName | undefined) 
         ["init", workspace, "--no-connect", ...(agent === undefined ? [] : ["--agent", agent])],
         workspace,
         "Workspace setup",
+        env,
       );
 
       const ended = yield* Effect.exit(init.handle.exitCode);
@@ -303,6 +305,8 @@ export interface SidecarOptions {
   readonly agent?: AgentName | undefined;
   readonly port: { readonly fixed: number } | { readonly last: Option.Option<number> };
   readonly watch: boolean;
+  /** Variables the server and its setup get on top of the app's. */
+  readonly env: Env;
   readonly onCrash: (message: string) => Effect.Effect<void>;
 }
 
@@ -319,7 +323,7 @@ const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope
   const launch = yield* resolveLaunch;
 
   if (!(yield* isWorkspaceRoot(options.workspace))) {
-    yield* setUp(launch, options.workspace, options.agent);
+    yield* setUp(launch, options.workspace, options.agent, options.env);
   }
 
   const server = yield* spawn(
@@ -337,6 +341,7 @@ const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope
     ],
     options.workspace,
     "The local server",
+    options.env,
   ).pipe(Scope.provide(scope));
 
   const url = `http://${HOST}:${port}/`;

@@ -37,6 +37,7 @@ if (command === "init") {
       await Bun.write(flag("--workspace") + "/stopped", "");
       process.exit(0);
     });
+    await Bun.write(flag("--workspace") + "/counts-in", process.env.CUTFAC_DESKTOP_DATA ?? "");
   }
   if (mode === "silent") setInterval(() => {}, 60_000);
   else Bun.serve({ hostname: flag("--host"), port: Number(flag("--port")), fetch: () => new Response("ok") });

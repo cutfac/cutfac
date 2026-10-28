@@ -25,6 +25,7 @@ const on = (workspace: string, more: Partial<SidecarOptions> = {}): SidecarOptio
   workspace,
   port: { last: Option.none() },
   watch: false,
+  env: {},
   onCrash: () => Effect.void,
   ...more,
 });

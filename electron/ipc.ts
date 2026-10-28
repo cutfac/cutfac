@@ -128,3 +128,5 @@ export const DEV_RESTORE_CHANNEL = "cutfac:dev-restore";
 export const DEV_OPEN_STEP_CHANNEL = "cutfac:dev-open-step";
 
 export const DEV_REVEAL_CHANNEL = "cutfac:dev-reveal";
+
+export const DEV_RESET_FREE_COUNT_CHANNEL = "cutfac:dev-reset-free-count";
