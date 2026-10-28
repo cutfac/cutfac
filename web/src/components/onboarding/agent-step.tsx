@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ArrowRightIcon, CheckIcon, CopyIcon, RotateCwIcon } from "lucide-react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
@@ -22,6 +23,7 @@ import type { AgentSetup, CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { copyText } from "../../lib/clipboard.ts";
 import { errorText } from "../../lib/notify.ts";
+import { pickAgent, pickedAgent, workingAgent } from "../../lib/onboarding.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
 
 /** A fix in flight shows the last line it printed; one that failed, the command to run instead. */
@@ -66,7 +68,21 @@ export function AgentStep({
   const [setups, setSetups] = useState<ReadonlyArray<AgentSetup>>();
   const [error, setError] = useState<string>();
   const [runs, setRuns] = useState<Runs>({});
+  const [picked, setPicked] = useState(pickedAgent);
   const ready = setups?.some((setup) => setup.state === "ready") ?? false;
+
+  const readyAgents = (setups ?? []).flatMap((setup) =>
+    setup.state === "ready" ? [setup.agent] : [],
+  );
+
+  const working = workingAgent(readyAgents, picked);
+  // With one ready there is nothing to pick; with both, the one the user pays for makes the videos.
+  const choosing = readyAgents.length > 1;
+
+  const pick = (agent: AgentName) => {
+    pickAgent(agent);
+    setPicked(Option.some(agent));
+  };
 
   const checks = useRef(0);
 
@@ -183,11 +199,21 @@ export function AgentStep({
               primary={setup.agent === primary}
               onFix={() => fix(setup)}
               onCheck={check}
+              choice={
+                choosing && setup.state === "ready"
+                  ? {
+                      picked: Option.contains(working, setup.agent),
+                      onPick: () => pick(setup.agent),
+                    }
+                  : undefined
+              }
             />
           ))}
         </ItemGroup>
       )}
-      {setups === undefined || ready ? null : (
+      {setups === undefined ? null : choosing ? (
+        <p className="text-xs/relaxed text-muted-foreground">{t.pick}</p>
+      ) : ready ? null : (
         <p className="text-xs/relaxed text-muted-foreground">{t.subscription}</p>
       )}
       <StepActions onBack={onBack}>
@@ -200,6 +226,12 @@ export function AgentStep({
       </StepActions>
     </>
   );
+}
+
+/** A ready agent offered to pick, when both are. */
+interface Choice {
+  picked: boolean;
+  onPick: () => void;
 }
 
 /** The agents the step looks for, in the order it shows them. */
@@ -227,12 +259,15 @@ function AgentRow({
   primary,
   onFix,
   onCheck,
+  choice,
 }: {
   setup: AgentSetup;
   run: FixRun | undefined;
   primary: boolean;
   onFix: () => void;
   onCheck: () => void;
+  /** With both ready, whether this one makes the videos, and how to pick it. */
+  choice: Choice | undefined;
 }) {
   const t = useMessages();
   const copy = t.onboarding.agent;
@@ -241,7 +276,12 @@ function AgentRow({
   const description = state === "outdated" ? copy.state.outdated(setup.version) : copy.state[state];
 
   return (
-    <AgentShell agent={setup.agent} lit={state === "ready"}>
+    <AgentShell
+      agent={setup.agent}
+      lit={state === "ready" && (choice === undefined || choice.picked)}
+      choice={choice}
+      label={t.setup.agents[setup.agent]}
+    >
       <ItemContent className="relative min-w-0">
         <ItemTitle>{t.setup.agents[setup.agent]}</ItemTitle>
         {run?.status === "running" && state !== "ready" ? (
@@ -265,7 +305,9 @@ function AgentRow({
         )}
       </ItemContent>
       <ItemActions className="relative">
-        {state === "ready" ? null : (
+        {choice?.picked === true ? (
+          <span className="text-xs font-medium text-brand">{copy.picked}</span>
+        ) : state === "ready" ? null : (
           <Button
             variant={primary ? "default" : "outline"}
             disabled={run?.status === "running"}
@@ -286,14 +328,35 @@ function AgentRow({
 function AgentShell({
   agent,
   lit,
+  choice,
+  label,
   children,
 }: {
   agent: AgentName;
   lit: boolean;
+  choice?: Choice | undefined;
+  label?: string;
   children: ReactNode;
 }) {
   return (
     <Item variant="muted" className="relative overflow-hidden">
+      {choice === undefined ? null : (
+        <>
+          <button
+            type="button"
+            aria-pressed={choice.picked}
+            aria-label={label}
+            onClick={choice.onPick}
+            className="absolute inset-0 z-10 rounded-2xl outline-none hover:bg-foreground/4 focus-visible:bg-foreground/4"
+          />
+          {choice.picked ? (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-brand ring-inset"
+            />
+          ) : null}
+        </>
+      )}
       <span
         aria-hidden
         className={cn(

@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import type { AgentStatus } from "../web/src/api.ts";
-import { agentsToConnect, asWebsite, needsStart } from "../web/src/lib/onboarding.ts";
+import { agentsToConnect, asWebsite, needsStart, workingAgent } from "../web/src/lib/onboarding.ts";
 
 const status = (agent: AgentStatus["agent"], rest: Partial<AgentStatus>): AgentStatus => ({
   agent,
@@ -34,4 +36,10 @@ test("a website typed without its scheme is read over https", () => {
   expect(asWebsite(" yourwebsite.com ")).toBe("https://yourwebsite.com");
   expect(asWebsite("http://example.com")).toBe("http://example.com");
   expect(asWebsite("  ")).toBe("");
+});
+
+test("the agent picked makes the videos while it is ready, else the first ready one", () => {
+  expect(workingAgent(["claude", "codex"], Option.some("codex"))).toEqual(Option.some("codex"));
+  expect(workingAgent(["claude"], Option.some("codex"))).toEqual(Option.some("claude"));
+  expect(workingAgent([], Option.none())).toEqual(Option.none());
 });

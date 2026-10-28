@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ArrowRightIcon, FolderIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -10,7 +11,7 @@ import type { CutfacOnboarding, Folder, Sharing, SharingPurpose } from "../../de
 import { useMessages } from "../../i18n/index.ts";
 import { EMPTY_BRIEF } from "../../lib/brief.ts";
 import { errorText } from "../../lib/notify.ts";
-import { suggestedName } from "../../lib/onboarding.ts";
+import { pickedAgent, suggestedName } from "../../lib/onboarding.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
 import { SharingChoice } from "./sharing-choice.tsx";
 
@@ -77,7 +78,7 @@ export function ReadyStep({
     setBusy(true);
     setError(undefined);
     // On success the window loads the board, so only a failure comes back here.
-    onboarding.createWorkspace(name ?? t.defaultName).then(
+    onboarding.createWorkspace(name ?? t.defaultName, Option.getOrUndefined(pickedAgent())).then(
       (failure) => {
         if (failure === undefined) return;
 

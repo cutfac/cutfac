@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { useCallback, useEffect, useState } from "react";
 
 import { ListSkeleton } from "@/components/page";
@@ -6,7 +7,7 @@ import type { CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { EMPTY_BRIEF } from "../../lib/brief.ts";
 import { errorText } from "../../lib/notify.ts";
-import { suggestedName } from "../../lib/onboarding.ts";
+import { pickedAgent, suggestedName } from "../../lib/onboarding.ts";
 import type { Answers } from "./answers.ts";
 import { BriefQuestions } from "./start-step.tsx";
 
@@ -63,7 +64,10 @@ export function MakeStep({
         () => {
           // The workspace is made and the agent starts reading while the user goes on.
           void onboarding
-            .startWorkspace(suggestedName(sources, defaultName))
+            .startWorkspace(
+              suggestedName(sources, defaultName),
+              Option.getOrUndefined(pickedAgent()),
+            )
             .catch(() => undefined);
           onDone();
         },

@@ -1,5 +1,6 @@
-import { Array, Option } from "effect";
+import { Array, Option, Schema } from "effect";
 
+import { AgentName as AgentNameSchema } from "../../../src/core/schema.ts";
 import type { AgentName, AgentStatus } from "../api.ts";
 import { readStored, writeStored } from "./storage.ts";
 import { urlOf } from "./utils.ts";
@@ -38,6 +39,31 @@ export const nameFromSources = (sources: ReadonlyArray<string>): Option.Option<s
 /** The first workspace's name: the website's address, else the default the board names. */
 export const suggestedName = (sources: ReadonlyArray<string>, fallback: string) =>
   Option.getOrElse(nameFromSources(sources), () => fallback);
+
+const AGENT_KEY = "cutfac.onboarding.agent";
+
+const decodeAgent = Schema.decodeUnknownOption(AgentNameSchema);
+
+/** The agent the user picked on the first launch to make their videos with, if they did. */
+export const pickedAgent = (): Option.Option<AgentName> =>
+  Option.flatMap(Option.fromNullishOr(readStored(AGENT_KEY)), decodeAgent);
+
+export function pickAgent(agent: AgentName): void {
+  writeStored(AGENT_KEY, agent);
+}
+
+/**
+ * The agent the first workspace works with: the one picked when it is ready, else the first ready
+ * in the order shown, Claude Code first.
+ */
+export const workingAgent = (
+  ready: ReadonlyArray<AgentName>,
+  picked: Option.Option<AgentName>,
+): Option.Option<AgentName> =>
+  Option.orElse(
+    Option.filter(picked, (agent) => ready.includes(agent)),
+    () => Array.head(ready),
+  );
 
 const skipKey = (root: string) => `cutfac.start.skipped.${root}`;
 
