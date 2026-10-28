@@ -2,7 +2,6 @@ import { FolderIcon, GlobeIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
 import { badgeVariants } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -106,17 +105,25 @@ export function FolderPicker({ sources, onSources }: Sources) {
 
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button
-        type="button"
-        size="lg"
-        variant="outline"
-        className="w-full"
-        disabled={picking}
-        onClick={choose}
-      >
-        <FolderIcon data-icon="inline-start" />
-        {t.choose}
-      </Button>
+      {/* Shaped like the website field on the step before; anywhere on it opens the folder dialog. */}
+      <InputGroup>
+        <InputGroupAddon>
+          <FolderIcon />
+        </InputGroupAddon>
+        <button
+          type="button"
+          disabled={picking}
+          onClick={choose}
+          className="h-full min-w-0 flex-1 truncate pl-1.5 text-left text-sm text-muted-foreground outline-none"
+        >
+          {t.choose}
+        </button>
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton variant="secondary" size="xs" disabled={picking} onClick={choose}>
+            {t.browse}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
       <Chips
         shown={sources.filter((source) => !isLink(source))}
         sources={sources}
