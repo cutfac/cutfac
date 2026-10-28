@@ -50,6 +50,7 @@ test("a learn import reads about.md's unread sources into it, from the start, wi
   expect(message).toContain("about.md");
   expect(message).toContain("Write only about.md");
   expect(message).toContain("```ideas");
+  expect(message).toContain("in the language you write to them in");
   expect(message).toContain("Write to the user in Korean.");
   expect(message).not.toContain("press Allow");
 });

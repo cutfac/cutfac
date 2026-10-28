@@ -114,7 +114,7 @@ const READING_POLL_MS = 3000;
 /**
  * On the empty board, what the agent knows from the first launch: the material it learned, or that
  * it is still reading it, with a way to see all of it, so the answers given there visibly went
- * somewhere.
+ * somewhere; then the first videos the reading suggests, once it ends.
  */
 function KnownLine() {
   const t = useMessages();
@@ -151,10 +151,15 @@ function KnownLine() {
   if (titles.length === 0) return null;
 
   return (
-    <a href={href("learn")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-      {reading ? <Spinner data-icon="inline-start" /> : <BookOpenIcon data-icon="inline-start" />}
-      <span className="truncate">{reading ? t.board.reading(titles) : t.board.known(titles)}</span>
-    </a>
+    <>
+      <a href={href("learn")} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        {reading ? <Spinner data-icon="inline-start" /> : <BookOpenIcon data-icon="inline-start" />}
+        <span className="truncate">
+          {reading ? t.board.reading(titles) : t.board.known(titles)}
+        </span>
+      </a>
+      <FirstIdeas imports={imports.data} />
+    </>
   );
 }
 
@@ -302,7 +307,6 @@ export function Board() {
             <EmptyContent>
               <NewItemTrigger />
               <KnownLine />
-              <FirstIdeas />
               <AccessRow />
               <NotifyRow />
             </EmptyContent>

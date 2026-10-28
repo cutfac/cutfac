@@ -1,16 +1,13 @@
 import { ArrowRightIcon } from "lucide-react";
 
-import { api, type ImportSummary } from "../api.ts";
-import { useLive } from "../hooks.ts";
+import type { ImportSummary } from "../api.ts";
 import { useMessages } from "../i18n/index.ts";
 import { replyBlocks } from "../lib/replyBlocks.ts";
 import { openNewItemWith } from "./new-item-dialog.tsx";
 
 /** The first videos the last reading of the user's material suggested, once it has finished. */
-function useIdeas(): ReadonlyArray<string> {
-  const imports = useLive("imports", api.imports);
-
-  const reading = imports.data
+function ideasIn(imports: ReadonlyArray<ImportSummary> | undefined): ReadonlyArray<string> {
+  const reading = imports
     ?.filter(({ doc }) => doc.kind === "learn")
     .reduce<ImportSummary | undefined>(
       (latest, one) =>
@@ -29,9 +26,9 @@ function useIdeas(): ReadonlyArray<string> {
  * On the empty board, the videos the agent suggests from what it read, so the first one is the
  * user's own and asks nothing of them but a pick. Each opens New video with it written in.
  */
-export function FirstIdeas() {
+export function FirstIdeas({ imports }: { imports: ReadonlyArray<ImportSummary> | undefined }) {
   const t = useMessages();
-  const ideas = useIdeas();
+  const ideas = ideasIn(imports);
 
   if (ideas.length === 0) return null;
 

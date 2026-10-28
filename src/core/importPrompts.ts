@@ -141,7 +141,7 @@ function learnPrompt(doc: ImportDoc): string {
     "Read brief.md, then each section of about.md that says it is not read yet: read its link or folder, rewrite the section with what matters for short videos about it (what it is, who it is for, their own words, the claims it can back up, how it looks, how it sounds), and delete the not-read line. Keep each section's `<!-- learned:id -->` line.",
     "Write only about.md. Make no template, video, or other file, and install nothing.",
     "If a source can't be read, leave its section as it is and say which one.",
-    "End with one or two short sentences on what you learned, then three first videos the user could make right away from it, each one line as they would ask for it, for the platforms in brief.md, in this block and nothing after it:",
+    "End with one or two short sentences on what you learned, then three first videos the user could make right away from it, each one line as they would ask for it, in the language you write to them in, for the platforms in brief.md, in this block and nothing after it:",
     "```ideas",
     "- A 15-second TikTok on the one problem the app solves, ending on its name",
     "```",
