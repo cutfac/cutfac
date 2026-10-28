@@ -10,6 +10,8 @@ export const shellKo: ShellMessages = {
   },
   app: {
     unreachable: "컷팩 서버에 연결할 수 없어요",
+    quitting: "컷팩을 종료하고 있어요",
+    quittingDetail: "로컬 서버와 에이전트 작업을 멈추고 있어요. 잠시 걸릴 수 있어요.",
   },
   nav: {
     appName: "컷팩",

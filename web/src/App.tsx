@@ -7,6 +7,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { DesktopLicense } from "@/components/desktop-license";
 import { NewItemDialog } from "@/components/new-item-dialog";
 import { ErrorAlert } from "@/components/page";
+import { QuittingOverlay } from "@/components/quitting-overlay";
 import { TitleBar } from "@/components/title-bar";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar-provider";
@@ -33,18 +34,23 @@ export function App() {
   const [view, id] = useHashRoute();
   const onboarding = desktop?.onboarding;
 
-  // The app's first launch runs before there is a workspace, and so a server to talk to.
-  if (onboarding !== undefined && view === "welcome") {
-    return <Welcome onboarding={onboarding} step={id} />;
-  }
-
   if (onboarding !== undefined && view === "drag-helper")
     return <DragHelper onboarding={onboarding} />;
 
   // The dev build's Dev Panel; the bridge has its tools in that window alone.
   if (desktop?.dev !== undefined && view === "dev") return <DevTools dev={desktop.dev} />;
 
-  return <Shell view={view} id={id} />;
+  return (
+    <>
+      {onboarding !== undefined && view === "welcome" ? (
+        // The app's first launch runs before there is a workspace, and so a server to talk to.
+        <Welcome onboarding={onboarding} step={id} />
+      ) : (
+        <Shell view={view} id={id} />
+      )}
+      <QuittingOverlay />
+    </>
+  );
 }
 
 /** The board on a workspace: the sidebar and the page, or the first template while it has none. */

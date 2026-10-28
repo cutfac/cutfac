@@ -40,6 +40,9 @@ export const SET_LICENSE_KEY_CHANNEL = "cutfac:set-license-key";
 /** The paid plan unlocked or ran out, for the board to show the plan again. */
 export const LICENSE_CHANGE_CHANNEL = "cutfac:license-change";
 
+/** The app is quitting, for the board to say so while it stops its work. */
+export const QUITTING_CHANNEL = "cutfac:quitting";
+
 /** The board asks for its license key dialog, as License Key… in the app menu does. */
 export const OPEN_LICENSE_KEY_CHANNEL = "cutfac:open-license-key";
 

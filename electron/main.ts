@@ -26,6 +26,7 @@ import {
   LICENSE_KEY_REQUEST_CHANNEL,
   OPEN_LICENSE_KEY_CHANNEL,
   PICK_PATH_CHANNEL,
+  QUITTING_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
@@ -40,11 +41,9 @@ import { MESSAGES } from "./messages.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions } from "./permissions.ts";
 import { guardQuit } from "./quitGuard.ts";
-import { quitSheet } from "./quitSheet.ts";
 import {
   appState,
   boardWindow,
-  builtService,
   devLaunch,
   forkInMain,
   readNow,
@@ -133,12 +132,12 @@ function start(): void {
 
     if (window) rememberPlace(window);
 
-    // The runtime closes during the quit, so the sheet runs apart from it.
-    const sheet = Effect.runFork(showQuitting(window));
+    // The runtime closes during the quit, so this runs apart from it.
+    const saying = Effect.runFork(sayQuitting(window));
 
     forkInMain(
       shutDownMain(settingsWritten).pipe(
-        Effect.ensuring(Fiber.interrupt(sheet)),
+        Effect.ensuring(Fiber.interrupt(saying)),
         Effect.andThen(Ref.set(quitReady, true)),
         Effect.andThen(Effect.sync(() => app.quit())),
       ),
@@ -388,32 +387,17 @@ const show = Effect.fn("main.show")(function* (url: string, title: string) {
   window.webContents.navigationHistory.clear();
 });
 
-/** Says on the board's window that the app is quitting, once the quit takes a moment. */
-const showQuitting = (window: BrowserWindow | undefined) => {
-  if (window === undefined || window.isDestroyed()) return Effect.void;
+/** How long a quit goes on before the board says so; one quicker than this shows nothing. */
+const SAY_QUITTING_AFTER = "500 millis";
 
-  const t = messages();
-  const server = builtService(WorkspaceServer);
-
-  const quitNow = Effect.andThen(
-    Option.match(server, { onNone: () => Effect.void, onSome: (running) => running.kill }),
-    Effect.sync(() => app.exit(0)),
+/** Has the board say the app is quitting, once the quit takes a moment, until the window closes. */
+const sayQuitting = (window: BrowserWindow | undefined) =>
+  Effect.delay(
+    Effect.sync(() => {
+      if (window !== undefined && !window.isDestroyed()) window.webContents.send(QUITTING_CHANNEL);
+    }),
+    SAY_QUITTING_AFTER,
   );
-
-  return quitSheet(
-    (signal) =>
-      dialog
-        .showMessageBox(window, {
-          type: "info",
-          message: t.quitting,
-          detail: t.quittingDetail,
-          buttons: [t.quitNow],
-          signal,
-        })
-        .then(({ response }) => !signal.aborted && response === 0),
-    quitNow,
-  );
-};
 
 const showCrash = (message: string) =>
   Effect.promise(() =>

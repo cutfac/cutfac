@@ -257,6 +257,8 @@ export interface CutfacDesktop {
    * Resolves what cutfac.com said.
    */
   setLicenseKey: (key: string) => Promise<LicenseCheck>;
+  /** The app is quitting and stopping its work, which can take a moment. Returns an unsubscribe. */
+  onQuitting: (listener: () => void) => () => void;
   /**
    * The paid plan unlocked or ran out, so the plan the board shows is stale. Returns an
    * unsubscribe.

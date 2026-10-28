@@ -8,6 +8,8 @@ export const shellEn = {
   },
   app: {
     unreachable: "Cannot reach the Cutfac server",
+    quitting: "Cutfac is quitting",
+    quittingDetail: "Stopping the local server and agent work. This can take a moment.",
   },
   nav: {
     appName: "Cutfac",

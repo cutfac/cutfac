@@ -50,6 +50,7 @@ import {
   SWITCH_WORKSPACE_CHANNEL,
   WORKSPACES_CHANNEL,
   PICK_PATH_CHANNEL,
+  QUITTING_CHANNEL,
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
@@ -203,6 +204,15 @@ const bridge = {
     };
   },
   setLicenseKey: (key) => ipcRenderer.invoke(SET_LICENSE_KEY_CHANNEL, key),
+  onQuitting: (listener) => {
+    const forward = () => listener();
+
+    ipcRenderer.on(QUITTING_CHANNEL, forward);
+
+    return () => {
+      ipcRenderer.removeListener(QUITTING_CHANNEL, forward);
+    };
+  },
   onLicenseChange: (listener) => {
     const forward = () => listener();
 

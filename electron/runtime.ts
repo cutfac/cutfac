@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Context, Effect, Layer, ManagedRuntime, Option, Predicate, Ref } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Predicate, Ref } from "effect";
 import { FetchHttpClient } from "effect/http";
 import type { PlatformError } from "effect/PlatformError";
 import { app } from "electron";
@@ -122,7 +122,3 @@ export const runNow = (effect: Effect.Effect<void, never, AppServices>) => {
 
 export const shutDownMain = <E>(save: Effect.Effect<void, E, AppServices>) =>
   shutDown(runtime, save);
-
-/** `key`'s service once the runtime is built, for the quit, which still needs one as it closes. */
-export const builtService = <I extends AppServices, S>(key: Context.Key<I, S>): Option.Option<S> =>
-  Option.map(Option.fromUndefinedOr(runtime.cachedContext), (context) => Context.get(context, key));
