@@ -3,10 +3,11 @@
  * one command. It first checks everything the release needs, so nothing turns up missing after the
  * long build. Then it bumps the version with `bun pm version` when given one, runs CI's checks, and
  * checks that the installed claude and codex CLIs still work with Cutfac, which the flag leaves
- * out. It builds, signs and notarizes the app, and uploads it to the private release bucket, the
- * update feed last. Apps and the download page reach it through short-lived cutfac.com links, with
- * no license key. Last, it pushes main with a `v<version>` tag and publishes a source-only GitHub
- * release. Credentials come from .env.release; nothing here prints their values.
+ * out. It builds, signs and notarizes the app in a copy of the release commit, and uploads it to the
+ * private release bucket, the update feed last. Apps and the download page reach it through
+ * short-lived cutfac.com links, with no license key. Last, it pushes the release commit to main with
+ * a `v<version>` tag and publishes a source-only GitHub release. Credentials come from .env.release;
+ * nothing here prints their values.
  */
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
@@ -40,6 +41,12 @@ const root = path.resolve(import.meta.dir, "..");
 
 const outputDir = path.join(root, "release");
 
+/**
+ * Where the release commit is copied to be built, with its own dist/ and release/, so a dev build
+ * writing dist/ or a file being edited in the checkout can't reach the app.
+ */
+const buildRoot = path.join(outputDir, "source");
+
 const packageFile = path.join(root, "package.json");
 
 /** What CI runs on every push besides the build, so no release ships what CI would fail. */
@@ -57,7 +64,7 @@ const CHECKS = [
  */
 const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"] as const;
 
-const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
+const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>, cwd = root) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const [program = "", ...args] = command;
   const shown = command.join(" ");
@@ -66,7 +73,7 @@ const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
     Effect.flatMap(
       spawner.spawn(
         ChildProcess.make(program, args, {
-          cwd: root,
+          cwd,
           stdin: "inherit",
           stdout: "inherit",
           stderr: "inherit",
@@ -245,8 +252,9 @@ const publishSource = Effect.fnUntraced(function* (version: string, commit: stri
 
   const steps = [
     ["git", "tag", "-a", tag, commit, "-m", `Cutfac ${version}`],
-    // Atomic, so GitHub gets main and its tag together or neither.
-    ["git", "push", "--atomic", "origin", BRANCH, `refs/tags/${tag}`],
+    // Atomic, so GitHub gets the release commit on main and its tag together or neither. Only that
+    // commit: whatever was committed on main while the release built stays local.
+    ["git", "push", "--atomic", "origin", `${commit}:refs/heads/${BRANCH}`, `refs/tags/${tag}`],
     [
       "gh",
       "release",
@@ -274,9 +282,25 @@ const publishSource = Effect.fnUntraced(function* (version: string, commit: stri
     }
   }
 
-  yield* log(`Pushed ${BRANCH} with ${tag} and published its GitHub release.`);
+  yield* log(`Pushed ${tag} and its commit to ${BRANCH}, and published its GitHub release.`);
 
   return 0;
+});
+
+/** The commit's files in `buildRoot`, with its locked packages installed. */
+const copyCommit = Effect.fnUntraced(function* (commit: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const archive = `${buildRoot}.tar`;
+
+  yield* fs.remove(buildRoot, { recursive: true, force: true });
+  yield* fs.makeDirectory(buildRoot, { recursive: true });
+  // The vendored reference source is read by people, never built.
+  yield* run(["git", "archive", "--output", archive, commit, "--", ".", ":!reference-repos"]);
+  yield* run(["tar", "-xf", archive, "-C", buildRoot]);
+  yield* fs.remove(archive);
+  // Its own install, not a link to the checkout's: Bun would write the link's real path, a path on
+  // this machine, into the bundles.
+  yield* run(["bun", "install", "--frozen-lockfile", "--ignore-scripts"], buildRoot);
 });
 
 const ship = Effect.fnUntraced(function* (asked: ReleaseArgs) {
@@ -287,22 +311,26 @@ const ship = Effect.fnUntraced(function* (asked: ReleaseArgs) {
     return yield* new ReleaseFailed({ message: "Couldn't read the commit to release." });
   }
 
-  yield* log(`Building Cutfac ${version}.`);
-  yield* run(["bun", "run", "build"]);
-  yield* run(["bun", "run", "build:sidecar"]);
-  yield* run(["bun", "run", "build:electron"]);
+  yield* log(`Building Cutfac ${version} in ${path.relative(root, buildRoot)}.`);
+  yield* copyCommit(commit.value);
+  yield* run(["bun", "run", "build"], buildRoot);
+  yield* run(["bun", "run", "build:sidecar"], buildRoot);
+  yield* run(["bun", "run", "build:electron"], buildRoot);
 
   // Fails instead of building an unsigned app when the Developer ID certificate is missing. The
   // feed file is still written; this script uploads it, since the bucket is not a builder target.
-  yield* run([
-    path.join(root, "node_modules", ".bin", "electron-builder"),
-    "--mac",
-    "--publish",
-    "never",
-    "-c.mac.forceCodeSigning=true",
-  ]);
+  yield* run(
+    [
+      path.join(buildRoot, "node_modules", ".bin", "electron-builder"),
+      "--mac",
+      "--publish",
+      "never",
+      "-c.mac.forceCodeSigning=true",
+    ],
+    buildRoot,
+  );
 
-  yield* publishBuild(outputDir, version);
+  yield* publishBuild(path.join(buildRoot, "release"), version);
 
   const code = yield* publishSource(
     version,

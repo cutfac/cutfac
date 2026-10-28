@@ -50,14 +50,18 @@ at once. It then refuses a version that is already tagged or not newer than the 
 runs the checks CI runs. A bump is committed as `chore(release): <version>` only once they pass;
 until then a failure puts `package.json` back.
 
-Then it builds, signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their
-blockmaps to `mac/`, then `latest-mac.yml` last so no app sees the release before its files.
+Then it copies the release commit to `release/source/` and builds there, with its own `dist/` and
+`release/`, so a running `desktop:dev` or a file being edited in the checkout can't reach the app.
+It signs under the hardened runtime, notarizes, and uploads the dmg, the zip and their blockmaps to
+`mac/`, then `latest-mac.yml` last so no app sees the release before its files.
 cutfac.com hands out short-lived CloudFront links to these files: the dmg from its download page and
 the rest to the app's update checks. The feed is never cached and build files never change, so a
 release needs no cache invalidation.
 
-Last, it tags the commit it built `v<version>`, pushes `main` and the tag together, and creates a
-GitHub release with no files attached, whose notes list the features and fixes since the last tag.
+Last, it tags the commit it built `v<version>`, pushes that commit to `main` and the tag together,
+and creates a GitHub release with no files attached, whose notes list the features and fixes since
+the last tag. Commits made on `main` while the release built stay local, and a `main` that moved on
+GitHub meanwhile stops the push.
 If that step fails, the builds are already out and the script prints the commands left to run.
 It ends by reminding you to add the version to cutfac.com's changelog, which is written by hand
 from those notes.
