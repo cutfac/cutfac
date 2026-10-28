@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect, Fiber, Option } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
+import { TestClock } from "effect/testing";
 
-import { InvalidRequest } from "../src/core/errors.ts";
+import { FetchFailed, InvalidRequest } from "../src/core/errors.ts";
 import {
   detectSource,
   fetchListing,
@@ -148,6 +149,31 @@ describe("fetchListing", () => {
         InvalidRequest,
       );
       expect(requested).toEqual([]);
+    }),
+  );
+
+  it.effect("gives up on a page that stops answering, before its headers or during its body", () =>
+    Effect.gen(function* () {
+      const silent = HttpClient.make(() => Effect.never);
+
+      const stalled = HttpClient.make((request) =>
+        Effect.succeed(HttpClientResponse.fromWeb(request, new Response(new ReadableStream()))),
+      );
+
+      for (const client of [silent, stalled]) {
+        const reading = yield* fetchListing("https://fernly.app/").pipe(
+          Effect.provideService(HttpClient.HttpClient, client),
+          Effect.flip,
+          Effect.forkScoped,
+        );
+
+        yield* TestClock.adjust("20 seconds");
+
+        const error = yield* Fiber.join(reading);
+
+        expect(error).toBeInstanceOf(FetchFailed);
+        expect(error.message).toBe("https://fernly.app/ did not answer in time.");
+      }
     }),
   );
 });

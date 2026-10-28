@@ -72,17 +72,27 @@ export function detectSource(url: string): ListingSource {
   return "web";
 }
 
-const fetchFailed = (url: string) => (error: { readonly message: string }) =>
-  new FetchFailed({ message: `${url}: ${error.message}` });
+/** A page or picture that takes longer is given up on, so a server that never answers can't stall learning. */
+const FETCH_TIMEOUT = "20 seconds";
 
-const get = (url: string) =>
+/** `url`'s OK response as `read` takes it, the body included in the time it gets. */
+const fetchAs = <A>(
+  url: string,
+  read: (
+    response: HttpClientResponse.HttpClientResponse,
+  ) => Effect.Effect<A, { readonly message: string }>,
+) =>
   HttpClient.get(url, { headers: { "user-agent": UA, "accept-language": "en" } }).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
-    Effect.mapError(fetchFailed(url)),
+    Effect.flatMap(read),
+    Effect.mapError((error) => new FetchFailed({ message: `${url}: ${error.message}` })),
+    Effect.timeoutOrElse({
+      duration: FETCH_TIMEOUT,
+      orElse: () => Effect.fail(new FetchFailed({ message: `${url} did not answer in time.` })),
+    }),
   );
 
-const getText = (url: string) =>
-  get(url).pipe(Effect.flatMap((response) => Effect.mapError(response.text, fetchFailed(url))));
+const getText = (url: string) => fetchAs(url, (response) => response.text);
 
 /** Read one App Store, Google Play, or landing page. */
 export const fetchListing = Effect.fn("listings.fetchListing")(function* (url: string) {
@@ -97,10 +107,7 @@ export const fetchListing = Effect.fn("listings.fetchListing")(function* (url: s
     const country = /apps\.apple\.com\/([a-z]{2})\//.exec(url)?.[1] ?? "us";
     const lookupUrl = `https://itunes.apple.com/lookup?id=${id}&country=${country}`;
 
-    const lookup = yield* get(lookupUrl).pipe(
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(AppStoreLookup)),
-      Effect.mapError(fetchFailed(lookupUrl)),
-    );
+    const lookup = yield* fetchAs(lookupUrl, HttpClientResponse.schemaBodyJson(AppStoreLookup));
 
     return yield* Effect.fromOption(
       parseAppStoreLookup(lookup, url),
@@ -241,17 +248,17 @@ const IMAGE_EXTENSIONS = new Map([
  */
 export const download = Effect.fn("listings.download")(function* (url: string, stem: string) {
   const ws = yield* Workspace;
-  const response = yield* get(url);
-  const type = (response.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
-  const extension = IMAGE_EXTENSIONS.get(type);
 
-  if (extension === undefined) {
-    return yield* new FetchFailed({
-      message: `${url}: not a picture the board can show (${type})`,
+  const [extension, bytes] = yield* fetchAs(url, (response) => {
+    const type = (response.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+
+    return Option.match(Option.fromUndefinedOr(IMAGE_EXTENSIONS.get(type)), {
+      onNone: () =>
+        Effect.fail(new FetchFailed({ message: `not a picture the board can show (${type})` })),
+      onSome: (found) => Effect.map(response.arrayBuffer, (body) => [found, body] as const),
     });
-  }
+  });
 
-  const bytes = yield* Effect.mapError(response.arrayBuffer, fetchFailed(url));
   const file = `${stem}.${extension}`;
   yield* ws.writeBytes(file, new Uint8Array(bytes));
 
