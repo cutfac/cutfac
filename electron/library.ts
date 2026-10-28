@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
 
 import type { AgentName } from "../src/core/schema.ts";
+import { isWorkspaceRoot } from "../src/core/workspaceRoot.ts";
 import type { AgentSetup } from "../web/src/desktop.ts";
 
 // Where the app keeps its workspaces: one folder of its own, `~/Movies/Cutfac` by default, with each
@@ -10,9 +11,6 @@ import type { AgentSetup } from "../web/src/desktop.ts";
 
 /** The folder in the app's own where the workspaces are. */
 export const WORKSPACES = "workspaces";
-
-/** What a workspace folder holds at its root; `factory.yaml` is its name from before Cutfac. */
-const CONFIGS = ["cutfac.yaml", "factory.yaml"];
 
 /**
  * A workspace's name, which is its folder's name: one level, nothing hidden, and nothing Finder or
@@ -37,17 +35,6 @@ export interface LibraryWorkspace {
   path: string;
 }
 
-const isWorkspace = Effect.fnUntraced(function* (dir: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-
-  for (const config of CONFIGS) {
-    if (yield* fs.exists(path.join(dir, config))) return true;
-  }
-
-  return false;
-});
-
 /** The workspaces in `library`, by name; none while it has no `workspaces` folder yet. */
 export const listWorkspaces = Effect.fn("library.list")(function* (library: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -60,7 +47,7 @@ export const listWorkspaces = Effect.fn("library.list")(function* (library: stri
   for (const name of names.toSorted((a, b) => a.localeCompare(b))) {
     const target = path.join(dir, name);
 
-    if (Option.isSome(decodeWorkspaceName(name)) && (yield* isWorkspace(target))) {
+    if (Option.isSome(decodeWorkspaceName(name)) && (yield* isWorkspaceRoot(target))) {
       found.push({ name, path: target });
     }
   }
@@ -88,7 +75,7 @@ export const prepareWorkspace = Effect.fn("library.prepare")(function* (
   const target = path.join(library, WORKSPACES, name);
 
   if (yield* fs.exists(target)) {
-    if (yield* isWorkspace(target)) {
+    if (yield* isWorkspaceRoot(target)) {
       return reuse ? ({ kind: "ready", path: target } as const) : ({ kind: "taken" } as const);
     }
 

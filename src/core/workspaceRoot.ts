@@ -33,7 +33,7 @@ const pathExists = Effect.fnUntraced(function* (full: string) {
 });
 
 /** Whether `dir` holds a config file, current or from before the rename. */
-const hasConfig = Effect.fnUntraced(function* (dir: string) {
+export const isWorkspaceRoot = Effect.fnUntraced(function* (dir: string) {
   const path = yield* Path.Path;
 
   const found = yield* Effect.forEach([CONFIG_FILE, LEGACY_CONFIG_FILE], (name) =>
@@ -49,7 +49,7 @@ export const findRoot = Effect.fnUntraced(function* (start: string) {
   let dir = path.resolve(start);
 
   for (;;) {
-    if (yield* hasConfig(dir)) return Option.some(dir);
+    if (yield* isWorkspaceRoot(dir)) return Option.some(dir);
     const parent = path.dirname(dir);
 
     if (parent === dir) return Option.none<string>();
@@ -73,7 +73,7 @@ export const initWorkspace = Effect.fn("Workspace.init")(function* (
   const failed = (error: PlatformError | Schema.SchemaError) =>
     new WorkspaceError({ message: `Could not create ${file}: ${error.message}` });
 
-  if (yield* hasConfig(dir)) return false;
+  if (yield* isWorkspaceRoot(dir)) return false;
 
   const encoded = yield* Schema.decodeEffect(WorkspaceConfig)(config).pipe(
     Effect.flatMap(Schema.encodeEffect(WorkspaceConfig)),

@@ -7,7 +7,6 @@ import {
   Effect,
   Exit,
   Fiber,
-  FileSystem,
   Layer,
   Option,
   Ref,
@@ -20,6 +19,7 @@ import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { STOP_GRACE, whichIn } from "../src/core/process.ts";
+import { isWorkspaceRoot } from "../src/core/workspaceRoot.ts";
 import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.ts";
 import { bindPort, freePort, HOST } from "./ports.ts";
 
@@ -311,17 +311,11 @@ export interface Sidecar {
 }
 
 const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope.Closeable) {
-  const fs = yield* FileSystem.FileSystem;
   const choice = options.port;
   const port = yield* "fixed" in choice ? bindPort(choice.fixed) : freePort(choice.last);
   const launch = yield* resolveLaunch;
 
-  // factory.yaml is what a workspace made before the rename to Cutfac calls it; serving renames it.
-  const configs = yield* Effect.forEach(["cutfac.yaml", "factory.yaml"], (name) =>
-    fs.exists(path.join(options.workspace, name)).pipe(Effect.orElseSucceed(() => false)),
-  );
-
-  if (!configs.includes(true)) yield* setUp(launch, options.workspace);
+  if (!(yield* isWorkspaceRoot(options.workspace))) yield* setUp(launch, options.workspace);
 
   const server = yield* spawn(
     options.watch ? { ...launch, args: [...launch.watchFlags, ...launch.args] } : launch,
