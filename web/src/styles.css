@@ -452,44 +452,16 @@
   }
 }
 
-/* Words about work going on elsewhere: a soft light passes over them now and then, so they read as
-   alive without asking to be watched. */
-.reading-shine {
-  background: linear-gradient(
-      100deg,
-      var(--muted-foreground) 40%,
-      var(--foreground) 50%,
-      var(--muted-foreground) 60%
-    )
-    0 0 / 250% 100%;
-  background-clip: text;
-  color: transparent;
-}
-
+/* A dot beside work going on elsewhere fades in and out at the pace of a slow breath, alive without
+   asking to be watched. */
 @media (prefers-reduced-motion: no-preference) {
-  .reading-shine {
-    animation: reading-shine 3.2s ease-in-out infinite;
-  }
-
-  /* The dot beside them breathes at about the pace of a slow breath. */
-  .reading-ping {
-    animation: reading-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  .reading-breathe {
+    animation: reading-breathe 2.4s ease-in-out infinite;
   }
 }
 
-@keyframes reading-shine {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -150% 0;
-  }
-}
-
-@keyframes reading-ping {
-  75%,
-  100% {
-    scale: 2.2;
-    opacity: 0;
+@keyframes reading-breathe {
+  50% {
+    opacity: 0.3;
   }
 }

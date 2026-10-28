@@ -54,10 +54,7 @@ export function SampleStep({ onSkip }: { onSkip: () => void }) {
 
   return (
     <div className="flex animate-in flex-col gap-8 duration-300 fade-in slide-in-from-bottom-2">
-      <div className="flex flex-col gap-4">
-        <StepHeader title={t.title} body={t.body} />
-        <ReadingNote />
-      </div>
+      <StepHeader title={t.title} body={t.body} />
       <div className="grid grid-cols-3 gap-3">
         {(samples ?? []).map((sample) => (
           <button
@@ -88,9 +85,12 @@ export function SampleStep({ onSkip }: { onSkip: () => void }) {
         ))}
       </div>
       {error === undefined ? null : <ErrorAlert message={error} />}
-      <div className="flex items-center">
-        {adding === undefined ? null : (
-          <span className="text-sm text-muted-foreground">{t.adding}</span>
+      {/* What goes on meanwhile sits beside Skip, as status rather than a step to wait for. */}
+      <div className="flex items-center gap-4">
+        {adding === undefined ? (
+          <ReadingNote />
+        ) : (
+          <span className="text-xs text-muted-foreground">{t.adding}</span>
         )}
         <Button
           size="lg"
@@ -107,31 +107,27 @@ export function SampleStep({ onSkip }: { onSkip: () => void }) {
 }
 
 /**
- * What the agent is doing meanwhile, quietly: a breathing dot and words a soft light passes over
- * while it reads, then that it is done. Nothing shows when there was nothing to read.
+ * What the agent is doing meanwhile, in one quiet line: that it reads in the background and nothing
+ * waits on it, with a slowly breathing dot, then that it is done. Nothing shows when there was
+ * nothing to read.
  */
 function ReadingNote() {
-  const messages = useMessages();
+  const t = useMessages().start.sample;
   const { titles, reading } = useFirstReading();
 
   if (!reading && titles.length === 0) return null;
 
   return (
-    <div
+    <span
       key={reading ? "reading" : "read"}
-      className="flex animate-in items-center gap-2.5 self-start rounded-full bg-foreground/5 py-1.5 ps-3 pe-4 text-xs duration-500 fade-in"
+      className="flex min-w-0 animate-in items-center gap-2 text-xs text-muted-foreground duration-500 fade-in"
     >
       {reading ? (
-        <span className="relative flex size-2">
-          <span className="reading-ping absolute inset-0 rounded-full bg-brand/50" />
-          <span className="relative size-2 rounded-full bg-brand" />
-        </span>
+        <span className="reading-breathe size-1.5 shrink-0 rounded-full bg-brand" />
       ) : (
-        <CheckIcon className="size-3.5 text-brand" />
+        <CheckIcon className="size-3.5 shrink-0 text-brand" />
       )}
-      <span className={reading ? "reading-shine" : "text-muted-foreground"}>
-        {reading ? messages.board.reading(titles) : messages.start.sample.read}
-      </span>
-    </div>
+      {reading ? t.reading : t.read}
+    </span>
   );
 }

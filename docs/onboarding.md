@@ -167,7 +167,8 @@ opens in the editor with a guide card that moves on as the user does each part o
 play it, draw a box on the title, send the suggested request to change it to their product's name,
 then ask for two versions and compare. The copy is the user's own video from then on, so it counts
 as one of the free version's videos, a light nudge that the next ones are worth making well. While
-the user picks, a quiet line under the offer says what the agent is reading, then that it is done.
+the user picks, one quiet line beside Skip says the agent reads in the background and nothing waits
+on it, then that it is done; a line under the heading read as a loading screen to wait out.
 The guide's last card,
 or Skip on the offer, opens an empty editor for the first video of their own, so asking for it is
 the next thing to do; a template can come from a video the user likes later, through Templates. The
