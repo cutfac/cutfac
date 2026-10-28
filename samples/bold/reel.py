@@ -6,6 +6,7 @@ import sys
 
 import numpy as np
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from motion import *  # noqa: E402,F403
 
