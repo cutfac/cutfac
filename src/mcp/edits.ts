@@ -6,6 +6,7 @@ import { saveVariant } from "../core/editVariants.ts";
 import { openFeedback } from "../core/items.ts";
 import { Feedback, Variant } from "../core/schema.ts";
 import { Workspace } from "../core/workspace.ts";
+import { workOn } from "../plan.ts";
 import { AbsDir, Id, Ok, describe, tool, toolRunner } from "./tool.ts";
 
 const OpenFeedbackEntry = Schema.Struct({
@@ -88,11 +89,14 @@ export const editsHandlers = EditsToolkit.toLayer(
 
       save_variant: ({ item, feedbackId, label, media }) =>
         run(
-          Effect.map(saveVariant(item, feedbackId, label, media), ({ variant, saved, wanted }) => ({
-            variant,
-            saved,
-            wanted,
-          })),
+          Effect.map(
+            Effect.andThen(workOn(item), saveVariant(item, feedbackId, label, media)),
+            ({ variant, saved, wanted }) => ({
+              variant,
+              saved,
+              wanted,
+            }),
+          ),
         ),
     });
   }),

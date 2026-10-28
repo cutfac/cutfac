@@ -3,7 +3,7 @@ import { Context, Effect, Layer, Option, Path, Schema } from "effect";
 import { AppData, appendAppRecord } from "./core/appData.ts";
 import { BUNDLED } from "./core/build.ts";
 import { envVar } from "./core/env.ts";
-import { type NewItemInput, createItem } from "./core/items.ts";
+import { type Item, type NewItemInput, createItem, getItem } from "./core/items.ts";
 import { nowIso } from "./core/time.ts";
 import { Workspace } from "./core/workspace.ts";
 import { paidInSettings } from "./license.ts";
@@ -17,11 +17,45 @@ export const PRICING_URL = "https://cutfac.com/pricing";
 /** The app's settings file is a few hundred bytes; anything past this isn't one. */
 const SETTINGS_BYTES = 64 * 1024;
 
-/** A line per video, so the start of the file holds far more lines than the count needs. */
-const VIDEOS_BYTES = 64 * 1024;
+/** A line per video, far more than a free version or a busy paid one makes. */
+const VIDEOS_BYTES = 1024 * 1024;
 
-/** The time each new video was made on this Mac, a line each, paid or not. */
+/**
+ * Each video counted on this Mac, paid or not, a line each: `<time> made <key>` for one Cutfac
+ * made, `<time> seen <key>` for one first worked on without being made by it, as a folder an
+ * agent wrote by hand. Lines from before keys hold the time alone.
+ */
 const VIDEOS_FILE = "videos.log";
+
+/** What names a video in the count. A copy of its folder under another id is another video. */
+const videoKey = (item: Item) => `${item.id}@${item.doc.created ?? ""}`;
+
+interface VideoCount {
+  readonly made: ReadonlySet<string>;
+  readonly seen: ReadonlySet<string>;
+  /** Lines from before keys, which the videos made then and seen since may each stand for. */
+  readonly unnamed: number;
+}
+
+const countOf = (videos: string): VideoCount => {
+  const made = new Set<string>();
+  const seen = new Set<string>();
+  let unnamed = 0;
+
+  for (const line of videos.split("\n")) {
+    const [time = "", kind, key] = line.trim().split(" ");
+
+    if (kind === "made" && key !== undefined) made.add(key);
+    else if (kind === "seen" && key !== undefined) seen.add(key);
+    else if (time !== "") unnamed++;
+  }
+
+  return { made, seen, unnamed };
+};
+
+const usedOf = ({ made, seen, unnamed }: VideoCount) => made.size + Math.max(unnamed, seen.size);
+
+const isCounted = ({ made, seen }: VideoCount, key: string) => made.has(key) || seen.has(key);
 
 /**
  * The desktop app's data folder, which holds its license and the count of videos made, when this
@@ -98,30 +132,41 @@ export const planOf = Effect.fnUntraced(function* (
 ): Effect.fn.Return<Plan> {
   if (Option.isSome(settings) && (yield* paidInSettings(settings.value))) return PAID;
 
-  const made = videos.split("\n").filter((line) => line.trim() !== "").length;
+  const used = usedOf(countOf(videos));
 
-  return { edition: "desktop", paid: false, used: Math.min(made, FREE_VIDEOS), limit: FREE_VIDEOS };
+  return { edition: "desktop", paid: false, used: Math.min(used, FREE_VIDEOS), limit: FREE_VIDEOS };
 });
 
-/** The plan now. Files the app hasn't written yet, or can't be read, count as none. */
+/** The app's settings and video count in `dir`. Files it hasn't written yet, or can't be read, are empty. */
+const readRecords = Effect.fnUntraced(function* (dir: string) {
+  const ws = yield* Workspace;
+  const path = yield* Path.Path;
+
+  return yield* Effect.all(
+    [
+      ws.peekText(path.join(dir, "settings.json"), SETTINGS_BYTES).pipe(Effect.option),
+      ws.peekText(path.join(dir, VIDEOS_FILE), VIDEOS_BYTES).pipe(Effect.orElseSucceed(() => "")),
+    ],
+    { concurrency: "unbounded" },
+  );
+});
+
+/** The plan now. */
 export const planStatus = Effect.fn("plan.status")(function* () {
   const dir = yield* DesktopData;
 
   if (Option.isNone(dir)) return OPEN_SOURCE;
-  const ws = yield* Workspace;
+
+  return yield* planOf(...(yield* readRecords(dir.value)));
+});
+
+/** Adds a line to the count. The work goes on either way; a count that can't be kept lets one go. */
+const record = Effect.fnUntraced(function* (dir: string, kind: "made" | "seen", key: string) {
   const path = yield* Path.Path;
 
-  const [settings, videos] = yield* Effect.all(
-    [
-      ws.peekText(path.join(dir.value, "settings.json"), SETTINGS_BYTES).pipe(Effect.option),
-      ws
-        .peekText(path.join(dir.value, VIDEOS_FILE), VIDEOS_BYTES)
-        .pipe(Effect.orElseSucceed(() => "")),
-    ],
-    { concurrency: "unbounded" },
+  yield* appendAppRecord(path.join(dir, VIDEOS_FILE), `${yield* nowIso} ${kind} ${key}`).pipe(
+    Effect.catch((error) => Effect.logWarning(error.message)),
   );
-
-  return yield* planOf(settings, videos);
 });
 
 /** A new video refused because the desktop app's free version has made all of its videos. */
@@ -135,8 +180,13 @@ const LIMIT_MESSAGE =
   `on one of those. To make new videos, the user upgrades at ${PRICING_URL}: while the early-bird ` +
   "offer lasts it is $99/year, and the first 100 buyers keep that price for as long as they stay " +
   "subscribed. After buying, they enter the license key in the Cutfac app (Cutfac menu → License " +
-  "Key…). Their workspace files are untouched. This is not a bug in Cutfac, so don't offer to " +
-  "report it.";
+  "Key…). Their workspace files are untouched. Don't make a video's folder or item.yaml yourself " +
+  "instead: Cutfac counts a video it didn't make when work on it starts. This is not a bug in " +
+  "Cutfac, so don't offer to report it.";
+
+const UNCOUNTED_MESSAGE =
+  "This video wasn't made by create_item or the board, so it isn't one of the videos Cutfac's " +
+  `free version made. ${LIMIT_MESSAGE}`;
 
 export function freeVersionNote(plan: Plan): Option.Option<string> {
   if (plan.edition === "open-source" || plan.paid) return Option.none();
@@ -157,7 +207,6 @@ export function freeVersionNote(plan: Plan): Option.Option<string> {
  */
 export const createCountedItem = Effect.fn("plan.createItem")(function* (input: NewItemInput) {
   const ws = yield* Workspace;
-  const path = yield* Path.Path;
   const dir = yield* DesktopData;
 
   if (Option.isNone(dir)) return yield* createItem(input);
@@ -166,20 +215,47 @@ export const createCountedItem = Effect.fn("plan.createItem")(function* (input: 
   return yield* ws.exclusive(
     "plan:videos",
     Effect.gen(function* () {
-      const plan = yield* planStatus();
-
-      if (plan.edition === "desktop" && !plan.paid && plan.used >= plan.limit) {
+      if (atFreeLimit(yield* planOf(...(yield* readRecords(data))))) {
         return yield* new FreeLimitReached({ message: LIMIT_MESSAGE });
       }
 
       const item = yield* createItem(input);
 
-      // The item is made either way; a count that can't be kept lets one video go uncounted.
-      yield* appendAppRecord(path.join(data, VIDEOS_FILE), yield* nowIso).pipe(
-        Effect.catch((error) => Effect.logWarning(error.message)),
-      );
+      yield* record(data, "made", videoKey(item));
 
       return item;
+    }),
+  );
+});
+
+const atFreeLimit = (plan: Plan) =>
+  plan.edition === "desktop" && !plan.paid && plan.used >= plan.limit;
+
+/**
+ * Lets work start on the video `id`: an agent's edit, render or new version. One Cutfac didn't
+ * make, as a folder an agent wrote by hand, counts as a new video now, and the free version
+ * refuses it once it has made all of its videos.
+ */
+export const workOn = Effect.fn("plan.workOn")(function* (id: string) {
+  const ws = yield* Workspace;
+  const dir = yield* DesktopData;
+
+  if (Option.isNone(dir)) return;
+  const data = dir.value;
+  const key = videoKey(yield* getItem(id));
+
+  yield* ws.exclusive(
+    "plan:videos",
+    Effect.gen(function* () {
+      const [settings, videos] = yield* readRecords(data);
+
+      if (isCounted(countOf(videos), key)) return;
+
+      if (atFreeLimit(yield* planOf(settings, videos))) {
+        return yield* new FreeLimitReached({ message: UNCOUNTED_MESSAGE });
+      }
+
+      yield* record(data, "seen", key);
     }),
   );
 });

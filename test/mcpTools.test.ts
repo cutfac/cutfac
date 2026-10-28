@@ -108,7 +108,7 @@ describe("the MCP server's tools", () => {
   );
 
   it.live(
-    "the Cutfac app's free version tells agents what is left, then refuses a new video",
+    "the Cutfac app's free version tells agents what is left, then refuses a new video, one written by hand too",
     () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -147,6 +147,19 @@ describe("the MCP server's tools", () => {
         expect(yield* app.call("update_item", { id: last.id, status: "review" }, Updated)).toEqual({
           status: "review",
         });
+
+        const items = free.config.paths.items;
+
+        yield* free.writeText(
+          `${items}/handmade/item.yaml`,
+          yield* free.readText(`${items}/${last.id}/item.yaml`),
+        );
+
+        const handmade = yield* Effect.flip(
+          app.call("update_item", { id: "handmade", status: "review" }, Updated),
+        );
+
+        expect(handmade.message).toContain("wasn't made by create_item");
       }),
     60_000,
   );

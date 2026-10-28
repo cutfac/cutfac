@@ -6,7 +6,8 @@ import { generateKeyPairSync } from "node:crypto";
 import { Clock, Duration, Effect, FileSystem, Layer, Option, Path, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 
-import { listItemIds } from "../src/core/items.ts";
+import { createItem, listItemIds } from "../src/core/items.ts";
+import { Workspace } from "../src/core/workspace.ts";
 import {
   LICENSE_PUBLIC_KEY,
   LicenseKey,
@@ -26,6 +27,7 @@ import {
   planOf,
   planStatus,
   type Plan,
+  workOn,
 } from "../src/plan.ts";
 import { testEffect } from "./effect.ts";
 import { signedGrant, tempWorkspace, testLicenseKey } from "./support.ts";
@@ -289,6 +291,56 @@ describe("making videos on the desktop app", () => {
 
       expect(yield* listItemIds()).toHaveLength(4);
       expect(yield* planStatus()).toEqual({ edition: "open-source" });
+    }),
+  );
+});
+
+/** Copies the video `from` to a folder `to`, as an agent making a video by hand would. */
+const byHand = Effect.fnUntraced(function* (from: string, to: string) {
+  const ws = yield* Workspace;
+  const items = ws.config.paths.items;
+
+  yield* ws.writeText(`${items}/${to}/item.yaml`, yield* ws.readText(`${items}/${from}/item.yaml`));
+});
+
+describe("videos the desktop app didn't make", () => {
+  onThisMac.live("count once work on them starts, and past the limit the work is refused", () =>
+    Effect.gen(function* () {
+      yield* Effect.forEach(["One", "Two"], make);
+      yield* byHand("one", "handmade");
+
+      expect(yield* planStatus()).toEqual(free(2));
+
+      yield* workOn("handmade");
+      yield* workOn("handmade");
+
+      expect(yield* planStatus()).toEqual(free(3));
+
+      yield* byHand("one", "another");
+
+      expect(yield* Effect.flip(workOn("another"))).toBeInstanceOf(FreeLimitReached);
+
+      yield* workOn("two");
+    }),
+  );
+
+  onThisMac.live("those an earlier version counted aren't counted again", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+
+      yield* Effect.forEach(["One", "Two"], (title) => createItem({ title }));
+      yield* fs.writeFileString(
+        yield* dataFile("videos.log"),
+        "2026-10-01T09:00:00.000Z\n2026-10-02T09:00:00.000Z\n",
+      );
+      yield* workOn("one");
+      yield* workOn("two");
+
+      expect(yield* planStatus()).toEqual(free(2));
+
+      yield* make("Three");
+
+      expect(yield* planStatus()).toEqual(free(3));
     }),
   );
 });

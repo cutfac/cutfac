@@ -4,7 +4,8 @@ import { Toolkit } from "effect/ai";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { RENDER_STATUSES, Renders, type RenderState } from "../core/render.ts";
 import { RENDER_STAGES, RENDER_UNITS } from "../core/renderProgress.ts";
-import { Id, describe, logFailure, tool } from "./tool.ts";
+import { workOn } from "../plan.ts";
+import { Id, describe, tool, toolRunner } from "./tool.ts";
 
 /**
  * How long one call waits for the render to end. Under the minute Codex gives a tool call, so a
@@ -92,35 +93,39 @@ export const RenderToolkit = Toolkit.make(Render);
 export const renderHandlers = RenderToolkit.toLayer(
   Effect.gen(function* () {
     const renders = yield* Renders;
+    const run = yield* toolRunner;
 
     return RenderToolkit.of({
       render: ({ id, command, cwd, output, label }) =>
-        Effect.gen(function* () {
-          const current = yield* renders.current(id);
+        run(
+          Effect.gen(function* () {
+            const current = yield* renders.current(id);
 
-          // A call repeating the running render's command only waits on it, as a retry would.
-          if (command !== undefined && Option.isNone(current)) {
-            yield* renders.start({ item: id, command, cwd, output, label });
-          } else if (
-            command !== undefined &&
-            Option.isSome(current) &&
-            (current.value.command !== command || current.value.label !== label)
-          ) {
-            return yield* new Conflict({
-              message: `${id} is already rendering ${current.value.label ?? "a version"}; call render with just the id to wait for it first`,
-            });
-          }
+            // A call repeating the running render's command only waits on it, as a retry would.
+            if (command !== undefined && Option.isNone(current)) {
+              yield* workOn(id);
+              yield* renders.start({ item: id, command, cwd, output, label });
+            } else if (
+              command !== undefined &&
+              Option.isSome(current) &&
+              (current.value.command !== command || current.value.label !== label)
+            ) {
+              return yield* new Conflict({
+                message: `${id} is already rendering ${current.value.label ?? "a version"}; call render with just the id to wait for it first`,
+              });
+            }
 
-          const state = yield* renders.wait(id, WAIT);
+            const state = yield* renders.wait(id, WAIT);
 
-          if (Option.isNone(state)) {
-            return yield* new InvalidRequest({
-              message: `${id} has no render yet; pass the command to start one`,
-            });
-          }
+            if (Option.isNone(state)) {
+              return yield* new InvalidRequest({
+                message: `${id} has no render yet; pass the command to start one`,
+              });
+            }
 
-          return report(state.value, yield* Clock.currentTimeMillis);
-        }).pipe(logFailure),
+            return report(state.value, yield* Clock.currentTimeMillis);
+          }),
+        ),
     });
   }),
 ).pipe(Layer.provide(Renders.layer));

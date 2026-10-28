@@ -11,6 +11,7 @@ import { type Item, addFeedback, findFeedback, getItem } from "../core/items.ts"
 import { AgentChoice, AgentName, FeedbackInput, ModelSettings } from "../core/schema.ts";
 import { Workspace } from "../core/workspace.ts";
 import { requireTrust } from "../core/workspaceTrust.ts";
+import { workOn } from "../plan.ts";
 import { trackUsage } from "../usageStats.ts";
 import { defaultAgent } from "./agents.ts";
 import { sendEdit } from "./dispatch.ts";
@@ -63,6 +64,9 @@ const editRoute = Effect.gen(function* () {
   const ws = yield* Workspace;
   const runs = yield* RunRegistry;
   const id = yield* queryId;
+
+  yield* workOn(id);
+
   const request = yield* HttpServerRequest.HttpServerRequest;
   const body = yield* request.json;
   const { agent, ...settings } = yield* decodeEditVia(body);
@@ -93,6 +97,9 @@ const runRoute = Effect.gen(function* () {
   const ws = yield* Workspace;
   const runs = yield* RunRegistry;
   const id = yield* queryId;
+
+  yield* workOn(id);
+
   const body = yield* HttpServerRequest.schemaBodyJson(RunBody);
   const { feedbackId, agent = defaultAgent(ws), ...settings } = body;
   yield* agentBin(agent);
@@ -106,6 +113,8 @@ const runRoute = Effect.gen(function* () {
 /** Start the item's waiting line again, after a run on it failed or was stopped. */
 const continueRoute = withId((id) =>
   Effect.gen(function* () {
+    yield* workOn(id);
+
     const runs = yield* RunRegistry;
 
     return yield* runs.exclusive(

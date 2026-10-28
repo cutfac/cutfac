@@ -7,7 +7,7 @@ import { getItem, listItems } from "../core/items.ts";
 import { itemReferences, listReferences } from "../core/references.ts";
 import { Aspect, ItemDoc, ItemPatch, ItemStatus } from "../core/schema.ts";
 import { Workspace } from "../core/workspace.ts";
-import { createCountedItem, freeVersionNote, planStatus } from "../plan.ts";
+import { createCountedItem, freeVersionNote, planStatus, workOn } from "../plan.ts";
 import {
   AbsDir,
   AwaitingDecision,
@@ -193,7 +193,7 @@ export const itemsHandlers = ItemsToolkit.toLayer(
 
       update_item: ({ id, ...patch }) =>
         run(
-          Effect.map(updateDetails(id, patch), (item) => ({
+          Effect.map(Effect.andThen(workOn(id), updateDetails(id, patch)), (item) => ({
             id: item.id,
             status: item.doc.status,
             updated: item.doc.updated,
