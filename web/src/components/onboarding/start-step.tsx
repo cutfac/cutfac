@@ -7,9 +7,9 @@ import { Spinner } from "@/components/ui/spinner";
 
 import type { WorkspaceInfo } from "../../api.ts";
 import { desktop } from "../../desktop.ts";
-import { href } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { briefReady } from "../../lib/brief.ts";
+import { openFirstVideo } from "../../lib/firstVideo.ts";
 import { errorText } from "../../lib/notify.ts";
 import { asWebsite, skipStart } from "../../lib/onboarding.ts";
 import { type Answers, saveAnswers } from "./answers.ts";
@@ -220,7 +220,9 @@ export function StartStep({
   /** Why starting from the first launch's answers didn't work, to try again from here. */
   error?: string | undefined;
 }) {
-  const { whatToMake: t } = useMessages().start;
+  const messages = useMessages();
+  const { whatToMake: t } = messages.start;
+  const untitled = messages.newItem.untitled;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(failed);
 
@@ -230,7 +232,7 @@ export function StartStep({
     saveAnswers(answers, t).then(
       () => {
         skipStart(ws.root);
-        location.hash = href("board");
+        void openFirstVideo(untitled);
       },
       (cause: unknown) => {
         setError(errorText(cause));

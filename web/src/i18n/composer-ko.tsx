@@ -10,6 +10,8 @@ export const composerKo: ComposerMessages = {
       whole: ["템포를 더 빠르게", "말하는 내용에 자막 달기", "첫 1초에 시선 잡기"],
       new: ["제품을 소개하는 15초 세로 영상 만들기", "학습시킨 영상 스타일로 짧은 티저 만들기"],
     },
+    readingIdeas: "에이전트가 자료를 읽고 첫 영상을 골라 오는 중이에요…",
+    seconds: (seconds) => `${seconds}초`,
     placeholder: {
       range: "이 부분에서 무엇을 바꿀까요?",
       box: "박스 안에서 무엇을 바꿀까요?",

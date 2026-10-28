@@ -13,9 +13,10 @@ import {
   type OnboardingDraft,
   type SharingPurpose,
 } from "../desktop.ts";
-import { href, type Live } from "../hooks.ts";
+import type { Live } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { EMPTY_BRIEF, type BriefDraft, type BriefView } from "../lib/brief.ts";
+import { openFirstVideo } from "../lib/firstVideo.ts";
 import { LiveState } from "../lib/live.ts";
 import { skipStart } from "../lib/onboarding.ts";
 
@@ -42,6 +43,7 @@ type Begun = { kind: "starting" } | { kind: "ask"; answers: Answers; error?: str
  */
 function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
   const onboarding = desktop?.onboarding;
+  const untitled = useMessages().newItem.untitled;
   const asked: Begun = { kind: "ask", answers: { brief: initial, sources: [] } };
 
   const [begun, setBegun] = useState<Begun>(
@@ -66,7 +68,7 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
         await handOnSharing(onboarding, draft).catch(() => undefined);
 
         skipStart(ws.root);
-        location.hash = href("board");
+        await openFirstVideo(untitled);
       },
       () => setBegun(asked),
     );

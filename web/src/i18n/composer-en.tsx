@@ -16,6 +16,9 @@ export const composerEn = {
         "Make a short teaser in the style of a video I taught you",
       ],
     },
+    /** While the first launch's reading is still choosing the first videos to suggest. */
+    readingIdeas: "The agent is reading your material to suggest a first video…",
+    seconds: (seconds: number) => `${seconds}s`,
     placeholder: {
       range: "What should change in this part?",
       box: "What should change in the box?",

@@ -160,16 +160,17 @@ writes the template from that. So step 3 asks, a part at a time and in this orde
 Nothing is made from it during the first launch. A template took the agent minutes, and what came
 out was a spec for the agent that the user couldn't judge yet. Instead the answers are context:
 `brief.md` and the material in `about.md`, which the agent reads before every template and video.
-The first video is asked for on the board in the user's own words, with or without a template, and
-a template can come from a video the user likes later, through Templates. The agent reads the
-material during the rest of the first launch (see Before the workspace); the empty board says it
-is still reading, then what it knows, which opens the Brief page. A source it couldn't read keeps
-its section marked not read yet, so the next agent that works reads it. The reading ends with three
-first videos for the platforms in the brief, in an `ideas` block, each its platform, length and a
-short title (`tiktok 15 | …`). The empty board then has one thing to do: while the agent reads, it
-says so over three cards still to come; once it has, its title asks to start with one of them, each
-card opening New video with the whole request written in, and writing one's own sits below. With
-no ideas, New video is the way in. Turning on screen recording, app use and notifications waits
+The first launch ends in an empty editor for the first video, so asking for it is the next thing
+to do; a template can come from a video the user likes later, through Templates. The empty video
+costs no free video until work on it starts, and it takes its title from its first request. The
+agent reads the material during the rest of the first launch (see Before the workspace), and the
+reading ends with three first videos for the platforms in the brief, in an `ideas` block, each its
+platform, length and a short title (`tiktok 15 | …`). Over the request box, while the agent still
+reads, the editor says so; then each idea is a starting point that writes the whole request in, to
+send as it is or change, and with no ideas the usual starting points stand. A source the agent
+couldn't read keeps its section marked not read yet, so the next agent that works reads it. Back
+on the board, before any video, the empty board offers New video beside what the agent knows,
+which opens the Brief page, with turning on screen recording, app use and notifications
 underneath as quiet links.
 
 ### The brief

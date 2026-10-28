@@ -4,6 +4,7 @@ import { useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
+import { FirstIdeaChips, type PickedIdea } from "@/components/first-ideas";
 import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { Button } from "@/components/ui/button";
 import { Dropzone } from "@/components/ui/dropzone";
@@ -33,6 +34,7 @@ import { useMessages } from "../../i18n/index.ts";
 import { copyPrompt } from "../../lib/clipboard.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
+import { draftTitle } from "../../lib/newVideo.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
@@ -189,6 +191,17 @@ export async function sendRequest(
   }
 }
 
+/**
+ * A video made empty, as the first launch opens on, takes its title from its first request, as
+ * New video titles one from what the user wrote.
+ */
+function nameNewVideo(item: ItemDetail, request: string, onItem: (item: ItemDetail) => void) {
+  Option.match(draftTitle(request), {
+    onNone: () => undefined,
+    onSome: (title) => void api.updateItem(item.id, { title }).then(onItem, sendFailed),
+  });
+}
+
 export interface ComposerProps {
   item: ItemDetail;
   media: Media | undefined;
@@ -239,6 +252,7 @@ export function Composer({
   onSent,
 }: ComposerProps) {
   const [body, setBody] = useState("");
+  const [picked, setPicked] = useState<PickedIdea>();
   const openFiles = useRef<() => void>(null);
   const [sending, setSending] = useState(false);
   const [versions, setVersions] = useState(1);
@@ -267,7 +281,12 @@ export function Composer({
         onRun,
       );
 
+      if (sentTo === "item" && item.doc.title === t.newItem.untitled) {
+        nameNewVideo(item, picked?.prompt === text ? picked.title : text, onItem);
+      }
+
       setBody("");
+      setPicked(undefined);
       onSent?.();
 
       if (sentTo === "item") {
@@ -291,7 +310,16 @@ export function Composer({
   return (
     <Dropzone paste label={t.attachments.drop.composer} openRef={openFiles} onFiles={files.add}>
       <div className="flex flex-col gap-2 p-3">
-        {ideas.length === 0 ? null : (
+        {ideas.length > 0 && scope === "new" ? (
+          <FirstIdeaChips
+            fallback={ideas}
+            onPick={(idea) => {
+              setBody(idea.prompt);
+              setPicked(idea);
+              inputRef.current?.focus();
+            }}
+          />
+        ) : ideas.length === 0 ? null : (
           <div className="flex flex-wrap gap-1.5">
             {ideas.map((idea) => (
               <Button

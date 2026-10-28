@@ -39,18 +39,7 @@ export const boardEn = {
       titles.length === 1
         ? `Your agent is reading ${titles[0]}…`
         : `Your agent is reading ${titles.length} sources…`,
-    /** Over the first videos the agent suggests from what it read; one opens New video with it. */
-    ideasTitle: "Start your first video with one of these",
-    ideasFrom: (titles: ReadonlyArray<string>) =>
-      titles.length === 1
-        ? `Your agent read ${titles[0]} and picked these`
-        : `Your agent read ${titles.length} sources and picked these`,
-    /** Under an idea: where it goes and how long it runs. */
-    ideaMeta: (platform: string | undefined, seconds: number | undefined) =>
-      [platform, seconds === undefined ? undefined : `${seconds} seconds`]
-        .filter((part) => part !== undefined)
-        .join(" · "),
-    /** The request an idea writes into New video. */
+    /** The request a suggested first video writes into the request box. */
     ideaPrompt: (platform: string | undefined, seconds: number | undefined, title: string) => {
       const lead = [seconds === undefined ? undefined : `${seconds}-second`, platform]
         .filter((part) => part !== undefined)
@@ -58,8 +47,6 @@ export const boardEn = {
 
       return lead === "" ? title : `A ${lead}: ${title}`;
     },
-    make: "Make",
-    writeOwn: "I'll write my own",
     emptyColumn: "Nothing here",
     openFeedback: (count: number) => `${count} open`,
     selected: "selected",

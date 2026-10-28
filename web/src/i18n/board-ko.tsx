@@ -40,15 +40,6 @@ export const boardKo: BoardMessages = {
       titles.length === 1
         ? `에이전트가 ${withParticle(titles[0] ?? "", "을/를")} 읽고 있어요…`
         : `에이전트가 자료 ${titles.length}개를 읽고 있어요…`,
-    ideasTitle: "첫 영상, 이 중 하나로 시작해 보세요",
-    ideasFrom: (titles) =>
-      titles.length === 1
-        ? `에이전트가 ${withParticle(titles[0] ?? "", "을/를")} 읽고 골랐어요`
-        : `에이전트가 자료 ${titles.length}개를 읽고 골랐어요`,
-    ideaMeta: (platform, seconds) =>
-      [platform, seconds === undefined ? undefined : `${seconds}초`]
-        .filter((part) => part !== undefined)
-        .join(" · "),
     ideaPrompt: (platform, seconds, title) => {
       const lead = [seconds === undefined ? undefined : `${seconds}초`, platform]
         .filter((part) => part !== undefined)
@@ -56,8 +47,6 @@ export const boardKo: BoardMessages = {
 
       return lead === "" ? title : `${lead}: ${title}`;
     },
-    make: "만들기",
-    writeOwn: "직접 적을게요",
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,
     selected: "선택됨",
