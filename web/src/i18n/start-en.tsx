@@ -103,8 +103,8 @@ export const startEn = {
   },
   /** The end of the first launch: a sample video to try editing while the agent reads. */
   sample: {
-    title: "Try a sample while your agent gets ready",
-    body: "Change a short sample video by asking for it. It's one of your free videos.",
+    title: "Your agent is getting ready. Play with a sample first",
+    body: "Change a short sample video by asking for it.",
     moods: { bold: "Bold", calm: "Calm", playful: "Playful" },
     /** While the agent reads the material, which the sample doesn't wait for. */
     reading: "Your agent is reading about you in the background · no need to wait",
