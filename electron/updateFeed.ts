@@ -2,6 +2,7 @@ import { Effect, Layer, Option, Queue, Stream } from "effect";
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from "electron";
 import electronUpdater, { type UpdateDownloadedEvent } from "electron-updater";
 
+import { describeError } from "../src/core/errors.ts";
 import type { Messages } from "./messages.ts";
 import { UpdateCheckFailed, UpdateFeed, type UpdatePrompts } from "./updates.ts";
 
@@ -22,8 +23,7 @@ export const updateFeed = Layer.sync(UpdateFeed, () => {
     enabled: true,
     check: Effect.tryPromise({
       try: () => autoUpdater.checkForUpdates(),
-      catch: (cause) =>
-        new UpdateCheckFailed({ message: cause instanceof Error ? cause.message : String(cause) }),
+      catch: (cause) => new UpdateCheckFailed({ message: describeError(cause) }),
     }).pipe(
       Effect.tap((result) =>
         Option.match(Option.fromNullishOr(result?.downloadPromise), {

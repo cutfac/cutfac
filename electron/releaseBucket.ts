@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { Context, Effect, FileSystem, Layer, Option, Redacted, Result } from "effect";
 
+import { describeError } from "../src/core/errors.ts";
 import {
   type BuildFile,
   buildFiles,
@@ -26,7 +27,7 @@ const setting = (name: ReleaseSetting) =>
 
 const failed = (what: string) => (cause: unknown) =>
   new ReleaseFailed({
-    message: `${what}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    message: `${what}: ${describeError(cause)}`,
   });
 
 export class ReleaseBucket extends Context.Service<

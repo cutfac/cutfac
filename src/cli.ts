@@ -16,6 +16,7 @@ import {
 } from "./core/agents.ts";
 import { agentSetup } from "./core/agentSetup.ts";
 import { COMPILED } from "./core/build.ts";
+import { describeError } from "./core/errors.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { logDir, logToFile } from "./core/logFile.ts";
 import { syncSkill } from "./core/skill.ts";
@@ -322,7 +323,7 @@ const report = (cause: Cause.Cause<unknown>) => {
   if (Option.isNone(error)) return Console.error(Cause.pretty(cause));
 
   if (CliError.isCliError(error.value)) return Effect.void;
-  const { message } = error.value instanceof Error ? error.value : { message: String(error.value) };
+  const message = describeError(error.value);
 
   return Console.error(message);
 };

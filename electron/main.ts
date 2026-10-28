@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Effect, Option, Queue, Ref, Schema } from "effect";
 import { app, clipboard, dialog, Menu, nativeTheme, type BrowserWindow } from "electron";
 
+import { describeError } from "../src/core/errors.ts";
 import type { AppCommand, EditCommand, OnboardingStep } from "../web/src/desktop.ts";
 import { LOCALES, resolveLocale } from "../web/src/i18n/locale.ts";
 import { handleAttention } from "./attention.ts";
@@ -18,7 +19,7 @@ import {
 } from "./boardWindow.ts";
 import { DEV_APP } from "./devApp.ts";
 import { handleDevTools } from "./devTools.ts";
-import { describeError, pickSource, showStartFailure } from "./dialogs.ts";
+import { pickSource, showStartFailure } from "./dialogs.ts";
 import {
   APP_COMMAND_CHANNEL,
   EDIT_COMMAND_CHANNEL,

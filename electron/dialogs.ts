@@ -34,9 +34,6 @@ export const pickWorkspace = (
 export const pickSource = (owner: BrowserWindow | undefined, message: string) =>
   pickOne(owner, { properties: ["openDirectory", "openFile"], message });
 
-export const describeError = (cause: unknown) =>
-  cause instanceof Error ? cause.message : String(cause);
-
 /** Says the app couldn't start, with what went wrong under it. */
 export const showStartFailure = (message: string, detail: string) =>
   Effect.asVoid(Effect.promise(() => dialog.showMessageBox({ type: "error", message, detail })));

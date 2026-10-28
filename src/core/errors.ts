@@ -37,3 +37,7 @@ export type CutfacError =
   | Conflict
   | CommandFailed
   | FetchFailed;
+
+/** What went wrong, as text to show or log. */
+export const describeError = (cause: unknown) =>
+  cause instanceof Error ? cause.message : String(cause);
