@@ -2,14 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import { Schema } from "effect";
 
-import {
-  baselineMillis,
-  clipArgs,
-  describeTarget,
-  drawboxFilter,
-  formatTimecode,
-  frameArgs,
-} from "../src/core/edits.ts";
+import { clipArgs, drawboxFilter, frameArgs } from "../src/core/editContext.ts";
+import { describeTarget, formatTimecode } from "../src/core/editPrompt.ts";
+import { baselineMillis } from "../src/core/editSnapshots.ts";
 import { Feedback, FeedbackInput } from "../src/core/schema.ts";
 
 const base = { id: "a", at: "2026-01-01T00:00:00Z", body: "x" };

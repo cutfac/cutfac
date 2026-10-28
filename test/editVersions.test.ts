@@ -2,16 +2,15 @@ import { describe, expect } from "bun:test";
 
 import { Effect, Schema } from "effect";
 
+import { buildEditPrompt } from "../src/core/editPrompt.ts";
 import {
   approveEdit,
-  awaitsDecision,
-  buildEditPrompt,
   pickVariant,
   requestEdit,
   resolveEdit,
   restoreBefore,
-  saveVariant,
 } from "../src/core/edits.ts";
+import { awaitsDecision, saveVariant } from "../src/core/editVariants.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
 import { readHistory } from "../src/core/history.ts";
 import { addFeedback, createItem } from "../src/core/items.ts";

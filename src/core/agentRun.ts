@@ -11,17 +11,11 @@ import {
 } from "./agents.ts";
 import { converse, noteCompaction } from "./agentTurn.ts";
 import type { Ask } from "./approval.ts";
-import {
-  baselineMillis,
-  beginEdit,
-  buildEditPrompt,
-  editImages,
-  pendingVariants,
-  resolveEdit,
-  snapshotAfter,
-  waitingLine,
-  waitingPick,
-} from "./edits.ts";
+import { buildEditPrompt, editImages } from "./editPrompt.ts";
+import { resolveEdit } from "./edits.ts";
+import { baselineMillis, snapshotAfter } from "./editSnapshots.ts";
+import { pendingVariants } from "./editVariants.ts";
+import { beginEdit, waitingLine, waitingPick } from "./editWaiting.ts";
 import type { CutfacError } from "./errors.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import { approvedClaudeServers, approvedCodexServers } from "./mcpApprovals.ts";

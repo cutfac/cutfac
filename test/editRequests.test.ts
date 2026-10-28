@@ -4,18 +4,10 @@ import { join } from "node:path";
 import { Clock, type Crypto, Effect, FileSystem, Ref, Schema, Stream, Fiber } from "effect";
 
 import { type RunInput, editRuns } from "../src/core/agentRun.ts";
-import {
-  approveEdit,
-  awaitsDecision,
-  beginEdit,
-  buildEditPrompt,
-  cancelWaiting,
-  requestEdit,
-  resolveEdit,
-  restoreBefore,
-  rewordWaiting,
-  waitingLine,
-} from "../src/core/edits.ts";
+import { buildEditPrompt } from "../src/core/editPrompt.ts";
+import { approveEdit, requestEdit, resolveEdit, restoreBefore } from "../src/core/edits.ts";
+import { awaitsDecision } from "../src/core/editVariants.ts";
+import { beginEdit, cancelWaiting, rewordWaiting, waitingLine } from "../src/core/editWaiting.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
 import { addFeedback, createItem, getItem, resolveFeedback } from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";

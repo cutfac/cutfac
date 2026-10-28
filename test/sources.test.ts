@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { ConfigProvider, Effect } from "effect";
 
 import { agentInvocation } from "../src/core/agentCommand.ts";
-import { buildEditPrompt, requestEdit } from "../src/core/edits.ts";
+import { buildEditPrompt } from "../src/core/editPrompt.ts";
+import { requestEdit } from "../src/core/edits.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
 import { createItem, getItem, updateItem } from "../src/core/items.ts";
 import { MAX_SOURCES, cleanSources, sourceHosts } from "../src/core/sources.ts";

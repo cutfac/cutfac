@@ -20,19 +20,16 @@ import {
 import { RunRegistry } from "../core/agentRun.ts";
 import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
 import type { Approval } from "../core/approval.ts";
+import { buildEditPrompt } from "../core/editPrompt.ts";
 import {
   approveEdit,
-  awaitsDecision,
-  buildEditPrompt,
-  cancelWaiting,
   pickVariant,
   requestEdit,
   resolveEdit,
   restoreBefore,
-  rewordWaiting,
-  waitingLine,
-  waitingPick,
 } from "../core/edits.ts";
+import { awaitsDecision } from "../core/editVariants.ts";
+import { cancelWaiting, rewordWaiting, waitingLine, waitingPick } from "../core/editWaiting.ts";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { errorCount, recentLogs } from "../core/feedbackLogs.ts";
 import { formatStatuses } from "../core/formatSpec.ts";

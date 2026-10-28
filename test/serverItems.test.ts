@@ -2,7 +2,8 @@ import { describe, expect } from "bun:test";
 
 import { Effect, Layer } from "effect";
 
-import { requestEdit, resolveEdit, saveVariant } from "../src/core/edits.ts";
+import { requestEdit, resolveEdit } from "../src/core/edits.ts";
+import { saveVariant } from "../src/core/editVariants.ts";
 import { createItem } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";

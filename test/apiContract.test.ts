@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { resolveEdit, saveVariant } from "../src/core/edits.ts";
+import { resolveEdit } from "../src/core/edits.ts";
+import { saveVariant } from "../src/core/editVariants.ts";
 import { api, startBoardServer, type BoardServer } from "./boardServer.ts";
 import {
   makeFakeAgents,

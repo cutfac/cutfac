@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { Effect, FileSystem } from "effect";
 
-import { editImages } from "../src/core/edits.ts";
+import { editImages } from "../src/core/editPrompt.ts";
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import {
