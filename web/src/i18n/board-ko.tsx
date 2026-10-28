@@ -12,6 +12,9 @@ export const boardKo: BoardMessages = {
     open: "열기",
     moveTo: "옮기기",
     showFolder: "폴더 보기",
+    rename: "이름 바꾸기…",
+    renameTitle: "영상 이름 바꾸기",
+    save: "저장",
     archive: "보관",
     archived: (titles) =>
       titles.length === 1

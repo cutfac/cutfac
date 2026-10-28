@@ -11,6 +11,9 @@ export const boardEn = {
     open: "Open",
     moveTo: "Move to",
     showFolder: "Show folder",
+    rename: "Rename…",
+    renameTitle: "Rename video",
+    save: "Save",
     archive: "Archive",
     archived: (titles: readonly string[]) =>
       titles.length === 1 ? `Archived "${titles[0]}"` : `Archived ${titles.length} videos`,

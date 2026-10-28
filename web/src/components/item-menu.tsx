@@ -1,5 +1,12 @@
-import { ArchiveIcon, ArrowRightLeftIcon, FolderOpenIcon, SquarePenIcon } from "lucide-react";
+import {
+  ArchiveIcon,
+  ArrowRightLeftIcon,
+  FolderOpenIcon,
+  PencilIcon,
+  SquarePenIcon,
+} from "lucide-react";
 
+import { openRename } from "@/components/rename-item-dialog";
 import { StatusDot } from "@/components/status-dot";
 import {
   ContextMenuContent,
@@ -21,8 +28,8 @@ import { useMessages } from "../i18n/index.ts";
 import { revealItem } from "../lib/items.ts";
 
 /**
- * What a right click on a video, on the board or in the sidebar, offers: open it, move it to another
- * column, find its files. For several picked cards, moving and archiving take them all.
+ * What a right click on a video, on the board or in the sidebar, offers: open it, rename it, move it
+ * to another column, find its files. For several picked cards, moving and archiving take them all.
  */
 export function ItemMenu({
   items,
@@ -49,6 +56,12 @@ export function ItemMenu({
           <ContextMenuLabel>{t.board.selectedCount(items.length)}</ContextMenuLabel>
         </ContextMenuGroup>
       )}
+      {single ? (
+        <ContextMenuItem onClick={() => openRename(single)}>
+          <PencilIcon />
+          {t.itemActions.rename}
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuSub>
         <ContextMenuSubTrigger>
           <ArrowRightLeftIcon />
