@@ -284,7 +284,7 @@ function AddTemplateForm({
             <CopyIcon data-icon="inline-start" />
             {t.templates.copyPrompt}
           </Button>
-          <Button type="submit" disabled={trimmed === "" || agent === undefined || sending}>
+          <Button type="submit" disabled={trimmed === "" || Option.isNone(agent) || sending}>
             {sending ? <Spinner data-icon="inline-start" /> : null}
             {t.imports.start}
           </Button>
