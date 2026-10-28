@@ -3,7 +3,7 @@ import { describe, expect } from "bun:test";
 import { dirname, join } from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, FileSystem, Ref } from "effect";
+import { Deferred, Effect, FileSystem, Layer } from "effect";
 
 import { Workspace, type WorkspaceService } from "../src/core/workspace.ts";
 import { initWorkspace } from "../src/core/workspaceRoot.ts";
@@ -82,74 +82,75 @@ it.live("init leaves a workspace from before the rename as it is", () =>
 );
 
 describe("writing a file", () => {
-  const SIZE = 2_000_000;
   const FILE = "state.txt";
-  const first = "a".repeat(SIZE);
-  const second = "b".repeat(SIZE);
 
-  const rewriting = <E>(
+  const seenAroundWrite = <E>(
     write: (ws: WorkspaceService, text: string) => Effect.Effect<void, E>,
-    read: (ws: WorkspaceService) => Effect.Effect<string, E>,
   ) =>
     Effect.gen(function* () {
-      const ws = yield* Workspace;
-      const seen = yield* Ref.make<ReadonlyArray<string>>([]);
+      const { root, write: put } = yield* folder;
+      const fs = yield* FileSystem.FileSystem;
+      const halfway = yield* Deferred.make<void>();
+      const seen = yield* Deferred.make<void>();
 
-      const note = (what: string) => Ref.update(seen, (all) => [...all, what]);
+      const slowDisk = FileSystem.make({
+        ...fs,
+        writeFile: (path, data, options) =>
+          fs
+            .writeFile(path, data.subarray(0, data.length / 2), options)
+            .pipe(
+              Effect.andThen(Deferred.succeed(halfway, undefined)),
+              Effect.andThen(Deferred.await(seen)),
+              Effect.andThen(fs.writeFile(path, data, options)),
+            ),
+      });
 
-      yield* write(ws, first);
+      yield* put("cutfac.yaml", "name: Busy\n");
+      yield* put(FILE, "old text");
 
-      const reader = Effect.gen(function* () {
-        const text = yield* read(ws);
+      return yield* Effect.gen(function* () {
+        const ws = yield* Workspace;
 
-        if (text !== first && text !== second) yield* note(`read ${text.length} characters`);
+        const look = Effect.all({
+          text: ws.readText(FILE),
+          names: Effect.map(ws.list(""), (entries) => entries.map((entry) => entry.name)),
+        });
 
-        const names = (yield* ws.list("")).map((entry) => entry.name);
-
-        if (names.some((name) => name !== FILE && name !== "cutfac.yaml"))
-          yield* note(`listed ${names.join(", ")}`);
-      }).pipe(Effect.forever);
-
-      const writer = Effect.forEach(
-        Array.from({ length: 150 }, (_, n) => (n % 2 === 0 ? second : first)),
-        (text) => write(ws, text),
-        { discard: true },
-      );
-
-      yield* Effect.raceFirst(
-        writer,
-        Effect.all(
-          Array.from({ length: 4 }, () => reader),
+        const [, during] = yield* Effect.all(
+          [
+            write(ws, "new text"),
+            Deferred.await(halfway).pipe(
+              Effect.andThen(look),
+              Effect.tap(() => Deferred.succeed(seen, undefined)),
+            ),
+          ],
           { concurrency: "unbounded" },
+        );
+
+        return { during, after: yield* look };
+      }).pipe(
+        Effect.provide(
+          Workspace.layer(root).pipe(Layer.provide(Layer.succeed(FileSystem.FileSystem, slowDisk))),
         ),
       );
-
-      expect((yield* Ref.get(seen)).slice(0, 3)).toEqual([]);
     });
 
-  it.live("a reader never sees a text file empty or half written", () =>
-    Effect.gen(function* () {
-      const { inWorkspace } = yield* folder;
+  const wholeEachTime = {
+    during: { text: "old text", names: ["cutfac.yaml", FILE] },
+    after: { text: "new text", names: ["cutfac.yaml", FILE] },
+  };
 
-      yield* inWorkspace(
-        rewriting(
-          (ws, text) => ws.writeText(FILE, text),
-          (ws) => ws.readText(FILE),
-        ),
-      );
+  it.live("a reader sees a text file as it was until the write is done, never half written", () =>
+    Effect.gen(function* () {
+      expect(yield* seenAroundWrite((ws, text) => ws.writeText(FILE, text))).toEqual(wholeEachTime);
     }),
   );
 
-  it.live("a reader never sees a binary file empty or half written", () =>
+  it.live("a reader sees a binary file as it was until the write is done, never half written", () =>
     Effect.gen(function* () {
-      const { inWorkspace } = yield* folder;
-
-      yield* inWorkspace(
-        rewriting(
-          (ws, text) => ws.writeBytes(FILE, new TextEncoder().encode(text)),
-          (ws) => ws.readText(FILE),
-        ),
-      );
+      expect(
+        yield* seenAroundWrite((ws, text) => ws.writeBytes(FILE, new TextEncoder().encode(text))),
+      ).toEqual(wholeEachTime);
     }),
   );
 
