@@ -126,7 +126,6 @@ const stopImportRoute = withId((id) =>
 /** Stop the import's agent, if it is working, and set the import aside. */
 const closeImportRoute = withId((id) => Effect.flatMap(stopAndCloseImport(id), importDetail));
 
-/** The chats in which the user's agent reads a link or the brief into the workspace. */
 export const importRoutes = (cli: CliEntry | undefined) =>
   HttpRouter.addAll([
     json(

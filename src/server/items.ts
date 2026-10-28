@@ -104,7 +104,6 @@ const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: stri
   return { item: yield* itemDetail(yield* getItem(id)), added };
 });
 
-/** The gallery of items, and each item's media and reference files. */
 export const itemRoutes = HttpRouter.addAll([
   json(
     "GET",

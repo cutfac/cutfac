@@ -41,7 +41,6 @@ export const ownLaunch = Effect.fnUntraced(function* (cli: CliEntry | undefined,
   return mcpLaunch(cli, ws.root);
 });
 
-/** The agents the board runs and the choices it makes for them: setup, trust, permissions, MCP. */
 export const agentRoutes = (cli: CliEntry | undefined) =>
   HttpRouter.addAll([
     json("GET", "/api/agents", agentStatus()),
