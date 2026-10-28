@@ -66,6 +66,23 @@ describe("agent CLIs", () => {
     expect(parseClaudeLine("not json")).toEqual({ events: [] });
   });
 
+  test("a command the agent described reads in its words in the chat", () => {
+    const line = (input: Readonly<Record<string, string>>) =>
+      parseClaudeLine(
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "tool_use", name: "Bash", input }] },
+        }),
+      ).events;
+
+    expect(line({ command: "python3 -c 'import PIL'", description: "Check for Pillow" })).toEqual([
+      { type: "tool", name: "Bash", detail: "Check for Pillow" },
+    ]);
+    expect(line({ command: "ls", description: " " })).toEqual([
+      { type: "tool", name: "Bash", detail: "ls" },
+    ]);
+  });
+
   test("shows tool paths relative to the workspace", () => {
     const root = "/Users/me/Videos/brew";
 

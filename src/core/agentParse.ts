@@ -110,9 +110,17 @@ export const mainArgument = (input: Schema.JsonObject, root: string | undefined)
     Option.map((value) => shownValue(value, root)),
   );
 
-/** A tool call's main argument, cut short to fit on its line. */
+/**
+ * What a tool line in the chat says, cut short to fit: the agent's own words for what the call
+ * does, as Claude Code gives for a command, else its main argument. What the agent asks to run
+ * shows the command itself, from `mainArgument`.
+ */
 export const toolDetail = (input: Schema.JsonObject, root: string | undefined) =>
-  Option.map(mainArgument(input, root), clamp);
+  decodeText(input["description"]).pipe(
+    Option.filter((description) => description.trim() !== ""),
+    Option.orElse(() => mainArgument(input, root)),
+    Option.map(clamp),
+  );
 
 const decodeJsonLine = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.JsonObject));
 
