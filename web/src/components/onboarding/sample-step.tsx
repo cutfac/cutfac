@@ -146,6 +146,9 @@ const SCRAMBLE_MS = 520;
 /** How much later each letter after the first settles. */
 const SCRAMBLE_STAGGER_MS = 22;
 
+/** How often the stand-ins change while the letters settle. */
+const SCRAMBLE_FRAME_MS = 40;
+
 const LATIN = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 /** A stand-in for a letter while it settles, picked by `roll` in [0, 1): a Latin letter, or a Hangul syllable. */
@@ -179,19 +182,17 @@ function useScramble(words: string) {
 
     const began = performance.now();
     const end = SCRAMBLE_MS + [...words].length * SCRAMBLE_STAGGER_MS;
-    let frame = 0;
 
-    const tick = () => {
+    // A timer rather than animation frames, which a hidden window never gets: the words always land.
+    const timer = setInterval(() => {
       const elapsed = performance.now() - began;
 
       setSettling({ words, shown: settle(words, elapsed, () => Math.random()) });
 
-      if (elapsed < end) frame = requestAnimationFrame(tick);
-    };
+      if (elapsed >= end) clearInterval(timer);
+    }, SCRAMBLE_FRAME_MS);
 
-    frame = requestAnimationFrame(tick);
-
-    return () => cancelAnimationFrame(frame);
+    return () => clearInterval(timer);
   }, [words]);
 
   if (settling?.words === words) return settling.shown;
