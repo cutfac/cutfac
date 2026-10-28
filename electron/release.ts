@@ -12,20 +12,19 @@
 import path from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Config, Console, Effect, FileSystem, Option, Result, Schema } from "effect";
+import { Console, Effect, FileSystem, Option, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { run as runCaptured } from "../src/core/process.ts";
+import { publishBuild, ReleaseBucket } from "./releaseBucket.ts";
 import {
   BRANCH,
   BUMP,
-  type BuildFile,
   type ReleaseArgs,
-  type ReleaseSetting,
+  ReleaseFailed,
   USAGE,
   branchProblem,
-  buildFiles,
-  feedVersion,
+  log,
   missingEnv,
   releaseArgs,
   releaseNotes,
@@ -56,34 +55,9 @@ const CHECKS = [
  */
 const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"] as const;
 
-/** The bucket folder the site serves builds from. */
-const FOLDER = "mac";
-
-const FEED_FILE = "latest-mac.yml";
-
-export class ReleaseFailed extends Schema.TaggedError<ReleaseFailed>()("ReleaseFailed", {
-  message: Schema.String,
-}) {}
-
 const decodePackage = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ version: Schema.NonEmptyString })),
 );
-
-const log = (message: string) => Console.log(`[release] ${message}`);
-
-const setting = (name: ReleaseSetting) =>
-  Config.option(Config.String(name)).pipe(
-    Effect.orElseSucceed(Option.none<string>),
-    Effect.flatMap(
-      Option.match({
-        onNone: () => Effect.fail(new ReleaseFailed({ message: `Set ${name} in .env.release.` })),
-        onSome: (value) =>
-          value === ""
-            ? Effect.fail(new ReleaseFailed({ message: `Set ${name} in .env.release.` }))
-            : Effect.succeed(value),
-      }),
-    ),
-  );
 
 const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -121,42 +95,6 @@ const output = (command: ReadonlyArray<string>) => {
     Effect.orElseSucceed(Option.none<string>),
   );
 };
-
-const releaseBucket = Effect.gen(function* () {
-  const s3 = new Bun.S3Client({
-    bucket: yield* setting("CUTFAC_RELEASES_BUCKET"),
-    region: yield* setting("CUTFAC_RELEASES_REGION"),
-    accessKeyId: yield* setting("AWS_ACCESS_KEY_ID"),
-    secretAccessKey: yield* setting("AWS_SECRET_ACCESS_KEY"),
-  });
-
-  const failed = (what: string) => (cause: unknown) =>
-    new ReleaseFailed({
-      message: `${what}: ${cause instanceof Error ? cause.message : String(cause)}`,
-    });
-
-  const published = Effect.tryPromise({
-    try: async () => {
-      const feed = s3.file(`${FOLDER}/${FEED_FILE}`);
-
-      return (await feed.exists()) ? Option.some(await feed.text()) : Option.none<string>();
-    },
-    catch: failed(`Couldn't read ${FOLDER}/${FEED_FILE} in the bucket`),
-  }).pipe(Effect.map(Option.flatMap(feedVersion)));
-
-  const upload = ({ name, type }: BuildFile) =>
-    Effect.andThen(
-      log(`Uploading ${name}.`),
-      Effect.tryPromise({
-        try: () => s3.write(`${FOLDER}/${name}`, Bun.file(path.join(outputDir, name)), { type }),
-        catch: failed(`Couldn't upload ${name}`),
-      }),
-    );
-
-  return { published, upload };
-});
-
-type ReleaseBucket = Effect.Success<typeof releaseBucket>;
 
 /** The subjects of the commits up to `commit` since the release tag before it, or all of them. */
 const subjectsSinceRelease = Effect.fnUntraced(function* (commit: string) {
@@ -243,7 +181,7 @@ const packageVersion = Effect.gen(function* () {
 });
 
 /** Refuses a version that is already tagged, or not newer than the one the bucket serves. */
-const refuseReleased = Effect.fnUntraced(function* (version: string, bucket: ReleaseBucket) {
+const refuseReleased = Effect.fnUntraced(function* (version: string) {
   const tagged = yield* output([
     "git",
     "rev-parse",
@@ -256,7 +194,8 @@ const refuseReleased = Effect.fnUntraced(function* (version: string, bucket: Rel
     return yield* new ReleaseFailed({ message: `${tagName(version)} is already tagged. ${BUMP}` });
   }
 
-  const problem = versionProblem(version, yield* bucket.published);
+  const bucket = yield* ReleaseBucket;
+  const problem = versionProblem(version, yield* bucket.publishedVersion);
 
   if (Option.isSome(problem)) return yield* new ReleaseFailed({ message: problem.value });
 });
@@ -266,10 +205,7 @@ const refuseReleased = Effect.fnUntraced(function* (version: string, bucket: Rel
  * `bun pm version` bumps it to. The bump is committed only after the checks pass; until then a
  * failure puts package.json back, so the next try starts from the same tree.
  */
-const checkedVersion = Effect.fnUntraced(function* (
-  { increment, checkAgents }: ReleaseArgs,
-  bucket: ReleaseBucket,
-) {
+const checkedVersion = Effect.fnUntraced(function* ({ increment, checkAgents }: ReleaseArgs) {
   const fs = yield* FileSystem.FileSystem;
   const original = yield* fs.readFileString(packageFile);
 
@@ -280,7 +216,7 @@ const checkedVersion = Effect.fnUntraced(function* (
   const checked = Effect.gen(function* () {
     const version = yield* packageVersion;
 
-    yield* refuseReleased(version, bucket);
+    yield* refuseReleased(version);
     yield* log(`Running CI's checks on ${version}.`);
     yield* Effect.forEach(CHECKS, run, { discard: true });
 
@@ -355,22 +291,8 @@ const publishSource = Effect.fnUntraced(function* (version: string, commit: stri
   return 0;
 });
 
-export const release = Effect.fn("release")(function* (args: ReadonlyArray<string>) {
-  const fs = yield* FileSystem.FileSystem;
-  const asked = releaseArgs(args);
-
-  if (Option.isNone(asked)) return yield* new ReleaseFailed({ message: USAGE });
-
-  const problems = yield* preflight;
-
-  if (problems.length > 0) {
-    return yield* new ReleaseFailed({
-      message: `Fix these first:\n  - ${problems.join("\n  - ")}`,
-    });
-  }
-
-  const bucket = yield* releaseBucket;
-  const version = yield* checkedVersion(asked.value, bucket);
+const ship = Effect.fnUntraced(function* (asked: ReleaseArgs) {
+  const version = yield* checkedVersion(asked);
   const commit = yield* output(["git", "rev-parse", "HEAD"]);
 
   if (Option.isNone(commit)) {
@@ -392,23 +314,7 @@ export const release = Effect.fn("release")(function* (args: ReadonlyArray<strin
     "-c.mac.forceCodeSigning=true",
   ]);
 
-  const feed = yield* fs.readFileString(path.join(outputDir, FEED_FILE)).pipe(Effect.option);
-
-  // The feed is what makes a version live, so a stale one must never go up.
-  if (!Option.contains(Option.flatMap(feed, feedVersion), version)) {
-    return yield* new ReleaseFailed({
-      message: `The build did not produce a ${FEED_FILE} for ${version}.`,
-    });
-  }
-
-  const builds = buildFiles(version, yield* fs.readDirectory(outputDir));
-
-  if (Result.isFailure(builds)) return yield* new ReleaseFailed({ message: builds.failure });
-
-  yield* Effect.forEach(builds.success, bucket.upload, { discard: true });
-
-  yield* bucket.upload({ name: FEED_FILE, type: "text/yaml" });
-  yield* log(`Published ${version}. cutfac.com/download now hands it out.`);
+  yield* publishBuild(outputDir, version);
 
   const code = yield* publishSource(
     version,
@@ -422,6 +328,22 @@ export const release = Effect.fn("release")(function* (args: ReadonlyArray<strin
   );
 
   return code;
+});
+
+export const release = Effect.fn("release")(function* (args: ReadonlyArray<string>) {
+  const asked = releaseArgs(args);
+
+  if (Option.isNone(asked)) return yield* new ReleaseFailed({ message: USAGE });
+
+  const problems = yield* preflight;
+
+  if (problems.length > 0) {
+    return yield* new ReleaseFailed({
+      message: `Fix these first:\n  - ${problems.join("\n  - ")}`,
+    });
+  }
+
+  return yield* ship(asked.value).pipe(Effect.provide(ReleaseBucket.layer));
 });
 
 if (import.meta.main) {
