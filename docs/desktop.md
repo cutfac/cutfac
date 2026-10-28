@@ -21,6 +21,12 @@ cutfac.com at launch and once a day whether its plan is active. Without an activ
 for more than a week, the app is the free version again. Runs from source (`desktop`,
 `desktop:dev`) never update.
 
+The free version counts the videos made on the Mac in `videos.log` in the app's data folder, under
+the account's home whatever `HOME` says, and the released app keeps a copy of that count in the
+login keychain, so losing the file loses no count. It reads and writes the copy only through
+`/usr/bin/security`, and only while the keychain is unlocked, so it never asks for a password; with
+the keychain locked or unavailable it counts from the file alone. Builds from source keep no copy.
+
 ## Releasing the app
 
 One command ships a release, from a clean `main`:

@@ -14,12 +14,14 @@ import {
   Option,
   Path,
   Redacted,
+  Ref,
 } from "effect";
 import { TestClock } from "effect/testing";
 
 import { AppData } from "../src/core/appData.ts";
 import { createItem, listItemIds } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
+import { CountKeychain } from "../src/countKeychain.ts";
 import {
   LICENSE_PUBLIC_KEY,
   LicenseKey,
@@ -391,6 +393,71 @@ describe("videos the desktop app didn't make", () => {
       yield* make("Three");
 
       expect(yield* planStatus()).toEqual(free(3));
+    }),
+  );
+});
+
+/** The login keychain's copy of the count, kept in memory for the test. */
+const keychainCopy = Layer.effect(
+  CountKeychain,
+  Effect.map(Ref.make<ReadonlyArray<string>>([]), (kept) => ({
+    read: Effect.asSome(Ref.get(kept)),
+    write: (lines: ReadonlyArray<string>) => Ref.set(kept, lines),
+  })),
+);
+
+/** The desktop app on this Mac, its count kept in the login keychain too. */
+const withKeychain = testEffect(
+  appDataFolder.pipe(
+    Layer.provideMerge(Layer.mergeAll(tempWorkspace(), testLicenseKey, keychainCopy)),
+  ),
+);
+
+/** Ways the count file can be lost. */
+const LOSSES = [
+  ["deleted", (fs: FileSystem.FileSystem, file: string) => fs.remove(file)],
+  ["emptied", (fs: FileSystem.FileSystem, file: string) => fs.writeFileString(file, "")],
+  ["made unreadable", (fs: FileSystem.FileSystem, file: string) => fs.chmod(file, 0o000)],
+  [
+    "replaced by a folder",
+    (fs: FileSystem.FileSystem, file: string) =>
+      Effect.andThen(fs.remove(file), fs.makeDirectory(file)),
+  ],
+] as const;
+
+describe("a count kept in the login keychain too", () => {
+  for (const [how, lose] of LOSSES) {
+    withKeychain.live(`keeps counting when the count file is ${how}`, () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+
+        yield* Effect.forEach(["One", "Two", "Three"], make);
+        yield* lose(fs, yield* dataFile("videos.log"));
+
+        expect(yield* planStatus()).toEqual(free(3));
+        expect(yield* Effect.flip(make("Four"))).toBeInstanceOf(FreeLimitReached);
+
+        // The videos already made stay editable, as they were counted before.
+        yield* workOn("two");
+      }),
+    );
+  }
+
+  withKeychain.live("takes the videos an earlier version counted, before the file is lost", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const file = yield* dataFile("videos.log");
+
+      yield* fs.writeFileString(
+        file,
+        "2026-10-01T09:00:00.000Z made a@1\n2026-10-02T09:00:00.000Z made b@2\n",
+      );
+
+      expect(yield* planStatus()).toEqual(free(2));
+
+      yield* fs.remove(file);
+
+      expect(yield* planStatus()).toEqual(free(2));
     }),
   );
 });

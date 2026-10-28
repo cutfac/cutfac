@@ -7,6 +7,7 @@ import { type Item, type NewItemInput, createItem, getItem } from "./core/items.
 import { run } from "./core/process.ts";
 import { nowIso } from "./core/time.ts";
 import { Workspace } from "./core/workspace.ts";
+import { CountKeychain, countKeychain } from "./countKeychain.ts";
 import { paidInSettings } from "./license.ts";
 
 /** How many videos the desktop app's free version makes on one Mac, with every feature open. */
@@ -126,7 +127,7 @@ export const appData = Layer.effect(
 
     return Option.map(config, (dir) => path.join(dir, folder));
   }),
-).pipe(Layer.provideMerge(desktopData));
+).pipe(Layer.provideMerge(Layer.mergeAll(desktopData, countKeychain)));
 
 /** The open-source CLI; the desktop app on a paid plan; or its free version, with videos made. */
 export type Plan =
@@ -155,18 +156,39 @@ export const planOf = Effect.fnUntraced(function* (
   return { edition: "desktop", paid: false, used: Math.min(used, FREE_VIDEOS), limit: FREE_VIDEOS };
 });
 
-/** The app's settings and video count in `dir`. Files it hasn't written yet, or can't be read, are empty. */
+const linesOf = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+/**
+ * The app's settings and video count in `dir`. The count is the count file's lines and its
+ * keychain copy's together, so losing the file loses none, and the copy takes the file's new lines.
+ * Files it hasn't written yet, or can't be read, are empty.
+ */
 const readRecords = Effect.fnUntraced(function* (dir: string) {
   const ws = yield* Workspace;
   const path = yield* Path.Path;
+  const copy = yield* CountKeychain;
 
-  return yield* Effect.all(
+  const [settings, file, kept] = yield* Effect.all(
     [
       ws.peekText(path.join(dir, "settings.json"), SETTINGS_BYTES).pipe(Effect.option),
       ws.peekText(path.join(dir, VIDEOS_FILE), VIDEOS_BYTES).pipe(Effect.orElseSucceed(() => "")),
+      copy.read,
     ],
     { concurrency: "unbounded" },
   );
+
+  const lines = Option.match(kept, {
+    onNone: () => linesOf(file),
+    onSome: (copied) => [...new Set([...copied, ...linesOf(file)])],
+  });
+
+  if (Option.exists(kept, (copied) => lines.length > copied.length)) yield* copy.write(lines);
+
+  return [settings, lines.join("\n")] as const;
 });
 
 /** The plan now. */
@@ -178,13 +200,22 @@ export const planStatus = Effect.fn("plan.status")(function* () {
   return yield* planOf(...(yield* readRecords(dir.value)));
 });
 
-/** Adds a line to the count. The work goes on either way; a count that can't be kept lets one go. */
+/**
+ * Adds a line to the count and to its keychain copy. The work goes on either way; a count that
+ * can't be kept lets one go.
+ */
 const record = Effect.fnUntraced(function* (dir: string, kind: "made" | "seen", key: string) {
   const path = yield* Path.Path;
+  const copy = yield* CountKeychain;
+  const line = `${yield* nowIso} ${kind} ${key}`;
 
-  yield* appendAppRecord(path.join(dir, VIDEOS_FILE), `${yield* nowIso} ${kind} ${key}`).pipe(
+  yield* appendAppRecord(path.join(dir, VIDEOS_FILE), line).pipe(
     Effect.catch((error) => Effect.logWarning(error.message)),
   );
+
+  const kept = yield* copy.read;
+
+  if (Option.isSome(kept)) yield* copy.write([...kept.value, line]);
 });
 
 /** A new video refused because the desktop app's free version has made all of its videos. */
