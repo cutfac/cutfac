@@ -10,6 +10,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http";
 import { RunRegistry } from "../src/core/agentRun.ts";
 import { AppData } from "../src/core/appData.ts";
 import { ImportRuns } from "../src/core/importRun.ts";
+import { ReportKey } from "../src/errorReports.ts";
 import { DesktopData } from "../src/plan.ts";
 import { routes } from "../src/server/app.ts";
 import { setUpClaudePlugins } from "./pluginFixtures.ts";
@@ -168,6 +169,8 @@ export async function startBoardServer(t: TestWorkspace, fakes: FakeAgents): Pro
         ImportRuns.layer,
         FetchHttpClient.layer,
         BunHttpPlatform.layer,
+        // The release runs the tests with its PostHog key in the environment.
+        Layer.succeed(ReportKey, Option.none()),
         extra,
       ).pipe(Layer.provideMerge(t.layer), Layer.provideMerge(env)),
     );
