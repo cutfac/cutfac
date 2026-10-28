@@ -25,6 +25,21 @@ export const updateFeed = Layer.sync(UpdateFeed, () => {
       catch: (cause) =>
         new UpdateCheckFailed({ message: cause instanceof Error ? cause.message : String(cause) }),
     }).pipe(
+      Effect.tap((result) =>
+        Option.match(Option.fromNullishOr(result?.downloadPromise), {
+          onNone: () => Effect.void,
+          onSome: (download) =>
+            Effect.forkDetach(
+              Effect.ignore(
+                Effect.tryPromise(() => download),
+                {
+                  log: "Warn",
+                  message: "Downloading the update failed",
+                },
+              ),
+            ),
+        }),
+      ),
       Effect.map((result) =>
         Option.map(Option.fromNullishOr(result), ({ isUpdateAvailable, updateInfo }) => ({
           available: isUpdateAvailable,

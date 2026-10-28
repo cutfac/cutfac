@@ -7,7 +7,19 @@ import { join } from "node:path";
 // Each helper runs a test's effect to completion, so it is the entry point that provides layers.
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
-import { ConfigProvider, Context, Effect, FileSystem, Layer, Option, type Schema } from "effect";
+import {
+  ConfigProvider,
+  Context,
+  Effect,
+  FileSystem,
+  Layer,
+  Logger,
+  LogLevel,
+  Option,
+  Predicate,
+  Queue,
+  type Schema,
+} from "effect";
 
 import { which } from "../src/core/process.ts";
 import { Workspace } from "../src/core/workspace.ts";
@@ -146,6 +158,19 @@ export const fakeAgents = Layer.unwrap(
     return Layer.merge(Layer.succeed(FakeAgentDir, FakeAgentDir.of({ dir, calls, bin })), path);
   }),
 ).pipe(Layer.provide(BunServices.layer), Layer.orDie);
+
+/** A logger that keeps the words of each line logged at warning level and up, to read back. */
+export const warnings = Effect.gen(function* () {
+  const lines = yield* Queue.unbounded<string>();
+
+  const logger = Logger.make(({ message, logLevel }) => {
+    if (!LogLevel.isGreaterThanOrEqualTo(logLevel, "Warn")) return;
+
+    Queue.offerUnsafe(lines, [message].flat().filter(Predicate.isString).join(" "));
+  });
+
+  return { layer: Logger.layer([logger]), lines: Queue.clear(lines) };
+});
 
 export const holdPort = (port: number) =>
   Effect.acquireRelease(

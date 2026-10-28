@@ -139,8 +139,12 @@ const make = Effect.gen(function* () {
         return code === 0;
       }),
     ).pipe(
-      Effect.timeoutOrElse({ duration: FIX_TIMEOUT, orElse: () => Effect.succeed(false) }),
-      Effect.orElseSucceed(() => false),
+      Effect.timeoutOrElse({
+        duration: FIX_TIMEOUT,
+        orElse: () =>
+          Effect.as(Effect.logWarning(`${command} ran too long and was stopped`), false),
+      }),
+      Effect.catch((error) => Effect.as(Effect.logWarning(`${command} failed`, error), false)),
       Effect.map((ok): AgentFix => ({ ok, command })),
       Effect.provideContext(services),
     );

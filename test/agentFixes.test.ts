@@ -11,7 +11,7 @@ import { AgentFixes } from "../electron/agents.ts";
 import { Install, ServerEnv } from "../electron/sidecar.ts";
 import { eventually, testEffect } from "./effect.ts";
 import { fakeSidecar } from "./fakeSidecar.ts";
-import { alive } from "./support.ts";
+import { alive, warnings } from "./support.ts";
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer));
 
@@ -121,6 +121,22 @@ describe("fixing an agent", () => {
 
       expect(result).toEqual({ ok: false, command });
       expect(lines).toEqual(["no network"]);
+    }),
+  );
+
+  it.live("leaves a warning in the log when a fix couldn't run to its end", () =>
+    Effect.gen(function* () {
+      const { dir, fake } = yield* fakeSidecar;
+      const command = "kill -9 $$";
+      const logged = yield* warnings;
+
+      const { result } = yield* Effect.andThen(
+        Effect.flatMap(AgentFixes, (agents) => agents.check),
+        fixWithLines("claude"),
+      ).pipe(Effect.provide(Layer.merge(fixesFor(dir, fake, { claude: command }), logged.layer)));
+
+      expect(result).toEqual({ ok: false, command });
+      expect((yield* logged.lines).join("\n")).toContain(command);
     }),
   );
 

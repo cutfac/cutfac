@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test";
 
+// @effect-diagnostics strictEffectProvide:off
 import { Effect, Option, Queue, Ref, Stream } from "effect";
 import { TestClock } from "effect/testing";
 
@@ -11,6 +12,7 @@ import {
   type UpdatePrompts,
 } from "../electron/updates.ts";
 import { eventually, it } from "./effect.ts";
+import { warnings } from "./support.ts";
 
 const fakeFeed = Effect.fnUntraced(function* (
   answers: ReadonlyArray<Option.Option<FoundUpdate> | UpdateCheckFailed>,
@@ -74,6 +76,22 @@ describe("updating in the background", () => {
 
       expect(yield* Ref.get(checks)).toBe(3);
       expect(yield* Ref.get(said)).toEqual([]);
+    }),
+  );
+
+  it.effect("leaves a warning in the log when a check in the background fails", () =>
+    Effect.gen(function* () {
+      const { feed } = yield* fakeFeed([new UpdateCheckFailed({ message: "offline" })]);
+      const { prompts } = yield* fakePrompts(false);
+      const logged = yield* warnings;
+
+      yield* startUpdates(prompts).pipe(
+        Effect.provideService(UpdateFeed, feed),
+        Effect.provide(logged.layer),
+      );
+      yield* TestClock.adjust("0 millis");
+
+      expect((yield* logged.lines).join("\n")).toContain("Checking for updates failed");
     }),
   );
 

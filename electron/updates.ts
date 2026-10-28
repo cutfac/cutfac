@@ -64,7 +64,7 @@ export const startUpdates = Effect.fn("updates.start")(function* (prompts: Updat
   );
 
   yield* feed.check.pipe(
-    Effect.ignore,
+    Effect.ignore({ log: "Warn", message: "Checking for updates failed" }),
     Effect.repeat(Schedule.spaced(CHECK_EVERY)),
     Effect.forkScoped,
   );

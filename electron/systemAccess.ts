@@ -176,7 +176,7 @@ const make = Effect.gen(function* () {
       Effect.flatMap((granted) =>
         Effect.andThen(stopWatching, Option.isSome(granted) ? watch.onGranted : Effect.void),
       ),
-      Effect.ignore,
+      Effect.ignore({ log: "Warn", message: "Watching for the access to be granted failed" }),
       Effect.forkDetach,
     );
 

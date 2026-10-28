@@ -148,6 +148,9 @@ function start(): void {
     killWorkspaceServer();
     stopFixes();
   });
+  process.on("unhandledRejection", (reason) =>
+    forkInMain(Effect.logWarning("A promise failed with nothing to catch it", reason)),
+  );
   process.on("SIGTERM", () => app.quit());
   process.on("SIGINT", () => app.quit());
 
@@ -225,7 +228,14 @@ function start(): void {
     checks: devTools?.checks,
   });
 
-  void app.whenReady().then(() => runInMain(boot(setMenu)));
+  // The runtime itself may be what failed, so this says so without it.
+  void app
+    .whenReady()
+    .then(() => runInMain(boot(setMenu)))
+    .catch((cause) => {
+      dialog.showErrorBox(messages().couldNotStart, describeError(cause));
+      app.quit();
+    });
 }
 
 const boot = Effect.fn("main.boot")(function* (setMenu: Effect.Effect<void, never, Updates>) {
