@@ -153,6 +153,11 @@ export interface DevFakes {
   access: "real" | "granted" | "denied";
   /** Suggest a new folder for the workspace each time, so a run never opens a real one. */
   freshFolder: boolean;
+  /**
+   * Offer sharing as a release build does, which only a build with the key can; with none, nothing
+   * is sent whatever the answer.
+   */
+  sharing: "real" | "available";
 }
 
 /** Where the dev build keeps things, and what it is faking. */

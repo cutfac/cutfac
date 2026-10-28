@@ -52,6 +52,11 @@ const FOLDERS: Options<"fresh" | "default"> = [
   ["default", "Default"],
 ];
 
+const SHARING: Options<DevFakes["sharing"]> = [
+  ["real", "Real"],
+  ["available", "Offered"],
+];
+
 const STEPS: Options<OnboardingStep> = [
   ["welcome", "Welcome"],
   ["make", "Make"],
@@ -240,11 +245,18 @@ function Fakes({ fakes, onChange }: { fakes: DevFakes; onChange: (fakes: DevFake
         onChange={(access) => onChange({ ...fakes, access })}
       />
       <Choice
-        label="Workspace folder"
-        hint="New each run suggests a dated Documents/Cutfac Dev folder where the released app suggests Documents/Cutfac, so a run never opens a real workspace. It is made only when the folder step creates it."
+        label="Workspace name"
+        hint="New each run names the first workspace for when it was made, so a run never reuses one. Default names it for the website, or My videos, as the released app does."
         options={FOLDERS}
         value={fakes.freshFolder ? "fresh" : "default"}
         onChange={(folder) => onChange({ ...fakes, freshFolder: folder === "fresh" })}
+      />
+      <Choice
+        label="Sharing with the Cutfac team"
+        hint="Offered asks on the last step as a release build does. This build has no key, so nothing is sent whatever the answer."
+        options={SHARING}
+        value={fakes.sharing}
+        onChange={(sharing) => onChange({ ...fakes, sharing })}
       />
     </Section>
   );

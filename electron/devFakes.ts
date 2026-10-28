@@ -9,6 +9,7 @@ export const NO_FAKES: DevFakes = {
   fixesFail: false,
   access: "real",
   freshFolder: true,
+  sharing: "real",
 };
 
 const VERB: Record<Fixable, string> = {

@@ -60,6 +60,7 @@ const FAKES = {
     fixesFail: Schema.Boolean,
     access: Schema.Literals(["real", "granted", "denied"]),
     freshFolder: Schema.Boolean,
+    sharing: Schema.Literals(["real", "available"]),
   }),
   what: "fakes",
 };
@@ -136,6 +137,11 @@ export function handleDevTools(host: DevToolsHost): DevTools {
       Effect.flatMap(Ref.get(fakes), ({ access }) =>
         access === "real" ? hasPermission(permission) : Effect.succeed(access === "granted"),
       ),
+    sharing: Effect.flatMap(Ref.get(fakes), ({ sharing }) =>
+      Effect.map(macChecks.sharing, (real) =>
+        sharing === "available" ? { ...real, available: true } : real,
+      ),
+    ),
     suggestion: Effect.gen(function* () {
       if (!(yield* Ref.get(fakes)).freshFolder) return yield* macChecks.suggestion;
 
