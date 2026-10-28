@@ -231,11 +231,14 @@ function start(): void {
     checks: devTools?.checks,
   });
 
-  // The runtime itself may be what failed, so this says so without it.
+  // The runtime itself may be what failed, so this says so without it. A quit closes the runtime,
+  // which stops a boot still under way; that isn't a failure, and a modal box would hold the quit.
   void app
     .whenReady()
     .then(() => runInMain(boot(setMenu)))
     .catch((cause) => {
+      if (readNow(appState.quitting)) return;
+
       dialog.showErrorBox(messages().couldNotStart, describeError(cause));
       app.quit();
     });
