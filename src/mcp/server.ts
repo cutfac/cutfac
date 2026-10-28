@@ -13,6 +13,7 @@ import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 
 import { version } from "../../package.json" with { type: "json" };
+import { ABOUT_FILE } from "../core/about.ts";
 import { SERVER_NAME } from "../core/agents.ts";
 import { agentVersionNotices } from "../core/agentVersion.ts";
 import { BRIEF_FILE, briefNotices, readBrief } from "../core/brief.ts";
@@ -23,7 +24,7 @@ import { FormatDoc } from "../core/formatSchema.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { getItem, listItems, openFeedback } from "../core/items.ts";
-import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
+import { learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
 import { LearnedDoc, LearnedKind, PreprocessResult } from "../core/learnedSchema.ts";
 import { formatNotices, getFormat, readFormats, saveFormat } from "../core/library.ts";
 import { mcpNotices } from "../core/mcpApprovals.ts";

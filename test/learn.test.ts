@@ -1,24 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { Effect, FileSystem, Layer, Ref } from "effect";
+import { Effect, FileSystem, Layer, Option, Ref } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
+import { ABOUT_FILE, UNREAD, aboutSection, aboutSections, readAbout } from "../src/core/about.ts";
 import { CommandFailed, InvalidRequest, NotFound } from "../src/core/errors.ts";
 import {
-  ABOUT_FILE,
-  UNREAD,
-  aboutSection,
-  aboutSections,
   forget,
   getLearned,
   learn,
   learnInputOf,
   learnNotices,
   listLearned,
-  readAbout,
-  summarize,
 } from "../src/core/learn.ts";
+import { summarize } from "../src/core/learnText.ts";
 import { runChecked } from "../src/core/process.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
@@ -258,7 +254,7 @@ describe("learn", () => {
 
       expect(error).toBeInstanceOf(CommandFailed);
       expect(yield* listing("learned")).toEqual([]);
-      expect(yield* readAbout()).toBeUndefined();
+      expect(yield* readAbout()).toEqual(Option.none());
     }),
   );
 

@@ -10,6 +10,7 @@ import {
   Multipart,
 } from "effect/http";
 
+import { readAbout } from "../core/about.ts";
 import { agentBin } from "../core/agentCommand.ts";
 import { RunEvent } from "../core/agentParse.ts";
 import {
@@ -59,7 +60,7 @@ import {
   openFeedback,
   shortId,
 } from "../core/items.ts";
-import { forget, learn, learnInputOf, listLearned, readAbout } from "../core/learn.ts";
+import { forget, learn, learnInputOf, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats } from "../core/library.ts";
 import { addLinkedVideo } from "../core/linkedVideos.ts";
 import {
@@ -369,7 +370,7 @@ const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
 
 /** Everything learned, newest first, with about.md as agents read it. */
 const learnedList = Effect.all(
-  { learned: listLearned(), about: readAbout() },
+  { learned: listLearned(), about: Effect.map(readAbout(), Option.getOrUndefined) },
   { concurrency: "unbounded" },
 );
 
