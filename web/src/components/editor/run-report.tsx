@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Match, Option } from "effect";
 import { ChevronRightIcon, CircleStopIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -82,18 +82,21 @@ export function RunReport({
           </Button>
         </div>
       ) : null}
-      {Option.contains(run.status, "failed") ? (
-        <Bubble variant="destructive">
-          <BubbleContent>
-            <p className="whitespace-pre-wrap">
-              {Option.getOrElse(run.error, () => t.chat.failed)}
-            </p>
-          </BubbleContent>
-        </Bubble>
-      ) : null}
-      {Option.contains(run.status, "stopped") ? (
-        <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
-      ) : null}
+      {Match.value(run.status).pipe(
+        Match.when({ _tag: "Some", value: "failed" }, () => (
+          <Bubble variant="destructive">
+            <BubbleContent>
+              <p className="whitespace-pre-wrap">
+                {Option.getOrElse(run.error, () => t.chat.failed)}
+              </p>
+            </BubbleContent>
+          </Bubble>
+        )),
+        Match.when({ _tag: "Some", value: "stopped" }, () => (
+          <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
+        )),
+        Match.orElse(() => null),
+      )}
     </>
   );
 }
