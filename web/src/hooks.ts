@@ -13,6 +13,7 @@ import {
 } from "./api.ts";
 import { desktop } from "./desktop.ts";
 import type { ModelPicks } from "./lib/models.ts";
+import { routeOf, type Route } from "./lib/route.ts";
 import { readStored } from "./lib/storage.ts";
 
 interface Loaded<T> {
@@ -124,14 +125,7 @@ export const agentInstalled = (
 ) =>
   statuses === undefined || statuses.some((status) => status.agent === agent && status.installed);
 
-type Route = readonly [view: string, id: string | undefined];
-
-function readRoute(): Route {
-  const [view = "", ...rest] = location.hash.replace(/^#\/?/, "").split("/");
-  const id = rest.length > 0 ? decodeURIComponent(rest.join("/")) : undefined;
-
-  return [view === "" ? "board" : view, id];
-}
+const readRoute = () => routeOf(location.hash);
 
 /** Which way the page zooms when the route changes: into a video from the gallery, or back out. */
 function zoomOf(from: Route, to: Route) {
