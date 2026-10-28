@@ -1,5 +1,5 @@
 import { Match } from "effect";
-import { type CSSProperties, useEffect } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 
 import { AnnouncementDialog } from "@/components/announcement-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -67,12 +67,15 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
   const [sidebarOpen, setSidebarOpen] = useSidebarOpen();
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
 
-  // Opened with no page in mind, a workspace with no template yet starts on making one. Unknown
-  // until both have loaded; a brief that can't be read doesn't hold that up.
+  const drafted = useFirstLaunchDraft();
+
+  // Opened with no page in mind, the workspace the first launch just made finishes it, and one
+  // with no template yet starts on making one. Unknown until all have loaded; a brief that can't
+  // be read doesn't hold that up.
   const startFirst =
-    ws === undefined || LiveState.$is("Loading")(brief.state)
+    ws === undefined || LiveState.$is("Loading")(brief.state) || drafted === undefined
       ? undefined
-      : needsStart(ws.formats.length, brief.data?.exists ?? true, startSkipped(ws.root));
+      : drafted || needsStart(ws.formats.length, brief.data?.exists ?? true, startSkipped(ws.root));
 
   const landing =
     location.hash === "" && !LiveState.$is("Failed")(workspace.state) && startFirst !== false;
@@ -156,6 +159,24 @@ function useConnectAgents(): void {
       },
     );
   }, []);
+}
+
+/**
+ * Whether the desktop's first launch left its answers for the board to finish with, as it does
+ * when it opens the workspace it made; unknown until the app answers. A browser has none.
+ */
+function useFirstLaunchDraft(): boolean | undefined {
+  const onboarding = desktop?.onboarding;
+  const [drafted, setDrafted] = useState(onboarding === undefined ? false : undefined);
+
+  useEffect(() => {
+    void onboarding?.draft().then(
+      (draft) => setDrafted(draft !== undefined),
+      () => setDrafted(false),
+    );
+  }, [onboarding]);
+
+  return drafted;
 }
 
 function renderView(view: string, id: string | undefined) {
