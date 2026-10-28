@@ -64,7 +64,7 @@ const CHECKS = [
  */
 const AGENT_CHECK = ["bun", "run", "check:agents", "--no-save"] as const;
 
-const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>, cwd = root) {
+const runAt = Effect.fnUntraced(function* (cwd: string, command: ReadonlyArray<string>) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const [program = "", ...args] = command;
   const shown = command.join(" ");
@@ -88,6 +88,12 @@ const run = Effect.fnUntraced(function* (command: ReadonlyArray<string>, cwd = r
   if (code !== 0)
     return yield* new ReleaseFailed({ message: `\`${shown}\` exited with code ${code}.` });
 });
+
+/** Runs `command` in the checkout. */
+const run = (command: ReadonlyArray<string>) => runAt(root, command);
+
+/** Runs `command` in the copy of the release commit the build happens in. */
+const runInCopy = (command: ReadonlyArray<string>) => runAt(buildRoot, command);
 
 const output = (command: ReadonlyArray<string>) => {
   const [program = "", ...args] = command;
@@ -306,29 +312,26 @@ const copyCommit = Effect.fnUntraced(function* (commit: string) {
   yield* fs.remove(archive);
   // Its own install, not a link to the checkout's: Bun would write the link's real path, a path on
   // this machine, into the bundles.
-  yield* run(["bun", "install", "--frozen-lockfile", "--ignore-scripts"], buildRoot);
+  yield* runInCopy(["bun", "install", "--frozen-lockfile", "--ignore-scripts"]);
 });
 
 /** Builds, signs and notarizes `commit` as `version` in `buildRoot`, into the folder it returns. */
 const buildApp = Effect.fnUntraced(function* (version: string, commit: string) {
   yield* log(`Building Cutfac ${version} in ${path.relative(root, buildRoot)}.`);
   yield* copyCommit(commit);
-  yield* run(["bun", "run", "build"], buildRoot);
-  yield* run(["bun", "run", "build:sidecar"], buildRoot);
-  yield* run(["bun", "run", "build:electron"], buildRoot);
+  yield* runInCopy(["bun", "run", "build"]);
+  yield* runInCopy(["bun", "run", "build:sidecar"]);
+  yield* runInCopy(["bun", "run", "build:electron"]);
 
   // Fails instead of building an unsigned app when the Developer ID certificate is missing. The
   // feed file is still written; this script uploads it, since the bucket is not a builder target.
-  yield* run(
-    [
-      path.join(buildRoot, "node_modules", ".bin", "electron-builder"),
-      "--mac",
-      "--publish",
-      "never",
-      "-c.mac.forceCodeSigning=true",
-    ],
-    buildRoot,
-  );
+  yield* runInCopy([
+    path.join(buildRoot, "node_modules", ".bin", "electron-builder"),
+    "--mac",
+    "--publish",
+    "never",
+    "-c.mac.forceCodeSigning=true",
+  ]);
 
   return path.join(buildRoot, "release");
 });
