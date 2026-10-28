@@ -159,6 +159,34 @@ export const editorEn = {
     goToBox: "Go to the frame this box is on",
     removeBox: "Remove the box",
   },
+  /** The steps that walk a new user through editing a sample, one card at a time. */
+  guide: {
+    label: "Try editing the sample",
+    of: (step: number, total: number) => `${step} of ${total}`,
+    close: "Close the guide",
+    play: {
+      title: "Play the sample",
+      body: "Press Space or the play button and watch it through.",
+    },
+    select: {
+      title: "Draw a box around the title",
+      body: "Drag over the big title on the video. A box marks what to change.",
+    },
+    ask: {
+      title: "Say what to change",
+      body: "Pick the suggestion in the box's request and send it. Your agent changes the code and renders it again.",
+      suggestion: "Change this text to our product's name",
+    },
+    variants: {
+      title: "Ask for a few versions",
+      body: "Once it's done, draw a box somewhere else, set versions to 2 and send. Compare them side by side and keep the one you like.",
+    },
+    done: {
+      title: "That's the whole loop",
+      body: "Now make your own video from scratch. Your agent suggests ideas from what it read about you.",
+      make: "Make my own video",
+    },
+  },
 };
 
 export type EditorMessages = typeof editorEn;

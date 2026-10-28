@@ -2,6 +2,7 @@ import { ArrowUpIcon, PaperclipIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { SlashFeedbackHint } from "@/components/feedback-dialog";
+import { Button } from "@/components/ui/button";
 import { Dropzone } from "@/components/ui/dropzone";
 import {
   InputGroup,
@@ -27,6 +28,8 @@ export interface BoxAsk {
   readonly agent: AgentChoice;
   /** Files going with the request about the box. */
   readonly files: Attachments;
+  /** A request to offer while the box has none yet, such as the sample guide's. */
+  readonly suggestion?: string | undefined;
   /**
    * Send the request about the box, asking for `versions` of it, with the reference files
    * attached; rejects when it could not go.
@@ -106,6 +109,20 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
         <Dropzone paste label={t.attachments.drop.box} openRef={openFiles} onFiles={files.add}>
           <div className="flex flex-col gap-2">
             <AttachmentChips item={ask.item} files={files} />
+            {ask.suggestion === undefined || text !== "" ? null : (
+              <Button
+                variant="soft"
+                pill
+                size="xs"
+                className="max-w-full self-start"
+                onClick={() => {
+                  setBody(ask.suggestion ?? "");
+                  inputRef.current?.focus();
+                }}
+              >
+                <span className="truncate">{ask.suggestion}</span>
+              </Button>
+            )}
             <InputGroup>
               <InputGroupTextarea
                 ref={inputRef}

@@ -19,6 +19,7 @@ import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
 import { mediaUrl, MediaStrip, NoMedia, shownMedia } from "../components/editor/item-media.tsx";
 import { Toolbar } from "../components/editor/item-toolbar.tsx";
 import { RenderFrame, RenderProvider, useItemRender } from "../components/editor/render-card.tsx";
+import { SampleGuideCard, useSampleGuide } from "../components/editor/sample-guide.tsx";
 import { ShortcutsDialog } from "../components/editor/shortcuts.tsx";
 import { aspectRatio, Stage } from "../components/editor/stage.tsx";
 import { Timeline } from "../components/editor/timeline.tsx";
@@ -81,6 +82,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   // The files going with the chat's next request, and with the next request about a box.
   const chatFiles = useAttachments(id, setData);
   const boxFiles = useAttachments(id, setData);
+  const guide = useSampleGuide(id, player, target.region);
   const t = useMessages();
 
   useEffect(
@@ -268,6 +270,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
           ) : (
             <>
+              <SampleGuideCard guide={guide} />
               <RenderFrame
                 view={renderView}
                 ratio={(video ? videoRatio : undefined) ?? aspectRatio(media.aspect) ?? 9 / 16}
@@ -291,6 +294,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     item,
                     agent,
                     files: boxFiles,
+                    suggestion: guide.suggestion,
                     onSend: (body, versions, attachments) =>
                       sendRequest(
                         item,
@@ -309,7 +313,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                         setTab("chat");
 
                         // `/feedback` leaves the box drawn, so the request about it can still follow.
-                        if (sentTo === "item") clear();
+                        if (sentTo === "item") {
+                          clear();
+                          guide.sent(versions);
+                        }
 
                         return sentTo;
                       }),

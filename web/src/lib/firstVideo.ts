@@ -6,10 +6,15 @@ import { href } from "../hooks.ts";
  * next thing to do; on the board when the workspace already has videos, or one can't be made.
  */
 export async function openFirstVideo(title: string) {
-  const item = await api
-    .items()
-    .then((items) => (items.length === 0 ? api.createItem({ title, empty: true }) : undefined))
-    .catch(() => undefined);
+  const items = await api.items().catch(() => undefined);
+
+  if (items?.length === 0) await openEmptyVideo(title);
+  else location.hash = href("board");
+}
+
+/** An empty editor for a new video, or the board when one can't be made. */
+export async function openEmptyVideo(title: string) {
+  const item = await api.createItem({ title, empty: true }).catch(() => undefined);
 
   location.hash = item === undefined ? href("board") : href("item", item.id);
 }

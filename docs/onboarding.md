@@ -160,8 +160,16 @@ writes the template from that. So step 3 asks, a part at a time and in this orde
 Nothing is made from it during the first launch. A template took the agent minutes, and what came
 out was a spec for the agent that the user couldn't judge yet. Instead the answers are context:
 `brief.md` and the material in `about.md`, which the agent reads before every template and video.
-The first launch ends in an empty editor for the first video, so asking for it is the next thing
-to do; a template can come from a video the user likes later, through Templates. The empty video
+The first launch ends by offering a sample to try while the agent reads: three short motion
+graphics made with code (bold, calm, playful, in `samples/`), shown playing side by side. The one
+picked is copied into the workspace in the user's language, with its code, fonts and words, and
+opens in the editor with a guide card that moves on as the user does each part of the core loop:
+play it, draw a box on the title, send the suggested request to change it to their product's name,
+then ask for two versions and compare. The app's `videos.log` marks the copy a sample, so working on
+it uses no free video, and editing its folder can't make another video one. The guide's last card,
+or Skip on the offer, opens an empty editor for the first video of their own, so asking for it is
+the next thing to do; a template can come from a video the user likes later, through Templates. The
+empty video
 costs no free video until work on it starts, and it takes its title from its first request. The
 agent reads the material during the rest of the first launch (see Before the workspace), and the
 reading ends with three first videos for the platforms in the brief, in an `ideas` block, each its
