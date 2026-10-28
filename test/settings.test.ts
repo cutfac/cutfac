@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test";
 import path from "node:path";
 
 // @effect-diagnostics strictEffectProvide:off
-import { Effect, FileSystem, Option, Schema } from "effect";
+import { Effect, Exit, FileSystem, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
 import { LicenseSettings } from "../electron/license.ts";
@@ -100,6 +100,26 @@ describe("saving the settings", () => {
       yield* settingsIn(saveLocale("en"));
 
       expect(yield* saved).toEqual({ locale: "en" });
+    }),
+  );
+
+  it.live("doesn't save over a file it couldn't read, which would lose what it holds", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, saved, settingsIn } = yield* appData;
+      const before = { licenseKey: "KEY-1", workspace: "/work" };
+
+      yield* fs.writeFileString(file, JSON.stringify(before));
+      yield* fs.chmod(file, 0o000);
+
+      expect(yield* settingsIn(loadWorkspace)).toEqual(Option.none());
+
+      const exit = yield* Effect.exit(settingsIn(saveLocale("ko")));
+
+      yield* fs.chmod(file, 0o644);
+
+      expect(yield* saved).toEqual(before);
+      expect(Exit.isFailure(exit)).toBe(true);
     }),
   );
 

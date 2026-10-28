@@ -99,11 +99,12 @@ const make = Effect.fnUntraced(function* ({ dir, defaultLibrary }: SettingsPlace
   const file = path.join(dir, "settings.json");
   const backup = path.join(dir, "settings.dev-backup.json");
 
-  const read = readAppFile(file, SETTINGS_BYTES).pipe(
+  const readStored = readAppFile(file, SETTINGS_BYTES).pipe(
     Effect.map((text) => Option.getOrElse(Option.flatMap(text, decodeFile), () => ({}))),
-    Effect.orElseSucceed((): Schema.JsonObject => ({})),
     Effect.provideContext(services),
   );
+
+  const read = Effect.orElseSucceed(readStored, (): Schema.JsonObject => ({}));
 
   const queued = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem | Path | Crypto>) =>
     lock.withPermits(1)(Effect.provideContext(effect, services));
@@ -111,7 +112,7 @@ const make = Effect.fnUntraced(function* ({ dir, defaultLibrary }: SettingsPlace
   const write = (patch: Partial<Saved>) =>
     queued(
       Effect.gen(function* () {
-        const settings = { ...(yield* read), ...patch };
+        const settings = { ...(yield* readStored), ...patch };
 
         yield* writeAppFile(file, `${JSON.stringify(settings, null, 2)}\n`);
       }),
