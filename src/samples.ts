@@ -4,7 +4,7 @@ import { COMPILED } from "./core/build.ts";
 import { InvalidRequest, NotFound } from "./core/errors.ts";
 import { getItem } from "./core/items.ts";
 import { Workspace } from "./core/workspace.ts";
-import { createCountedItem } from "./plan.ts";
+import { createSampleItem } from "./plan.ts";
 
 /**
  * The app's sample videos: each a short motion graphic made with code, which a new user copies into
@@ -98,7 +98,7 @@ const notes = (media: string) =>
 
 /**
  * Copy the sample `id` into the workspace as a new video titled `title`, with its words in `lang`.
- * It is a video of the user's own from then on, so it counts as one the free version made.
+ * It is practice, so it uses none of the free version's videos, now or as work on it goes on.
  */
 export const addSample = Effect.fn("samples.add")(function* (
   id: string,
@@ -114,7 +114,7 @@ export const addSample = Effect.fn("samples.add")(function* (
   if (sample === undefined) return yield* new InvalidRequest({ message: `No sample named ${id}` });
 
   const media = `[9x16] ${id}.mp4`;
-  const item = yield* createCountedItem({ title, id: `sample-${id}`, notes: notes(media) });
+  const item = yield* createSampleItem({ title, id: `sample-${id}`, notes: notes(media) });
 
   const files: ReadonlyArray<readonly [string, string]> = [
     [`${dir}/${id}/preview.${lang}.mp4`, media],

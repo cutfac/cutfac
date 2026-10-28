@@ -170,8 +170,10 @@ Chromium by `render.mjs`, the way those videos were made; its words are in `copy
 picked is copied into the workspace in the user's language, with its code, fonts and words, and
 opens in the editor with a guide card that moves on as the user does each part of the core loop:
 play it, draw a box on the title, send the suggested request to change it to their product's name,
-then ask for two versions and compare. The copy is the user's own video from then on, so it counts
-as one of the free version's videos, a light nudge that the next ones are worth making well. While
+then ask for two versions and compare. The copy is practice, so it uses none of the free version's
+videos: the app's `videos.log` (and its keychain copy) marks it a sample, so neither copying it in
+nor working on it counts, and it stays editable past the limit; editing its folder can't make
+another video one. While
 the user picks, one quiet line beside Skip says the agent reads in the background and nothing waits
 on it, then that it is done; a line under the heading read as a loading screen to wait out.
 The guide's last card,
