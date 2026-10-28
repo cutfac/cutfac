@@ -9,6 +9,7 @@ import {
   createItem,
   getItem,
   listItemIds,
+  listItems,
   openFeedback,
   resolveFeedback,
   updateItem,
@@ -87,6 +88,26 @@ describe("items in a workspace", () => {
         "Film it on a wooden table",
       ]);
     }),
+  );
+
+  it.live(
+    "items created at the same time under one title each keep an id and doc of their own",
+    () =>
+      Effect.gen(function* () {
+        const notes = Array.from({ length: 12 }, (_, n) => `Note ${n}`);
+
+        const created = yield* Effect.forEach(
+          notes,
+          (note) => createItem({ title: "Same Title", notes: note }),
+          { concurrency: "unbounded" },
+        );
+
+        expect(new Set(created.map((item) => item.id)).size).toBe(notes.length);
+
+        expect((yield* listItems()).map((item) => item.doc.notes).toSorted()).toEqual(
+          notes.toSorted(),
+        );
+      }),
   );
 
   it.live("an explicit id brings in a folder without item.yaml, unless it holds items", () =>

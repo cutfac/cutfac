@@ -186,6 +186,28 @@ describe("media in a workspace", () => {
     }),
   );
 
+  it.live("uploads of one name at the same time each keep a file of their own", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const item = yield* createItem({ title: "Clip" });
+      const bodies = Array.from({ length: 8 }, (_, n) => `Video ${n}`);
+
+      yield* Effect.forEach(bodies, (body, n) => ws.writeText(`uploads/${n}.bin`, body));
+
+      const imported = yield* Effect.forEach(
+        bodies,
+        (_, n) => importMedia(item.id, join(ws.root, `uploads/${n}.bin`), "clip.mp4"),
+        { concurrency: "unbounded" },
+      );
+
+      const names = imported.map((upload) => upload.name);
+      const saved = yield* Effect.forEach(names, (name) => ws.readText(`${item.dir}/${name}`));
+
+      expect(new Set(names).size).toBe(bodies.length);
+      expect(saved.toSorted()).toEqual(bodies.toSorted());
+    }),
+  );
+
   liveWithFfmpeg(
     "imports uploads with a probed aspect tag and unique names, then verifies them",
     () =>

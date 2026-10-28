@@ -192,7 +192,7 @@ export const createItem = Effect.fn("items.createItem")(function* (input: NewIte
   let id = base;
 
   if (input.id === undefined || !(yield* isAdoptable(ws, id))) {
-    for (let n = 2; yield* ws.exists(itemDir(ws, id)); n++) id = `${base}-${n}`;
+    for (let n = 2; !(yield* ws.claimFolder(itemDir(ws, id))); n++) id = `${base}-${n}`;
   }
 
   const inputs = yield* itemInputs(input);
@@ -426,9 +426,13 @@ export const importMedia = Effect.fn("items.importMedia")(function* (
   const tag = Option.match(aspect, { onNone: () => "", onSome: (value) => `[${value}] ` });
   let name = `${tag}${stem}.${ext}`;
 
-  for (let n = 2; item.media.some((m) => m.name === name); n++) name = `${tag}${stem}-${n}.${ext}`;
+  for (let n = 2; !(yield* ws.claimFile(`${item.dir}/${name}`)); n++) {
+    name = `${tag}${stem}-${n}.${ext}`;
+  }
 
-  yield* ws.importFile(source, `${item.dir}/${name}`);
+  const target = `${item.dir}/${name}`;
+
+  yield* ws.importFile(source, target).pipe(Effect.onError(() => Effect.ignore(ws.remove(target))));
 
   return { item: yield* getItem(id), name };
 });

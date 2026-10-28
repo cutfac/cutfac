@@ -7,6 +7,7 @@ import {
   Layer,
   Option,
   Path,
+  Predicate,
   Schema,
   Semaphore,
   Stream,
@@ -62,6 +63,12 @@ export class Workspace extends Context.Service<
       value: A,
     ) => Effect.Effect<void, WorkspaceError>;
     readonly mkdir: (rel: string) => Effect.Effect<void, WorkspaceError>;
+    /**
+     * Take `rel` for a new folder, or an empty file to fill, in one step if nothing has the name
+     * yet; false when something does. Two callers, even in two processes, can't both take it.
+     */
+    readonly claimFolder: (rel: string) => Effect.Effect<boolean, WorkspaceError>;
+    readonly claimFile: (rel: string) => Effect.Effect<boolean, WorkspaceError>;
     readonly copy: (fromRel: string, toRel: string) => Effect.Effect<void, WorkspaceError>;
     /** Copy a folder and everything in it, keeping files already at the destination. */
     readonly copyTree: (fromRel: string, toRel: string) => Effect.Effect<void, WorkspaceError>;
@@ -230,6 +237,30 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
       .pipe(Effect.mapError(fileFailure("create", relPath)));
   });
 
+  const claimed = (relPath: string, create: (full: string) => Effect.Effect<void, PlatformError>) =>
+    Effect.gen(function* () {
+      const full = yield* abs(relPath);
+
+      yield* ensureParent(full, relPath);
+
+      return yield* create(full).pipe(
+        Effect.as(true),
+        Effect.catchIf(
+          (error) => Predicate.isTagged(error.reason, "AlreadyExists"),
+          () => Effect.succeed(false),
+        ),
+        Effect.mapError(fileFailure("create", relPath)),
+      );
+    });
+
+  const claimFolder = Effect.fn("Workspace.claimFolder")((relPath: string) =>
+    claimed(relPath, (full) => fs.makeDirectory(full)),
+  );
+
+  const claimFile = Effect.fn("Workspace.claimFile")((relPath: string) =>
+    claimed(relPath, (full) => fs.writeFile(full, new Uint8Array(), { flag: "wx" })),
+  );
+
   const copy = Effect.fn("Workspace.copy")(function* (fromRel: string, toRel: string) {
     const from = yield* abs(fromRel);
     const to = yield* abs(toRel);
@@ -249,7 +280,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   const importFile = Effect.fn("Workspace.importFile")(function* (source: string, toRel: string) {
     const to = yield* abs(toRel);
     yield* ensureParent(to, toRel);
-    yield* fs.copyFile(source, to).pipe(Effect.mapError(fileFailure(`copy ${source} to`, toRel)));
+    yield* replace(toRel, to, (temp) => fs.copyFile(source, temp));
   });
 
   const statFull = (full: string, relPath: string) =>
@@ -372,6 +403,8 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     readYaml,
     writeYaml,
     mkdir,
+    claimFolder,
+    claimFile,
     copy,
     copyTree,
     importFile,
