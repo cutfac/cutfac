@@ -17,7 +17,7 @@ import {
   sampleTimes,
   sheetArgs,
 } from "../src/core/review.ts";
-import { SafeZone } from "../src/core/schema.ts";
+import { SafeZone } from "../src/core/reviewSchema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

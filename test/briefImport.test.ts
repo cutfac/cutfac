@@ -6,7 +6,7 @@ import type { McpLaunch } from "../src/core/agents.ts";
 import { ALLOW_RULES, freshPrompt, turnMessage } from "../src/core/importPrompts.ts";
 import { claudeImportFlags } from "../src/core/importRun.ts";
 import { createImport } from "../src/core/imports.ts";
-import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
+import type { ImportDoc, ImportTurn } from "../src/core/importSchema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

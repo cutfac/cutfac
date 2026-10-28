@@ -48,6 +48,7 @@ import {
   importFiles,
   listImports,
 } from "../core/imports.ts";
+import { IMPORT_KINDS } from "../core/importSchema.ts";
 import {
   type Item,
   addFeedback,
@@ -85,7 +86,6 @@ import {
   AgentName,
   type AgentPick,
   FeedbackInput,
-  IMPORT_KINDS,
   ItemPatch,
   ModelSettings,
 } from "../core/schema.ts";

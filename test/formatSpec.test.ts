@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ConfigProvider, Effect, FileSystem, Schema } from "effect";
 
 import { InvalidRequest } from "../src/core/errors.ts";
+import { FormatDoc } from "../src/core/formatSchema.ts";
 import {
   checkFormat,
   formatStatuses,
@@ -13,7 +14,6 @@ import {
 } from "../src/core/formatSpec.ts";
 import { createItem } from "../src/core/items.ts";
 import { formatNotices, listFormats, readFormats, saveFormat } from "../src/core/library.ts";
-import { FormatDoc } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { it as pure, testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

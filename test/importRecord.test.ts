@@ -12,7 +12,7 @@ import {
   listImports,
   settleInstalls,
 } from "../src/core/imports.ts";
-import type { ImportTurn } from "../src/core/schema.ts";
+import type { ImportTurn } from "../src/core/importSchema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

@@ -32,12 +32,12 @@ import {
   saveImportSession,
   settleInstalls,
 } from "./imports.ts";
+import type { ImportDoc } from "./importSchema.ts";
 import { shortId } from "./items.ts";
 import { type CodexListed, codexServers } from "./mcpServers.ts";
 import { mediaKind } from "./media.ts";
 import { type ReferenceUpload, addReferences } from "./references.ts";
 import { type Emit, type RunSpec, type Runner, type Runs, runsLayer } from "./runRegistry.ts";
-import type { ImportDoc } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 import { requireTrust } from "./workspaceTrust.ts";
 

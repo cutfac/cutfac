@@ -4,7 +4,7 @@ import { Option } from "effect";
 
 import { ALLOW_RULES, freshPrompt, languageName, turnMessage } from "../src/core/importPrompts.ts";
 import { allowedFromStart } from "../src/core/imports.ts";
-import type { ImportDoc, ImportTurn } from "../src/core/schema.ts";
+import type { ImportDoc, ImportTurn } from "../src/core/importSchema.ts";
 
 const AT = "2026-10-13T00:00:00.000Z";
 

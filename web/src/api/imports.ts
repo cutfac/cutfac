@@ -1,10 +1,11 @@
 import { Schema } from "effect";
 
-import { type AgentName, ImportDoc } from "../../../src/core/schema.ts";
+import { ImportDoc } from "../../../src/core/importSchema.ts";
+import { type AgentName } from "../../../src/core/schema.ts";
 import { q, request, send, uploadForm, type Upload } from "./client.ts";
 import { Reference } from "./items.ts";
 
-export { ImportDoc, ImportTurn } from "../../../src/core/schema.ts";
+export { ImportDoc, ImportTurn } from "../../../src/core/importSchema.ts";
 
 export const ImportSummary = Schema.Struct({
   id: Schema.String,

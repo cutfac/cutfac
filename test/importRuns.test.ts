@@ -7,9 +7,9 @@ import type { McpLaunch } from "../src/core/agents.ts";
 import { ALLOW_RULES } from "../src/core/importPrompts.ts";
 import { ImportRuns, startImport, startTurn, stopAndCloseImport } from "../src/core/importRun.ts";
 import { getImport, importFiles, listImports } from "../src/core/imports.ts";
+import type { ImportTurn } from "../src/core/importSchema.ts";
 import { codexServers } from "../src/core/mcpServers.ts";
 import { listReferences } from "../src/core/references.ts";
-import type { ImportTurn } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import {

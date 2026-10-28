@@ -1,6 +1,7 @@
 import { Effect, Option, Path } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
+import { LearnedDoc, type PreprocessResult } from "./learnedSchema.ts";
 import { isSimpleId, readOptionalText } from "./library.ts";
 import {
   detectSource,
@@ -12,7 +13,7 @@ import {
 } from "./listings.ts";
 import { extension, mediaKind, probe } from "./media.ts";
 import { downloadVideo, preprocessVideo, readPreprocess } from "./preprocess.ts";
-import { type ItemSource, LearnedDoc, type PreprocessResult } from "./schema.ts";
+import { type ItemSource } from "./schema.ts";
 import { cleanPath, cleanUrl } from "./sources.ts";
 import { isVideoLink } from "./videoLinks.ts";
 import { Workspace, type WorkspaceService, foldersWith, nowIso, slugify } from "./workspace.ts";

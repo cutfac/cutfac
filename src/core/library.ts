@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
+import { FormatDoc } from "./formatSchema.ts";
 import { carriesSecret } from "./links.ts";
-import { FormatDoc } from "./schema.ts";
 import { Workspace, type WorkspaceService, foldersWith, slugify } from "./workspace.ts";
 
 export const FORMAT_FILE = "format.yaml";

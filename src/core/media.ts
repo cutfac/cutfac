@@ -1,8 +1,9 @@
 import { Array, Effect, Match, Option, Schema } from "effect";
 
 import { CommandFailed } from "./errors.ts";
+import { type FormatDoc } from "./formatSchema.ts";
 import { run, runChecked, tail } from "./process.ts";
-import { ASPECTS, type Aspect, type FormatDoc } from "./schema.ts";
+import { ASPECTS, type Aspect } from "./schema.ts";
 import type { Entry } from "./workspace.ts";
 
 const VIDEO_EXT = new Set(["mp4", "mov", "webm", "m4v"]);

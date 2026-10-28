@@ -19,10 +19,12 @@ import { BRIEF_FILE, briefNotices, readBrief } from "../core/brief.ts";
 import { movedRuleNotices } from "../core/claudeRules.ts";
 import { resolveEdit } from "../core/edits.ts";
 import { awaitsDecision, saveVariant } from "../core/editVariants.ts";
+import { FormatDoc } from "../core/formatSchema.ts";
 import { checkFormat } from "../core/formatSpec.ts";
 import { updateDetails } from "../core/history.ts";
 import { getItem, listItems, openFeedback } from "../core/items.ts";
 import { ABOUT_FILE, learn, learnInputOf, learnNotices, listLearned } from "../core/learn.ts";
+import { LearnedDoc, LearnedKind, PreprocessResult } from "../core/learnedSchema.ts";
 import { formatNotices, getFormat, readFormats, saveFormat } from "../core/library.ts";
 import { mcpNotices } from "../core/mcpApprovals.ts";
 import { itemReferences, listReferences } from "../core/references.ts";
@@ -33,17 +35,13 @@ import {
   reviewChecklist,
   reviewMedia,
 } from "../core/review.ts";
+import { SafeZone } from "../core/reviewSchema.ts";
 import {
   Aspect,
   Feedback,
-  FormatDoc,
   ItemDoc,
   ItemPatch,
   ItemStatus,
-  LearnedDoc,
-  LearnedKind,
-  PreprocessResult,
-  SafeZone,
   Variant,
   WorkspaceConfig,
 } from "../core/schema.ts";

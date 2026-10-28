@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect, Schema } from "effect";
 
 import { InvalidRequest, NotFound, WorkspaceError } from "../src/core/errors.ts";
+import { DetailValues } from "../src/core/historySchema.ts";
 import {
   addFeedback,
   createItem,
@@ -13,7 +14,7 @@ import {
   updateItem,
   upgradeItemDoc,
 } from "../src/core/items.ts";
-import { currentStatus, DetailValues } from "../src/core/schema.ts";
+import { currentStatus } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

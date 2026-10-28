@@ -1,9 +1,9 @@
 import { Duration, Effect, Option } from "effect";
 
 import { InvalidRequest } from "./errors.ts";
+import type { FormatDoc, InputField } from "./formatSchema.ts";
 import { FORMAT_FILE, type Format, getFormat, isSimpleId } from "./library.ts";
 import { run, which } from "./process.ts";
-import type { FormatDoc, InputField } from "./schema.ts";
 import { SKILL_FOLDERS } from "./skill.ts";
 import { Workspace, foldersWith } from "./workspace.ts";
 

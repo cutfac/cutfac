@@ -2,6 +2,15 @@ import { Effect, type Types } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
 import {
+  DETAIL_FIELDS,
+  type DetailField,
+  type DetailValues,
+  HistoryDoc,
+  type HistoryEntry,
+  type MediaCause,
+  type MediaVersion,
+} from "./historySchema.ts";
+import {
   type Decision,
   type Item,
   getItem,
@@ -11,19 +20,7 @@ import {
   withDecision,
 } from "./items.ts";
 import { extension } from "./media.ts";
-import {
-  DETAIL_FIELDS,
-  type DetailField,
-  type DetailValues,
-  type Feedback,
-  HistoryDoc,
-  type HistoryEntry,
-  type ItemDoc,
-  type ItemPatch,
-  type ItemStatus,
-  type MediaCause,
-  type MediaVersion,
-} from "./schema.ts";
+import { type Feedback, type ItemDoc, type ItemPatch, type ItemStatus } from "./schema.ts";
 import { Workspace, nowIso } from "./workspace.ts";
 
 /** Item subfolder with history.yaml and the media versions that are not edit snapshots. */

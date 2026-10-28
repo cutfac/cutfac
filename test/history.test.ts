@@ -15,8 +15,8 @@ import {
   undo,
   updateDetails,
 } from "../src/core/history.ts";
+import type { HistoryDoc, HistoryEntry } from "../src/core/historySchema.ts";
 import { createItem, getItem, updateItem } from "../src/core/items.ts";
-import type { HistoryDoc, HistoryEntry } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

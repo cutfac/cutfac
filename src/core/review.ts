@@ -3,7 +3,7 @@ import { Effect, Option } from "effect";
 import { InvalidRequest, NotFound } from "./errors.ts";
 import { type Item, getItem } from "./items.ts";
 import { aspectOf, ffmpeg, probe, sceneCuts } from "./media.ts";
-import { ReviewDoc, type ReviewShot, type SafeZone } from "./schema.ts";
+import { ReviewDoc, type ReviewShot, type SafeZone } from "./reviewSchema.ts";
 import { Workspace, foldersWith, nowIso } from "./workspace.ts";
 
 /** Item subfolder with one review folder per video, named after the video. */

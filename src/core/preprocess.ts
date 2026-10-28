@@ -1,10 +1,10 @@
 import { Effect, Option, Schema } from "effect";
 
 import { CommandFailed } from "./errors.ts";
+import { PreprocessResult } from "./learnedSchema.ts";
 import { readOptionalText } from "./library.ts";
 import { mediaKind, probe, sceneCuts } from "./media.ts";
 import { run, tail, which } from "./process.ts";
-import { PreprocessResult } from "./schema.ts";
 import { Workspace } from "./workspace.ts";
 
 export const PREPROCESS_FILE = "preprocess.json";

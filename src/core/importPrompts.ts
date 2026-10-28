@@ -1,7 +1,7 @@
 import { Option } from "effect";
 
 import { allowedFromStart } from "./imports.ts";
-import type { ImportDoc, ImportTurn } from "./schema.ts";
+import type { ImportDoc, ImportTurn } from "./importSchema.ts";
 
 // What the import's agent is told: the first message, each turn after it, and the conversation
 // so far when its session is gone.

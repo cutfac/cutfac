@@ -9,11 +9,12 @@ import { approveEdit, requestEdit, resolveEdit, restoreBefore } from "../src/cor
 import { awaitsDecision } from "../src/core/editVariants.ts";
 import { beginEdit, cancelWaiting, rewordWaiting, waitingLine } from "../src/core/editWaiting.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
+import { FormatDoc } from "../src/core/formatSchema.ts";
 import { addFeedback, createItem, getItem, resolveFeedback } from "../src/core/items.ts";
 import { saveFormat } from "../src/core/library.ts";
 import { runChecked } from "../src/core/process.ts";
 import { type Runner, makeRunRegistry } from "../src/core/runRegistry.ts";
-import { type AgentPick, FormatDoc } from "../src/core/schema.ts";
+import { type AgentPick } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { eventually, testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";

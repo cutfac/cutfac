@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Effect, Option, Schema } from "effect";
 
 import { InvalidRequest } from "../src/core/errors.ts";
+import { FormatDoc } from "../src/core/formatSchema.ts";
 import { createItem, importMedia } from "../src/core/items.ts";
 import {
   aspectFromName,
@@ -15,7 +16,6 @@ import {
 } from "../src/core/media.ts";
 import { frameTimes } from "../src/core/preprocess.ts";
 import { runChecked } from "../src/core/process.ts";
-import { FormatDoc } from "../src/core/schema.ts";
 import { verifyItem } from "../src/core/verify.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";

@@ -1,18 +1,12 @@
 import { Effect, Option } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
+import { ImportDoc, type ImportTurn, IMPORT_KINDS, IMPORT_TURN_KINDS } from "./importSchema.ts";
 import { shortId } from "./items.ts";
 import { FORMAT_FILE } from "./library.ts";
 import { carriesSecret } from "./links.ts";
 import type { ReferenceFolder } from "./references.ts";
-import {
-  type AgentName,
-  type AgentRun,
-  ImportDoc,
-  type ImportTurn,
-  IMPORT_KINDS,
-  IMPORT_TURN_KINDS,
-} from "./schema.ts";
+import { type AgentName, type AgentRun } from "./schema.ts";
 import { installedSkills, mirrorSkills } from "./skill.ts";
 import { STATE_DIR, Workspace, foldersWith, nowIso } from "./workspace.ts";
 

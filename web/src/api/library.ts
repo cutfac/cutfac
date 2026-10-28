@@ -1,9 +1,12 @@
 import { Schema } from "effect";
 
-import { FormatDoc, LearnedDoc } from "../../../src/core/schema.ts";
+import { FormatDoc } from "../../../src/core/formatSchema.ts";
+import { LearnedDoc } from "../../../src/core/learnedSchema.ts";
 import { q, request, send } from "./client.ts";
 
-export { InputChoice, InputField, LearnedKind } from "../../../src/core/schema.ts";
+export { InputChoice, InputField } from "../../../src/core/formatSchema.ts";
+
+export { LearnedKind } from "../../../src/core/learnedSchema.ts";
 
 export const Format = Schema.Struct({
   id: Schema.String,

@@ -1,37 +1,41 @@
 import { Schema } from "effect";
 
+import { HistoryDoc } from "../../../src/core/historySchema.ts";
+import { ReviewDoc } from "../../../src/core/reviewSchema.ts";
 import {
   AgentChoice,
   type AgentName,
   Feedback,
-  HistoryDoc,
   ItemDoc,
   type ItemPatch,
   ItemStatus,
   type ModelSettings,
   type Region,
-  ReviewDoc,
 } from "../../../src/core/schema.ts";
 import { RenderState } from "../lib/render.ts";
 import { Ok, q, request, send, uploadForm, type Upload } from "./client.ts";
 
 export {
-  DetailsChange,
   Feedback,
-  HistoryDoc,
-  HistoryEntry,
   ItemPatch,
   ItemSource,
-  MediaChange,
-  MediaVersion,
   Region,
-  SafeZone,
   Variant,
   ITEM_STATUSES as STATUSES,
   ItemStatus as Status,
+} from "../../../src/core/schema.ts";
+
+export {
+  DetailsChange,
+  HistoryDoc,
+  HistoryEntry,
+  MediaChange,
+  MediaVersion,
   type DetailField,
   type MediaCause,
-} from "../../../src/core/schema.ts";
+} from "../../../src/core/historySchema.ts";
+
+export { SafeZone } from "../../../src/core/reviewSchema.ts";
 
 export const MediaKind = Schema.Literals(["video", "image"]);
 
