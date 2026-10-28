@@ -25,8 +25,8 @@ type Step = Exclude<OnboardingStep, "welcome">;
 const STEPS = ["agent", "make", "access", "folder"] as const satisfies ReadonlyArray<Step>;
 
 /** Each step opens the next by its page, so the app keeps where the user is if they quit. */
-const go = (step: Step) => {
-  location.hash = href("welcome", step);
+const go = (step: Step | "welcome") => {
+  location.hash = step === "welcome" ? href("welcome") : href("welcome", step);
 };
 
 /**
@@ -47,7 +47,7 @@ export function Welcome({
   if (current === "agent") {
     return (
       <OnboardingFrame step={1}>
-        <AgentStep onboarding={onboarding} onDone={() => go("make")} />
+        <AgentStep onboarding={onboarding} onDone={() => go("make")} onBack={() => go("welcome")} />
       </OnboardingFrame>
     );
   }
