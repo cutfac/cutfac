@@ -67,7 +67,7 @@ export function BriefQuestions({
 }) {
   const { whatToMake: t, brief: b } = useMessages().start;
   const [brief, setBrief] = useState(initial.brief);
-  // The website step takes one site, in its field; folders and any older extra links stay as they were.
+  // The website and folder parts take one each; the site is edited in its field, so it lives there.
   const site = initial.sources.find(isLink);
   const [sources, setSources] = useState<string[]>(initial.sources.filter((s) => s !== site));
   const [typed, setTyped] = useState(site === undefined ? "" : siteLabel(site));
@@ -116,8 +116,11 @@ export function BriefQuestions({
   const own = brief.purpose === "own";
   const parts = { value: brief, onChange: setBrief, disabled: busy };
 
+  // Focus waits on Next once a folder is picked, so Enter moves on as it does from the website field.
+  const nextButton = useRef<HTMLButtonElement>(null);
+
   const next = (label: string, ready = true) => (
-    <Button size="lg" disabled={!ready} onClick={() => go(1)}>
+    <Button ref={nextButton} size="lg" disabled={!ready} onClick={() => go(1)}>
       {label}
       <ArrowRightIcon data-icon="inline-end" />
     </Button>
@@ -150,7 +153,18 @@ export function BriefQuestions({
     folder: {
       title: t.material.folder.title,
       body: t.material.folder.body,
-      field: <FolderPicker sources={sources} onSources={setSources} />,
+      field: (
+        <FolderPicker
+          folder={sources.find((source) => !isLink(source))}
+          // Another folder takes the place of the one there; links stay as they were.
+          onFolder={(path) => {
+            setSources([...sources.filter(isLink), ...(path === undefined ? [] : [path])]);
+
+            // After the folder dialog hands focus back to the window.
+            if (path !== undefined) requestAnimationFrame(() => nextButton.current?.focus());
+          }}
+        />
+      ),
       primary: next(folders ? t.next : t.skipPart),
     },
     platforms: {

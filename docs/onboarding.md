@@ -147,8 +147,8 @@ writes the template from that. So step 3 asks, a part at a time and in this orde
 - **Their material**, optional: a website, or local folders to read from (a brand kit, past
   videos, a product folder). A website and a folder are each a part of their own, so each screen
   asks for one thing; the browser, which can't pick a folder, asks for the website alone. The
-  website part takes one site in a single field, as most people have one to point at; more can be
-  added later from the Brief page. Start
+  website part takes one site in a single field and the folder part one folder, as most people have
+  one of each to point at; more can be added later from the Brief page. Start
   learns each one into the workspace with the Learn the board already has, into `about.md`, so every
   later run reads it too. A folder is read where it is, not copied.
 - **Platforms**: TikTok, YouTube Shorts, Instagram Reels, any of them, each with its logo, or Other
