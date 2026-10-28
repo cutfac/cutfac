@@ -4,7 +4,7 @@ export const editorEn = {
   item: {
     openError: "Cannot open this video",
     /** Saves a copy of the finished file shown; the agent renders it with every edit. */
-    download: "Download",
+    download: "Export",
     imageHint: "Drag on the image to mark the area an edit is about.",
     chat: "Chat",
     checks: "Checks",
