@@ -1,7 +1,8 @@
-import { Config, Context, Effect, Layer, Option, Path, Schema } from "effect";
+import { Context, Effect, Layer, Option, Path, Schema } from "effect";
 
 import { AppData, appendAppRecord } from "./core/appData.ts";
 import { BUNDLED } from "./core/build.ts";
+import { envVar } from "./core/env.ts";
 import { type NewItemInput, createItem } from "./core/items.ts";
 import { nowIso } from "./core/time.ts";
 import { Workspace } from "./core/workspace.ts";
@@ -30,9 +31,6 @@ export const DesktopData = Context.Reference<Option.Option<string>>("cutfac/Desk
   defaultValue: () => Option.none(),
 });
 
-const env = (name: string) =>
-  Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none<string>));
-
 /**
  * The app's folder in Application Support when this is the binary the desktop app bundles. From
  * source, CUTFAC_DESKTOP_DATA names a folder to try the free version with.
@@ -40,10 +38,10 @@ const env = (name: string) =>
 export const desktopData = Layer.effect(
   DesktopData,
   Effect.gen(function* () {
-    if (!BUNDLED) return yield* env("CUTFAC_DESKTOP_DATA");
+    if (!BUNDLED) return yield* envVar("CUTFAC_DESKTOP_DATA");
     const path = yield* Path.Path;
 
-    return Option.map(yield* env("HOME"), (home) =>
+    return Option.map(yield* envVar("HOME"), (home) =>
       path.join(home, "Library", "Application Support", "Cutfac"),
     );
   }),
@@ -60,17 +58,17 @@ export const appData = Layer.effect(
 
     if (Option.isSome(desktop)) return desktop;
     const path = yield* Path.Path;
-    const home = yield* env("HOME");
+    const home = yield* envVar("HOME");
 
     if (process.platform === "win32") {
-      return Option.map(yield* env("APPDATA"), (dir) => path.join(dir, "Cutfac"));
+      return Option.map(yield* envVar("APPDATA"), (dir) => path.join(dir, "Cutfac"));
     }
 
     if (process.platform === "darwin") {
       return Option.map(home, (dir) => path.join(dir, "Library", "Application Support", "Cutfac"));
     }
 
-    const config = Option.orElse(yield* env("XDG_CONFIG_HOME"), () =>
+    const config = Option.orElse(yield* envVar("XDG_CONFIG_HOME"), () =>
       Option.map(home, (dir) => path.join(dir, ".config")),
     );
 

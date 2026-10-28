@@ -1,7 +1,8 @@
-import { Config, Effect, FileSystem, Option, Path, Predicate, Stream } from "effect";
+import { Effect, FileSystem, Option, Path, Predicate, Stream } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import { envVar } from "./env.ts";
 import { CommandFailed } from "./errors.ts";
 
 export interface RunOptions {
@@ -17,8 +18,6 @@ export interface CommandResult {
   readonly stdout: string;
   readonly stderr: string;
 }
-
-const SearchPath = Config.option(Config.String("PATH"));
 
 const ANYONE_MAY_RUN = 0o111;
 
@@ -49,7 +48,7 @@ export const whichIn = (name: string, searchPath: string) =>
  * a test can point it at fake programs.
  */
 export const which = (name: string) =>
-  Effect.flatMap(Effect.orElseSucceed(SearchPath, Option.none), (PATH) =>
+  Effect.flatMap(envVar("PATH"), (PATH) =>
     whichIn(
       name,
       Option.getOrElse(PATH, () => ""),

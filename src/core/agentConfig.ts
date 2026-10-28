@@ -1,5 +1,6 @@
-import { Config, Effect, Option, Path, Schema } from "effect";
+import { Effect, Option, Path, Schema } from "effect";
 
+import { envVar } from "./env.ts";
 import { claudeModelName, codexConfigModel } from "./models.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -11,10 +12,6 @@ const ModelSetting = Schema.fromJsonString(
 );
 
 const decodeModelSetting = Schema.decodeUnknownOption(ModelSetting);
-
-/** The environment variable `name`, or none. */
-export const envVar = (name: string) =>
-  Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none));
 
 /** A file outside the workspace, or nothing when it is missing or unreadable. */
 const peek = (full: string) =>

@@ -1,5 +1,6 @@
-import { Config, Effect, Option, Path } from "effect";
+import { Effect, Option, Path } from "effect";
 
+import { envVar } from "./env.ts";
 import { InvalidRequest } from "./errors.ts";
 import { carriesSecret } from "./links.ts";
 import type { ItemSource } from "./schema.ts";
@@ -7,8 +8,6 @@ import { Workspace } from "./workspace.ts";
 
 /** Enough to point an item at what it builds on, few enough to list in every edit prompt. */
 export const MAX_SOURCES = 20;
-
-const Home = Config.option(Config.String("HOME"));
 
 /** What tells two sources apart: the link, or the path as stored. */
 const sourceKey = (source: ItemSource) => ("url" in source ? source.url : source.path);
@@ -50,7 +49,7 @@ export const cleanPath = Effect.fnUntraced(function* (text: string) {
   }
 
   if (given === "~" || given.startsWith("~/")) {
-    const home = yield* Effect.orElseSucceed(Home, Option.none);
+    const home = yield* envVar("HOME");
 
     if (Option.isNone(home)) {
       return yield* new InvalidRequest({ message: `Write the full path instead of ${given}` });

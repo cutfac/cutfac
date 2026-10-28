@@ -1,8 +1,8 @@
 import { Effect, Option, Schema } from "effect";
 
-import { envVar } from "./agentConfig.ts";
 import { AGENT_TITLE } from "./agentVersion.ts";
 import { peekAppStore, updateAppStore } from "./appStore.ts";
+import { envVar } from "./env.ts";
 import { Conflict, NotFound } from "./errors.ts";
 import { isJsonObject, setAt } from "./json.ts";
 import {

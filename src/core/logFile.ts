@@ -1,6 +1,5 @@
 import {
   Cause,
-  Config,
   Context,
   DateTime,
   Duration,
@@ -17,6 +16,7 @@ import {
 } from "effect";
 
 import { BUNDLED } from "./build.ts";
+import { envVar } from "./env.ts";
 
 // The desktop app's own log, which stays on this Mac. People can send it with their feedback.
 
@@ -62,12 +62,9 @@ export const LogDir = Context.Reference<Option.Option<string>>("cutfac/LogDir", 
   defaultValue: () => Option.none(),
 });
 
-const env = (name: string) =>
-  Config.option(Config.String(name)).pipe(Effect.orElseSucceed(Option.none<string>));
-
 /** Shows the home folder as `~` in text, as the log does, so what it holds says less of who. */
 export const homeScrubber = Effect.map(
-  env("HOME"),
+  envVar("HOME"),
   (home) => (text: string) =>
     Option.match(home, {
       onNone: () => text,
@@ -82,11 +79,13 @@ export const homeScrubber = Effect.map(
 export const logDir = Layer.effect(
   LogDir,
   Effect.gen(function* () {
-    if (!BUNDLED) return yield* env("CUTFAC_LOG_DIR");
+    if (!BUNDLED) return yield* envVar("CUTFAC_LOG_DIR");
 
     const path = yield* Path.Path;
 
-    return Option.map(yield* env("HOME"), (home) => path.join(home, "Library", "Logs", "Cutfac"));
+    return Option.map(yield* envVar("HOME"), (home) =>
+      path.join(home, "Library", "Logs", "Cutfac"),
+    );
   }),
 );
 
