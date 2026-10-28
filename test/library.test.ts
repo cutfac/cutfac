@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, FileSystem, Option, Path } from "effect";
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
 
 import {
   candidateNames,
   decodeWorkspaceName,
   listWorkspaces,
   prepareWorkspace,
+  MakingWorkspace,
   readingAgent,
   sameSource,
   WORKSPACES,
@@ -111,6 +112,16 @@ describe("the first workspace's reading", () => {
       ]),
     ).toBe("codex");
     expect(readingAgent([{ agent: "claude", state: "missing" }])).toBeUndefined();
+  });
+
+  test("the board asks for the first workspace with or without a picked agent", () => {
+    const decode = Schema.decodeUnknownSync(MakingWorkspace);
+
+    expect(decode({ name: "cutfac.com", agent: undefined })).toEqual({
+      name: "cutfac.com",
+      agent: undefined,
+    });
+    expect(decode({ name: "cutfac.com", agent: "codex" }).agent).toBe("codex");
   });
 
   test("the agent the user picked works the workspace, unless it isn't ready", () => {

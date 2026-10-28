@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
 
-import type { AgentName } from "../src/core/schema.ts";
+import { AgentName } from "../src/core/schema.ts";
 import { isWorkspaceRoot } from "../src/core/workspaceRoot.ts";
 import type { AgentSetup } from "../web/src/desktop.ts";
 
@@ -87,6 +87,15 @@ export const prepareWorkspace = Effect.fn("library.prepare")(function* (
   yield* fs.makeDirectory(target, { recursive: true });
 
   return { kind: "ready", path: target } as const;
+});
+
+/**
+ * The first workspace the board asks for: its name, checked where it is used, and the agent the
+ * user picked, which the bridge sends as undefined when there is none.
+ */
+export const MakingWorkspace = Schema.Struct({
+  name: Schema.Unknown,
+  agent: Schema.optional(AgentName),
 });
 
 /** How many names it tries, `name`, `name 2` and on, before giving up on a free one. */

@@ -12,7 +12,7 @@ import {
 
 import type { AgentSetup } from "../src/core/agentReadiness.ts";
 import { AgentName } from "../src/core/schema.ts";
-import type { AgentFix, CreateFailure, Folder, Permission } from "../web/src/desktop.ts";
+import type { AgentFix, CreateFailure, Folder, Permission, Sharing } from "../web/src/desktop.ts";
 import { KnownPermission } from "./accessWatch.ts";
 import { AgentFixes } from "./agents.ts";
 import { FirstWorkspace, FirstWorkspaceFailed } from "./firstWorkspace.ts";
@@ -38,7 +38,7 @@ import {
 } from "./ipc.ts";
 import { type Decodable, ANY_INPUT } from "./ipcCall.ts";
 import { answer as answerCall } from "./ipcHandlers.ts";
-import { decodeWorkspaceName, WORKSPACES } from "./library.ts";
+import { decodeWorkspaceName, MakingWorkspace, WORKSPACES } from "./library.ts";
 import { runNow, type AppServices } from "./runtime.ts";
 import { clearDraft, loadDraft, loadLibrary, OnboardingDraft, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
@@ -46,9 +46,6 @@ import { Install } from "./sidecar.ts";
 import { appBadge, hasPermission, SystemAccess, systemVersion } from "./systemAccess.ts";
 
 const Sample = Schema.Struct({ title: Schema.String, body: Schema.String });
-
-/** The first workspace to make: its name, checked where it is used, and the agent picked for it. */
-const Making = Schema.Struct({ name: Schema.Unknown, agent: Schema.optionalKey(AgentName) });
 
 /** A folder as the workspace step shows it, from the home folder when it is inside it. */
 function folder(target: string, home: string): Folder {
@@ -68,6 +65,8 @@ export interface OnboardingChecks {
     onLine: (line: string) => Effect.Effect<void>,
   ): Effect.Effect<AgentFix, Failure, AppServices>;
   hasPermission(permission: Permission): Effect.Effect<boolean, never, AppServices>;
+  /** Whether this build can share with the Cutfac team, and what was answered before. */
+  readonly sharing: Effect.Effect<Sharing, Failure, AppServices>;
   /** The app's folder for the first workspace, and a name for it when the build has one. */
   readonly suggestion: Effect.Effect<
     { readonly library: string; readonly name: Option.Option<string> },
@@ -80,6 +79,7 @@ export const macChecks: OnboardingChecks = {
   agentSetups: Effect.flatMap(AgentFixes, (agents) => agents.check),
   fixAgent: (agent, onLine) => Effect.flatMap(AgentFixes, (agents) => agents.fix(agent, onLine)),
   hasPermission,
+  sharing: sharingChoice,
   suggestion: Effect.map(loadLibrary, (library) => ({ library, name: Option.none() })),
 };
 
@@ -164,7 +164,7 @@ export function handleOnboarding(host: OnboardingHost): void {
   answer(DRAFT_CHANNEL, () => Effect.map(loadDraft, Option.getOrUndefined));
   answerWith(SAVE_DRAFT_CHANNEL, OnboardingDraft, "draft", saveDraft);
   answer(CLEAR_DRAFT_CHANNEL, () => clearDraft);
-  answer(SHARING_CHANNEL, () => sharingChoice);
+  answer(SHARING_CHANNEL, () => checks.sharing);
   answer(SYSTEM_VERSION_CHANNEL, () => systemVersion);
   answerWith(PERMISSION_CHANNEL, KnownPermission, "permission", checks.hasPermission);
   answerWith(ASK_NOTIFICATIONS_CHANNEL, Sample, "notification", (sample) =>
@@ -196,7 +196,7 @@ export function handleOnboarding(host: OnboardingHost): void {
   });
   answer(APP_ICON_CHANNEL, () => appBadge);
   // It runs while the user goes on; the last step waits for it, and tries again if it failed.
-  answerWith(START_WORKSPACE_CHANNEL, Making, "workspace", ({ name, agent }) =>
+  answerWith(START_WORKSPACE_CHANNEL, MakingWorkspace, "workspace", ({ name, agent }) =>
     Effect.asVoid(
       Effect.forkDetach(
         Effect.ignore(start(decodeWorkspaceName(name), Option.fromUndefinedOr(agent)), {
@@ -222,7 +222,7 @@ export function handleOnboarding(host: OnboardingHost): void {
       );
     }),
   );
-  answerWith(CREATE_WORKSPACE_CHANNEL, Making, "workspace", ({ name, agent }) =>
+  answerWith(CREATE_WORKSPACE_CHANNEL, MakingWorkspace, "workspace", ({ name, agent }) =>
     createWorkspace(decodeWorkspaceName(name), Option.fromUndefinedOr(agent)),
   );
 }
