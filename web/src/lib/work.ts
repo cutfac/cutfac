@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import type { Feedback, ItemSummary } from "../api.ts";
 import type { Attention } from "../desktop.ts";
 import { renderShare, type RenderState } from "./render.ts";
@@ -32,7 +34,7 @@ export type ItemWork =
   | { readonly kind: "quiet" };
 
 const runOf = (item: ItemSummary, feedback: Feedback) =>
-  runView(feedback.run, undefined, item.running);
+  runView(feedback.run, Option.none(), item.running);
 
 /** The request the item's agent works on, when the board started the run. */
 const atWork = (item: ItemSummary) => {
@@ -47,7 +49,7 @@ const halted = (item: ItemSummary, feedback: Feedback) => {
   return (
     feedback.status === "open" &&
     feedback.decision === undefined &&
-    (status === "failed" || status === "stopped")
+    Option.exists(status, (ended) => ended === "failed" || ended === "stopped")
   );
 };
 

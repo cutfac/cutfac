@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ArrowUpIcon, LayersIcon, SquareIcon, XIcon } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { toast } from "sonner";
@@ -404,8 +405,8 @@ export function Composer({
         </div>
         {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
         <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
-        {status === undefined ? null : (
-          <OutdatedAgentNote status={status} className="px-1 text-xs text-muted-foreground" />
+        {Option.isNone(status) ? null : (
+          <OutdatedAgentNote status={status.value} className="px-1 text-xs text-muted-foreground" />
         )}
       </div>
     </Dropzone>

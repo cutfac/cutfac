@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ArrowLeftIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,7 +18,7 @@ import { href } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { EDIT_KEYS, type EditCommand } from "../../lib/edit-commands.ts";
 import { redoable, undoable } from "../../lib/history.ts";
-import { agentLabel } from "../../lib/models.ts";
+import { agentTitle } from "../../lib/models.ts";
 import type { LiveRun } from "../../lib/run.ts";
 import { Hint, keepFocus } from "./hint.tsx";
 
@@ -57,12 +58,12 @@ export function Toolbar({
       {running && asking !== undefined ? (
         <Badge variant="outline">
           <span className="size-1.5 rounded-full bg-selection" />
-          {t.item.asking(agentLabel(agent) ?? t.chat.agent, asking === "question")}
+          {t.item.asking(agentTitle(Option.fromUndefinedOr(agent), t), asking === "question")}
         </Badge>
       ) : running ? (
         <Badge variant="secondary">
           <Spinner data-icon="inline-start" />
-          {t.item.editing(agentLabel(agent) ?? t.chat.agent)}
+          {t.item.editing(agentTitle(Option.fromUndefinedOr(agent), t))}
         </Badge>
       ) : null}
       <div className="ml-auto flex shrink-0 items-center gap-1">

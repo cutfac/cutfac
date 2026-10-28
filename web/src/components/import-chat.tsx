@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import {
   ArrowUpIcon,
   LayoutTemplateIcon,
@@ -232,7 +233,7 @@ interface TurnProps {
 function Turn({ detail, turn, live, onStop, children }: TurnProps) {
   const view = turnRun(detail, turn, live);
   // The question or the list the reply ends with, which the first launch draws, read as text here.
-  const run = view.reply === undefined ? view : { ...view, reply: replyMarkdown(view.reply) };
+  const run = { ...view, reply: Option.map(view.reply, replyMarkdown) };
   const t = useMessages();
   const locale = useLocale();
 
@@ -259,10 +260,10 @@ function Turn({ detail, turn, live, onStop, children }: TurnProps) {
           <MessageFooter>{clockTime(turn.at, locale)}</MessageFooter>
         </MessageContent>
       </Message>
-      {run.status === undefined && children === null ? null : (
+      {Option.isNone(run.status) && children === null ? null : (
         <Message>
           <MessageContent>
-            {run.status === undefined ? null : <RunReport run={run} onStop={onStop} />}
+            {Option.isNone(run.status) ? null : <RunReport run={run} onStop={onStop} />}
             {children}
           </MessageContent>
         </Message>

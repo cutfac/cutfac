@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import type {
   AgentName,
   AgentRun,
@@ -9,6 +11,7 @@ import type {
   RunMessage,
 } from "../api.ts";
 import type { Approval } from "../approvalsApi.ts";
+import type { NamedSettings } from "./models.ts";
 
 export type RunStep =
   | { readonly kind: "text"; readonly text: string }
@@ -152,37 +155,43 @@ export function sentRun(run: LiveRun, receipt: EditReceipt, settings: ModelSetti
 }
 
 /** The streamed run as a request shows it: its own, or the one it is on its way to start. */
-export function liveFor(run: LiveRun, feedback: Feedback): LiveRun | undefined {
-  if (run.subject === feedback.id) return run;
+export function liveFor(run: LiveRun, feedback: Feedback): Option.Option<LiveRun> {
+  if (run.subject === feedback.id) return Option.some(run);
 
   const { sending } = run;
 
-  if (sending === undefined || sending.before.includes(feedback.id)) return undefined;
+  if (sending === undefined || sending.before.includes(feedback.id)) return Option.none();
 
   // Lined up or already run: not the request on its way.
-  if (feedback.waiting !== undefined || feedback.run !== undefined) return undefined;
+  if (feedback.waiting !== undefined || feedback.run !== undefined) return Option.none();
 
-  return startedRun(feedback.id, sending.agent, sending);
+  return Option.some(startedRun(feedback.id, sending.agent, sending));
 }
 
 /** A finished run as the chat lays it out: the steps, then the reply under them. */
 export interface ClosedRun {
   readonly steps: ReadonlyArray<RunStep>;
-  readonly reply: string | undefined;
+  readonly reply: Option.Option<string>;
 }
 
 /**
  * Split the reply out of the steps. The last text step usually is the reply; it is dropped from
  * the steps rather than the reply hidden, so the reply still shows when the steps are folded away.
  */
-export function closingReply(steps: ReadonlyArray<RunStep>, reply: string | undefined): ClosedRun {
-  const text = reply?.trim();
+export function closingReply(
+  steps: ReadonlyArray<RunStep>,
+  reply: Option.Option<string>,
+): ClosedRun {
+  const text = Option.filter(
+    Option.map(reply, (said) => said.trim()),
+    (said) => said !== "",
+  );
 
-  if (text === undefined || text === "") return { steps, reply: undefined };
+  if (Option.isNone(text)) return { steps, reply: text };
 
   const index = steps.findLastIndex((step) => step.kind === "text");
   const last = steps[index];
-  const repeated = last?.kind === "text" && last.text.trim() === text;
+  const repeated = last?.kind === "text" && last.text.trim() === text.value;
 
   return { steps: repeated ? steps.toSpliced(index, 1) : steps, reply: text };
 }
@@ -264,20 +273,19 @@ export function toolCounts(tools: ReadonlyArray<ToolStep>): ToolCount[] {
   });
 }
 
-/** One run as a message shows it, streamed or saved. */
+/** One run as a message shows it, streamed or saved; a request not sent yet has no status. */
 export interface RunView {
-  readonly agent: AgentName | undefined;
-  readonly model: string | undefined;
-  readonly effort: string | undefined;
-  readonly status: AgentRun["status"] | undefined;
+  readonly agent: Option.Option<AgentName>;
+  readonly settings: NamedSettings;
+  readonly status: Option.Option<AgentRun["status"]>;
   readonly running: boolean;
   /** The agent is compacting the conversation right now. */
   readonly compacting: boolean;
   readonly steps: ReadonlyArray<RunStep>;
   /** What the agent waits on the user's answer to; only a streamed run asks. */
   readonly approvals: ReadonlyArray<Approval>;
-  readonly reply: string | undefined;
-  readonly error: string | undefined;
+  readonly reply: Option.Option<string>;
+  readonly error: Option.Option<string>;
 }
 
 /**
@@ -287,24 +295,25 @@ export interface RunView {
  */
 export function runView(
   saved: AgentRun | undefined,
-  live: LiveRun | undefined,
+  live: Option.Option<LiveRun>,
   alive: boolean,
 ): RunView {
-  const status = live?.status ?? saved?.status;
-  const interrupted = live === undefined && status === "running" && !alive;
+  const streamed = Option.getOrUndefined(live);
+  const status = streamed?.status ?? saved?.status;
+  const interrupted = streamed === undefined && status === "running" && !alive;
   const running = status === "running" && !interrupted;
+  // A run streamed without a model ran on the default, whatever an older saved run used.
+  const named = streamed ?? saved;
 
   return {
-    agent: live?.agent ?? saved?.agent,
-    // A run streamed without a model ran on the default, whatever an older saved run used.
-    model: live === undefined ? saved?.model : live.model,
-    effort: live === undefined ? saved?.effort : live.effort,
-    status: interrupted ? "stopped" : status,
+    agent: Option.fromUndefinedOr(streamed?.agent ?? saved?.agent),
+    settings: { model: named?.model, effort: named?.effort },
+    status: Option.fromUndefinedOr(interrupted ? "stopped" : status),
     running,
-    compacting: running && live?.compacting === true,
-    steps: live?.steps ?? (saved?.compacted === true ? [COMPACTION] : []),
-    approvals: running ? (live?.approvals ?? []) : [],
-    reply: live?.reply ?? saved?.reply,
-    error: live?.error ?? saved?.error,
+    compacting: running && streamed?.compacting === true,
+    steps: streamed?.steps ?? (saved?.compacted === true ? [COMPACTION] : []),
+    approvals: running ? (streamed?.approvals ?? []) : [],
+    reply: Option.fromUndefinedOr(streamed?.reply ?? saved?.reply),
+    error: Option.fromUndefinedOr(streamed?.error ?? saved?.error),
   };
 }

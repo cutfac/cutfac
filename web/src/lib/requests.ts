@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import type { Feedback, ItemDetail, Variant } from "../api.ts";
 import { liveFor, runView, type LiveRun, type RunView } from "./run.ts";
 
@@ -69,7 +71,7 @@ export const asksUser = (
   feedback.status === "open" &&
   feedback.decision === undefined &&
   !run.running &&
-  run.status === "done" &&
+  Option.contains(run.status, "done") &&
   !hasResult(item, feedback, false);
 
 /**
@@ -82,9 +84,9 @@ export function runOffer(
   run: Pick<RunView, "status" | "running">,
   result: boolean,
 ): "send" | "retry" | undefined {
-  if (!open || result || run.running || run.status === "done") return undefined;
+  if (!open || result || run.running || Option.contains(run.status, "done")) return undefined;
 
-  return run.status === undefined ? "send" : "retry";
+  return Option.isNone(run.status) ? "send" : "retry";
 }
 
 /** Where a request still in play stands, as its pin on the frame shows it. */
@@ -108,7 +110,9 @@ function pinState(item: ItemDetail, feedback: Feedback, live: LiveRun): PinState
 
   const open = feedback.status === "open" && feedback.decision === undefined;
 
-  if (open && (run.status === "failed" || run.status === "stopped")) return "halted";
+  if (open && Option.exists(run.status, (status) => status === "failed" || status === "stopped")) {
+    return "halted";
+  }
 
   return undefined;
 }

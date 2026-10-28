@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import type { AgentRun, AgentStatus, ImportSummary, ImportTurn } from "../web/src/api.ts";
 import {
   importAgent,
@@ -89,9 +91,9 @@ describe("import state", () => {
     // The run ended, but the import was loaded before the server let go of it.
     expect(importState(saved, done)).toBe("waiting");
     expect(turnRun(saved, saved.doc.turns[1]!, done)).toMatchObject({
-      status: "done",
+      status: Option.some("done"),
       running: false,
-      reply: "Ready.",
+      reply: Option.some("Ready."),
     });
 
     // A stream still on the turn before does not speak for the new one.
@@ -104,7 +106,7 @@ describe("import state", () => {
     });
 
     expect(turnRun(restarted, restarted.doc.turns[0]!, NO_RUN)).toMatchObject({
-      status: "stopped",
+      status: Option.some("stopped"),
       running: false,
     });
     expect(turnRun(restarted, restarted.doc.turns[1]!, NO_RUN).running).toBe(true);

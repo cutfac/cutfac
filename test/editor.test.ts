@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import type { AgentRun, Feedback, RunMessage } from "../web/src/api.ts";
 import { en } from "../web/src/i18n/en.tsx";
 import { ko } from "../web/src/i18n/ko.tsx";
@@ -151,23 +153,30 @@ describe("run transcript", () => {
     expect(asked.approvals).toEqual([ffmpeg, curl]);
     expect(fold([{ type: "approval-settled", id: "r1" }], asked).approvals).toEqual([curl]);
     expect(fold([{ type: "stopped" }], asked).approvals).toEqual([]);
-    expect(runView(undefined, asked, true).approvals).toHaveLength(2);
+    expect(runView(undefined, Option.some(asked), true).approvals).toHaveLength(2);
     // A run that streamed its end waits on nothing, whatever it asked.
-    expect(runView(undefined, { ...asked, status: "done" }, true).approvals).toEqual([]);
+    expect(runView(undefined, Option.some({ ...asked, status: "done" }), true).approvals).toEqual(
+      [],
+    );
   });
 
   test("moves a reply the last text step already said out of the steps", () => {
     const tool = { kind: "tool", name: "Bash" } as const;
 
-    expect(closingReply([tool, { kind: "text", text: "Done. " }, tool], "Done.")).toEqual({
+    const done = Option.some("Done.");
+
+    expect(closingReply([tool, { kind: "text", text: "Done. " }, tool], done)).toEqual({
       steps: [tool, tool],
-      reply: "Done.",
+      reply: done,
     });
-    expect(closingReply([{ kind: "text", text: "Looking." }], "Done.")).toEqual({
+    expect(closingReply([{ kind: "text", text: "Looking." }], done)).toEqual({
       steps: [{ kind: "text", text: "Looking." }],
-      reply: "Done.",
+      reply: done,
     });
-    expect(closingReply([tool], "  ")).toEqual({ steps: [tool], reply: undefined });
+    expect(closingReply([tool], Option.some("  "))).toEqual({
+      steps: [tool],
+      reply: Option.none(),
+    });
   });
 
   test("a run shows as streamed, else as saved", () => {
@@ -185,33 +194,38 @@ describe("run transcript", () => {
       { type: "text", text: "Looking." },
     ]);
 
-    expect(runView(saved, undefined, false)).toEqual({
-      agent: "codex",
-      model: "gpt-b",
-      effort: "high",
-      status: "done",
+    expect(runView(saved, Option.none(), false)).toEqual({
+      agent: Option.some("codex"),
+      settings: { model: "gpt-b", effort: "high" },
+      status: Option.some("done"),
       running: false,
       compacting: false,
       steps: [],
       approvals: [],
-      reply: "Saved reply.",
-      error: undefined,
+      reply: Option.some("Saved reply."),
+      error: Option.none(),
     });
-    expect(runView(saved, live, false)).toMatchObject({
-      agent: "claude",
-      status: "running",
+    expect(runView(saved, Option.some(live), false)).toMatchObject({
+      agent: Option.some("claude"),
+      status: Option.some("running"),
       running: true,
       steps: [{ kind: "text", text: "Looking." }],
-      reply: "Saved reply.",
+      reply: Option.some("Saved reply."),
     });
     // The streamed run picked no model, so the older run's does not show on it.
-    expect(runView(saved, live, false)).toMatchObject({ model: undefined, effort: undefined });
+    expect(runView(saved, Option.some(live), false).settings).toEqual({
+      model: undefined,
+      effort: undefined,
+    });
 
     const picked = fold([
       { type: "start", subject: "f1", agent: "claude", model: "opus", effort: "max" },
     ]);
 
-    expect(runView(saved, picked, false)).toMatchObject({ model: "opus", effort: "max" });
+    expect(runView(saved, Option.some(picked), false).settings).toEqual({
+      model: "opus",
+      effort: "max",
+    });
   });
 
   test("a saved run marked running with no agent behind it was cut off", () => {
@@ -221,10 +235,16 @@ describe("run transcript", () => {
       startedAt: "2026-10-12T00:00:00.000Z",
     };
 
-    expect(runView(saved, undefined, false)).toMatchObject({ status: "stopped", running: false });
-    expect(runView(saved, undefined, true)).toMatchObject({ status: "running", running: true });
-    expect(runView(undefined, undefined, false)).toMatchObject({
-      status: undefined,
+    expect(runView(saved, Option.none(), false)).toMatchObject({
+      status: Option.some("stopped"),
+      running: false,
+    });
+    expect(runView(saved, Option.none(), true)).toMatchObject({
+      status: Option.some("running"),
+      running: true,
+    });
+    expect(runView(undefined, Option.none(), false)).toMatchObject({
+      status: Option.none(),
       running: false,
     });
   });

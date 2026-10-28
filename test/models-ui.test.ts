@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import type { AgentStatus } from "../web/src/api.ts";
 import { en } from "../web/src/i18n/en.tsx";
 import { ko } from "../web/src/i18n/ko.tsx";
 import {
   effortsFor,
-  offersModels,
   pickedSettings,
   settingsLabels,
   usableSettings,
@@ -42,34 +43,31 @@ describe("picking a model and effort", () => {
     expect(effortsFor(codex, "gone")).toEqual(["low", "medium"]);
   });
 
-  test("an agent with nothing to pick shows no picker", () => {
-    expect(offersModels(codex)).toBe(true);
-    expect(offersModels(claude)).toBe(false);
-    expect(offersModels(undefined)).toBe(false);
-  });
-
   test("a request always names a model and effort the agent offers", () => {
-    expect(usableSettings(codex, { model: "gpt-a", effort: "ultra" })).toEqual({
+    expect(usableSettings(Option.some(codex), { model: "gpt-a", effort: "ultra" })).toEqual({
       model: "gpt-a",
       effort: "ultra",
     });
     // Moving to a model that does not take the effort moves the effort to one it does.
-    expect(usableSettings(codex, { model: "gpt-b", effort: "ultra" })).toEqual({
+    expect(usableSettings(Option.some(codex), { model: "gpt-b", effort: "ultra" })).toEqual({
       model: "gpt-b",
       effort: "medium",
     });
     // With nothing picked, or a model gone, the agent's first model runs with its own effort.
-    expect(usableSettings(codex, undefined)).toEqual({ model: "gpt-a", effort: "low" });
-    expect(usableSettings(codex, { model: "gone", effort: "medium" })).toEqual({
+    expect(usableSettings(Option.some(codex), undefined)).toEqual({
+      model: "gpt-a",
+      effort: "low",
+    });
+    expect(usableSettings(Option.some(codex), { model: "gone", effort: "medium" })).toEqual({
       model: "gpt-a",
       effort: "medium",
     });
-    expect(usableSettings(claude, { model: "opus" })).toEqual({});
-    expect(usableSettings(undefined, { model: "opus" })).toEqual({});
+    expect(usableSettings(Option.some(claude), { model: "opus" })).toEqual({});
+    expect(usableSettings(Option.none(), { model: "opus" })).toEqual({});
   });
 
   test("with nothing picked, the first listed model runs whatever the agent's config names", () => {
-    expect(usableSettings({ ...codex, defaultModel: "GPT-B" }, {})).toEqual({
+    expect(usableSettings(Option.some({ ...codex, defaultModel: "GPT-B" }), {})).toEqual({
       model: "gpt-a",
       effort: "low",
     });
@@ -85,16 +83,16 @@ describe("picking a model and effort", () => {
   });
 
   test("a run names its model as listed and its effort in the user's language", () => {
-    expect(settingsLabels(codex, { model: "gpt-a", effort: "high" }, en)).toEqual([
+    expect(settingsLabels(Option.some(codex), { model: "gpt-a", effort: "high" }, en)).toEqual([
       "GPT-A",
       "High",
     ]);
-    expect(settingsLabels(codex, { effort: "xhigh" }, ko)).toEqual(["매우 높음"]);
+    expect(settingsLabels(Option.some(codex), { effort: "xhigh" }, ko)).toEqual(["매우 높음"]);
     // A model or effort the board has no name for shows as the agent names it.
-    expect(settingsLabels(undefined, { model: "gpt-z", effort: "ultra" }, en)).toEqual([
+    expect(settingsLabels(Option.none(), { model: "gpt-z", effort: "ultra" }, en)).toEqual([
       "gpt-z",
       "ultra",
     ]);
-    expect(settingsLabels(codex, {}, en)).toEqual([]);
+    expect(settingsLabels(Option.some(codex), {}, en)).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ChevronDownIcon } from "lucide-react";
 import { Fragment } from "react";
 
@@ -132,7 +133,11 @@ function destinations(
   t: Messages,
 ): ReadonlyArray<OptionGroup<Destination>> {
   const agents = AGENTS.map(({ agent, label }): OptionGroup<Destination> => {
-    const models = statusOf(statuses, agent)?.models ?? [];
+    const models = Option.match(statusOf(statuses, agent), {
+      onNone: () => [],
+      onSome: (status) => status.models,
+    });
+
     const installed = agentInstalled(statuses, agent);
 
     if (!installed || models.length === 0) {
@@ -177,10 +182,13 @@ export function ModelPicker({ statuses, agent, picks, onAgent, onPick }: ModelPi
   const m = t.composer.models;
   const groups = destinations(statuses, agent, t);
   const runner = agent === "queue" ? undefined : agent;
-  const status = runner === undefined ? undefined : statusOf(statuses, runner);
+  const status = statusOf(statuses, agent);
   const settings = pickedSettings(statuses, picks, agent);
 
-  const efforts = status === undefined ? [] : effortsFor(status, settings.model);
+  const efforts = Option.match(status, {
+    onNone: () => [],
+    onSome: (known) => effortsFor(known, settings.model),
+  });
 
   function send(value: string) {
     const picked = groups
@@ -210,7 +218,7 @@ export function ModelPicker({ statuses, agent, picks, onAgent, onPick }: ModelPi
         bare
         onPick={send}
       />
-      {runner !== undefined && status !== undefined && efforts.length > 0 ? (
+      {runner !== undefined && Option.isSome(status) && efforts.length > 0 ? (
         <Setting
           label={m.effort}
           value={settings.effort}

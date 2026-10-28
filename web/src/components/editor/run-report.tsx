@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ChevronRightIcon, CircleStopIcon, WrenchIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -8,7 +9,7 @@ import { MessageHeader } from "@/components/ui/message";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-import type { AgentStatus } from "../../api.ts";
+import type { AgentName, AgentStatus } from "../../api.ts";
 import { useMessages, type Messages } from "../../i18n/index.ts";
 import { answerer } from "../../lib/models.ts";
 import {
@@ -57,13 +58,13 @@ export function RunReport({
   const { steps, reply } = closingReply(run.steps, run.reply);
   const t = useMessages();
   const rendering = useRenderLine();
-  const agent = t.setup.agents[run.agent ?? "claude"];
+  const agent = t.setup.agents[Option.getOrElse(run.agent, (): AgentName => "claude")];
 
   return (
     <>
-      <MessageHeader>{answerer(run.agent, run, statuses, t)}</MessageHeader>
+      <MessageHeader>{answerer(run.agent, run.settings, statuses, t)}</MessageHeader>
       {steps.length > 0 ? <Steps steps={steps} running={run.running} /> : null}
-      {reply === undefined ? null : <ClosingReply text={reply} onAnswer={onReply} />}
+      {Option.isSome(reply) ? <ClosingReply text={reply.value} onAnswer={onReply} /> : null}
       {onAnswer === undefined
         ? null
         : run.approvals.map((approval) => {
@@ -81,14 +82,16 @@ export function RunReport({
           </Button>
         </div>
       ) : null}
-      {run.status === "failed" ? (
+      {Option.contains(run.status, "failed") ? (
         <Bubble variant="destructive">
           <BubbleContent>
-            <p className="whitespace-pre-wrap">{run.error ?? t.chat.failed}</p>
+            <p className="whitespace-pre-wrap">
+              {Option.getOrElse(run.error, () => t.chat.failed)}
+            </p>
           </BubbleContent>
         </Bubble>
       ) : null}
-      {run.status === "stopped" ? (
+      {Option.contains(run.status, "stopped") ? (
         <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
       ) : null}
     </>

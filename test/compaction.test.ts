@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { Effect, Layer, Ref, type Schema, Stream } from "effect";
+import { Effect, Layer, Option, Ref, type Schema, Stream } from "effect";
 
 import type { RunEvent } from "../src/core/agentParse.ts";
 import type { McpLaunch } from "../src/core/agents.ts";
@@ -54,7 +54,7 @@ describe("an agent compacting its conversation", () => {
 
     const looking = { kind: "text", text: "Looking." };
 
-    expect(runView(undefined, fold(started), true)).toMatchObject({
+    expect(runView(undefined, Option.some(fold(started)), true)).toMatchObject({
       running: true,
       compacting: true,
       steps: [looking],
@@ -66,18 +66,21 @@ describe("an agent compacting its conversation", () => {
       { type: "text", text: "Trimming." },
     ]);
 
-    expect(runView(undefined, compacted, true)).toMatchObject({
+    expect(runView(undefined, Option.some(compacted), true)).toMatchObject({
       compacting: false,
       steps: [looking, { kind: "compaction" }, { kind: "text", text: "Trimming." }],
     });
 
     const gaveUp = fold([...started, { type: "compaction", state: "failed" }]);
 
-    expect(runView(undefined, gaveUp, true)).toMatchObject({ compacting: false, steps: [looking] });
+    expect(runView(undefined, Option.some(gaveUp), true)).toMatchObject({
+      compacting: false,
+      steps: [looking],
+    });
     // A stopped run is not compacting anymore, whatever it was doing.
-    expect(runView(undefined, fold([...started, { type: "stopped" }]), true).compacting).toBe(
-      false,
-    );
+    expect(
+      runView(undefined, Option.some(fold([...started, { type: "stopped" }])), true).compacting,
+    ).toBe(false);
   });
 
   test("a saved run keeps only that it compacted", () => {
@@ -88,11 +91,11 @@ describe("an agent compacting its conversation", () => {
       reply: "Done.",
     };
 
-    expect(runView({ ...saved, compacted: true }, undefined, false)).toMatchObject({
+    expect(runView({ ...saved, compacted: true }, Option.none(), false)).toMatchObject({
       steps: [{ kind: "compaction" }],
-      reply: "Done.",
+      reply: Option.some("Done."),
     });
-    expect(runView(saved, undefined, false).steps).toEqual([]);
+    expect(runView(saved, Option.none(), false).steps).toEqual([]);
   });
 
   it.effect("a run remembers it compacted only once the agent got through it", () =>

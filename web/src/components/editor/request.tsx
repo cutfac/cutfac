@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import {
   CheckIcon,
   ClipboardCopyIcon,
@@ -20,7 +21,7 @@ import { composing } from "@/lib/utils";
 import type { AgentName, AgentStatus, Feedback, ItemDetail, Variant } from "../../api.ts";
 import { agentInstalled, href } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
-import { AGENTS, agentLabel, answerer } from "../../lib/models.ts";
+import { AGENTS, agentTitle, answerer } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { asksUser, hasResult, runOffer, versionsMedia, versionsOf } from "../../lib/requests.ts";
 import { closingReply, runView, type LiveRun } from "../../lib/run.ts";
@@ -61,7 +62,7 @@ interface RequestProps {
   /** For a request lined up behind others, how many run before it. */
   ahead: number | undefined;
   /** The streamed run, when the latest run on this item is about this request. */
-  live: LiveRun | undefined;
+  live: Option.Option<LiveRun>;
   statuses: ReadonlyArray<AgentStatus> | undefined;
   actions: RequestActions;
 }
@@ -73,7 +74,7 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
   const result = hasResult(item, feedback, state.running);
   const open = feedback.status === "open" && feedback.decision === undefined;
   const offer = runOffer(open, state, result);
-  const replied = closingReply(state.steps, state.reply).reply !== undefined;
+  const replied = Option.isSome(closingReply(state.steps, state.reply).reply);
   const asks = asksUser(item, feedback, state);
   const t = useMessages();
   const locale = useLocale();
@@ -215,11 +216,12 @@ function Waiting({
   onCancel: () => void;
 }) {
   const t = useMessages();
-  const agent = agentLabel(feedback.waiting) ?? t.chat.agent;
+  const waiting = Option.fromUndefinedOr(feedback.waiting);
+  const agent = agentTitle(waiting, t);
 
   return (
     <>
-      <MessageHeader>{answerer(feedback.waiting, feedback, statuses, t)}</MessageHeader>
+      <MessageHeader>{answerer(waiting, feedback, statuses, t)}</MessageHeader>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <HourglassIcon className="size-3.5 shrink-0" />
         {t.chat.waiting(agent, ahead)}

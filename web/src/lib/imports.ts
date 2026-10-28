@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import type { AgentChoice, AgentName, AgentStatus, ImportSummary, ImportTurn } from "../api.ts";
 import { runView, type LiveRun, type RunView } from "./run.ts";
 
@@ -30,7 +32,11 @@ export function turnRun(detail: ImportSummary, turn: ImportTurn, live: LiveRun):
   // Only the last turn can have an agent on it; an earlier one still marked running was cut off.
   const alive = detail.running && detail.doc.turns.at(-1)?.id === turn.id;
 
-  return runView(turn.run, live.subject === turn.id ? live : undefined, alive);
+  return runView(
+    turn.run,
+    Option.liftPredicate(live, (run) => run.subject === turn.id),
+    alive,
+  );
 }
 
 /** Where the import stands, from its last turn's run. */
@@ -44,16 +50,13 @@ export function importState(detail: ImportSummary, live: LiveRun): ImportState {
   // Turns are recorded before their run starts, so one without any did not get going.
   if (last === undefined) return "failed";
 
-  switch (turnRun(detail, last, live).status) {
-    case "running":
-      return doc.allowed ? "installing" : "reading";
-    case "done":
-      return doc.allowed ? "done" : "waiting";
-    case "failed":
-      return "failed";
-    default:
-      return "stopped";
-  }
+  const { status } = turnRun(detail, last, live);
+
+  if (Option.contains(status, "running")) return doc.allowed ? "installing" : "reading";
+
+  if (Option.contains(status, "done")) return doc.allowed ? "done" : "waiting";
+
+  return Option.contains(status, "failed") ? "failed" : "stopped";
 }
 
 /** Whether an agent is on the import, so it takes no message until it is done or stopped. */

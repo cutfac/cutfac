@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { CrosshairIcon, HourglassIcon, PlayIcon, XIcon } from "lucide-react";
 import type { RefObject } from "react";
 import { toast } from "sonner";
@@ -213,7 +214,7 @@ export function ChatComposer({ run, ...props }: ChatComposerProps) {
   const answering =
     !running &&
     inOrder(item).some((feedback) =>
-      asksUser(item, feedback, runView(feedback.run, undefined, false)),
+      asksUser(item, feedback, runView(feedback.run, Option.none(), false)),
     );
 
   return (

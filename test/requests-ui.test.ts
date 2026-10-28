@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import { MAX_VARIANTS } from "../src/core/schema.ts";
 import type { AgentRun, EditReceipt, Feedback, ItemDetail } from "../web/src/api.ts";
 import {
@@ -161,14 +163,16 @@ describe("hasResult", () => {
 });
 
 describe("asksUser", () => {
-  const done = { status: "done" as const, running: false };
+  const done = { status: Option.some("done" as const), running: false };
 
   test("is a finished run whose open request has no result to look at", () => {
     const asked = request("a", 1, { run: saved("done") });
 
     expect(asksUser(itemWith([asked]), asked, done)).toBe(true);
     expect(asksUser(itemWith([asked]), asked, { ...done, running: true })).toBe(false);
-    expect(asksUser(itemWith([asked]), asked, { status: "failed", running: false })).toBe(false);
+    expect(
+      asksUser(itemWith([asked]), asked, { status: Option.some("failed"), running: false }),
+    ).toBe(false);
     expect(asksUser(itemWith([asked]), { ...asked, status: "resolved" }, done)).toBe(false);
 
     const changed = { media: [{ name: "clip.mp4", kind: "video" as const, size: 1, mtime: 9e15 }] };
@@ -179,23 +183,25 @@ describe("asksUser", () => {
 });
 
 describe("runOffer", () => {
-  const idle = { status: undefined, running: false };
+  const idle = { status: Option.none(), running: false };
 
   test("offers to send a request nothing ran yet, and to run a halted one again", () => {
     expect(runOffer(true, idle, false)).toBe("send");
-    expect(runOffer(true, { status: "failed", running: false }, false)).toBe("retry");
-    expect(runOffer(true, { status: "stopped", running: false }, false)).toBe("retry");
+    expect(runOffer(true, { status: Option.some("failed"), running: false }, false)).toBe("retry");
+    expect(runOffer(true, { status: Option.some("stopped"), running: false }, false)).toBe("retry");
   });
 
   test("offers nothing while it runs, after it finished, or once it is closed", () => {
-    expect(runOffer(true, { status: "running", running: true }, false)).toBeUndefined();
-    expect(runOffer(true, { status: "done", running: false }, false)).toBeUndefined();
+    expect(
+      runOffer(true, { status: Option.some("running"), running: true }, false),
+    ).toBeUndefined();
+    expect(runOffer(true, { status: Option.some("done"), running: false }, false)).toBeUndefined();
     expect(runOffer(false, idle, false)).toBeUndefined();
   });
 
   test("offers nothing once a result came in, from the user's own agent too", () => {
     expect(runOffer(true, idle, true)).toBeUndefined();
-    expect(runOffer(true, { status: "failed", running: false }, true)).toBeUndefined();
+    expect(runOffer(true, { status: Option.some("failed"), running: false }, true)).toBeUndefined();
   });
 });
 
@@ -282,22 +288,26 @@ describe("request on its way", () => {
     const sending = sendingRun(NO_RUN, itemWith([old]), input);
     const fresh = request("f1", 1);
 
-    expect(liveFor(sending, fresh)).toEqual({
-      ...NO_RUN,
-      subject: "f1",
-      agent: "claude",
-      model: "opus",
-      effort: undefined,
-      status: "running",
-    });
+    expect(liveFor(sending, fresh)).toEqual(
+      Option.some({
+        ...NO_RUN,
+        subject: "f1",
+        agent: "claude",
+        model: "opus",
+        effort: undefined,
+        status: "running",
+      }),
+    );
     // The requests that were there before the send stay as they were.
-    expect(liveFor(sending, old)).toBeUndefined();
-    expect(liveFor(sending, request("f1", 1, { waiting: "claude" }))).toBeUndefined();
+    expect(liveFor(sending, old)).toEqual(Option.none());
+    expect(liveFor(sending, request("f1", 1, { waiting: "claude" }))).toEqual(Option.none());
 
     const answered = sentRun(sending, receipt(fresh), input);
 
     expect(answered.sending).toBeUndefined();
-    expect(liveFor(answered, fresh)?.status).toBe("running");
+    expect(Option.map(liveFor(answered, fresh), (run) => run.status)).toEqual(
+      Option.some("running"),
+    );
   });
 
   test("marks nothing for no agent or behind a run going now", () => {
