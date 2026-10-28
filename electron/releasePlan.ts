@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Console, Option, Result, Schema } from "effect";
+import { Config, Console, Effect, Option, Result, Schema } from "effect";
 
 import { fromYamlString } from "../src/core/configText.ts";
 
@@ -58,9 +58,14 @@ export function releaseArgs(args: ReadonlyArray<string>): Option.Option<ReleaseA
   });
 }
 
-export function missingEnv(env: Readonly<Record<string, string | undefined>>): Array<string> {
-  return REQUIRED_ENV.filter((name) => !env[name]);
-}
+/** A setting from .env.release, or none when it is unset or empty. */
+export const releaseSetting = (name: ReleaseSetting) =>
+  Config.option(Config.NonEmptyString(name)).pipe(Effect.orElseSucceed(Option.none<string>));
+
+/** The settings .env.release leaves unset or empty, by name, never their values. */
+export const missingSettings = Effect.filter(REQUIRED_ENV, (name) =>
+  Effect.map(releaseSetting(name), Option.isNone),
+);
 
 export const feedVersion = (feed: string) => Option.map(decodeFeed(feed), ({ version }) => version);
 

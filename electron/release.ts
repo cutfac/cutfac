@@ -25,9 +25,10 @@ import {
   USAGE,
   branchProblem,
   log,
-  missingEnv,
+  missingSettings,
   releaseArgs,
   releaseNotes,
+  releaseSetting,
   signingProblem,
   tagName,
   treeProblem,
@@ -126,12 +127,8 @@ const subjectsSinceRelease = Effect.fnUntraced(function* (commit: string) {
 
 /** What stops a release, found in seconds so that nothing fails for it after the long build. */
 const preflight = Effect.gen(function* () {
-  const missing = missingEnv(process.env);
-
-  const team = Option.filter(
-    Option.fromUndefinedOr(process.env["APPLE_TEAM_ID"]),
-    (id) => id !== "",
-  );
+  const missing = yield* missingSettings;
+  const team = yield* releaseSetting("APPLE_TEAM_ID");
 
   const fetched = yield* output(["git", "fetch", "--quiet", "origin", BRANCH]);
 

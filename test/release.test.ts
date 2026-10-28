@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Option, Result } from "effect";
+import { ConfigProvider, Effect, Option, Result } from "effect";
 
 import { release } from "../electron/release.ts";
 import {
   branchProblem,
   buildFiles,
   feedVersion,
-  missingEnv,
+  missingSettings,
   releaseArgs,
   releaseNotes,
   REQUIRED_ENV,
@@ -65,16 +65,24 @@ describe("the release command", () => {
   );
 });
 
-describe("desktop release checks", () => {
-  test("names the unset and empty variables, never their values", () => {
-    const env = Object.fromEntries(REQUIRED_ENV.map((name) => [name, "set"]));
+const missingFrom = (env: Record<string, string>) =>
+  missingSettings.pipe(
+    Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env })),
+  );
 
-    expect(missingEnv(env)).toEqual([]);
-    expect(missingEnv({ ...env, APPLE_ID: "", CUTFAC_RELEASES_BUCKET: undefined })).toEqual([
-      "APPLE_ID",
-      "CUTFAC_RELEASES_BUCKET",
-    ]);
-  });
+describe("desktop release checks", () => {
+  it.effect("names the unset and empty settings, never their values", () =>
+    Effect.gen(function* () {
+      const env = Object.fromEntries(REQUIRED_ENV.map((name) => [name, "set"]));
+      const { CUTFAC_RELEASES_BUCKET: _, ...withoutBucket } = env;
+
+      expect(yield* missingFrom(env)).toEqual([]);
+      expect(yield* missingFrom({ ...withoutBucket, APPLE_ID: "" })).toEqual([
+        "APPLE_ID",
+        "CUTFAC_RELEASES_BUCKET",
+      ]);
+    }),
+  );
 
   test("reads the version a feed announces", () => {
     const feed = [

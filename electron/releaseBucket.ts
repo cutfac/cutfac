@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Config, Context, Effect, FileSystem, Layer, Option, Result } from "effect";
+import { Context, Effect, FileSystem, Layer, Option, Result } from "effect";
 
 import {
   type BuildFile,
@@ -8,6 +8,7 @@ import {
   feedVersion,
   log,
   ReleaseFailed,
+  releaseSetting,
   type ReleaseSetting,
 } from "./releasePlan.ts";
 
@@ -17,9 +18,7 @@ const FOLDER = "mac";
 const FEED_FILE = "latest-mac.yml";
 
 const setting = (name: ReleaseSetting) =>
-  Config.option(Config.String(name)).pipe(
-    Effect.orElseSucceed(Option.none<string>),
-    Effect.map(Option.filter((value) => value !== "")),
+  releaseSetting(name).pipe(
     Effect.flatMap(
       Effect.fromOption(() => new ReleaseFailed({ message: `Set ${name} in .env.release.` })),
     ),
