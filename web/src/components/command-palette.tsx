@@ -14,7 +14,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { useSidebar } from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar-provider";
 import { openWorkspace } from "@/components/workspace-menu";
 
 import { api } from "../api.ts";

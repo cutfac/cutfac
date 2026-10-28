@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { SidebarMenuButton } from "@/components/ui/sidebar";
+import { SidebarMenuButton } from "@/components/ui/sidebar-menu";
 import { Spinner } from "@/components/ui/spinner";
 
 import type { WorkspaceInfo } from "../api.ts";

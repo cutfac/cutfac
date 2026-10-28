@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 
 import { BackForward } from "@/components/back-forward";
 import { Hint } from "@/components/editor/hint";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar-provider";
 import { cn } from "@/lib/utils";
 
 import { desktop, insetTitleBar } from "../desktop.ts";

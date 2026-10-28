@@ -1,6 +1,6 @@
 import { type KeyboardEvent, type PointerEvent, useRef } from "react";
 
-import { useSidebar } from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar-provider";
 
 import { clampSidebarWidth, SIDEBAR_WIDTH } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";

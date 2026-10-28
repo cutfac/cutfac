@@ -7,7 +7,8 @@ import { DesktopLicense } from "@/components/desktop-license";
 import { NewItemDialog } from "@/components/new-item-dialog";
 import { ErrorAlert } from "@/components/page";
 import { TitleBar } from "@/components/title-bar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar-provider";
 import { cn } from "@/lib/utils";
 
 import { api } from "./api.ts";
