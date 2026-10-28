@@ -45,7 +45,7 @@ export const boardKo: BoardMessages = {
         .filter((part) => part !== undefined)
         .join(" ");
 
-      return `${withParticle(lead, "을/를")} 만들어 주세요. ${about}`;
+      return `${lead} 만들어 줘. ${about}`;
     },
     emptyColumn: "비어 있어요",
     openFeedback: (count) => `${count}개 남음`,

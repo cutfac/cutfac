@@ -165,9 +165,9 @@ to do; a template can come from a video the user likes later, through Templates.
 costs no free video until work on it starts, and it takes its title from its first request. The
 agent reads the material during the rest of the first launch (see Before the workspace), and the
 reading ends with three first videos for the platforms in the brief, in an `ideas` block, each its
-platform, length, a short title and a sentence on what it shows (`tiktok 15 | … | …`). Over the
+platform, length, a short title and the request to make it, detailed enough for a good first cut from that one request (`tiktok 15 | … | …`). Over the
 request box, while the agent still reads, the editor says so; then each idea is a starting point
-by its title that writes the whole request in as a sentence, to send as it is or change, and with
+by its title that writes that request in, to send as it is or change, and with
 no ideas the usual starting points stand. A source the agent
 couldn't read keeps its section marked not read yet, so the next agent that works reads it. Back
 on the board, before any video, the empty board offers New video beside what the agent knows,
