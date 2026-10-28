@@ -1,0 +1,18 @@
+{
+  "title": "FLOW",
+  "tagline": "Every task, one place",
+  "words": [
+    "Plan it",
+    "Push it",
+    "Forget it"
+  ],
+  "stop": "Not anymore.",
+  "today": "TODAY",
+  "tasks": [
+    "Answer email",
+    "Prep meeting",
+    "30-min run"
+  ],
+  "left": "tasks left",
+  "ending": "Lighter, starting today"
+}

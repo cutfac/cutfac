@@ -1,0 +1,21 @@
+{
+  "samples": [
+    {
+      "id": "bold",
+      "fonts": [
+        "Pretendard-SemiBold.otf",
+        "Pretendard-Bold.otf",
+        "Pretendard-Black.otf",
+        "OFL-Pretendard.txt"
+      ]
+    },
+    {
+      "id": "calm",
+      "fonts": ["GowunBatang-Regular.ttf", "OFL-GowunBatang.txt"]
+    },
+    {
+      "id": "playful",
+      "fonts": ["Jua.ttf", "OFL-Jua.txt"]
+    }
+  ]
+}
