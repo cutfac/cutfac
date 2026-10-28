@@ -36,27 +36,71 @@ export const onAgentRun = (id: string, listener: (message: RunMessage) => void) 
 export const onImportRun = (id: string, listener: (message: RunMessage) => void) =>
   onRun(`/api/import/run${q(id)}`, listener);
 
+/**
+ * How long the change stream may stay quiet, pings included, before it counts as dead: more than
+ * twice the server's ping interval. A proxied stream goes quiet without closing when the server
+ * behind it restarts, as under `desktop:dev`.
+ */
+export const SILENT_MS = 60_000;
+
 // Subscribers share one EventSource: browsers allow only six HTTP/1.1 connections per origin.
 const changeListeners = new Set<() => void>();
 
-let changeSource: EventSource | undefined;
+const notifyAll = () => {
+  for (const notify of changeListeners) notify();
+};
+
+/**
+ * The change stream, opened again when it goes quiet. Each connection after the first tells every
+ * listener to reload, as what changed while it was down went unheard.
+ */
+function connectChanges() {
+  let source: EventSource | undefined;
+  let silence: ReturnType<typeof setTimeout> | undefined;
+  let connected = false;
+
+  const heard = () => {
+    clearTimeout(silence);
+    silence = setTimeout(open, SILENT_MS);
+  };
+
+  function open() {
+    source?.close();
+    source = new EventSource(apiUrl("/api/events"));
+    source.addEventListener("open", () => {
+      if (connected) notifyAll();
+
+      connected = true;
+      heard();
+    });
+    source.addEventListener("ping", heard);
+    source.addEventListener("change", () => {
+      heard();
+      notifyAll();
+    });
+    heard();
+  }
+
+  open();
+
+  return () => {
+    clearTimeout(silence);
+    source?.close();
+  };
+}
+
+let closeChanges: (() => void) | undefined;
 
 export function onWorkspaceChange(listener: () => void): () => void {
   changeListeners.add(listener);
-
-  if (changeSource === undefined) {
-    changeSource = new EventSource(apiUrl("/api/events"));
-    changeSource.addEventListener("change", () => {
-      for (const notify of changeListeners) notify();
-    });
-  }
+  closeChanges ??= connectChanges();
 
   return () => {
     changeListeners.delete(listener);
 
     if (changeListeners.size === 0) {
-      changeSource?.close();
-      changeSource = undefined;
+      closeChanges?.();
+      closeChanges = undefined;
     }
   };
 }
