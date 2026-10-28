@@ -7,7 +7,7 @@ import { buildEditPrompt } from "../core/editPrompt.ts";
 import { approveEdit, pickVariant, resolveEdit, restoreBefore } from "../core/edits.ts";
 import { cancelWaiting, rewordWaiting, waitingLine, waitingPick } from "../core/editWaiting.ts";
 import { InvalidRequest } from "../core/errors.ts";
-import { addFeedback, findFeedback, getItem } from "../core/items.ts";
+import { type Item, addFeedback, findFeedback, getItem } from "../core/items.ts";
 import { AgentChoice, AgentName, FeedbackInput, ModelSettings } from "../core/schema.ts";
 import { Workspace } from "../core/workspace.ts";
 import { requireTrust } from "../core/workspaceTrust.ts";
@@ -127,24 +127,29 @@ const continueRoute = withId((id) =>
   }),
 );
 
-/** The requests people make on an item, and the agent runs that answer them. */
+const changeItem = <A, RD, E, R>(
+  schema: Schema.ConstraintDecoder<A, RD>,
+  change: (id: string, body: A) => Effect.Effect<Item, E, R>,
+) =>
+  withId((id) =>
+    Effect.flatMap(HttpServerRequest.schemaBodyJson(schema), (body) =>
+      Effect.flatMap(change(id, body), itemDetail),
+    ),
+  );
+
 export const editRoutes = HttpRouter.addAll([
   json(
     "POST",
     "/api/item/feedback",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackInput), (input) =>
-        Effect.flatMap(addFeedback(id, input), (added) => itemDetail(added.item)),
-      ),
+    changeItem(FeedbackInput, (id, input) =>
+      Effect.map(addFeedback(id, input), (added) => added.item),
     ),
   ),
   json(
     "POST",
     "/api/item/feedback/resolve",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(ResolveBody), (body) =>
-        Effect.flatMap(resolveEdit(id, body.feedbackId, resolutionOf(body.resolution)), itemDetail),
-      ),
+    changeItem(ResolveBody, (id, body) =>
+      resolveEdit(id, body.feedbackId, resolutionOf(body.resolution)),
     ),
   ),
   json("POST", "/api/item/edit", editRoute),
@@ -153,20 +158,12 @@ export const editRoutes = HttpRouter.addAll([
   json(
     "POST",
     "/api/item/edit/cancel",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(CancelBody), (body) =>
-        Effect.flatMap(cancelWaiting(id, body.feedbackId), itemDetail),
-      ),
-    ),
+    changeItem(CancelBody, (id, body) => cancelWaiting(id, body.feedbackId)),
   ),
   json(
     "POST",
     "/api/item/edit/reword",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(RewordBody), (body) =>
-        Effect.flatMap(rewordWaiting(id, body.feedbackId, body.body), itemDetail),
-      ),
-    ),
+    changeItem(RewordBody, (id, body) => rewordWaiting(id, body.feedbackId, body.body)),
   ),
   json(
     "POST",
@@ -192,32 +189,21 @@ export const editRoutes = HttpRouter.addAll([
   json(
     "POST",
     "/api/item/edit/approve",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
-        Effect.flatMap(approveEdit(id, body.feedbackId), itemDetail),
-      ),
-    ),
+    changeItem(FeedbackRef, (id, body) => approveEdit(id, body.feedbackId)),
   ),
   json(
     "POST",
     "/api/item/edit/pick",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(PickBody), (body) =>
-        pickVariant(id, body.feedbackId, body.variantId).pipe(
-          Effect.tap(() => trackUsage("take_kept")),
-          Effect.flatMap(itemDetail),
-        ),
+    changeItem(PickBody, (id, body) =>
+      pickVariant(id, body.feedbackId, body.variantId).pipe(
+        Effect.tap(() => trackUsage("take_kept")),
       ),
     ),
   ),
   json(
     "POST",
     "/api/item/edit/restore",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
-        Effect.flatMap(restoreBefore(id, body.feedbackId), itemDetail),
-      ),
-    ),
+    changeItem(FeedbackRef, (id, body) => restoreBefore(id, body.feedbackId)),
   ),
   runStream("/api/item/run", RunRegistry, getItem),
 ]);
