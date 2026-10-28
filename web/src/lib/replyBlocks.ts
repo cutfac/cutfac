@@ -8,17 +8,20 @@ export interface ReplyQuestion {
 
 /**
  * An agent's reply as the board shows it. A reply to the board may end with a block the board
- * draws itself: a ```question block, or a ```settled block listing what the agent decided without
- * asking (see `BOARD_BLOCKS` in src/core/importPrompts.ts).
+ * draws itself: a ```question block, a ```settled block listing what the agent decided without
+ * asking (see `BOARD_BLOCKS` in src/core/importPrompts.ts), or an ```ideas block of first videos to
+ * make, which a reading of the user's material ends with.
  */
 export interface ReplyBlocks {
   /** The reply without the block it ended with. */
   readonly text: string;
   readonly question?: ReplyQuestion;
   readonly settled?: ReadonlyArray<string>;
+  /** Videos to make, each as the user would ask for it. */
+  readonly ideas?: ReadonlyArray<string>;
 }
 
-const OPENING = /^```(question|settled)[^\S\n]*\n/gm;
+const OPENING = /^```(question|settled|ideas)[^\S\n]*\n/gm;
 
 const CLOSING = /^```[^\S\n]*$/m;
 
@@ -67,6 +70,8 @@ export function replyBlocks(reply: string): ReplyBlocks {
 
   if (block.kind === "settled") return { text, settled: items };
 
+  if (block.kind === "ideas") return { text, ideas: items };
+
   const question = block.lines.filter((line) => !isItem(line)).join(" ");
 
   // A question block with no question is not one the board can ask.
@@ -79,13 +84,11 @@ const markdownList = (items: ReadonlyArray<string>) => items.map((item) => `- ${
 
 /** The reply as markdown, with its board block written out for a chat that doesn't draw it. */
 export function replyMarkdown(reply: string): string {
-  const { text, question, settled } = replyBlocks(reply);
+  const { text, question, settled, ideas } = replyBlocks(reply);
 
   const extra =
     question === undefined
-      ? settled === undefined
-        ? []
-        : [markdownList(settled)]
+      ? [settled, ideas].flatMap((items) => (items === undefined ? [] : [markdownList(items)]))
       : [question.question, markdownList(question.answers)];
 
   return [text, ...extra].filter((part) => part !== "").join("\n\n");

@@ -49,6 +49,7 @@ test("a learn import reads about.md's unread sources into it, from the start, wi
   expect(allowedFromStart(doc)).toBe(true);
   expect(message).toContain("about.md");
   expect(message).toContain("Write only about.md");
+  expect(message).toContain("```ideas");
   expect(message).toContain("Write to the user in Korean.");
   expect(message).not.toContain("press Allow");
 });

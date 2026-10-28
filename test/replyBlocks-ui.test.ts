@@ -32,6 +32,18 @@ describe("what the board draws from an agent's reply", () => {
     });
   });
 
+  test("a reading ends with first videos to make, which the plain reply lists too", () => {
+    const reply = "I read cutfac.com.\n```ideas\n- A 15-second intro\n- A before and after\n```";
+
+    expect(replyBlocks(reply)).toEqual({
+      text: "I read cutfac.com.",
+      ideas: ["A 15-second intro", "A before and after"],
+    });
+    expect(replyMarkdown(reply)).toBe(
+      "I read cutfac.com.\n\n- A 15-second intro\n- A before and after",
+    );
+  });
+
   test("only a block that ends the reply counts, and a code block is left alone", () => {
     const code = "Run this:\n```sh\nbrew install ffmpeg\n```";
     const notLast = "```question\nWhich one?\n- A\n```\nThen I go on.";
