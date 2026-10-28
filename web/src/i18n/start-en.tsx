@@ -99,9 +99,7 @@ export const startEn = {
    * the user when the agent waits for them. macOS asks on the first one, so Turn on puts up a sample.
    */
   notify: {
-    label: "Get notified when your agent needs you",
-    turnOn: "Turn on",
-    done: "Notifications on",
+    link: "Turn on notifications",
     sample: { title: "Cutfac", body: "This is how Cutfac tells you your agent is waiting." },
   },
   /** While the first launch's answers go into the new workspace, a moment before the board. */

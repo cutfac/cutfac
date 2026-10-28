@@ -84,9 +84,7 @@ export const startKo: StartMessages = {
     learnFailed: (source, message) => `${withParticle(source, "을/를")} 읽지 못했어요: ${message}`,
   },
   notify: {
-    label: "에이전트가 기다리면 알림 받기",
-    turnOn: "켜기",
-    done: "알림을 켰어요",
+    link: "알림 켜기",
     sample: { title: "컷팩", body: "에이전트가 기다리면 이렇게 알려 드릴게요." },
   },
   saving: {

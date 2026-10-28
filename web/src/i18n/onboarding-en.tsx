@@ -56,7 +56,7 @@ export const onboardingEn = {
     turnOn: "Turn on",
     on: "On",
     granted: "Both are on",
-    remind: "Let your agent record the screen and use apps",
+    link: "Turn on screen recording and app use",
     settingsTitle: "Mac permissions",
     skip: "Skip for now",
     /**

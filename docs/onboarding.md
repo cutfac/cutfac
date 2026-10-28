@@ -165,9 +165,12 @@ a template can come from a video the user likes later, through Templates. The ag
 material during the rest of the first launch (see Before the workspace); the empty board says it
 is still reading, then what it knows, which opens the Brief page. A source it couldn't read keeps
 its section marked not read yet, so the next agent that works reads it. The reading ends with three
-first videos for the platforms in the brief, in an `ideas` block; the empty board shows them under
-what the agent knows, and one opens New video with it written in, so the first video is the user's
-own and only asks for a pick.
+first videos for the platforms in the brief, in an `ideas` block, each its platform, length and a
+short title (`tiktok 15 | …`). The empty board then has one thing to do: while the agent reads, it
+says so over three cards still to come; once it has, its title asks to start with one of them, each
+card opening New video with the whole request written in, and writing one's own sits below. With
+no ideas, New video is the way in. Turning on screen recording, app use and notifications waits
+underneath as quiet links.
 
 ### The brief
 

@@ -8,38 +8,35 @@ import { desktop, type CutfacOnboarding } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 import { AccessRows, useAccess } from "./onboarding/access-rows.tsx";
 
-/**
- * On the empty board, while screen recording or accessibility is off, as after skipping them on the
- * first launch: one button that opens the next one to turn on. It goes once both are on.
- */
-export function AccessRow() {
+/** The same offer as a quiet link, for under what the empty board asks first. */
+export function AccessLink() {
   const onboarding = desktop?.onboarding;
 
-  return onboarding === undefined ? null : <AccessReminder onboarding={onboarding} />;
+  return onboarding === undefined ? null : <AccessLinkOn onboarding={onboarding} />;
 }
 
-function AccessReminder({ onboarding }: { onboarding: CutfacOnboarding }) {
+function AccessLinkOn({ onboarding }: { onboarding: CutfacOnboarding }) {
   const t = useMessages().onboarding.access;
   const access = useAccess(onboarding);
 
-  if (access.allGranted || access.next === undefined) return null;
+  if (access.next === undefined) return null;
 
   const next = access.next;
 
-  return (
-    <div className="flex w-full items-center gap-3 rounded-2xl bg-muted py-2.5 pr-2.5 pl-4 text-start text-sm">
-      {access.waiting === undefined ? (
-        <MonitorIcon className="size-4 shrink-0 text-muted-foreground" />
-      ) : (
-        <Spinner className="size-4 shrink-0" />
-      )}
-      <span className="min-w-0 flex-1">
-        {access.waiting === undefined ? t.remind : access.copy[access.waiting].waiting}
+  if (access.waiting !== undefined) {
+    return (
+      <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
+        <Spinner className="size-3" />
+        {access.copy[access.waiting].waiting}
       </span>
-      <Button size="sm" variant="outline" className="shrink-0" onClick={() => access.open(next)}>
-        {t.turnOn}
-      </Button>
-    </div>
+    );
+  }
+
+  return (
+    <Button size="xs" variant="ghost" onClick={() => access.open(next)}>
+      <MonitorIcon data-icon="inline-start" />
+      {t.link}
+    </Button>
   );
 }
 
