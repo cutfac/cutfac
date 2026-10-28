@@ -1,6 +1,6 @@
 import { Effect, type Types } from "effect";
 
-import { InvalidRequest, NotFound } from "./errors.ts";
+import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import {
   DETAIL_FIELDS,
   type DetailField,
@@ -41,9 +41,28 @@ export const readHistory = Effect.fn("history.readHistory")(function* (item: Ite
   return (yield* ws.exists(file)) ? yield* ws.readYaml(file, HistoryDoc) : EMPTY;
 });
 
-const writeHistory = Effect.fnUntraced(function* (item: Item, doc: HistoryDoc) {
+type SaveHistory = (doc: HistoryDoc) => Effect.Effect<void, WorkspaceError>;
+
+/**
+ * Read-modify-write an item's history, one at a time per item, so changes recorded together do
+ * not drop each other's entries. `change` writes with the `save` it is given, as often as it
+ * needs. Not reentrant, and the history is locked before item.yaml: `change` may use `mutateItem`,
+ * but nothing inside `mutateItem` may come here.
+ */
+export const mutateHistory = Effect.fn("history.mutateHistory")(function* <A, E, R>(
+  item: Item,
+  change: (doc: HistoryDoc, save: SaveHistory) => Effect.Effect<A, E, R>,
+) {
   const ws = yield* Workspace;
-  yield* ws.writeYaml(historyFile(item), HistoryDoc, doc);
+
+  return yield* ws.exclusive(
+    `history:${item.id}`,
+    Effect.gen(function* () {
+      const doc = yield* readHistory(item);
+
+      return yield* change(doc, (next) => ws.writeYaml(historyFile(item), HistoryDoc, next));
+    }),
+  );
 });
 
 /** Add a change at the cursor. Changes that could still have been redone are dropped. */
@@ -160,10 +179,13 @@ export const recordMedia = Effect.fn("history.recordMedia")(function* (
   captures: ReadonlyArray<MediaCapture>,
   by: Attribution,
 ) {
-  const doc = yield* readHistory(item);
-  const next = yield* capture(item, doc, captures, by);
+  yield* mutateHistory(item, (doc, save) =>
+    Effect.gen(function* () {
+      const next = yield* capture(item, doc, captures, by);
 
-  if (next !== doc) yield* writeHistory(item, next);
+      if (next !== doc) yield* save(next);
+    }),
+  );
 });
 
 /** Copy a saved version over its media file. */
@@ -193,19 +215,23 @@ const putVersion = Effect.fnUntraced(function* (item: Item, doc: HistoryDoc, ver
  */
 export const putBack = Effect.fn("history.putBack")(function* (item: Item, media: string) {
   const ws = yield* Workspace;
-  const doc = yield* readHistory(item);
-  const head = doc.heads[media];
   const path = `${item.dir}/${media}`;
 
-  if (head === undefined) return yield* ws.remove(path);
+  yield* mutateHistory(item, (doc, save) =>
+    Effect.gen(function* () {
+      const head = doc.heads[media];
 
-  if (yield* ws.exists(path)) {
-    const { size, mtime } = yield* ws.stat(path);
+      if (head === undefined) return yield* ws.remove(path);
 
-    if (head.size === size && head.mtime === mtime) return;
-  }
+      if (yield* ws.exists(path)) {
+        const { size, mtime } = yield* ws.stat(path);
 
-  yield* writeHistory(item, yield* putVersion(item, doc, head.version));
+        if (head.size === size && head.mtime === mtime) return;
+      }
+
+      yield* save(yield* putVersion(item, doc, head.version));
+    }),
+  );
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -261,26 +287,33 @@ export const updateDetails = Effect.fn("history.updateDetails")(function* (
   id: string,
   patch: ItemPatch,
 ) {
-  const before = yield* getItem(id);
-  const item = yield* updateItem(id, patch);
+  const located = yield* getItem(id);
 
-  const changed = new Set(
-    DETAIL_FIELDS.filter((field) => valueOf(before.doc, field) !== valueOf(item.doc, field)),
+  return yield* mutateHistory(located, (history, save) =>
+    Effect.gen(function* () {
+      // Read inside the lock, so it is the item as the change before this one left it.
+      const before = yield* getItem(id);
+      const item = yield* updateItem(id, patch);
+
+      const changed = new Set(
+        DETAIL_FIELDS.filter((field) => valueOf(before.doc, field) !== valueOf(item.doc, field)),
+      );
+
+      if (changed.size === 0) return item;
+
+      const entry: HistoryEntry = {
+        kind: "details",
+        id: yield* shortId,
+        at: yield* nowIso,
+        before: pickDetails(before.doc, changed),
+        after: pickDetails(item.doc, changed),
+      };
+
+      yield* save(pushEntry(history, entry));
+
+      return item;
+    }),
   );
-
-  if (changed.size === 0) return item;
-
-  const entry: HistoryEntry = {
-    kind: "details",
-    id: yield* shortId,
-    at: yield* nowIso,
-    before: pickDetails(before.doc, changed),
-    after: pickDetails(item.doc, changed),
-  };
-
-  yield* writeHistory(item, pushEntry(yield* readHistory(item), entry));
-
-  return item;
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -336,7 +369,12 @@ const applyEntry = Effect.fnUntraced(function* (
 });
 
 /** Undo or redo until the first `target` entries are applied, saving each step as it lands. */
-const travel = Effect.fnUntraced(function* (item: Item, start: HistoryDoc, target: number) {
+const travel = Effect.fnUntraced(function* (
+  item: Item,
+  start: HistoryDoc,
+  target: number,
+  save: SaveHistory,
+) {
   let doc = start;
 
   while (doc.cursor !== target) {
@@ -347,88 +385,90 @@ const travel = Effect.fnUntraced(function* (item: Item, start: HistoryDoc, targe
     if (entry === undefined) break;
     const applied = yield* applyEntry(item, doc, entry, direction);
     doc = { ...applied, cursor: direction === "undo" ? index : index + 1 };
-    yield* writeHistory(item, doc);
+    yield* save(doc);
   }
 });
 
-/** The item's history, with tracked media changed outside a request saved as entries first. */
-const synced = Effect.fnUntraced(function* (id: string) {
+/**
+ * Change an item's history, with tracked media changed outside a request saved as entries first.
+ * Returns the item afterwards.
+ */
+const mutateSynced = Effect.fnUntraced(function* <E, R>(
+  id: string,
+  change: (item: Item, doc: HistoryDoc, save: SaveHistory) => Effect.Effect<void, E, R>,
+) {
   const item = yield* getItem(id);
-  const doc = yield* readHistory(item);
-  const tracked = Object.keys(doc.heads).map((media) => ({ media }));
-  const next = yield* capture(item, doc, tracked, { cause: "outside" });
 
-  if (next !== doc) yield* writeHistory(item, next);
+  yield* mutateHistory(item, (doc, save) =>
+    Effect.gen(function* () {
+      const tracked = Object.keys(doc.heads).map((media) => ({ media }));
+      const next = yield* capture(item, doc, tracked, { cause: "outside" });
 
-  return { item, doc: next };
-});
+      if (next !== doc) yield* save(next);
 
-export const undo = Effect.fn("history.undo")(function* (id: string) {
-  const { item, doc } = yield* synced(id);
-
-  if (doc.cursor === 0) return yield* new InvalidRequest({ message: "Nothing to undo" });
-  yield* travel(item, doc, doc.cursor - 1);
+      return yield* change(item, next, save);
+    }),
+  );
 
   return yield* getItem(id);
 });
 
-export const redo = Effect.fn("history.redo")(function* (id: string) {
-  const { item, doc } = yield* synced(id);
+export const undo = Effect.fn("history.undo")((id: string) =>
+  mutateSynced(id, (item, doc, save) =>
+    doc.cursor === 0
+      ? Effect.fail(new InvalidRequest({ message: "Nothing to undo" }))
+      : travel(item, doc, doc.cursor - 1, save),
+  ),
+);
 
-  if (doc.cursor >= doc.entries.length) {
-    return yield* new InvalidRequest({ message: "Nothing to redo" });
-  }
-
-  yield* travel(item, doc, doc.cursor + 1);
-
-  return yield* getItem(id);
-});
+export const redo = Effect.fn("history.redo")((id: string) =>
+  mutateSynced(id, (item, doc, save) =>
+    doc.cursor >= doc.entries.length
+      ? Effect.fail(new InvalidRequest({ message: "Nothing to redo" }))
+      : travel(item, doc, doc.cursor + 1, save),
+  ),
+);
 
 /** Go to the state right after `entryId`, or to before the first change without one. */
-export const goTo = Effect.fn("history.goTo")(function* (id: string, entryId?: string) {
-  const { item, doc } = yield* synced(id);
-  const index = entryId === undefined ? -1 : doc.entries.findIndex((e) => e.id === entryId);
+export const goTo = Effect.fn("history.goTo")((id: string, entryId?: string) =>
+  mutateSynced(id, (item, doc, save) => {
+    const index = entryId === undefined ? -1 : doc.entries.findIndex((e) => e.id === entryId);
 
-  if (entryId !== undefined && index === -1) {
-    return yield* new NotFound({ message: `History entry ${entryId} not found on ${id}` });
-  }
-
-  yield* travel(item, doc, index + 1);
-
-  return yield* getItem(id);
-});
+    return entryId !== undefined && index === -1
+      ? Effect.fail(new NotFound({ message: `History entry ${entryId} not found on ${id}` }))
+      : travel(item, doc, index + 1, save);
+  }),
+);
 
 /** Put a saved version back in its media file, as a change that can be undone. */
-export const restoreVersion = Effect.fn("history.restoreVersion")(function* (
-  id: string,
-  versionId: string,
-) {
-  const { item, doc } = yield* synced(id);
-  const version = doc.versions.find((v) => v.id === versionId);
+export const restoreVersion = Effect.fn("history.restoreVersion")((id: string, versionId: string) =>
+  mutateSynced(id, (item, doc, save) =>
+    Effect.gen(function* () {
+      const version = doc.versions.find((v) => v.id === versionId);
 
-  if (version === undefined) {
-    return yield* new NotFound({ message: `Version ${versionId} not found on ${id}` });
-  }
+      if (version === undefined) {
+        return yield* new NotFound({ message: `Version ${versionId} not found on ${id}` });
+      }
 
-  const head = doc.heads[version.media];
+      const head = doc.heads[version.media];
 
-  if (head?.version === versionId) return item;
-  const placed = yield* putVersion(item, doc, versionId);
+      if (head?.version === versionId) return;
+      const placed = yield* putVersion(item, doc, versionId);
 
-  const next =
-    head === undefined
-      ? placed
-      : pushEntry(placed, {
-          kind: "media",
-          id: yield* shortId,
-          at: yield* nowIso,
-          media: version.media,
-          from: head.version,
-          to: versionId,
-          cause: "version",
-        });
+      const next =
+        head === undefined
+          ? placed
+          : pushEntry(placed, {
+              kind: "media",
+              id: yield* shortId,
+              at: yield* nowIso,
+              media: version.media,
+              from: head.version,
+              to: versionId,
+              cause: "version",
+            });
 
-  yield* writeHistory(item, next);
-
-  return yield* getItem(id);
-});
+      yield* save(next);
+    }),
+  ),
+);

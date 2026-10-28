@@ -10,6 +10,7 @@ import {
   goTo,
   pushEntry,
   readHistory,
+  recordMedia,
   redo,
   restoreVersion,
   undo,
@@ -264,6 +265,38 @@ describe("item history", () => {
 
       expect(yield* content).toBe("original");
       expect(yield* decision).toBeUndefined();
+    }),
+  );
+
+  it.live("keeps every change recorded at the same time", () =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const { id, history } = yield* fixture;
+      const item = yield* getItem(id);
+      const clips = Array.from({ length: 4 }, (_, n) => `[9x16] clip-${n}.mp4`);
+      const titles = Array.from({ length: 4 }, (_, n) => `Launch ${n}`);
+      const tracked = clips.map((media) => ({ media, start: true }));
+
+      const put = (content: string) =>
+        Effect.forEach(clips, (clip) => ws.writeText(`${item.dir}/${clip}`, content));
+
+      yield* put("first");
+      yield* recordMedia(item, tracked, { cause: "outside" });
+      yield* put("changed since");
+
+      yield* Effect.all(
+        [
+          ...clips.map((media) => recordMedia(item, [{ media }], { cause: "outside" })),
+          ...titles.map((title) => updateDetails(id, { title })),
+        ],
+        { concurrency: "unbounded" },
+      );
+
+      const doc = yield* history;
+      const recorded = doc.entries.map((e) => (e.kind === "media" ? e.media : e.after.title));
+
+      expect(recorded.toSorted()).toEqual([...clips, ...titles].toSorted());
+      expect(doc.cursor).toBe(clips.length + titles.length);
     }),
   );
 });
