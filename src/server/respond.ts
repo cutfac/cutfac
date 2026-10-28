@@ -2,10 +2,12 @@ import { Effect, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 /** Every error a route can fail with carries a tag and a message for the board to show. */
-interface Failure {
+export interface Failure {
   readonly _tag: string;
   readonly message: string;
 }
+
+type Method = "GET" | "POST" | "PATCH";
 
 const STATUS_BY_TAG = new Map([
   ["NotFound", 404],
@@ -40,10 +42,17 @@ const respond = <A, E extends Failure, R>(effect: Effect.Effect<A, E, R>) =>
 
 /** A JSON route: the handler's result as the body, its failure as `{ error }`. */
 export const json = <A, E extends Failure, R>(
-  method: "GET" | "POST" | "PATCH",
+  method: Method,
   path: HttpRouter.PathInput,
   handler: Effect.Effect<A, E, R>,
 ) => HttpRouter.route(method, path, respond(handler));
+
+/** A route that builds its own response, such as a stream or a file; its failure is `{ error }`. */
+export const raw = <E extends Failure, R>(
+  method: Method,
+  path: HttpRouter.PathInput,
+  handler: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>,
+) => HttpRouter.route(method, path, Effect.catch(handler, failureResponse));
 
 const IdQuery = Schema.Struct({ id: Schema.NonEmptyString });
 

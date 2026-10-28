@@ -7,12 +7,10 @@ import {
   HttpServerRespondable,
   HttpServerResponse,
   HttpStaticServer,
-  Multipart,
 } from "effect/http";
 
 import { readAbout } from "../core/about.ts";
 import { agentBin } from "../core/agentCommand.ts";
-import { RunEvent } from "../core/agentParse.ts";
 import {
   PermissionChoice,
   agentPermissions,
@@ -70,10 +68,8 @@ import {
   decideMcpServer,
   mcpServersStatus,
 } from "../core/mcpApprovals.ts";
-import { extension } from "../core/media.ts";
 import { which } from "../core/process.ts";
 import {
-  type ReferenceUpload,
   addReferences,
   itemReferences,
   listReferences,
@@ -81,7 +77,6 @@ import {
 } from "../core/references.ts";
 import { readRender } from "../core/render.ts";
 import { listReviews } from "../core/review.ts";
-import type { Runs } from "../core/runRegistry.ts";
 import {
   AgentChoice,
   AgentName,
@@ -105,10 +100,13 @@ import { createCountedItem, planStatus } from "../plan.ts";
 import { trackUsage } from "../usageStats.ts";
 import { approvalRoutes } from "./approvals.ts";
 import { briefRoutes } from "./brief.ts";
+import { fileRoutes } from "./files.ts";
 import { requestGuard } from "./guard.ts";
 import { renderChanges, renderRoutes } from "./render.ts";
-import { failureResponse, json, queryId, withId } from "./respond.ts";
+import { json, queryId, withId } from "./respond.ts";
+import { runStream } from "./runStream.ts";
 import { eventStream, sseEvent } from "./sse.ts";
+import { isMultipart, MediaForm, ReferencesForm, uploadsOf } from "./uploads.ts";
 
 export interface ServerOptions {
   /** The built board, served at `/`. Without it the server is API-only. */
@@ -121,28 +119,6 @@ export interface ListenOptions extends ServerOptions {
   readonly port: number;
   readonly hostname: string;
 }
-
-/** Workspace files the board may load, by extension, with the type to serve them as. */
-const SERVABLE = new Map([
-  ["mp4", "video/mp4"],
-  ["m4v", "video/mp4"],
-  ["mov", "video/quicktime"],
-  ["webm", "video/webm"],
-  ["jpg", "image/jpeg"],
-  ["jpeg", "image/jpeg"],
-  ["png", "image/png"],
-  ["webp", "image/webp"],
-  ["gif", "image/gif"],
-  ["md", "text/markdown; charset=utf-8"],
-  ["json", "application/json; charset=utf-8"],
-  ["srt", "text/plain; charset=utf-8"],
-  ["vtt", "text/vtt; charset=utf-8"],
-  ["wav", "audio/wav"],
-  ["mp3", "audio/mpeg"],
-  ["m4a", "audio/mp4"],
-]);
-
-const FILES_PREFIX = "/files/";
 
 /** Uploads are whole videos, far past Bun's 128 MB default. */
 const MAX_UPLOAD_BYTES = 8 * 1024 ** 3;
@@ -217,14 +193,6 @@ const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString)
 
 const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
 
-const MediaForm = Schema.Struct({ file: Multipart.SingleFileSchema });
-
-/** Dropped files and, in the same order, each one's path in the drop: `logo.png`, `photos/a.jpg`. */
-const ReferencesForm = Schema.Struct({
-  files: Multipart.FilesSchema,
-  paths: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
-});
-
 /** A new import with files the user dropped, pasted or picked to go with the link. */
 const NewImportForm = Schema.Struct({ ...NewImportBody.fields, ...ReferencesForm.fields });
 
@@ -273,28 +241,8 @@ const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
 
 const decodeFeedbackInput = Schema.decodeUnknownEffect(FeedbackInput);
 
-const encodeRunEvent = Schema.encodeEffect(Schema.fromJsonString(RunEvent));
-
 const nonEmpty = (text: string | undefined) =>
   text === undefined || text.trim() === "" ? undefined : text.trim();
-
-const isMultipart = (request: HttpServerRequest.HttpServerRequest) =>
-  (request.headers["content-type"] ?? "").startsWith("multipart/form-data");
-
-/** What was dropped, each file with its path in the drop: its name unless the form gave paths. */
-const uploadsOf = Effect.fnUntraced(function* (form: typeof ReferencesForm.Type) {
-  const given =
-    form.paths === undefined ? form.files.map((file) => file.name) : [form.paths].flat();
-
-  if (given.length !== form.files.length) {
-    return yield* new InvalidRequest({ message: "Send one path for each file" });
-  }
-
-  return form.files.map((file, index): ReferenceUpload => ({
-    source: file.path,
-    path: given[index] ?? "",
-  }));
-});
 
 // ---------------------------------------------------------------------------------------------
 // Items
@@ -636,39 +584,6 @@ const closeImportRoute = withId((id) => Effect.flatMap(stopAndCloseImport(id), i
 // Server-sent events
 
 /**
- * The latest run on the queried key: a `run` event naming what it is about (an item's request, an
- * import's turn), its events so far, then live ones. `find` turns away keys that name nothing, so
- * a stray id cannot leave a channel behind.
- */
-const runStreamRoute = <I, R, E, R2>(
-  registry: Effect.Effect<Runs<I>, never, R>,
-  find: (id: string) => Effect.Effect<unknown, E, R2>,
-) =>
-  Effect.gen(function* () {
-    const runs = yield* registry;
-    const id = yield* queryId;
-    yield* find(id);
-
-    // Subscribe inside the stream so the subscription lives exactly as long as the response.
-    const events = Stream.unwrap(
-      Effect.map(runs.subscribe(id), (subscription) => {
-        const head = Option.match(subscription.subject, {
-          onNone: () => Stream.empty,
-          onSome: (subject) => Stream.make(sseEvent("run", subject)),
-        });
-
-        const body = Stream.mapEffect(subscription.events, (event) =>
-          Effect.map(encodeRunEvent(event), (data) => sseEvent("agent", data)),
-        );
-
-        return Stream.concat(head, body);
-      }),
-    );
-
-    return eventStream(events);
-  });
-
-/**
  * Workspace paths that changed on disk, renders starting or ending, and items whose agent asks the
  * board or has its asking settled, so agent work appears without a reload.
  */
@@ -687,85 +602,6 @@ const changesRoute = Effect.gen(function* () {
       { concurrency: "unbounded" },
     ),
   );
-});
-
-// ---------------------------------------------------------------------------------------------
-// Workspace files
-
-export type ByteRange =
-  | { readonly kind: "whole" }
-  | { readonly kind: "slice"; readonly start: number; readonly end: number }
-  | { readonly kind: "unsatisfiable" };
-
-/**
- * One `Range: bytes=…` header against a file of `size` bytes. `end` is inclusive. Headers this
- * does not understand, such as multiple ranges, get the whole file, as HTTP allows.
- */
-export function parseRange(header: string | undefined, size: number): ByteRange {
-  const match = header === undefined ? null : /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  const from = match?.[1] ?? "";
-  const to = match?.[2] ?? "";
-
-  if (from === "" && to === "") return { kind: "whole" };
-
-  const start = from === "" ? Math.max(0, size - Number(to)) : Number(from);
-  const end = from === "" || to === "" ? size - 1 : Math.min(Number(to), size - 1);
-
-  if (start > end || (from === "" && Number(to) === 0)) return { kind: "unsatisfiable" };
-
-  return { kind: "slice", start, end };
-}
-
-const decodePath = (encoded: string) =>
-  Effect.try({
-    try: () => decodeURIComponent(encoded),
-    catch: () => new InvalidRequest({ message: "Malformed file path" }),
-  });
-
-/** A workspace file, with byte ranges so the board can scrub video. */
-const fileRoute = Effect.gen(function* () {
-  const ws = yield* Workspace;
-  const request = yield* HttpServerRequest.HttpServerRequest;
-  const url = HttpServerRequest.toURL(request);
-
-  const pathname = Option.match(url, {
-    onNone: () => request.url,
-    onSome: (value) => value.pathname,
-  });
-
-  const rel = yield* decodePath(pathname.slice(FILES_PREFIX.length));
-  const contentType = SERVABLE.get(extension(rel));
-
-  if (contentType === undefined) return HttpServerResponse.text("Not servable", { status: 403 });
-
-  const resolved = yield* Effect.option(ws.abs(rel));
-
-  if (Option.isNone(resolved))
-    return HttpServerResponse.text("Outside the workspace", { status: 403 });
-
-  if (!(yield* ws.exists(rel))) return HttpServerResponse.text("Not found", { status: 404 });
-
-  const { size } = yield* ws.stat(rel);
-  const range = parseRange(request.headers["range"], size);
-  const headers = { "accept-ranges": "bytes", "cache-control": "no-cache" };
-
-  switch (range.kind) {
-    case "whole":
-      return yield* HttpServerResponse.file(resolved.value, { contentType, headers });
-    case "slice":
-      return yield* HttpServerResponse.file(resolved.value, {
-        contentType,
-        status: 206,
-        offset: range.start,
-        bytesToRead: range.end - range.start + 1,
-        headers: { ...headers, "content-range": `bytes ${range.start}-${range.end}/${size}` },
-      });
-    case "unsatisfiable":
-      return HttpServerResponse.empty({
-        status: 416,
-        headers: { "content-range": `bytes */${size}` },
-      });
-  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -966,11 +802,7 @@ const apiRoutes = (options: ServerOptions) =>
       ),
     ),
     json("GET", "/api/item/verify", withId(verifyItem)),
-    HttpRouter.route(
-      "GET",
-      "/api/item/run",
-      Effect.catch(runStreamRoute(RunRegistry, getItem), failureResponse),
-    ),
+    runStream("/api/item/run", RunRegistry, getItem),
 
     json(
       "GET",
@@ -986,11 +818,7 @@ const apiRoutes = (options: ServerOptions) =>
     json("POST", "/api/import/reply", importReplyRoute(options)),
     json("POST", "/api/import/stop", stopImportRoute),
     json("POST", "/api/import/close", closeImportRoute),
-    HttpRouter.route(
-      "GET",
-      "/api/import/run",
-      Effect.catch(runStreamRoute(ImportRuns, getImport), failureResponse),
-    ),
+    runStream("/api/import/run", ImportRuns, getImport),
 
     json("GET", "/api/feedback", openFeedback()),
     json("GET", "/api/learned", learnedList),
@@ -1057,8 +885,6 @@ const apiRoutes = (options: ServerOptions) =>
     json("GET", "/api/formats/status", formatStatuses()),
     json("GET", "/api/format", withId(getFormat)),
     HttpRouter.route("GET", "/api/events", changesRoute),
-
-    HttpRouter.route("GET", `${FILES_PREFIX}*`, Effect.catch(fileRoute, failureResponse)),
   ]);
 
 /** The built board, with unknown paths falling back to its index for client-side routing. */
@@ -1141,6 +967,7 @@ export const routes = (options: ServerOptions) => {
   const api = Layer.mergeAll(
     staticRoutes,
     apiRoutes(options),
+    fileRoutes,
     briefRoutes,
     renderRoutes,
     historyRoutes,

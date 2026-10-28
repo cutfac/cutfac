@@ -4,7 +4,7 @@ import { HttpRouter } from "effect/http";
 import { getItem } from "../core/items.ts";
 import { readRender, RENDERS_DIR, requestStop, runningRenders } from "../core/render.ts";
 import { Workspace } from "../core/workspace.ts";
-import { failureResponse, json, withId } from "./respond.ts";
+import { json, raw, withId } from "./respond.ts";
 import { eventStream, sseEvent } from "./sse.ts";
 
 /**
@@ -51,7 +51,7 @@ export const renderChanges = Effect.map(Workspace, (ws) =>
 
 /** Renders the agents run, which the board follows beside the preview and can stop. */
 export const renderRoutes = HttpRouter.addAll([
-  HttpRouter.route("GET", "/api/item/render", Effect.catch(renderStream, failureResponse)),
+  raw("GET", "/api/item/render", renderStream),
   json(
     "POST",
     "/api/item/render/stop",

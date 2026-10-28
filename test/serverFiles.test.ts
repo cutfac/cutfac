@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect, Layer, Schema } from "effect";
 
 import { Workspace } from "../src/core/workspace.ts";
-import { parseRange } from "../src/server/app.ts";
+import { parseRange } from "../src/server/files.ts";
 import { testEffect } from "./effect.ts";
 import { boardServer, decodedOf, jsonOf } from "./routeSupport.ts";
 import { fakeAgents, tempWorkspace } from "./support.ts";
