@@ -6,7 +6,7 @@ import {
   SquarePenIcon,
 } from "lucide-react";
 
-import { openRename } from "@/components/rename-item-dialog";
+import { type RenamePlace, startRename } from "@/components/rename-field";
 import { StatusDot } from "@/components/status-dot";
 import {
   ContextMenuContent,
@@ -33,10 +33,13 @@ import { revealItem } from "../lib/items.ts";
  */
 export function ItemMenu({
   items,
+  renameIn,
   onMove,
   onArchive,
 }: {
   items: readonly ItemSummary[];
+  /** Where the title turns into a field to rename the video: the row or card clicked. */
+  renameIn: RenamePlace;
   onMove: (items: readonly ItemSummary[], status: Status) => void;
   onArchive: (items: readonly ItemSummary[]) => void;
 }) {
@@ -57,7 +60,7 @@ export function ItemMenu({
         </ContextMenuGroup>
       )}
       {single ? (
-        <ContextMenuItem onClick={() => openRename(single)}>
+        <ContextMenuItem onClick={() => startRename(single.id, renameIn)}>
           <PencilIcon />
           {t.itemActions.rename}
         </ContextMenuItem>

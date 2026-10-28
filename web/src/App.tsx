@@ -8,7 +8,6 @@ import { DesktopLicense } from "@/components/desktop-license";
 import { NewItemDialog } from "@/components/new-item-dialog";
 import { ErrorAlert } from "@/components/page";
 import { QuittingOverlay } from "@/components/quitting-overlay";
-import { RenameItemDialog } from "@/components/rename-item-dialog";
 import { TitleBar } from "@/components/title-bar";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar-provider";
@@ -131,7 +130,6 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
         </TitleBar>
       </SidebarInset>
       <NewItemDialog formats={ws?.formats} plan={plan} defaultAgent={ws?.config.agent.default} />
-      <RenameItemDialog />
       <CommandPalette editing={editing} />
       {desktop ? <DesktopLicense desktop={desktop} /> : null}
       <AnnouncementDialog />

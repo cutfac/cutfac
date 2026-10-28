@@ -16,6 +16,7 @@ import { FeedbackDialog } from "@/components/feedback-dialog";
 import { ItemMenu } from "@/components/item-menu";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
+import { RenameField, useRenaming } from "@/components/rename-field";
 import { SidebarResizer } from "@/components/sidebar-resizer";
 import { StatusDot } from "@/components/status-dot";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -42,7 +43,7 @@ import { UpdateCard } from "@/components/update-card";
 import { workDot, workText } from "@/components/work-state";
 import { WorkspaceMenu } from "@/components/workspace-menu";
 
-import { api, type Plan, type WorkspaceInfo } from "../api.ts";
+import { api, type ItemSummary, type Plan, type WorkspaceInfo } from "../api.ts";
 import { desktop, insetTitleBar } from "../desktop.ts";
 import { href, useLive, type Live } from "../hooks.ts";
 import {
@@ -142,6 +143,20 @@ function LinkRow({
       <ContextMenuTrigger render={<SidebarMenuItem />}>{row}</ContextMenuTrigger>
       {menu}
     </ContextMenu>
+  );
+}
+
+/** A video's row, or its title as a field while the user renames it there. */
+function VideoRow({ item, children }: { item: ItemSummary; children: ReactNode }) {
+  if (!useRenaming(item.id, "sidebar")) return children;
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton render={<div />}>
+        <StatusDot status={item.status} />
+        <RenameField item={item} />
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
@@ -268,25 +283,27 @@ export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarPro
                   const state = workText(work, t);
 
                   return (
-                    <LinkRow
-                      key={video.id}
-                      to={href("item", video.id)}
-                      active={video.id === editing}
-                      title={t.nav.videoTitle(video.title, t.status[video.status], state)}
-                      dot={state}
-                      dotTone={workDot(work)}
-                      menu={
-                        <ItemMenu
-                          items={[video]}
-                          onMove={(moving, status) => moveItems(live, moving, status)}
-                          onArchive={(archiving) => void archiveItems(archiving, t)}
-                        />
-                      }
-                    >
-                      <StatusDot status={video.status} />
-                      <span className="sr-only">{t.status[video.status]}</span>
-                      <span>{video.title}</span>
-                    </LinkRow>
+                    <VideoRow key={video.id} item={video}>
+                      <LinkRow
+                        to={href("item", video.id)}
+                        active={video.id === editing}
+                        title={t.nav.videoTitle(video.title, t.status[video.status], state)}
+                        dot={state}
+                        dotTone={workDot(work)}
+                        menu={
+                          <ItemMenu
+                            items={[video]}
+                            renameIn="sidebar"
+                            onMove={(moving, status) => moveItems(live, moving, status)}
+                            onArchive={(archiving) => void archiveItems(archiving, t)}
+                          />
+                        }
+                      >
+                        <StatusDot status={video.status} />
+                        <span className="sr-only">{t.status[video.status]}</span>
+                        <span>{video.title}</span>
+                      </LinkRow>
+                    </VideoRow>
                   );
                 })}
                 <LinkRow to={href("board")} active={false}>

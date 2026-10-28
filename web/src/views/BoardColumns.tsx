@@ -14,6 +14,7 @@ import { MessageSquareIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { ItemMenu } from "@/components/item-menu";
+import { RenameField, useRenaming } from "@/components/rename-field";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -111,7 +112,14 @@ export function BoardColumns({
                 faded={moving.includes(item)}
                 onToggle={() => toggle(item.id)}
                 onMenu={() => menuOn(item)}
-                menu={<ItemMenu items={takenBy(item)} onMove={onMove} onArchive={archive} />}
+                menu={
+                  <ItemMenu
+                    items={takenBy(item)}
+                    renameIn="board"
+                    onMove={onMove}
+                    onArchive={archive}
+                  />
+                }
               />
             ))}
           </Column>
@@ -215,6 +223,7 @@ function CardBody({
   selected?: boolean;
 }) {
   const t = useMessages();
+  const renaming = useRenaming(item.id, "board") && !overlay;
   const title = "line-clamp-2 text-sm leading-snug font-medium";
   const state = workText(work, t);
   const request = "request" in work ? work.request : undefined;
@@ -225,7 +234,9 @@ function CardBody({
       <div className="flex gap-3">
         <Thumbnail item={item} overlay={overlay} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {overlay ? (
+          {renaming ? (
+            <RenameField item={item} className="text-sm leading-snug font-medium" />
+          ) : overlay ? (
             <span className={title}>{item.title}</span>
           ) : (
             // The link's ::after stretches over the whole card, so the card is one click target.

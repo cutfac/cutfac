@@ -288,7 +288,12 @@ function Gallery({
             onToggle={() => picks.toggle(item.id)}
             onMenu={() => picks.menuOn(item)}
             menu={
-              <ItemMenu items={picks.takenBy(item)} onMove={onMove} onArchive={picks.archive} />
+              <ItemMenu
+                items={picks.takenBy(item)}
+                renameIn="board"
+                onMove={onMove}
+                onArchive={picks.archive}
+              />
             }
           />
         ))}

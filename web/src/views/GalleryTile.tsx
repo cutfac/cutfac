@@ -2,6 +2,7 @@ import { Option } from "effect";
 import { ArrowRightIcon, MessageSquareIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { RenameField, useRenaming } from "@/components/rename-field";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -100,6 +101,7 @@ export function Tile({
   onMenu: () => void;
   menu: ReactNode;
 }) {
+  const renaming = useRenaming(item.id, "board");
   const t = useMessages();
   const request = "request" in work ? work.request : undefined;
 
@@ -142,15 +144,19 @@ export function Tile({
             ) : null}
           </div>
           <div className="mt-2 flex flex-col gap-0.5 px-1">
-            {/* The link's ::after stretches over the whole tile, so the tile is one click target. */}
-            <a
-              href={href("item", item.id)}
-              data-card-link
-              className="line-clamp-2 text-sm leading-snug font-medium break-keep outline-none after:absolute after:inset-0"
-            >
-              {item.title}
-              {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
-            </a>
+            {renaming ? (
+              <RenameField item={item} className="text-sm leading-snug font-medium" />
+            ) : (
+              // The link's ::after stretches over the whole tile, so the tile is one click target.
+              <a
+                href={href("item", item.id)}
+                data-card-link
+                className="line-clamp-2 text-sm leading-snug font-medium break-keep outline-none after:absolute after:inset-0"
+              >
+                {item.title}
+                {selected ? <span className="sr-only">, {t.board.selected}</span> : null}
+              </a>
+            )}
             {request === undefined ? null : (
               <p className="line-clamp-1 text-xs text-muted-foreground">{request.body}</p>
             )}
