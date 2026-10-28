@@ -96,6 +96,9 @@ export const serverLayer = (options: ListenOptions) =>
         maxRequestBodySize: MAX_UPLOAD_BYTES,
         // Uploads, ffmpeg-backed requests, and event streams all outlast Bun's 10 s default.
         idleTimeout: 0,
+        // The board's event stream never ends by itself, so a stop that waited on it would hold the
+        // app's quit until the app killed the server, before it stopped its agents and renders.
+        gracefulShutdownTimeout: "1 second",
       }),
     ),
   );
