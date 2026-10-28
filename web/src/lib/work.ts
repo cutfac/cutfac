@@ -23,7 +23,7 @@ export type ItemWork =
   | {
       readonly kind: "rendering";
       readonly label?: string | undefined;
-      readonly share?: number | undefined;
+      readonly share: Option.Option<number>;
     }
   /** The last render failed, and the user hasn't opened the item since. */
   | { readonly kind: "renderFailed"; readonly label?: string | undefined }

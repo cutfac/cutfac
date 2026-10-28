@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { SquareIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,10 +21,10 @@ export function workText(work: ItemWork, t: Messages) {
     case "question":
       return t.gallery.question;
     case "rendering": {
-      const text =
-        work.share === undefined
-          ? t.render.rendering
-          : t.render.percent(Math.round(work.share * 100));
+      const text = Option.match(work.share, {
+        onNone: () => t.render.rendering,
+        onSome: (share) => t.render.percent(Math.round(share * 100)),
+      });
 
       return work.label === undefined ? text : `${work.label} · ${text}`;
     }

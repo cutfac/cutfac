@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
@@ -130,10 +131,15 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
 
   // A render that finishes shows what it wrote and plays it from where the request pointed.
   const renderView = useItemRender(id, shellRender(run.steps, run.status === "running"), (done) => {
-    const name = item === undefined ? undefined : renderedName(done, item.dir);
+    const written = Option.flatMap(Option.fromUndefinedOr(item), ({ dir }) =>
+      renderedName(done, dir),
+    );
+
     const at = target.start ?? 0;
 
-    if (name === undefined) return;
+    if (Option.isNone(written)) return;
+
+    const name = written.value;
 
     // The render's end can reach the board before the file it rewrote does.
     if (name === media?.name && media.mtime >= done.startedAt) {
@@ -291,7 +297,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                 ratio={(video ? videoRatio : undefined) ?? aspectRatio(media.aspect) ?? 9 / 16}
                 previous={
                   renderView.render?.status === "running" &&
-                  renderedName(renderView.render, item.dir) === media.name
+                  Option.contains(renderedName(renderView.render, item.dir), media.name)
                 }
               >
                 <Stage

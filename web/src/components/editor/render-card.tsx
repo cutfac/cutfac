@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ChevronRightIcon, CircleStopIcon, XIcon } from "lucide-react";
 import {
   createContext,
@@ -42,7 +43,7 @@ export interface RenderView {
   /** The render the card shows, while it runs and for a moment after it ends. */
   readonly render: RenderState | undefined;
   /** The command of a render the agent runs in its shell, whose progress the board can't read. */
-  readonly shell: string | undefined;
+  readonly shell: Option.Option<string>;
   /** Versions rendered so far this visit, by label, oldest first. */
   readonly versions: ReadonlyArray<RenderState>;
   readonly dismiss: () => void;
@@ -60,7 +61,7 @@ interface Seen {
  */
 export function useItemRender(
   id: string,
-  shell: string | undefined,
+  shell: Option.Option<string>,
   onDone: (render: RenderState) => void,
 ): RenderView {
   /**
@@ -127,7 +128,7 @@ export function useItemRender(
     (version) => version.label !== undefined,
   );
 
-  return { render, shell: render === undefined ? shell : undefined, versions, dismiss, stop };
+  return { render, shell: render === undefined ? shell : Option.none(), versions, dismiss, stop };
 }
 
 /** The current time, ticking each second while `on`. */
@@ -154,7 +155,7 @@ export function useRenderLine(): string | undefined {
   const view = useContext(RenderContext);
   const t = useMessages();
 
-  if (view?.shell !== undefined) return t.render.rendering;
+  if (view !== undefined && Option.isSome(view.shell)) return t.render.rendering;
 
   const render = view?.render;
 
@@ -163,9 +164,10 @@ export function useRenderLine(): string | undefined {
 
 /** `Rendering 27%`, or just `Rendering` while it can't tell how far. */
 function runningLine(render: RenderState, t: Messages) {
-  const share = renderShare(render);
-
-  return share === undefined ? t.render.rendering : t.render.percent(Math.round(share * 100));
+  return Option.match(renderShare(render), {
+    onNone: () => t.render.rendering,
+    onSome: (share) => t.render.percent(Math.round(share * 100)),
+  });
 }
 
 /** The size of `element`, kept current as it changes. */
@@ -219,7 +221,7 @@ export function RenderFrame({
   const [outer, setOuter] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState<HTMLDivElement | null>(null);
   const t = useMessages();
-  const showing = view.render !== undefined || view.shell !== undefined;
+  const showing = view.render !== undefined || Option.isSome(view.shell);
   // Decided on the whole area, line included: the line under the frame shrinks the stage, which
   // would otherwise make room beside it and flip the card back and forth.
   const beside = frameIn(useSize(outer), ratio).left >= CARD_WIDTH + CARD_GAP * 2;
@@ -254,17 +256,19 @@ export function RenderFrame({
 
 function RenderCard({ view, compact = false }: { view: RenderView; compact?: boolean }) {
   const { render, shell } = view;
-  const now = useNow(render?.status === "running" || shell !== undefined);
+  const now = useNow(render?.status === "running" || Option.isSome(shell));
   const t = useMessages();
 
   if (render === undefined) {
-    return <ShellCard key={shell} command={shell} now={now} compact={compact} />;
+    return Option.isSome(shell) ? (
+      <ShellCard key={shell.value} command={shell.value} now={now} compact={compact} />
+    ) : null;
   }
 
   const running = render.status === "running";
   const elapsed = (render.endedAt ?? now) - render.startedAt;
   const share = renderShare(render);
-  const left = running ? timeLeft(elapsed, share) : undefined;
+  const left = running ? timeLeft(elapsed, share) : Option.none();
   const { progress } = render;
   const stage = RENDER_STAGES.indexOf(progress.stage);
   const done = render.status === "done";
@@ -315,7 +319,7 @@ function RenderCard({ view, compact = false }: { view: RenderView; compact?: boo
               </li>
             ))}
           </ol>
-          <Progress value={share === undefined ? null : Math.round(share * 100)} />
+          <Progress value={Option.isSome(share) ? Math.round(share.value * 100) : null} />
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
             {progress.unit === "frames" &&
             progress.done !== undefined &&
@@ -323,9 +327,9 @@ function RenderCard({ view, compact = false }: { view: RenderView; compact?: boo
               <span>{t.render.frames(progress.done, progress.total)}</span>
             ) : null}
             {running ? <span>{t.render.elapsed(spanTime(elapsed))}</span> : null}
-            {left === undefined ? null : (
-              <span className="ml-auto">{t.render.left(spanTime(left))}</span>
-            )}
+            {Option.isSome(left) ? (
+              <span className="ml-auto">{t.render.left(spanTime(left.value))}</span>
+            ) : null}
           </div>
         </>
       ) : null}
@@ -341,15 +345,7 @@ function RenderCard({ view, compact = false }: { view: RenderView; compact?: boo
 }
 
 /** A render the agent runs in its shell: timed from when the board noticed it. */
-function ShellCard({
-  command,
-  now,
-  compact,
-}: {
-  command: string | undefined;
-  now: number;
-  compact: boolean;
-}) {
+function ShellCard({ command, now, compact }: { command: string; now: number; compact: boolean }) {
   const [since] = useState(Date.now);
   const t = useMessages();
 
@@ -420,9 +416,10 @@ function versionState(version: RenderState, t: Messages) {
     case "done":
       return "✓";
     case "running": {
-      const share = renderShare(version);
-
-      return share === undefined ? t.render.rendering : `${Math.round(share * 100)}%`;
+      return Option.match(renderShare(version), {
+        onNone: () => t.render.rendering,
+        onSome: (share) => `${Math.round(share * 100)}%`,
+      });
     }
 
     case "failed":

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import {
   renderedName,
   renderShare,
@@ -20,32 +22,33 @@ const state = (overrides: Partial<RenderState>): RenderState => ({
   ...overrides,
 });
 
+const halfThrough = (stage: RenderState["progress"]["stage"]) =>
+  Option.getOrThrow(renderShare(state({ progress: { stage, percent: 0.5 } })));
+
 describe("a render's share done", () => {
   test("weighs each stage, with drawing frames most of it", () => {
-    expect(renderShare(state({ progress: { stage: "preparing", percent: 0.5 } }))).toBeCloseTo(
-      0.05,
-    );
-    expect(renderShare(state({ progress: { stage: "frames", percent: 0.5 } }))).toBeCloseTo(0.45);
-    expect(renderShare(state({ progress: { stage: "encoding", percent: 0.5 } }))).toBeCloseTo(0.9);
+    expect(halfThrough("preparing")).toBeCloseTo(0.05);
+    expect(halfThrough("frames")).toBeCloseTo(0.45);
+    expect(halfThrough("encoding")).toBeCloseTo(0.9);
   });
 
   test("an ffmpeg render's time is the whole of it", () => {
     const progress = { stage: "encoding", unit: "seconds", percent: 0.3 } as const;
 
-    expect(renderShare(state({ progress }))).toBe(0.3);
+    expect(renderShare(state({ progress }))).toEqual(Option.some(0.3));
   });
 
   test("is whole once done, and unknown before any percentage", () => {
-    expect(renderShare(state({ status: "done" }))).toBe(1);
-    expect(renderShare(state({}))).toBeUndefined();
+    expect(renderShare(state({ status: "done" }))).toEqual(Option.some(1));
+    expect(renderShare(state({}))).toEqual(Option.none());
   });
 });
 
 describe("timing a render", () => {
   test("guesses the time left only once it has gone far enough", () => {
-    expect(timeLeft(10_000, 0.25)).toBe(30_000);
-    expect(timeLeft(10_000, 0.01)).toBeUndefined();
-    expect(timeLeft(10_000, 1)).toBeUndefined();
+    expect(timeLeft(10_000, Option.some(0.25))).toEqual(Option.some(30_000));
+    expect(timeLeft(10_000, Option.some(0.01))).toEqual(Option.none());
+    expect(timeLeft(10_000, Option.some(1))).toEqual(Option.none());
   });
 
   test("reads as minutes, and hours past an hour", () => {
@@ -61,32 +64,40 @@ describe("a render the agent runs in its shell", () => {
   test("is the command the running agent waits on, when it renders", () => {
     const steps = [step("ls"), step("npx remotion render MyComp out/v.mp4")];
 
-    expect(shellRender(steps, true)).toBe("npx remotion render MyComp out/v.mp4");
-    expect(shellRender([step("ffmpeg -i a.mp4 b.mp4")], true)).toBe("ffmpeg -i a.mp4 b.mp4");
+    expect(shellRender(steps, true)).toEqual(Option.some("npx remotion render MyComp out/v.mp4"));
+    expect(shellRender([step("ffmpeg -i a.mp4 b.mp4")], true)).toEqual(
+      Option.some("ffmpeg -i a.mp4 b.mp4"),
+    );
   });
 
   test("is nothing once the run ends or moves on", () => {
     const steps = [step("npx remotion render MyComp"), { kind: "text", text: "Done" } as const];
 
-    expect(shellRender([step("npx remotion render MyComp")], false)).toBeUndefined();
-    expect(shellRender(steps, true)).toBeUndefined();
-    expect(shellRender([step("npx remotion studio")], true)).toBeUndefined();
+    expect(shellRender([step("npx remotion render MyComp")], false)).toEqual(Option.none());
+    expect(shellRender(steps, true)).toEqual(Option.none());
+    expect(shellRender([step("npx remotion studio")], true)).toEqual(Option.none());
   });
 
   test("is nothing for a quick ffmpeg check or a single frame", () => {
-    expect(shellRender([step("which ffmpeg && ffmpeg -version")], true)).toBeUndefined();
-    expect(shellRender([step("ffmpeg -ss 2 -i v.mp4 -frames:v 1 f.png")], true)).toBeUndefined();
+    expect(shellRender([step("which ffmpeg && ffmpeg -version")], true)).toEqual(Option.none());
+    expect(shellRender([step("ffmpeg -ss 2 -i v.mp4 -frames:v 1 f.png")], true)).toEqual(
+      Option.none(),
+    );
   });
 });
 
 describe("the file a render wrote", () => {
   test("is named within the item's folder", () => {
-    expect(renderedName(state({ output: "items/clip/v2.mp4" }), "items/clip")).toBe("v2.mp4");
-    expect(renderedName(state({ output: "v2.mp4" }), "items/clip")).toBe("v2.mp4");
+    expect(renderedName(state({ output: "items/clip/v2.mp4" }), "items/clip")).toEqual(
+      Option.some("v2.mp4"),
+    );
+    expect(renderedName(state({ output: "v2.mp4" }), "items/clip")).toEqual(Option.some("v2.mp4"));
   });
 
   test("is nothing when it lands elsewhere or wasn't said", () => {
-    expect(renderedName(state({ output: "items/clip/out/v2.mp4" }), "items/clip")).toBeUndefined();
-    expect(renderedName(state({}), "items/clip")).toBeUndefined();
+    expect(renderedName(state({ output: "items/clip/out/v2.mp4" }), "items/clip")).toEqual(
+      Option.none(),
+    );
+    expect(renderedName(state({}), "items/clip")).toEqual(Option.none());
   });
 });

@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { ArrowRightIcon, MessageSquareIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -129,8 +130,8 @@ export function Tile({
           >
             <Thumbnail item={item} large />
             <WorkBadge work={work} />
-            {work.kind === "rendering" && work.share !== undefined ? (
-              <RenderBar share={work.share} />
+            {work.kind === "rendering" && Option.isSome(work.share) ? (
+              <RenderBar share={work.share.value} />
             ) : null}
             {isBusy(work) ? (
               <StopButton
