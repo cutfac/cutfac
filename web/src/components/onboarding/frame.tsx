@@ -1,5 +1,13 @@
+import { Option } from "effect";
 import { CheckIcon, LinkIcon } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  createContext,
+  type CSSProperties,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,6 +21,22 @@ export const ONBOARDING_STEPS = 4;
 
 /** How long a step shows that it is done before the next one, so the change reads as progress. */
 export const DONE_PAUSE_MS = 900;
+
+const StepProgress = createContext<(within: Option.Option<number>) => void>(() => undefined);
+
+/**
+ * How far a step with parts of its own has got, from 0 to 1, for its dot to fill, as the questions
+ * do over their five parts.
+ */
+export function useStepProgress(fraction: number) {
+  const report = useContext(StepProgress);
+
+  useEffect(() => {
+    report(Option.some(fraction));
+
+    return () => report(Option.none());
+  }, [report, fraction]);
+}
 
 /**
  * The first launch's window: one step at a time in a narrow column, centred, with the step's dots
@@ -28,6 +52,8 @@ export function OnboardingFrame({
   wide?: boolean;
   children: ReactNode;
 }) {
+  const [within, setWithin] = useState(Option.none<number>());
+
   useEffect(() => {
     document.documentElement.toggleAttribute("data-onboarding", true);
 
@@ -57,10 +83,10 @@ export function OnboardingFrame({
           )}
         >
           <LinkWaiting />
-          {children}
+          <StepProgress value={setWithin}>{children}</StepProgress>
         </div>
       </main>
-      {step === undefined ? null : <StepDots current={step} />}
+      {step === undefined ? null : <StepDots current={step} within={within} />}
     </div>
   );
 }
@@ -85,24 +111,39 @@ function LinkWaiting() {
   );
 }
 
-function StepDots({ current }: { current: number }) {
+/** A dot for each step, the current one long; one with parts of its own fills as they are done. */
+function StepDots({ current, within }: { current: number; within: Option.Option<number> }) {
   const t = useMessages();
 
   return (
     <div className="flex shrink-0 justify-center gap-1.5 pt-3 pb-8">
       <span className="sr-only">{t.onboarding.step(current, ONBOARDING_STEPS)}</span>
-      {Array.from({ length: ONBOARDING_STEPS }, (_, index) => (
-        <span
-          key={index}
-          aria-hidden
-          className={cn(
-            "h-1.5 rounded-full transition-all duration-300",
-            index + 1 === current ? "w-5 bg-foreground" : "w-1.5",
-            index + 1 < current ? "bg-foreground/50" : null,
-            index + 1 > current ? "bg-foreground/15" : null,
-          )}
-        />
-      ))}
+      {Array.from({ length: ONBOARDING_STEPS }, (_, index) =>
+        index + 1 === current && Option.isSome(within) ? (
+          <span
+            key={index}
+            aria-hidden
+            className="relative h-1.5 w-10 overflow-hidden rounded-full bg-foreground/15 transition-all duration-300"
+          >
+            <span
+              className="absolute inset-y-0 left-0 w-(--filled) rounded-full bg-foreground transition-all duration-300"
+              // SAFETY: CSSProperties has no index signature for custom properties; the value is a plain percentage.
+              style={{ "--filled": `${within.value * 100}%` } as CSSProperties}
+            />
+          </span>
+        ) : (
+          <span
+            key={index}
+            aria-hidden
+            className={cn(
+              "h-1.5 rounded-full transition-all duration-300",
+              index + 1 === current ? "w-5 bg-foreground" : "w-1.5",
+              index + 1 < current ? "bg-foreground/50" : null,
+              index + 1 > current ? "bg-foreground/15" : null,
+            )}
+          />
+        ),
+      )}
     </div>
   );
 }

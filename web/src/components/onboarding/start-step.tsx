@@ -14,7 +14,7 @@ import { errorText } from "../../lib/notify.ts";
 import { asWebsite, skipStart } from "../../lib/onboarding.ts";
 import { type Answers, saveAnswers } from "./answers.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
-import { StepHeader } from "./frame.tsx";
+import { StepHeader, useStepProgress } from "./frame.tsx";
 import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
 
 /** How long a clicked card shows as picked before the next part opens. */
@@ -99,6 +99,8 @@ export function BriefQuestions({
   );
 
   const index = STEPS.indexOf(part);
+
+  useStepProgress((index + 1) / STEPS.length);
   const links = sources.some(isLink) || typed.trim() !== "";
   const folders = sources.some((source) => !isLink(source));
   const go = (step: 1 | -1) => setPart(STEPS[index + step] ?? part);
