@@ -11,7 +11,7 @@
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
-import { Console, Effect, FileSystem, Option, Schema } from "effect";
+import { Console, Effect, FileSystem, Option, Redacted, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { run as runCaptured } from "../src/core/process.ts";
@@ -128,7 +128,7 @@ const subjectsSinceRelease = Effect.fnUntraced(function* (commit: string) {
 /** What stops a release, found in seconds so that nothing fails for it after the long build. */
 const preflight = Effect.gen(function* () {
   const missing = yield* missingSettings;
-  const team = yield* releaseSetting("APPLE_TEAM_ID");
+  const team = Option.map(yield* releaseSetting("APPLE_TEAM_ID"), Redacted.value);
 
   const fetched = yield* output(["git", "fetch", "--quiet", "origin", BRANCH]);
 

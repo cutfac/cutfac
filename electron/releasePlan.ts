@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Config, Console, Effect, Option, Result, Schema } from "effect";
+import { Config, Console, Effect, Option, Redacted, Result, Schema } from "effect";
 
 import { fromYamlString } from "../src/core/configText.ts";
 
@@ -58,9 +58,14 @@ export function releaseArgs(args: ReadonlyArray<string>): Option.Option<ReleaseA
   });
 }
 
-/** A setting from .env.release, or none when it is unset or empty. */
+/**
+ * A setting from .env.release, or none when it is unset or empty. It stays redacted, so a log or
+ * an error can't show it, until the one place that needs its value takes it out.
+ */
 export const releaseSetting = (name: ReleaseSetting) =>
-  Config.option(Config.NonEmptyString(name)).pipe(Effect.orElseSucceed(Option.none<string>));
+  Config.option(Config.Redacted(name)).pipe(
+    Effect.orElseSucceed(Option.none<Redacted.Redacted<string>>),
+  );
 
 /** The settings .env.release leaves unset or empty, by name, never their values. */
 export const missingSettings = Effect.filter(REQUIRED_ENV, (name) =>

@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Context, Effect, FileSystem, Layer, Option, Result } from "effect";
+import { Context, Effect, FileSystem, Layer, Option, Redacted, Result } from "effect";
 
 import {
   type BuildFile,
@@ -40,10 +40,10 @@ export class ReleaseBucket extends Context.Service<
     ReleaseBucket,
     Effect.gen(function* () {
       const s3 = new Bun.S3Client({
-        bucket: yield* setting("CUTFAC_RELEASES_BUCKET"),
-        region: yield* setting("CUTFAC_RELEASES_REGION"),
-        accessKeyId: yield* setting("AWS_ACCESS_KEY_ID"),
-        secretAccessKey: yield* setting("AWS_SECRET_ACCESS_KEY"),
+        bucket: Redacted.value(yield* setting("CUTFAC_RELEASES_BUCKET")),
+        region: Redacted.value(yield* setting("CUTFAC_RELEASES_REGION")),
+        accessKeyId: Redacted.value(yield* setting("AWS_ACCESS_KEY_ID")),
+        secretAccessKey: Redacted.value(yield* setting("AWS_SECRET_ACCESS_KEY")),
       });
 
       const publishedVersion = Effect.tryPromise({
