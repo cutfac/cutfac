@@ -1,6 +1,6 @@
 import { Option } from "effect";
 import { ArrowUpIcon, LayersIcon, SquareIcon, XIcon } from "lucide-react";
-import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TrustNote } from "@/components/workspace-trust";
-import { composing } from "@/lib/utils";
+import { blurOnEscape, sendOnEnter } from "@/lib/utils";
 
 import {
   api,
@@ -283,16 +283,7 @@ export function Composer({
     }
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (composing(event)) return;
-
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void send();
-    } else if (event.key === "Escape") {
-      event.currentTarget.blur();
-    }
-  }
+  const onKeyDown = sendOnEnter({ onEnter: () => void send(), onEscape: blurOnEscape });
 
   const settings = pickedSettings(statuses, picks, agent);
   const status = statusOf(statuses, agent);

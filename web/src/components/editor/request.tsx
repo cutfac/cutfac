@@ -16,7 +16,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Message, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message";
 import { Textarea } from "@/components/ui/textarea";
-import { composing } from "@/lib/utils";
+import { sendOnEnter } from "@/lib/utils";
 
 import type { AgentName, AgentStatus, Feedback, ItemDetail, Variant } from "../../api.ts";
 import { agentInstalled, href } from "../../hooks.ts";
@@ -276,16 +276,7 @@ function Reword({
         rows={3}
         aria-label={t.composer.request}
         onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if (composing(event)) return;
-
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            save();
-          } else if (event.key === "Escape") {
-            onCancel();
-          }
-        }}
+        onKeyDown={sendOnEnter({ onEnter: save, onEscape: onCancel })}
       />
       <div className="flex justify-end gap-1.5">
         <Button variant="ghost" pill size="xs" onClick={onCancel}>

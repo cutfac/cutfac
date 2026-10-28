@@ -10,7 +10,7 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Popover, PopoverContent } from "@/components/ui/popover";
-import { composing } from "@/lib/utils";
+import { sendOnEnter } from "@/lib/utils";
 
 import type { AgentChoice, ItemDetail } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -114,14 +114,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
                 placeholder={t.composer.placeholder.box}
                 aria-label={t.boxPrompt.label}
                 onChange={(event) => setBody(event.target.value)}
-                onKeyDown={(event) => {
-                  if (composing(event)) return;
-
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    send();
-                  }
-                }}
+                onKeyDown={sendOnEnter({ onEnter: send })}
               />
               <InputGroupAddon align="block-end">
                 <InputGroupButton

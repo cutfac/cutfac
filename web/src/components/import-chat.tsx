@@ -8,14 +8,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
-import {
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
 import { ErrorAlert, ListSkeleton } from "@/components/page";
@@ -49,7 +42,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
 import { TrustNote } from "@/components/workspace-trust";
-import { composing } from "@/lib/utils";
+import { blurOnEscape, sendOnEnter } from "@/lib/utils";
 
 import {
   api,
@@ -411,16 +404,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
     setSending(false);
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (composing(event)) return;
-
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void send();
-    } else if (event.key === "Escape") {
-      event.currentTarget.blur();
-    }
-  }
+  const onKeyDown = sendOnEnter({ onEnter: () => void send(), onEscape: blurOnEscape });
 
   const placeholder = working
     ? t.imports.placeholder.working
