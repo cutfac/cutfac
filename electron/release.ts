@@ -17,7 +17,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { run as runCaptured } from "../src/core/process.ts";
 import { packageVersion } from "./packageJson.ts";
-import { publishBuild, ReleaseBucket } from "./releaseBucket.ts";
+import { buildUploads, publishBuild, ReleaseBucket } from "./releaseBucket.ts";
 import {
   BRANCH,
   BUMP,
@@ -129,7 +129,10 @@ const subjectsSinceRelease = Effect.fnUntraced(function* (commit: string) {
   );
 });
 
-/** What stops a release, found in seconds so that nothing fails for it after the long build. */
+/**
+ * What stops a release, found in seconds so that nothing fails for it after the long build: what
+ * the build needs, and what publishing it needs, which a dry run only reports.
+ */
 const preflight = Effect.gen(function* () {
   const missing = yield* missingSettings;
   const team = Option.map(yield* releaseSetting("APPLE_TEAM_ID"), Redacted.value);
@@ -147,12 +150,21 @@ const preflight = Effect.gen(function* () {
     { concurrency: "unbounded" },
   );
 
-  const problems: Array<Option.Option<string>> = [
+  const build: Array<Option.Option<string>> = [
     missing.length === 0
       ? Option.none()
       : Option.some(
           `Set ${missing.join(", ")} in .env.release (see docs/desktop.md, Releasing the app).`,
         ),
+    Option.flatMap(team, (id) =>
+      signingProblem(
+        Option.getOrElse(identities, () => ""),
+        id,
+      ),
+    ),
+  ];
+
+  const publish: Array<Option.Option<string>> = [
     Option.match(status, {
       onNone: () => Option.some("Run this in a git checkout."),
       onSome: treeProblem,
@@ -163,16 +175,10 @@ const preflight = Effect.gen(function* () {
           Option.getOrElse(branch, () => ""),
           Number(Option.getOrElse(behind, () => "0")),
         ),
-    Option.flatMap(team, (id) =>
-      signingProblem(
-        Option.getOrElse(identities, () => ""),
-        id,
-      ),
-    ),
     Option.isNone(github) ? Option.some("Log in to GitHub with `gh auth login`.") : Option.none(),
   ];
 
-  return problems.flatMap(Option.toArray);
+  return { build: build.flatMap(Option.toArray), publish: publish.flatMap(Option.toArray) };
 });
 
 /** Refuses a version that is already tagged, or not newer than the one the bucket serves. */
@@ -303,16 +309,10 @@ const copyCommit = Effect.fnUntraced(function* (commit: string) {
   yield* run(["bun", "install", "--frozen-lockfile", "--ignore-scripts"], buildRoot);
 });
 
-const ship = Effect.fnUntraced(function* (asked: ReleaseArgs) {
-  const version = yield* checkedVersion(asked);
-  const commit = yield* output(["git", "rev-parse", "HEAD"]);
-
-  if (Option.isNone(commit)) {
-    return yield* new ReleaseFailed({ message: "Couldn't read the commit to release." });
-  }
-
+/** Builds, signs and notarizes `commit` as `version` in `buildRoot`, into the folder it returns. */
+const buildApp = Effect.fnUntraced(function* (version: string, commit: string) {
   yield* log(`Building Cutfac ${version} in ${path.relative(root, buildRoot)}.`);
-  yield* copyCommit(commit.value);
+  yield* copyCommit(commit);
   yield* run(["bun", "run", "build"], buildRoot);
   yield* run(["bun", "run", "build:sidecar"], buildRoot);
   yield* run(["bun", "run", "build:electron"], buildRoot);
@@ -330,7 +330,44 @@ const ship = Effect.fnUntraced(function* (asked: ReleaseArgs) {
     buildRoot,
   );
 
-  yield* publishBuild(path.join(buildRoot, "release"), version);
+  return path.join(buildRoot, "release");
+});
+
+/**
+ * What a release would publish from the build in `folder`, checked as far as it can be without
+ * publishing: the bucket is read, never written, and the push is a `--dry-run`.
+ */
+const rehearse = Effect.fnUntraced(function* (folder: string, version: string, commit: string) {
+  const bucket = yield* ReleaseBucket;
+  const published = Option.getOrElse(yield* bucket.publishedVersion, () => "nothing yet");
+  const uploads = (yield* buildUploads(folder, version)).map(({ name }) => name);
+
+  yield* log(
+    `Dry run: ${version} is built, signed and notarized in ${path.relative(root, folder)}, ` +
+      `without CI's checks, the agent check or a bump. The bucket serves ${published}.`,
+  );
+  yield* log(
+    `A release would upload ${uploads.join(", ")}, then tag ${tagName(version)} ` +
+      `and push ${commit.slice(0, 10)} to ${BRANCH}:`,
+  );
+  yield* run(["git", "push", "--dry-run", "origin", `${commit}:refs/heads/${BRANCH}`]);
+
+  return 0;
+});
+
+const ship = Effect.fnUntraced(function* (asked: ReleaseArgs) {
+  const version = asked.dryRun ? yield* packageVersion(packageFile) : yield* checkedVersion(asked);
+  const commit = yield* output(["git", "rev-parse", "HEAD"]);
+
+  if (Option.isNone(commit)) {
+    return yield* new ReleaseFailed({ message: "Couldn't read the commit to release." });
+  }
+
+  const folder = yield* buildApp(version, commit.value);
+
+  if (asked.dryRun) return yield* rehearse(folder, version, commit.value);
+
+  yield* publishBuild(folder, version);
 
   const code = yield* publishSource(
     version,
@@ -351,12 +388,18 @@ export const release = Effect.fn("release")(function* (args: ReadonlyArray<strin
 
   if (Option.isNone(asked)) return yield* new ReleaseFailed({ message: USAGE });
 
+  const { dryRun } = asked.value;
   const problems = yield* preflight;
+  const blocking = dryRun ? problems.build : [...problems.build, ...problems.publish];
 
-  if (problems.length > 0) {
+  if (blocking.length > 0) {
     return yield* new ReleaseFailed({
-      message: `Fix these first:\n  - ${problems.join("\n  - ")}`,
+      message: `Fix these first:\n  - ${blocking.join("\n  - ")}`,
     });
+  }
+
+  if (dryRun && problems.publish.length > 0) {
+    yield* log(`A release would stop for these first:\n  - ${problems.publish.join("\n  - ")}`);
   }
 
   return yield* ship(asked.value).pipe(Effect.provide(ReleaseBucket.layer));

@@ -28,7 +28,13 @@ One command ships a release, from a clean `main`:
 ```sh
 bun run release          # release the version in package.json
 bun run release patch    # or minor, major, or a version: bump it with `bun pm version` first
+bun run release --dry-run  # build, sign and notarize the version in package.json; publish nothing
 ```
+
+A dry run copies, builds, signs and notarizes `HEAD` as a release would, then reads the bucket's
+feed, lists the files a release would upload, and tries the push with `git push --dry-run`. It
+skips CI's checks, the agent check and the bump, and it never writes the bucket, tags or pushes.
+It reports what would stop a real release, like uncommitted changes, without stopping for them.
 
 It reads its credentials from `.env.release`, which git ignores:
 

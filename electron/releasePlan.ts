@@ -13,10 +13,14 @@ export const log = scriptLog("release");
 
 export const BRANCH = "main";
 
-export const USAGE =
-  "Usage: bun run release [patch | minor | major | <version>] [--skip-agent-check]";
+export const USAGE = [
+  "Usage: bun run release [patch | minor | major | <version>] [--skip-agent-check]",
+  "       bun run release --dry-run",
+].join("\n");
 
 const SKIP_AGENT_CHECK = "--skip-agent-check";
+
+const DRY_RUN = "--dry-run";
 
 export const BUMP = "Bump it with `bun run release patch` (or minor, major).";
 
@@ -46,16 +50,23 @@ const decodeFeed = Schema.decodeUnknownOption(
 export interface ReleaseArgs {
   readonly increment: Option.Option<string>;
   readonly checkAgents: boolean;
+  /** Builds, signs and notarizes package.json's version, and publishes nothing. */
+  readonly dryRun: boolean;
 }
 
 export function releaseArgs(args: ReadonlyArray<string>): Option.Option<ReleaseArgs> {
-  const [increment, ...rest] = args.filter((arg) => arg !== SKIP_AGENT_CHECK);
+  const [increment, ...rest] = args.filter((arg) => arg !== SKIP_AGENT_CHECK && arg !== DRY_RUN);
+  const dryRun = args.includes(DRY_RUN);
 
   if (rest.length > 0 || increment?.startsWith("-")) return Option.none();
+
+  // A bump would need a commit that a dry run then has no reason to keep.
+  if (dryRun && increment !== undefined) return Option.none();
 
   return Option.some({
     increment: Option.fromUndefinedOr(increment),
     checkAgents: !args.includes(SKIP_AGENT_CHECK),
+    dryRun,
   });
 }
 

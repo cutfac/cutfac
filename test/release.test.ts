@@ -30,24 +30,32 @@ const identities = (...names: string[]) =>
 
 describe("the release command", () => {
   test("releases package.json's version, or bumps it by what it is given", () => {
-    expect(releaseArgs([])).toEqual(Option.some({ increment: Option.none(), checkAgents: true }));
+    expect(releaseArgs([])).toEqual(
+      Option.some({ increment: Option.none(), checkAgents: true, dryRun: false }),
+    );
     expect(releaseArgs(["patch"])).toEqual(
-      Option.some({ increment: Option.some("patch"), checkAgents: true }),
+      Option.some({ increment: Option.some("patch"), checkAgents: true, dryRun: false }),
     );
     expect(releaseArgs(["1.2.3"])).toEqual(
-      Option.some({ increment: Option.some("1.2.3"), checkAgents: true }),
+      Option.some({ increment: Option.some("1.2.3"), checkAgents: true, dryRun: false }),
     );
   });
 
   test("checks the agent CLIs first, unless told to skip it", () => {
     expect(releaseArgs(["--skip-agent-check"])).toEqual(
-      Option.some({ increment: Option.none(), checkAgents: false }),
+      Option.some({ increment: Option.none(), checkAgents: false, dryRun: false }),
     );
     expect(releaseArgs(["patch", "--skip-agent-check"])).toEqual(
-      Option.some({ increment: Option.some("patch"), checkAgents: false }),
+      Option.some({ increment: Option.some("patch"), checkAgents: false, dryRun: false }),
     );
     expect(releaseArgs(["--skip-agent-check", "1.2.3"])).toEqual(
-      Option.some({ increment: Option.some("1.2.3"), checkAgents: false }),
+      Option.some({ increment: Option.some("1.2.3"), checkAgents: false, dryRun: false }),
+    );
+  });
+
+  test("rehearses package.json's version, which a dry run never bumps", () => {
+    expect(releaseArgs(["--dry-run"])).toEqual(
+      Option.some({ increment: Option.none(), checkAgents: true, dryRun: true }),
     );
   });
 
@@ -55,13 +63,17 @@ describe("the release command", () => {
     { args: ["patch", "minor"] },
     { args: ["--help"] },
     { args: ["patch", "minor", "--skip-agent-check"] },
-  ])("shows how to use it, the skip too, for $args before checking anything", ({ args }) =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(release(args));
+    { args: ["patch", "--dry-run"] },
+  ])(
+    "shows how to use it, the skip and the dry run too, for $args before checking anything",
+    ({ args }) =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(release(args));
 
-      expect(error.message).toStartWith("Usage: bun run release");
-      expect(error.message).toContain("[--skip-agent-check]");
-    }),
+        expect(error.message).toStartWith("Usage: bun run release");
+        expect(error.message).toContain("[--skip-agent-check]");
+        expect(error.message).toContain("--dry-run");
+      }),
   );
 });
 

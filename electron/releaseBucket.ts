@@ -67,10 +67,9 @@ export class ReleaseBucket extends Context.Service<
   );
 }
 
-/** Uploads `version`'s build from `folder`, the feed that makes it live last. */
-export const publishBuild = Effect.fn("publishBuild")(function* (folder: string, version: string) {
+/** What a release of `version` uploads from `folder`, in order: the feed that makes it live last. */
+export const buildUploads = Effect.fn("buildUploads")(function* (folder: string, version: string) {
   const fs = yield* FileSystem.FileSystem;
-  const bucket = yield* ReleaseBucket;
   const feed = yield* fs.readFileString(path.join(folder, FEED_FILE)).pipe(Effect.option);
 
   if (!Option.contains(Option.flatMap(feed, feedVersion), version)) {
@@ -83,13 +82,19 @@ export const publishBuild = Effect.fn("publishBuild")(function* (folder: string,
 
   if (Result.isFailure(builds)) return yield* new ReleaseFailed({ message: builds.failure });
 
+  return [...builds.success, { name: FEED_FILE, type: "text/yaml" }];
+});
+
+/** Uploads `version`'s build from `folder`, the feed that makes it live last. */
+export const publishBuild = Effect.fn("publishBuild")(function* (folder: string, version: string) {
+  const bucket = yield* ReleaseBucket;
+
   const upload = (file: BuildFile) =>
     Effect.andThen(
       log(`Uploading ${file.name}.`),
       bucket.upload(file, path.join(folder, file.name)),
     );
 
-  yield* Effect.forEach(builds.success, upload, { discard: true });
-  yield* upload({ name: FEED_FILE, type: "text/yaml" });
+  yield* Effect.forEach(yield* buildUploads(folder, version), upload, { discard: true });
   yield* log(`Published ${version}. cutfac.com/download now hands it out.`);
 });
