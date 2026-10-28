@@ -1,7 +1,7 @@
 import { Array, Option } from "effect";
 
 import type { Locale } from "../i18n/locale.ts";
-import { readStored } from "./storage.ts";
+import { readStored, writeStored } from "./storage.ts";
 
 /** What an announcement says, in one language. */
 export interface AnnouncementCopy {
@@ -65,11 +65,8 @@ const listeners = new Set<() => void>();
 export const storedSeen = () => readStored(SEEN_KEY);
 
 function saveSeen(seen: ReadonlyArray<string>): void {
-  try {
-    localStorage.setItem(SEEN_KEY, seen.join("\n"));
-  } catch {
-    // Storage can be blocked; the board then shows none, as the first time it opens.
-  }
+  // When storage is blocked, the board shows none, as the first time it opens.
+  writeStored(SEEN_KEY, seen.join("\n"));
 
   for (const listener of listeners) listener();
 }

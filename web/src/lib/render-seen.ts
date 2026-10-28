@@ -1,5 +1,5 @@
 import type { RenderState } from "./render.ts";
-import { readStored } from "./storage.ts";
+import { readStored, writeStored } from "./storage.ts";
 
 const seenKey = (item: string) => `cutfac.render.failedSeen.${item}`;
 
@@ -11,9 +11,5 @@ export const failureSeen = (render: RenderState) =>
   readStored(seenKey(render.item)) === String(render.startedAt);
 
 export function seeFailure(render: RenderState): void {
-  try {
-    localStorage.setItem(seenKey(render.item), String(render.startedAt));
-  } catch {
-    // Storage can be blocked; the tile then keeps showing the failure until the next render.
-  }
+  writeStored(seenKey(render.item), String(render.startedAt));
 }

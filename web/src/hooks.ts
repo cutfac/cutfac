@@ -15,7 +15,7 @@ import { desktop } from "./desktop.ts";
 import type { ModelPicks } from "./lib/models.ts";
 import { errorText } from "./lib/notify.ts";
 import { routeOf, type Route } from "./lib/route.ts";
-import { readStored } from "./lib/storage.ts";
+import { readStored, removeStored, writeStored } from "./lib/storage.ts";
 
 interface Loaded<T> {
   key: string;
@@ -196,15 +196,11 @@ export function useModelPicks() {
   const pick = (agent: AgentName, settings: ModelSettings) => {
     setPicks({ ...picks, [agent]: settings });
 
-    try {
-      for (const part of ["model", "effort"] as const) {
-        const value = settings[part];
+    for (const part of ["model", "effort"] as const) {
+      const value = settings[part];
 
-        if (value === undefined) localStorage.removeItem(pickKey(agent, part));
-        else localStorage.setItem(pickKey(agent, part), value);
-      }
-    } catch {
-      // The pick just won't survive a reload.
+      if (value === undefined) removeStored(pickKey(agent, part));
+      else writeStored(pickKey(agent, part), value);
     }
   };
 
@@ -214,14 +210,6 @@ export function useModelPicks() {
 const SIDEBAR_OPEN_KEY = "cutfac.sidebar.open";
 
 const readSidebarOpen = () => readStored(SIDEBAR_OPEN_KEY) !== "false";
-
-function writeSidebarOpen(open: boolean) {
-  try {
-    localStorage.setItem(SIDEBAR_OPEN_KEY, String(open));
-  } catch {
-    // The choice just won't survive a reload.
-  }
-}
 
 type SidebarOpen = readonly [open: boolean, setOpen: (open: boolean) => void];
 
@@ -233,7 +221,7 @@ export function useSidebarOpen(): SidebarOpen {
     open,
     (next) => {
       setOpen(next);
-      writeSidebarOpen(next);
+      writeStored(SIDEBAR_OPEN_KEY, String(next));
     },
   ];
 }
@@ -272,11 +260,7 @@ export function useSidebarWidth(): readonly [width: number, setWidth: (width: nu
     (next) => {
       setWidth(next);
 
-      try {
-        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next));
-      } catch {
-        // The width just won't survive a reload.
-      }
+      writeStored(SIDEBAR_WIDTH_KEY, String(next));
     },
   ];
 }

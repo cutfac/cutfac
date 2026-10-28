@@ -6,17 +6,13 @@ import {
   serializeLayout,
   type EditorLayout,
 } from "./editor-layout.ts";
-import { readStored } from "./storage.ts";
+import { readStored, removeStored, writeStored } from "./storage.ts";
 
 const STORAGE_KEY = "cutfac.editor.layout";
 
-function writeStored(layout: EditorLayout) {
-  try {
-    if (isDefaultLayout(layout)) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, serializeLayout(layout));
-  } catch {
-    // Storage can be blocked or full; the arrangement still holds until the page reloads.
-  }
+function saveLayout(layout: EditorLayout) {
+  if (isDefaultLayout(layout)) removeStored(STORAGE_KEY);
+  else writeStored(STORAGE_KEY, serializeLayout(layout));
 }
 
 let current = parseLayout(readStored(STORAGE_KEY));
@@ -44,7 +40,7 @@ export function updateLayout(change: (layout: EditorLayout) => EditorLayout) {
   if (next === current) return;
 
   current = next;
-  writeStored(next);
+  saveLayout(next);
   notify();
 }
 

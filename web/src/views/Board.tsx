@@ -34,7 +34,7 @@ import { useMessages } from "../i18n/index.ts";
 import { gridColumns } from "../lib/board-keys.ts";
 import { moveItems } from "../lib/items.ts";
 import { failureSeen } from "../lib/render-seen.ts";
-import { readStored } from "../lib/storage.ts";
+import { readStored, writeStored } from "../lib/storage.ts";
 import { byWork, isBusy, itemWork } from "../lib/work.ts";
 import { BoardColumns, BoardSkeleton } from "./BoardColumns.tsx";
 import { usePicks } from "./BoardPicks.tsx";
@@ -43,14 +43,6 @@ import { Tile } from "./GalleryTile.tsx";
 const LEARN_HINT_KEY = "cutfac.learnHint.dismissed";
 
 const readHintDismissed = () => readStored(LEARN_HINT_KEY) === "true";
-
-function writeHintDismissed() {
-  try {
-    localStorage.setItem(LEARN_HINT_KEY, "true");
-  } catch {
-    // The hint may come back after a reload.
-  }
-}
 
 /** The videos as a gallery, newest first, or as a board of status columns. */
 const Layout = Schema.Literals(["gallery", "board"]);
@@ -66,14 +58,6 @@ const LAYOUT_KEY = "cutfac.videos.layout";
 
 function readLayout(): Layout {
   return Option.getOrElse(decodeLayout(readStored(LAYOUT_KEY)), () => "gallery");
-}
-
-function writeLayout(layout: Layout) {
-  try {
-    localStorage.setItem(LAYOUT_KEY, layout);
-  } catch {
-    // The choice just won't survive a reload.
-  }
 }
 
 /**
@@ -93,7 +77,7 @@ function LearnHint() {
   if (dismissed || data === undefined || data.learned.length > 0) return null;
 
   const dismiss = () => {
-    writeHintDismissed();
+    writeStored(LEARN_HINT_KEY, "true");
     setDismissed(true);
   };
 
@@ -219,7 +203,7 @@ export function Board() {
 
     if (next === undefined) return;
 
-    writeLayout(next);
+    writeStored(LAYOUT_KEY, next);
     setLayout(next);
   }
 

@@ -1,7 +1,7 @@
 import { Array, Option } from "effect";
 
 import type { AgentName, AgentStatus } from "../api.ts";
-import { readStored } from "./storage.ts";
+import { readStored, writeStored } from "./storage.ts";
 import { urlOf } from "./utils.ts";
 
 /**
@@ -41,11 +41,7 @@ const skipKey = (root: string) => `cutfac.start.skipped.${root}`;
 export const startSkipped = (root: string) => readStored(skipKey(root)) !== null;
 
 export function skipStart(root: string): void {
-  try {
-    localStorage.setItem(skipKey(root), "1");
-  } catch {
-    // Storage can be blocked; the board then opens on the first template again next time.
-  }
+  writeStored(skipKey(root), "1");
 }
 
 /**

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { desktop } from "../desktop.ts";
 import { useMessages } from "../i18n/index.ts";
 import { sendFailed } from "../lib/notify.ts";
-import { readStored } from "../lib/storage.ts";
+import { readStored, writeStored } from "../lib/storage.ts";
 
 /** Asked notifications already: macOS answers once and doesn't say what, so asking is the step. */
 const NOTIFY_KEY = "cutfac.onboarding.notificationsAsked";
@@ -25,12 +25,7 @@ export function NotifyRow() {
   if (onboarding === undefined) return null;
 
   const turnOn = () => {
-    try {
-      localStorage.setItem(NOTIFY_KEY, "1");
-    } catch {
-      // The row just offers it again after a reload.
-    }
-
+    writeStored(NOTIFY_KEY, "1");
     setAsked(true);
     onboarding.askNotifications(n.sample).catch(sendFailed);
   };

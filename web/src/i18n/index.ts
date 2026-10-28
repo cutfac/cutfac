@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { desktop } from "../desktop.ts";
-import { readStored } from "../lib/storage.ts";
+import { readStored, writeStored } from "../lib/storage.ts";
 import { en, type Messages } from "./en.tsx";
 import { ko } from "./ko.tsx";
 import { resolveLocale, type Locale } from "./locale.ts";
@@ -13,14 +13,6 @@ export type { Messages } from "./en.tsx";
 const DICTIONARIES: Record<Locale, Messages> = { en, ko };
 
 const STORAGE_KEY = "cutfac.locale";
-
-function writeStored(locale: Locale) {
-  try {
-    localStorage.setItem(STORAGE_KEY, locale);
-  } catch {
-    // The choice just won't survive a reload.
-  }
-}
 
 let current = resolveLocale(readStored(STORAGE_KEY), navigator.languages);
 
@@ -38,7 +30,7 @@ export function setLocale(next: Locale) {
   if (next === current) return;
 
   current = next;
-  writeStored(next);
+  writeStored(STORAGE_KEY, next);
   apply(next);
 
   for (const listener of listeners) listener();

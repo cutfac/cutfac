@@ -1,17 +1,15 @@
 import { Option, Schema } from "effect";
 
+import { readStored, writeStored } from "../lib/storage.ts";
+
 const API_BASE = readApiBase();
 
 function readApiBase(): string {
   const fromQuery = new URLSearchParams(location.search).get("api");
 
-  try {
-    if (fromQuery !== null) localStorage.setItem("cutfac.api", fromQuery);
+  if (fromQuery !== null) writeStored("cutfac.api", fromQuery);
 
-    return fromQuery ?? localStorage.getItem("cutfac.api") ?? "";
-  } catch {
-    return fromQuery ?? "";
-  }
+  return fromQuery ?? readStored("cutfac.api") ?? "";
 }
 
 export const apiUrl = (path: string) => `${API_BASE}${path}`;
