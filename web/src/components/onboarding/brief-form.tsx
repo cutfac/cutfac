@@ -125,6 +125,7 @@ export function PlatformToggles({
       <ToggleGroup
         multiple
         variant="choice"
+        size="lg"
         disabled={disabled}
         aria-label={t.platformsLabel}
         value={value.platforms}
