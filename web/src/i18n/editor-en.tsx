@@ -17,6 +17,8 @@ export const editorEn = {
     status: "Status",
     noMediaTitle: "No video yet",
     noMediaBody: "Drop footage or an image here if you have some to start from.",
+    making: (agent: string) => `${agent} is making the first version`,
+    makingBody: "It shows here once it's rendered. Follow along in the chat.",
     addMedia: "Add a video or image",
     add: "Add",
     format: "Template",

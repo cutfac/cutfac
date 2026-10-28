@@ -30,7 +30,7 @@ import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { editorKey, type EditorKey } from "../lib/editor-keys.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { LiveState } from "../lib/live.ts";
-import { pickedSettings } from "../lib/models.ts";
+import { agentTitle, pickedSettings } from "../lib/models.ts";
 import { Player, usePlayer } from "../lib/player.ts";
 import { renderedName, shellRender } from "../lib/render.ts";
 import { pinsOn } from "../lib/requests.ts";
@@ -268,7 +268,16 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
       <EditorDock
         stage={
           media === undefined ? (
-            <NoMedia item={item} onItem={setData} onUploaded={setMediaName} />
+            <NoMedia
+              item={item}
+              maker={
+                running
+                  ? Option.some(agentTitle(Option.fromUndefinedOr(run.agent), t))
+                  : Option.none()
+              }
+              onItem={setData}
+              onUploaded={setMediaName}
+            />
           ) : (
             <>
               <SampleGuideCard guide={guide} />

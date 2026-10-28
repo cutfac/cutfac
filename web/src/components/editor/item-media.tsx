@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { PlusIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -67,18 +68,26 @@ function useUpload(
 
 const MEDIA_ACCEPT = "video/*,image/*";
 
+/**
+ * The stage before the item has media: while an agent makes the first version, that it is at work;
+ * otherwise, a place to drop footage to start from.
+ */
 export function NoMedia({
   item,
+  maker,
   onItem,
   onUploaded,
 }: {
   item: ItemDetail;
+  /** The agent making the first version, while it works. */
+  maker: Option.Option<string>;
   onItem: (item: ItemDetail) => void;
   onUploaded: (name: string) => void;
 }) {
   const { uploading, fromFiles } = useUpload(item, onItem, onUploaded);
   const openFiles = useRef<() => void>(null);
   const t = useMessages();
+  const making = Option.isSome(maker);
 
   return (
     <Dropzone
@@ -92,13 +101,13 @@ export function NoMedia({
       <div className="flex flex-1 rounded-3xl border border-dashed">
         <Empty>
           <EmptyHeader>
-            <EmptyMedia>
-              <StackMark />
-            </EmptyMedia>
-            <EmptyTitle>{t.item.noMediaTitle}</EmptyTitle>
-            <EmptyDescription>{t.item.noMediaBody}</EmptyDescription>
+            <EmptyMedia>{making ? <Spinner className="size-6" /> : <StackMark />}</EmptyMedia>
+            <EmptyTitle>
+              {Option.match(maker, { onSome: t.item.making, onNone: () => t.item.noMediaTitle })}
+            </EmptyTitle>
+            <EmptyDescription>{making ? t.item.makingBody : t.item.noMediaBody}</EmptyDescription>
           </EmptyHeader>
-          <EmptyContent>
+          <EmptyContent className={making ? "hidden" : undefined}>
             <Button variant="outline" onClick={() => openFiles.current?.()}>
               {uploading ? (
                 <Spinner data-icon="inline-start" />

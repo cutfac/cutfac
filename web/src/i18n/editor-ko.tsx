@@ -16,6 +16,8 @@ export const editorKo: EditorMessages = {
     status: "상태",
     noMediaTitle: "아직 영상이 없어요",
     noMediaBody: "찍어 둔 영상이나 이미지가 있으면 여기에 놓으세요.",
+    making: (agent) => `${withParticle(agent, "이/가")} 첫 버전을 만드는 중`,
+    makingBody: "렌더링이 끝나면 여기에 나와요. 진행은 채팅에서 볼 수 있어요.",
     addMedia: "영상이나 이미지 추가",
     add: "추가",
     format: "템플릿",
