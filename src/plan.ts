@@ -23,7 +23,8 @@ const VIDEOS_BYTES = 1024 * 1024;
 /**
  * Each video counted on this Mac, paid or not, a line each: `<time> made <key>` for one Cutfac
  * made, `<time> seen <key>` for one first worked on without being made by it, as a folder an
- * agent wrote by hand. Lines from before keys hold the time alone.
+ * agent wrote by hand. `<time> sample <key>` marks one of the app's samples, which never counts.
+ * Lines from before keys hold the time alone.
  */
 export const VIDEOS_FILE = "videos.log";
 
@@ -33,6 +34,7 @@ const videoKey = (item: Item) => `${item.id}@${item.doc.created ?? ""}`;
 interface VideoCount {
   readonly made: ReadonlySet<string>;
   readonly seen: ReadonlySet<string>;
+  readonly samples: ReadonlySet<string>;
   /** Lines from before keys, which the videos made then and seen since may each stand for. */
   readonly unnamed: number;
 }
@@ -40,6 +42,7 @@ interface VideoCount {
 const countOf = (videos: string): VideoCount => {
   const made = new Set<string>();
   const seen = new Set<string>();
+  const samples = new Set<string>();
   let unnamed = 0;
 
   for (const line of videos.split("\n")) {
@@ -47,15 +50,18 @@ const countOf = (videos: string): VideoCount => {
 
     if (kind === "made" && key !== undefined) made.add(key);
     else if (kind === "seen" && key !== undefined) seen.add(key);
+    else if (kind === "sample" && key !== undefined) samples.add(key);
     else if (time !== "") unnamed++;
   }
 
-  return { made, seen, unnamed };
+  return { made, seen, samples, unnamed };
 };
 
 const usedOf = ({ made, seen, unnamed }: VideoCount) => made.size + Math.max(unnamed, seen.size);
 
-const isCounted = ({ made, seen }: VideoCount, key: string) => made.has(key) || seen.has(key);
+/** Whether work on the video needs no new count: it is counted already, or is a sample. */
+const isCounted = ({ made, seen, samples }: VideoCount, key: string) =>
+  made.has(key) || seen.has(key) || samples.has(key);
 
 /**
  * The desktop app's data folder, which holds its license and the count of videos made, when this
@@ -164,7 +170,11 @@ export const planStatus = Effect.fn("plan.status")(function* () {
 });
 
 /** Adds a line to the count. The work goes on either way; a count that can't be kept lets one go. */
-const record = Effect.fnUntraced(function* (dir: string, kind: "made" | "seen", key: string) {
+const record = Effect.fnUntraced(function* (
+  dir: string,
+  kind: "made" | "seen" | "sample",
+  key: string,
+) {
   const path = yield* Path.Path;
 
   yield* appendAppRecord(path.join(dir, VIDEOS_FILE), `${yield* nowIso} ${kind} ${key}`).pipe(
@@ -255,6 +265,16 @@ const createWithin = Effect.fnUntraced(function* (input: NewItemInput, counted: 
       return item;
     }),
   );
+});
+
+/**
+ * Marks `item` as one of the app's samples, which work on never counts as a video. Kept in the
+ * app's data rather than the item, so a folder can't be made one by editing it.
+ */
+export const markSample = Effect.fn("plan.markSample")(function* (item: Item) {
+  const dir = yield* DesktopData;
+
+  if (Option.isSome(dir)) yield* record(dir.value, "sample", videoKey(item));
 });
 
 const atFreeLimit = (plan: Plan) =>

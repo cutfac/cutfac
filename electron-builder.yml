@@ -21,6 +21,11 @@ extraResources:
     to: bin/cutfac
   - from: dist/web
     to: web
+  - from: samples
+    to: samples
+    filter:
+      - "**/*"
+      - "!render.sh"
 
 # Switches baked into the Electron binary right before signing. The signed app can't be started as
 # plain Node or with NODE_OPTIONS or a debugger, so other programs can't borrow its permissions, and

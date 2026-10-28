@@ -23,6 +23,7 @@ import { itemRoutes } from "./items.ts";
 import { learnedRoutes } from "./learned.ts";
 import { renderRoutes } from "./render.ts";
 import { reportRoutes } from "./reports.ts";
+import { sampleRoutes } from "./samples.ts";
 import { workspaceRoutes } from "./workspace.ts";
 
 export interface ServerOptions {
@@ -68,6 +69,7 @@ export const routes = (options: ServerOptions) => {
     workspaceRoutes,
     agentRoutes(options.cli),
     itemRoutes,
+    sampleRoutes,
     editRoutes,
     historyRoutes,
     approvalRoutes,
