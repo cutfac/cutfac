@@ -3,7 +3,7 @@ import { Toolkit } from "effect/ai";
 
 import { BRIEF_FILE, BriefPatch, PLATFORMS, PURPOSES, updateBrief } from "../core/brief.ts";
 import { Workspace } from "../core/workspace.ts";
-import { describe, logFailure, tool } from "./tool.ts";
+import { describe, tool, toolRunner } from "./tool.ts";
 
 const UpdateBrief = tool("update_brief", {
   description:
@@ -21,20 +21,22 @@ const UpdateBrief = tool("update_brief", {
   idempotent: true,
 });
 
-/** The tools for the workspace brief, kept apart from the rest so each module stays one concern. */
 export const BriefToolkit = Toolkit.make(UpdateBrief);
 
 export const briefHandlers = BriefToolkit.toLayer(
   Effect.gen(function* () {
     const ws = yield* Workspace;
+    const run = yield* toolRunner;
 
     return BriefToolkit.of({
       update_brief: (patch) =>
-        Effect.gen(function* () {
-          const brief = yield* updateBrief(patch);
+        run(
+          Effect.gen(function* () {
+            const brief = yield* updateBrief(patch);
 
-          return { path: yield* ws.abs(BRIEF_FILE), ...brief };
-        }).pipe(Effect.provideService(Workspace, ws), logFailure),
+            return { path: yield* ws.abs(BRIEF_FILE), ...brief };
+          }),
+        ),
     });
   }),
 );

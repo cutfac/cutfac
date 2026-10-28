@@ -4,7 +4,7 @@ import { Toolkit } from "effect/ai";
 import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { RENDER_STATUSES, Renders, type RenderState } from "../core/render.ts";
 import { RENDER_STAGES, RENDER_UNITS } from "../core/renderProgress.ts";
-import { describe, logFailure, tool } from "./tool.ts";
+import { Id, describe, logFailure, tool } from "./tool.ts";
 
 /**
  * How long one call waits for the render to end. Under the minute Codex gives a tool call, so a
@@ -22,7 +22,7 @@ const Render = tool("render", {
     "and the media file it writes. It waits up to 40 seconds; while status is running, call render again with just the id to keep waiting. " +
     "A failed render returns the end of its output, so fix the cause and call it again.",
   parameters: Schema.Struct({
-    id: Schema.String.annotate(describe("item id, such as hooks/first-try")),
+    id: Id,
     command: Schema.optional(
       Schema.String.annotate(
         describe(
@@ -86,7 +86,6 @@ const report = (state: RenderState, now: number) => {
   };
 };
 
-/** The render tool, kept apart from the rest so each module stays one concern. */
 export const RenderToolkit = Toolkit.make(Render);
 
 /** Renders run in the background between calls, and are killed when the server shuts down. */

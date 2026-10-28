@@ -1,5 +1,15 @@
-import { Effect, Predicate, Schema, SchemaGetter } from "effect";
+import {
+  type Crypto,
+  Effect,
+  type FileSystem,
+  type Path,
+  Predicate,
+  Schema,
+  SchemaGetter,
+} from "effect";
 import { Tool } from "effect/ai";
+import type { HttpClient } from "effect/http";
+import type { ChildProcessSpawner } from "effect/process";
 
 import {
   CommandFailed,
@@ -10,6 +20,7 @@ import {
   WorkspaceError,
 } from "../core/errors.ts";
 import { answeredWithError } from "../core/logFile.ts";
+import type { Workspace } from "../core/workspace.ts";
 import { FreeLimitReached } from "../plan.ts";
 
 export const describe = (description: string) => ({ description });
@@ -87,3 +98,42 @@ export const tool = <
 export const logFailure = <A, E extends { readonly message: string }, R>(
   call: Effect.Effect<A, E, R>,
 ) => Effect.tapError(call, (error) => answeredWithError(error.message));
+
+/** What the core needs to run a tool; captured once when the server starts. */
+type ToolServices =
+  | Workspace
+  | Crypto.Crypto
+  | FileSystem.FileSystem
+  | Path.Path
+  | HttpClient.HttpClient
+  | ChildProcessSpawner.ChildProcessSpawner;
+
+/** Runs a core operation as a tool's result, with the services captured when the server starts. */
+export const toolRunner = Effect.gen(function* () {
+  const services = yield* Effect.context<ToolServices>();
+
+  return <A, E extends { readonly message: string }>(effect: Effect.Effect<A, E, ToolServices>) =>
+    Effect.provideContext(effect, services).pipe(logFailure);
+});
+
+export const Id = Schema.String.annotate(describe("item id, such as hooks/first-try"));
+
+export const Ok = Schema.Struct({ ok: Schema.Literal(true) });
+
+export const AbsDir = Schema.String.annotate(
+  describe("absolute folder; read and write files here"),
+);
+
+export const Created = Schema.Struct({ id: Schema.String, absDir: AbsDir });
+
+export const FreeVersion = Schema.optional(
+  Schema.String.annotate(
+    describe("in the Cutfac app's free version, how many of its videos are used; tell the user"),
+  ),
+);
+
+export const AwaitingDecision = Schema.Finite.annotate(
+  describe(
+    "requests whose versions or result wait for the user to pick, keep or roll back on the board",
+  ),
+);
