@@ -10,6 +10,7 @@ import { LogDir, logToFile } from "../src/core/logFile.ts";
 import { errorReports } from "../src/errorReports.ts";
 import { AgentFixes } from "./agents.ts";
 import { AppState } from "./appState.ts";
+import { devLaunchOf, type DevLaunch } from "./devEnv.ts";
 import { FirstWorkspace } from "./firstWorkspace.ts";
 import { LICENSE_CHANGE_CHANNEL } from "./ipc.ts";
 import { License } from "./license.ts";
@@ -22,6 +23,10 @@ import { updateFeed, updatePrompts } from "./updateFeed.ts";
 import { Updates } from "./updates.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
 
+// The packaged app ignores what the dev runner launches with, so another program can't open it on a
+// page of its choosing.
+export const devLaunch = app.isPackaged ? Option.none<DevLaunch>() : Effect.runSync(devLaunchOf);
+
 export const installInfo = (): InstallInfo => ({
   packaged: app.isPackaged,
   appPath: app.getAppPath(),
@@ -29,10 +34,7 @@ export const installInfo = (): InstallInfo => ({
   logsPath: app.getPath("logs"),
   homePath: app.getPath("home"),
   launchEnv: process.env,
-  devPort:
-    !app.isPackaged && process.env.CUTFAC_DEV_URL
-      ? Option.some(Number.parseInt(process.env.CUTFAC_PORT ?? "4317", 10))
-      : Option.none(),
+  devPort: Option.map(devLaunch, ({ serverPort }) => serverPort),
 });
 
 const appData = Layer.sync(AppData, () => Option.some(app.getPath("userData")));

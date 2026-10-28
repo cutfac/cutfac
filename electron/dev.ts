@@ -25,6 +25,7 @@ import { FetchHttpClient, HttpClient } from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { DEV_APP, devElectron } from "./devApp.ts";
+import { DEV_ENV } from "./devEnv.ts";
 import { type AppProcess, launchApp } from "./devLaunch.ts";
 import { bindPort, freePort } from "./ports.ts";
 
@@ -68,7 +69,7 @@ const program = Effect.gen(function* () {
     process.on(name, () => runSync(stop(code)));
   }
 
-  const serverPort = yield* Option.match(yield* Config.option(Config.Int("CUTFAC_PORT")), {
+  const serverPort = yield* Option.match(yield* Config.option(Config.Port(DEV_ENV.serverPort)), {
     onNone: () => freePort(Option.none()),
     onSome: Effect.succeed,
   });
@@ -81,7 +82,7 @@ const program = Effect.gen(function* () {
 
   const cdpPort = yield* bindPort(9222).pipe(Effect.catch(() => freePort(Option.none())));
 
-  const appEnv = { CUTFAC_PORT: String(serverPort), CUTFAC_DEV_URL: devUrl };
+  const appEnv = { [DEV_ENV.serverPort]: String(serverPort), [DEV_ENV.url]: devUrl };
 
   const spawnLogged = (command: string, args: ReadonlyArray<string>) =>
     spawner.spawn(
@@ -154,7 +155,7 @@ const program = Effect.gen(function* () {
         executable: yield* Fiber.join(executable),
         root,
         args: [`--remote-debugging-port=${cdpPort}`],
-        env: again ? { ...appEnv, CUTFAC_DEV_RESTART: "1" } : appEnv,
+        env: again ? { ...appEnv, [DEV_ENV.restart]: "1" } : appEnv,
         background: again,
       }).pipe(Scope.provide(scope));
 

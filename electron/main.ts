@@ -46,7 +46,7 @@ import { MESSAGES } from "./messages.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions } from "./permissions.ts";
 import { guardQuit } from "./quitGuard.ts";
-import { appState, boardWindow, forkInMain, readNow, runInMain } from "./runtime.ts";
+import { appState, boardWindow, devLaunch, forkInMain, readNow, runInMain } from "./runtime.ts";
 import {
   loadLocale,
   loadOnboarding,
@@ -67,17 +67,12 @@ class BoardNotShown extends Schema.TaggedError<BoardNotShown>()("BoardNotShown",
   message: Schema.String,
 }) {}
 
-// Dev with live reload: load the Vite server and run the sidecar on the port Vite proxies to. The
-// packaged app ignores it, so another program can't open the app on a page of its choosing.
-const devUrl = app.isPackaged ? undefined : process.env.CUTFAC_DEV_URL || undefined;
-
-// The dev runner restarted the app for a change: it comes back behind what the developer works in.
-const devRestart = devUrl !== undefined && process.env.CUTFAC_DEV_RESTART === "1";
+const devUrl = Option.map(devLaunch, ({ url }) => url);
 
 const preloadPath = fileURLToPath(new URL("./preload.cjs", import.meta.url));
 
 /** The board before there is a workspace: the app's own copy, or Vite's in dev. */
-const boardUrl = devUrl ?? BOARD_URL;
+const boardUrl = Option.getOrElse(devUrl, () => BOARD_URL);
 
 const messages = () => MESSAGES[readNow(appState.locale)];
 
@@ -158,7 +153,9 @@ function start(): void {
   process.on("SIGINT", () => app.quit());
 
   // `bun run desktop:dev` rebuilt the preload script, which a reload runs in the page.
-  if (devUrl) process.on("SIGUSR2", () => boardWindow()?.webContents.reloadIgnoringCache());
+  if (Option.isSome(devUrl)) {
+    process.on("SIGUSR2", () => boardWindow()?.webContents.reloadIgnoringCache());
+  }
 
   const workspaces = handleWorkspaces({ isFromApp, activate });
   const links = handleLinks({ isFromApp, bringToFront, window: boardWindow });
@@ -265,7 +262,7 @@ const boot = Effect.fn("main.boot")(function* (setMenu: Effect.Effect<void, neve
   yield* setMenu;
 
   // In dev, Vite serves the board instead.
-  if (!devUrl) serveBoard(boardDir());
+  if (Option.isNone(devUrl)) serveBoard(boardDir());
 
   const saved = yield* loadWorkspace;
 
@@ -327,7 +324,9 @@ const open = Effect.fn("main.open")(
 
     const page = Option.getOrElse(yield* loadPage(workspace), () => "");
 
-    yield* show(new URL(page, devUrl ?? served.value.url).href, path.basename(workspace));
+    const origin = Option.getOrElse(devUrl, () => served.value.url);
+
+    yield* show(new URL(page, origin).href, path.basename(workspace));
 
     return true;
   },
@@ -349,7 +348,7 @@ const windowNow = Effect.gen(function* () {
   const created = createBoardWindow(yield* loadWindowPlace, {
     preload: preloadPath,
     boardArguments: devTools?.boardArguments,
-    inactive: devRestart,
+    inactive: Option.exists(devLaunch, ({ restart }) => restart),
     guard: readNow(guardWindow),
   });
 

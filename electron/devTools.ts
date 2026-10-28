@@ -33,7 +33,7 @@ import { WORKSPACES } from "./library.ts";
 import { lockNavigation } from "./navigation.ts";
 import { macChecks, type OnboardingChecks } from "./onboarding.ts";
 import { sandboxed } from "./permissions.ts";
-import { runInMain, type AppServices } from "./runtime.ts";
+import { devLaunch, runInMain, type AppServices } from "./runtime.ts";
 import {
   loadLibrary,
   loadOnboarding,
@@ -164,7 +164,7 @@ export function handleDevTools(host: DevToolsHost): DevTools {
       defaultFolder: yield* suggestedFolder,
       // Only the dev runner's copy of Electron has a bundle id of its own; macOS keeps its
       // permissions by it.
-      bundleId: process.env.CUTFAC_DEV_URL ? DEV_APP.bundleId : "com.github.Electron",
+      bundleId: Option.isSome(devLaunch) ? DEV_APP.bundleId : "com.github.Electron",
     };
 
     return now;
