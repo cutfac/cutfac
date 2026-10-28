@@ -24,7 +24,7 @@ import {
 } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { versionsMedia, versionsOf } from "../../lib/requests.ts";
-import { describeTarget, targetOf } from "../../lib/target.ts";
+import { anchorOf, describeTarget, targetOf } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 
 interface Sides {
@@ -37,6 +37,9 @@ const IMAGE = /\.(png|jpe?g|webp|gif|avif)$/i;
 
 const kindOf = (item: ItemDetail, name: string): MediaKind =>
   item.media.find((media) => media.name === name)?.kind ?? (IMAGE.test(name) ? "image" : "video");
+
+/** The video at `url` opening on `from` seconds, with a media fragment, so it shows that frame first. */
+const atTime = (url: string, from: number) => (from > 0 ? `${url}#t=${from}` : url);
 
 /** Seek to `from`, or to the end when the video is shorter, and settle once the frame is there. */
 function seek(video: HTMLVideoElement, from: number): Promise<void> {
@@ -106,7 +109,8 @@ export function CompareDialog({
   const t = useMessages();
   const sides = sidesOf(item, feedback);
   const target = targetOf(feedback);
-  const from = target.start ?? 0;
+  // The box's frame, else the part's start: where the edit shows.
+  const from = anchorOf(target) ?? 0;
 
   if (sides === undefined) return null;
 
@@ -139,7 +143,7 @@ export function CompareDialog({
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
                 <video
                   ref={side === "before" ? before : after}
-                  src={sides[side]}
+                  src={atTime(sides[side], from)}
                   controls
                   playsInline
                   preload="auto"
@@ -231,7 +235,8 @@ export function VersionsDialog({
   const current = item.media.find((file) => file.name === media);
   const kind = kindOf(item, media);
   const target = targetOf(feedback);
-  const from = target.start ?? 0;
+  // The box's frame, else the part's start: where the edit shows.
+  const from = anchorOf(target) ?? 0;
   const where = describeTarget(target, t.target.boxAt);
 
   // A request for new media had nothing before it, so there is nothing to show as it is now.
@@ -288,7 +293,7 @@ export function VersionsDialog({
               {kind === "video" ? (
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
                 <video
-                  src={src}
+                  src={atTime(src, from)}
                   controls
                   playsInline
                   preload="auto"
