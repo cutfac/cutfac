@@ -16,7 +16,6 @@ import { sendOnEnter } from "@/lib/utils";
 import type { AgentChoice, ItemDetail } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { typingFeedbackCommand } from "../../lib/feedback.ts";
-import { agentLabel } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { type SentTo, VersionsPicker } from "./composer.tsx";
@@ -103,6 +102,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
         align="start"
         sideOffset={8}
         className="w-[26rem]"
+        tight
         initialFocus={inputRef}
         finalFocus={false}
       >
@@ -143,7 +143,7 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
                 </InputGroupButton>
                 <VersionsPicker value={versions} onChange={setVersions} />
                 <span className="min-w-0 truncate text-xs font-normal">
-                  {t.boxPrompt.hint(ask.agent === "queue" ? undefined : agentLabel(ask.agent))}
+                  {t.boxPrompt.hint[ask.agent === "queue" ? "copy" : "chat"]}
                 </span>
                 <InputGroupButton
                   variant="default"

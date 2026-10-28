@@ -80,10 +80,10 @@ export const chatKo: ChatMessages = {
   },
   boxPrompt: {
     label: "이 박스에 대한 요청",
-    hint: (agent) =>
-      agent === undefined
-        ? "Enter로 프롬프트 복사 · Esc로 닫기"
-        : `Enter로 ${agent}에게 보내기 · Esc로 닫기`,
+    hint: {
+      chat: "Enter로 채팅에 보내기 · Esc로 닫기",
+      copy: "Enter로 프롬프트 복사 · Esc로 닫기",
+    },
     send: "보내기",
   },
   pins: {

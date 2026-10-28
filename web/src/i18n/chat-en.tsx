@@ -93,11 +93,10 @@ export const chatEn = {
   /** The small request box that opens beside a box drawn on the frame. */
   boxPrompt: {
     label: "Request for this box",
-    /** `agent` is the agent's name, or undefined when the request is copied as a prompt. */
-    hint: (agent: string | undefined) =>
-      agent === undefined
-        ? "Enter copies the prompt · Esc closes"
-        : `Enter sends to ${agent} · Esc closes`,
+    hint: {
+      chat: "Enter sends to chat · Esc closes",
+      copy: "Enter copies the prompt · Esc closes",
+    },
     send: "Send",
   },
   /** Numbered pins on the frame and the timeline for the requests still in play. */
