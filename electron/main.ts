@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Effect, Option, Queue, Ref, Schema } from "effect";
+import { Effect, Fiber, Option, Queue, Ref, Schema } from "effect";
 import { app, clipboard, dialog, Menu, nativeTheme, type BrowserWindow } from "electron";
 
 import { describeError } from "../src/core/errors.ts";
@@ -40,9 +40,11 @@ import { MESSAGES } from "./messages.ts";
 import { handleOnboarding } from "./onboarding.ts";
 import { limitPermissions } from "./permissions.ts";
 import { guardQuit } from "./quitGuard.ts";
+import { quitSheet } from "./quitSheet.ts";
 import {
   appState,
   boardWindow,
+  builtService,
   devLaunch,
   forkInMain,
   readNow,
@@ -117,6 +119,13 @@ function start(): void {
   const stopBeforeQuit = (event: Electron.Event) => {
     if (readNow(quitReady)) return;
 
+    // Hold the quit until the settings are saved, the first launch's step too, and the services
+    // have stopped the server and all else they opened, then quit again with nothing left to stop.
+    // Asked again meanwhile, it waits for the same.
+    event.preventDefault();
+
+    if (readNow(appState.quitting)) return;
+
     Effect.runSync(Ref.set(appState.quitting, true));
 
     // The window closes only after this, too late for its place to reach the disk.
@@ -124,11 +133,12 @@ function start(): void {
 
     if (window) rememberPlace(window);
 
-    // Hold the quit until the settings are saved, the first launch's step too, and the services
-    // have stopped the server and all else they opened, then quit again with nothing left to stop.
-    event.preventDefault();
+    // The runtime closes during the quit, so the sheet runs apart from it.
+    const sheet = Effect.runFork(showQuitting(window));
+
     forkInMain(
       shutDownMain(settingsWritten).pipe(
+        Effect.ensuring(Fiber.interrupt(sheet)),
         Effect.andThen(Ref.set(quitReady, true)),
         Effect.andThen(Effect.sync(() => app.quit())),
       ),
@@ -377,6 +387,33 @@ const show = Effect.fn("main.show")(function* (url: string, title: string) {
 
   window.webContents.navigationHistory.clear();
 });
+
+/** Says on the board's window that the app is quitting, once the quit takes a moment. */
+const showQuitting = (window: BrowserWindow | undefined) => {
+  if (window === undefined || window.isDestroyed()) return Effect.void;
+
+  const t = messages();
+  const server = builtService(WorkspaceServer);
+
+  const quitNow = Effect.andThen(
+    Option.match(server, { onNone: () => Effect.void, onSome: (running) => running.kill }),
+    Effect.sync(() => app.exit(0)),
+  );
+
+  return quitSheet(
+    (signal) =>
+      dialog
+        .showMessageBox(window, {
+          type: "info",
+          message: t.quitting,
+          detail: t.quittingDetail,
+          buttons: [t.quitNow],
+          signal,
+        })
+        .then(({ response }) => !signal.aborted && response === 0),
+    quitNow,
+  );
+};
 
 const showCrash = (message: string) =>
   Effect.promise(() =>

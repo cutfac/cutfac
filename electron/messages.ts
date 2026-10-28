@@ -62,6 +62,9 @@ const en = {
   quitBusyDetail: "Quitting stops your agent and any render now. You can start them again later.",
   quitAnyway: "Quit",
   keepWorking: "Keep Working",
+  quitting: "Cutfac is quitting",
+  quittingDetail: "Stopping the local server and agent work. This can take a moment.",
+  quitNow: "Quit Now",
 };
 
 export type Messages = typeof en;
@@ -130,5 +133,8 @@ export const MESSAGES: Record<Locale, Messages> = {
     quitBusyDetail: "지금 종료하면 에이전트 작업과 렌더링이 멈춰요. 나중에 다시 시작할 수 있어요.",
     quitAnyway: "종료",
     keepWorking: "계속 작업하기",
+    quitting: "컷팩을 종료하고 있어요",
+    quittingDetail: "로컬 서버와 에이전트 작업을 멈추고 있어요. 잠시 걸릴 수 있어요.",
+    quitNow: "지금 종료",
   },
 };
