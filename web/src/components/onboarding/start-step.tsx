@@ -1,5 +1,5 @@
 import { ArrowRightIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { ErrorAlert } from "@/components/page";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,9 @@ import { StepHeader } from "./frame.tsx";
 import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
 
 /** The parts of what to make, asked one at a time. A browser can't pick a folder, so skips it. */
+/** How long a clicked card shows as picked before the next part opens. */
+const PICK_PAUSE_MS = 450;
+
 const PARTS = ["purpose", "website", "folder", "platforms", "details"] as const;
 
 type Part = (typeof PARTS)[number];
@@ -55,6 +58,19 @@ export function BriefQuestions({
   const [sources, setSources] = useState<string[]>([...initial.sources]);
   const [typed, setTyped] = useState("");
   const [part, setPart] = useState<Part>("purpose");
+  const [picks, setPicks] = useState(0);
+
+  useEffect(() => {
+    if (picks === 0) return;
+
+    const timer = setTimeout(
+      // Only from the cards: Next pressed during the pause has already moved on.
+      () => setPart((now) => (now === "purpose" ? (STEPS[STEPS.indexOf(now) + 1] ?? now) : now)),
+      PICK_PAUSE_MS,
+    );
+
+    return () => clearTimeout(timer);
+  }, [picks]);
 
   const index = STEPS.indexOf(part);
   const links = sources.some(isLink) || typed.trim() !== "";
@@ -82,7 +98,7 @@ export function BriefQuestions({
           {...parts}
           onClicked={(purpose) => {
             setBrief({ ...brief, purpose });
-            go(1);
+            setPicks((count) => count + 1);
           }}
         />
       ),
