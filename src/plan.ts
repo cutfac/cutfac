@@ -199,8 +199,9 @@ const LIMIT_MESSAGE =
   "offer lasts it is $99/year, and the first 100 buyers keep that price for as long as they stay " +
   "subscribed. After buying, they enter the license key in the Cutfac app (Cutfac menu → License " +
   "Key…). Their workspace files are untouched. Don't make a video's folder or item.yaml yourself " +
-  "instead: Cutfac counts a video it didn't make when work on it starts. This is not a bug in " +
-  "Cutfac, so don't offer to report it.";
+  "instead: Cutfac counts a video it didn't make when work on it starts. Don't try to reset the " +
+  "count or get around it any other way either. This is not a bug in Cutfac, so don't offer to " +
+  "report it.";
 
 const UNCOUNTED_MESSAGE =
   "This video wasn't made by create_item or the board, so it isn't one of the videos Cutfac's " +
