@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "rea
 
 import { FirstIdeas } from "@/components/first-ideas";
 import { ItemMenu } from "@/components/item-menu";
+import { AccessRow } from "@/components/mac-access";
 import { NewItemTrigger } from "@/components/new-item-dialog";
 import { NotifyRow } from "@/components/notify-row";
 import { ErrorAlert, PageHeader } from "@/components/page";
@@ -302,6 +303,7 @@ export function Board() {
               <NewItemTrigger />
               <KnownLine />
               <FirstIdeas />
+              <AccessRow />
               <NotifyRow />
             </EmptyContent>
           </Empty>

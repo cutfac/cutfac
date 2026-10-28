@@ -125,7 +125,8 @@ motion, after [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow):
    answers from step 3 kept, and finds it then.
 
 Once both are on, the step moves on by itself. It can be skipped; macOS then asks the first time an
-agent needs either.
+agent needs either, the empty board offers to turn them on in one row, and Settings lists both
+with whether each is on.
 
 Cutfac doesn't ask for Full Disk Access, which would let every agent read the user's mail and
 messages too: reading Desktop, Documents, Downloads and the like, macOS asks once per folder the

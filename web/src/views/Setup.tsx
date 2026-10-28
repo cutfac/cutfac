@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { AgentPermissions } from "@/components/agent-permissions";
 import { ErrorReportsCard } from "@/components/error-reports";
+import { MacAccessCard } from "@/components/mac-access";
 import { McpServersCard } from "@/components/mcp-servers";
 import { OutdatedAgentNote } from "@/components/outdated-agent";
 import { ErrorAlert, Page, Section } from "@/components/page";
@@ -120,6 +121,7 @@ export function Setup() {
           </ItemGroup>
         )}
       </Section>
+      <MacAccessCard />
       <McpServersCard />
       <ErrorReportsCard />
     </Page>

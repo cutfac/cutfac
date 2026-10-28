@@ -52,6 +52,8 @@ export const onboardingKo: OnboardingMessages = {
     on: "켜짐",
     granted: "둘 다 켰어요",
     skip: "나중에 하기",
+    remind: "에이전트가 화면을 녹화하고 앱을 쓸 수 있게 하기",
+    settingsTitle: "Mac 권한",
     screen: {
       name: "화면 기록",
       why: "화면과 앱을 녹화해서 영상에 써요.",
