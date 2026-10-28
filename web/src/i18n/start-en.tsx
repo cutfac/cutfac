@@ -79,7 +79,7 @@ export const startEn = {
       },
       folder: {
         title: "Any folder your agent should read?",
-        body: "Like a brand kit or your footage. It stays where it is.",
+        body: "Like a brand kit or your footage. Your agent reads it where it is.",
       },
       placeholder: "yourwebsite.com",
       add: "Add",

@@ -2,6 +2,7 @@ import { FolderIcon, GlobeIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 
 import { badgeVariants } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -63,7 +64,7 @@ export function WebsitePicker({
         }}
       >
         <InputGroup className="h-11">
-          <InputGroupAddon>
+          <InputGroupAddon className="ml-2">
             <GlobeIcon />
           </InputGroupAddon>
           <InputGroupInput
@@ -73,7 +74,7 @@ export function WebsitePicker({
             onChange={(event) => onDraft(event.target.value)}
           />
           {draft.trim() === "" ? null : (
-            <InputGroupAddon align="inline-end">
+            <InputGroupAddon align="inline-end" className="mr-1">
               <InputGroupButton type="submit" variant="secondary" size="xs">
                 {t.add}
               </InputGroupButton>
@@ -105,25 +106,19 @@ export function FolderPicker({ sources, onSources }: Sources) {
 
   return (
     <div className="flex flex-col items-start gap-3">
-      {/* Shaped like the website field on the step before; anywhere on it opens the folder dialog. */}
-      <InputGroup className="h-11">
-        <InputGroupAddon>
-          <FolderIcon />
-        </InputGroupAddon>
-        <button
-          type="button"
-          disabled={picking}
-          onClick={choose}
-          className="h-full min-w-0 flex-1 truncate pl-1.5 text-left text-sm text-muted-foreground outline-none"
-        >
-          {t.choose}
-        </button>
-        <InputGroupAddon align="inline-end">
-          <InputGroupButton variant="secondary" size="xs" disabled={picking} onClick={choose}>
-            {t.browse}
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
+      {/* Shaped like the website field on the step before, but the whole of it is the button. */}
+      <Button
+        type="button"
+        size="lg"
+        variant="outline"
+        className="h-11 w-full justify-start"
+        disabled={picking}
+        onClick={choose}
+      >
+        <FolderIcon data-icon="inline-start" />
+        <span className="flex-1 text-left font-normal text-muted-foreground">{t.choose}</span>
+        <span className={buttonVariants({ variant: "secondary", size: "xs" })}>{t.browse}</span>
+      </Button>
       <Chips
         shown={sources.filter((source) => !isLink(source))}
         sources={sources}

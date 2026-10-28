@@ -68,7 +68,7 @@ export const startKo: StartMessages = {
       },
       folder: {
         title: "에이전트가 읽을 폴더가 있나요?",
-        body: "브랜드 키트나 영상 소재처럼요. 폴더는 옮기지 않아요.",
+        body: "브랜드 키트나 영상 소재처럼요. 폴더는 그 자리에 둔 채로 읽어요.",
       },
       placeholder: "yourwebsite.com",
       add: "추가",
