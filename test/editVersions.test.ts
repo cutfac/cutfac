@@ -207,3 +207,46 @@ describe("versions to compare", () => {
     }),
   );
 });
+
+describe("putting the agent's code back", () => {
+  /** An item whose video an agent renders from code, with one request open on it. */
+  const requestOnCode = (variants?: number) =>
+    Effect.gen(function* () {
+      const id = yield* newItem;
+      yield* write(id, VIDEO, "first");
+      yield* write(id, "render/graph.txt", "yellow circle");
+
+      const requested = yield* requestEdit(id, { body: "Bluer", media: VIDEO, variants });
+
+      return { id, feedbackId: requested.feedback.id };
+    });
+
+  it.live("restoring a request puts the code back with the media, and keeps what it added", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId } = yield* requestOnCode();
+      yield* write(id, "render/graph.txt", "blue circle");
+      yield* write(id, "render/graph.orig.txt", "a copy the agent made");
+      yield* write(id, VIDEO, "blue");
+
+      const restored = yield* restoreBefore(id, feedbackId);
+
+      expect(yield* read(id, VIDEO)).toBe("first");
+      expect(yield* read(id, "render/graph.txt")).toBe("yellow circle");
+      expect(yield* read(id, "render/graph.orig.txt")).toBe("a copy the agent made");
+      expect(feedbackOf(restored, feedbackId)?.decision).toBe("restored");
+    }),
+  );
+
+  it.live("keeping none of the versions puts the code back too", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId } = yield* requestOnCode(2);
+      yield* write(id, "render/graph.txt", "sunset background");
+      yield* render(id, feedbackId, "Sunset");
+
+      const kept = yield* restoreBefore(id, feedbackId);
+
+      expect(yield* read(id, "render/graph.txt")).toBe("yellow circle");
+      expect(feedbackOf(kept, feedbackId)?.decision).toBe("restored");
+    }),
+  );
+});

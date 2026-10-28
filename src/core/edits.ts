@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import { restoreCode } from "./editCode.ts";
 import { buildContext } from "./editContext.ts";
 import { afterFile, itemRel } from "./editFiles.ts";
 import { saveBefore, snapshotAfter } from "./editSnapshots.ts";
@@ -108,7 +109,7 @@ export const approveEdit = Effect.fn("edits.approveEdit")(function* (
   );
 });
 
-/** The user rolls the media back to how it was when the request was made. */
+/** The user rolls the media, and the agent's code with it, back to how they were when the request was made. */
 export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   id: string,
   feedbackId: string,
@@ -119,13 +120,18 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   const before = f.context?.before;
 
   // Settling the versions already put the media back.
-  if (pendingVariants(f)) return yield* closeVariants(item, feedbackId, "restored");
+  if (pendingVariants(f)) {
+    yield* restoreCode(item, feedbackId);
+
+    return yield* closeVariants(item, feedbackId, "restored");
+  }
 
   if (f.media === undefined || before === undefined) {
     return yield* new InvalidRequest({ message: "This request has no saved before version" });
   }
 
   yield* ws.copy(`${item.dir}/${before}`, `${item.dir}/${f.media}`);
+  yield* restoreCode(item, feedbackId);
   yield* recordMedia(item, [{ media: f.media, file: before }], { cause: "restore", feedbackId });
   const now = yield* nowIso;
 

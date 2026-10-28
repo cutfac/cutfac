@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import { saveCode } from "./editCode.ts";
 import { afterFile, beforeFile, itemRel } from "./editFiles.ts";
 import { pendingVariants } from "./editVariants.ts";
 import { InvalidRequest } from "./errors.ts";
@@ -10,8 +11,9 @@ import { isoMillis } from "./time.ts";
 import { Workspace } from "./workspace.ts";
 
 /**
- * Save the media as it is now: the request's file as its "before" side, and the item's files in
- * its history, so what the agent changes can be undone. Returns the item-relative copy, if any.
+ * Save the media as it is now: the request's file as its "before" side, with the agent's code
+ * beside it, and the item's files in its history, so what the agent changes can be undone.
+ * Returns the item-relative copy, if any.
  */
 export const saveBefore = Effect.fnUntraced(function* (item: Item, f: Feedback) {
   const ws = yield* Workspace;
@@ -30,6 +32,7 @@ export const saveBefore = Effect.fnUntraced(function* (item: Item, f: Feedback) 
 
   const before = beforeFile(item, f.id, mediaName);
   yield* ws.copy(`${item.dir}/${mediaName}`, before);
+  yield* saveCode(item, f.id);
   const file = itemRel(item, before);
   yield* recordMedia(item, [{ media: mediaName, file, start: true }], { cause: "outside" });
 
