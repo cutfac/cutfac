@@ -1,5 +1,5 @@
 import { BunHttpServer } from "@effect/platform-bun";
-import { Effect, Layer, Option, Schema, Semaphore, Stream } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import {
   FetchHttpClient,
   HttpRouter,
@@ -10,58 +10,16 @@ import {
 } from "effect/http";
 
 import { readAbout } from "../core/about.ts";
-import { agentBin } from "../core/agentCommand.ts";
 import { RunRegistry } from "../core/agentRun.ts";
 import type { CliEntry } from "../core/agents.ts";
-import type { Approval } from "../core/approval.ts";
-import { buildEditPrompt } from "../core/editPrompt.ts";
-import {
-  approveEdit,
-  pickVariant,
-  requestEdit,
-  resolveEdit,
-  restoreBefore,
-} from "../core/edits.ts";
-import { awaitsDecision } from "../core/editVariants.ts";
-import { cancelWaiting, rewordWaiting, waitingLine, waitingPick } from "../core/editWaiting.ts";
-import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { errorCount, recentLogs } from "../core/feedbackLogs.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
-import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
 import { ImportRuns } from "../core/importRun.ts";
-import {
-  type Item,
-  addFeedback,
-  findFeedback,
-  getItem,
-  importMedia,
-  listItems,
-  openFeedback,
-} from "../core/items.ts";
+import { openFeedback } from "../core/items.ts";
 import { forget, learn, learnInputOf, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats } from "../core/library.ts";
-import { addLinkedVideo } from "../core/linkedVideos.ts";
-import { which } from "../core/process.ts";
-import {
-  addReferences,
-  itemReferences,
-  listReferences,
-  removeReference,
-} from "../core/references.ts";
-import { readRender } from "../core/render.ts";
-import { listReviews } from "../core/review.ts";
-import {
-  AgentChoice,
-  AgentName,
-  type AgentPick,
-  FeedbackInput,
-  ItemPatch,
-  ModelSettings,
-} from "../core/schema.ts";
 import { sendTeamFeedback } from "../core/teamFeedback.ts";
-import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
-import { requireTrust, trustProblem } from "../core/workspaceTrust.ts";
 import {
   type ReportSettings,
   feedbackInstallId,
@@ -69,19 +27,21 @@ import {
   resetInstallId,
   setReportChoices,
 } from "../errorReports.ts";
-import { createCountedItem, planStatus } from "../plan.ts";
+import { planStatus } from "../plan.ts";
 import { trackUsage } from "../usageStats.ts";
 import { agentRoutes, defaultAgent } from "./agents.ts";
 import { approvalRoutes } from "./approvals.ts";
 import { briefRoutes } from "./brief.ts";
+import { editRoutes } from "./edits.ts";
 import { fileRoutes } from "./files.ts";
 import { requestGuard } from "./guard.ts";
+import { historyRoutes } from "./history.ts";
 import { importRoutes } from "./imports.ts";
+import { itemRoutes } from "./items.ts";
 import { renderChanges, renderRoutes } from "./render.ts";
-import { json, queryId, withId } from "./respond.ts";
-import { runStream } from "./runStream.ts";
+import { json, withId } from "./respond.ts";
 import { eventStream, sseEvent } from "./sse.ts";
-import { isMultipart, MediaForm, ReferencesForm, uploadsOf } from "./uploads.ts";
+import { isMultipart, MediaForm } from "./uploads.ts";
 
 export interface ServerOptions {
   /** The built board, served at `/`. Without it the server is API-only. */
@@ -105,54 +65,6 @@ const notFound = HttpServerResponse.jsonUnsafe({ error: "No such API route" }, {
 
 // ---------------------------------------------------------------------------------------------
 // Request inputs
-
-const FeedbackQuery = Schema.Struct({
-  id: Schema.NonEmptyString,
-  feedbackId: Schema.NonEmptyString,
-});
-
-const NewItemBody = Schema.Struct({
-  title: Schema.String,
-  format: Schema.optional(Schema.NonEmptyString),
-  hook: Schema.optional(Schema.String),
-  notes: Schema.optional(Schema.String),
-  inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-});
-
-const FeedbackRef = Schema.Struct({ feedbackId: Schema.NonEmptyString });
-
-const PickBody = Schema.Struct({
-  feedbackId: Schema.NonEmptyString,
-  variantId: Schema.NonEmptyString,
-});
-
-const ResolveBody = Schema.Struct({
-  feedbackId: Schema.NonEmptyString,
-  resolution: Schema.optional(Schema.String),
-});
-
-/** Read beside the FeedbackInput fields of the same body. */
-const EditVia = Schema.Struct({ agent: Schema.optional(AgentChoice), ...ModelSettings.fields });
-
-const RunBody = Schema.Struct({
-  feedbackId: Schema.NonEmptyString,
-  agent: Schema.optional(AgentName),
-  ...ModelSettings.fields,
-});
-
-/** One waiting request, or every one on the item. */
-const CancelBody = Schema.Struct({ feedbackId: Schema.optional(Schema.NonEmptyString) });
-
-const RewordBody = Schema.Struct({ feedbackId: Schema.NonEmptyString, body: Schema.String });
-
-const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString) });
-
-const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
-
-const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
-
-/** A video link to download into an item's references. */
-const LinkBody = Schema.Struct({ url: Schema.NonEmptyString });
 
 const LearnBody = Schema.Struct({ source: Schema.NonEmptyString });
 
@@ -187,84 +99,8 @@ const reportView = ({ available, errorReports, usageStats, installId }: ReportSe
   installId: Option.getOrNull(installId),
 });
 
-const decodeEditVia = Schema.decodeUnknownEffect(EditVia);
-
-const decodeFeedbackInput = Schema.decodeUnknownEffect(FeedbackInput);
-
-const nonEmpty = (text: string | undefined) =>
-  text === undefined || text.trim() === "" ? undefined : text.trim();
-
 // ---------------------------------------------------------------------------------------------
 // Items
-
-/**
- * What the board shows for one item: the item, its markdown docs, its undo history, the agent's
- * last frame review of each video, its reference files, and whether an agent is on it.
- */
-const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) {
-  const ws = yield* Workspace;
-  const runs = yield* RunRegistry;
-
-  const docs = yield* Effect.forEach(
-    item.docs,
-    (name) =>
-      Effect.map(ws.readText(`${item.dir}/${name}`), (text): [string, string] => [name, text]),
-    { concurrency: 4 },
-  );
-
-  return {
-    ...item,
-    docs: Object.fromEntries(docs),
-    history: yield* readHistory(item),
-    reviews: yield* listReviews(item),
-    references: yield* listReferences(itemReferences(item)),
-    running: yield* runs.isRunning(item.id),
-  };
-});
-
-/** Files dropped, pasted or picked on the board, kept as the item's references. */
-const addReferencesRoute = Effect.fn("server.addReferences")(function* (id: string) {
-  const uploads = yield* uploadsOf(yield* HttpServerRequest.schemaBodyMultipart(ReferencesForm));
-  const added = yield* addReferences(itemReferences(yield* getItem(id)), uploads);
-
-  return { item: yield* itemDetail(yield* getItem(id)), added };
-});
-
-/** How many of the run's asks wait on the user to let it use a tool, and how many to answer it. */
-const asked = (pending: ReadonlyArray<Approval>) => {
-  const questions = pending.filter((approval) => approval.kind === "question").length;
-
-  return { approvals: pending.length - questions, questions };
-};
-
-/**
- * What the gallery shows of an item: its requests still open or waiting for the user's decision,
- * whether an agent works on it and how many of its asks wait for an answer, and its render while
- * it goes on or after it failed, so a tile can say what waits for the user and what is under way.
- */
-const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
-  const runs = yield* RunRegistry;
-  const render = yield* readRender(item.id);
-  const { feedback } = item.doc;
-
-  return {
-    id: item.id,
-    dir: item.dir,
-    title: item.doc.title,
-    status: item.doc.status,
-    format: item.doc.format,
-    hook: item.doc.hook,
-    openFeedback: feedback.filter((f) => f.status === "open").length,
-    requests: feedback.filter((f) => f.status === "open" || awaitsDecision(f)),
-    running: yield* runs.isRunning(item.id),
-    ...asked(yield* runs.pending(item.id)),
-    render: Option.getOrUndefined(
-      Option.filter(render, ({ status }) => status === "running" || status === "failed"),
-    ),
-    media: item.media,
-    updatedAt: item.updatedAt,
-  };
-});
 
 /** Everything learned, newest first, with about.md as agents read it. */
 const learnedList = Effect.all(
@@ -287,149 +123,6 @@ const workspaceInfo = Effect.gen(function* () {
     openFeedback: feedback.length,
   };
 });
-
-// ---------------------------------------------------------------------------------------------
-// Edit requests
-
-interface Dispatch {
-  readonly sent: AgentChoice;
-  readonly warnings: ReadonlyArray<string>;
-}
-
-const queuedInstead = (reason: string): Dispatch => ({
-  sent: "queue",
-  warnings: [`${reason}; the request is queued instead`],
-});
-
-/** Why `agent` can't start in this workspace now, if it can't. */
-const cannotStart = Effect.fnUntraced(function* (agent: AgentName) {
-  if (Option.isNone(yield* which(agent))) return `${agent} CLI not found on PATH`;
-
-  return yield* trustProblem(agent);
-});
-
-/** Start the agent on a recorded request, or leave it queued when the agent cannot start. */
-const dispatch = Effect.fnUntraced(function* (itemId: string, feedbackId: string, pick: AgentPick) {
-  const runs = yield* RunRegistry;
-  const problem = yield* cannotStart(pick.agent);
-
-  if (problem !== undefined) return queuedInstead(problem);
-
-  return yield* runs.start({ itemId, feedbackId, ...pick }).pipe(
-    Effect.as<Dispatch>({ sent: pick.agent, warnings: [] }),
-    Effect.catchTag("Conflict", (error) => Effect.succeed(queuedInstead(error.message))),
-  );
-});
-
-/**
- * Record a request and hand it to `via`: now, or once the item's run and the requests waiting
- * before it are done. Requests on an item run in the order they were made.
- */
-const sendEdit = Effect.fnUntraced(function* (
-  id: string,
-  input: FeedbackInput,
-  via: AgentChoice,
-  settings: ModelSettings,
-) {
-  const runs = yield* RunRegistry;
-
-  if (via === "queue") {
-    const queued: Dispatch = { sent: "queue", warnings: [] };
-
-    return { requested: yield* requestEdit(id, input), dispatched: queued };
-  }
-
-  const pick: AgentPick = { agent: via, ...settings };
-  const busy = (yield* runs.isRunning(id)) || waitingLine((yield* getItem(id)).doc).length > 0;
-
-  if (!busy) {
-    const requested = yield* requestEdit(id, input);
-
-    return { requested, dispatched: yield* dispatch(id, requested.feedback.id, pick) };
-  }
-
-  const problem = yield* cannotStart(via);
-
-  if (problem !== undefined) {
-    return { requested: yield* requestEdit(id, input), dispatched: queuedInstead(problem) };
-  }
-
-  const waiting: Dispatch = { sent: via, warnings: [] };
-
-  return { requested: yield* requestEdit(id, input, pick), dispatched: waiting };
-});
-
-/**
- * Record an edit request with its context files, then start the agent headlessly (streamed on
- * /api/item/run), line it up behind the item's run, or leave it queued for copy-paste.
- */
-const editRoute = Effect.gen(function* () {
-  const ws = yield* Workspace;
-  const runs = yield* RunRegistry;
-  const id = yield* queryId;
-  const request = yield* HttpServerRequest.HttpServerRequest;
-  const body = yield* request.json;
-  const { agent, ...settings } = yield* decodeEditVia(body);
-  const input = yield* decodeFeedbackInput(body);
-  const via = agent ?? ws.config.agent.default;
-
-  // Requests take turns here, so each sees whether the one before it started or lined up.
-  return yield* runs.exclusive(
-    id,
-    Effect.gen(function* () {
-      const { requested, dispatched } = yield* sendEdit(id, input, via, settings);
-
-      yield* trackUsage("edit_requested", { versions: input.variants ?? 1 });
-
-      return {
-        item: yield* itemDetail(requested.item),
-        feedbackId: requested.feedback.id,
-        sent: dispatched.sent,
-        warnings: [...requested.warnings, ...dispatched.warnings],
-        prompt: yield* buildEditPrompt(requested.item, requested.feedback),
-      };
-    }),
-  );
-});
-
-/** Send a queued request to an agent. */
-const runRoute = Effect.gen(function* () {
-  const ws = yield* Workspace;
-  const runs = yield* RunRegistry;
-  const id = yield* queryId;
-  const body = yield* HttpServerRequest.schemaBodyJson(RunBody);
-  const { feedbackId, agent = defaultAgent(ws), ...settings } = body;
-  yield* agentBin(agent);
-  yield* requireTrust(agent);
-  yield* findFeedback(yield* getItem(id), feedbackId);
-  yield* runs.exclusive(id, runs.start({ itemId: id, feedbackId, agent, ...settings }));
-
-  return { ok: true };
-});
-
-/** Start the item's waiting line again, after a run on it failed or was stopped. */
-const continueRoute = withId((id) =>
-  Effect.gen(function* () {
-    const runs = yield* RunRegistry;
-
-    return yield* runs.exclusive(
-      id,
-      Effect.gen(function* () {
-        const first = waitingLine((yield* getItem(id)).doc)[0];
-
-        if (first === undefined) {
-          return yield* new InvalidRequest({ message: "No request is waiting on this item" });
-        }
-
-        yield* agentBin(first.waiting);
-        yield* requireTrust(first.waiting);
-        yield* runs.start({ itemId: id, feedbackId: first.id, ...waitingPick(first) });
-
-        return { ok: true };
-      }),
-    );
-  }),
-);
 
 // ---------------------------------------------------------------------------------------------
 // Server-sent events
@@ -462,161 +155,6 @@ const changesRoute = Effect.gen(function* () {
 const apiRoutes = HttpRouter.addAll([
   json("GET", "/api/workspace", workspaceInfo),
   json("GET", "/api/plan", planStatus()),
-
-  json(
-    "GET",
-    "/api/items",
-    Effect.flatMap(listItems(), (items) =>
-      Effect.forEach(items, itemSummary, { concurrency: "unbounded" }),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/items",
-    Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), (body) =>
-      createCountedItem(body).pipe(
-        Effect.tap(() => trackUsage("video_created", { template: body.format !== undefined })),
-        Effect.flatMap(itemDetail),
-      ),
-    ),
-  ),
-  json(
-    "GET",
-    "/api/item",
-    withId((id) => Effect.flatMap(getItem(id), itemDetail)),
-  ),
-  json(
-    "POST",
-    "/api/item/media",
-    withId((id) =>
-      Effect.gen(function* () {
-        const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
-        const { item } = yield* importMedia(id, file.path, file.name);
-
-        return yield* itemDetail(item);
-      }),
-    ),
-  ),
-  json("POST", "/api/item/references", withId(addReferencesRoute)),
-  json(
-    "POST",
-    "/api/item/references/link",
-    withId((id) =>
-      Effect.gen(function* () {
-        const { url } = yield* HttpServerRequest.schemaBodyJson(LinkBody);
-        const added = yield* addLinkedVideo(itemReferences(yield* getItem(id)), url);
-
-        return { item: yield* itemDetail(yield* getItem(id)), added: [added] };
-      }),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/references/remove",
-    withId((id) =>
-      Effect.gen(function* () {
-        const { path } = yield* HttpServerRequest.schemaBodyJson(ReferenceBody);
-        yield* removeReference(yield* getItem(id), path);
-
-        return yield* itemDetail(yield* getItem(id));
-      }),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/feedback",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackInput), (input) =>
-        Effect.flatMap(addFeedback(id, input), (added) => itemDetail(added.item)),
-      ),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/feedback/resolve",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(ResolveBody), (body) =>
-        Effect.flatMap(
-          resolveEdit(id, body.feedbackId, nonEmpty(body.resolution) ?? "Resolved in the web UI"),
-          itemDetail,
-        ),
-      ),
-    ),
-  ),
-  json("POST", "/api/item/edit", editRoute),
-  json("POST", "/api/item/edit/run", runRoute),
-  json("POST", "/api/item/edit/continue", continueRoute),
-  json(
-    "POST",
-    "/api/item/edit/cancel",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(CancelBody), (body) =>
-        Effect.flatMap(cancelWaiting(id, body.feedbackId), itemDetail),
-      ),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/edit/reword",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(RewordBody), (body) =>
-        Effect.flatMap(rewordWaiting(id, body.feedbackId, body.body), itemDetail),
-      ),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/edit/stop",
-    withId((id) =>
-      Effect.map(
-        Effect.flatMap(RunRegistry, (runs) => runs.stop(id)),
-        (stopped) => ({ ok: true, stopped }),
-      ),
-    ),
-  ),
-  json(
-    "GET",
-    "/api/item/edit/prompt",
-    Effect.gen(function* () {
-      const query = yield* HttpServerRequest.schemaSearchParams(FeedbackQuery);
-      const item = yield* getItem(query.id);
-      const feedback = yield* findFeedback(item, query.feedbackId);
-
-      return { prompt: yield* buildEditPrompt(item, feedback) };
-    }),
-  ),
-  json(
-    "POST",
-    "/api/item/edit/approve",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
-        Effect.flatMap(approveEdit(id, body.feedbackId), itemDetail),
-      ),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/edit/pick",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(PickBody), (body) =>
-        pickVariant(id, body.feedbackId, body.variantId).pipe(
-          Effect.tap(() => trackUsage("take_kept")),
-          Effect.flatMap(itemDetail),
-        ),
-      ),
-    ),
-  ),
-  json(
-    "POST",
-    "/api/item/edit/restore",
-    withId((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
-        Effect.flatMap(restoreBefore(id, body.feedbackId), itemDetail),
-      ),
-    ),
-  ),
-  json("GET", "/api/item/verify", withId(verifyItem)),
-  runStream("/api/item/run", RunRegistry, getItem),
 
   json("GET", "/api/feedback", openFeedback()),
   json("GET", "/api/learned", learnedList),
@@ -694,64 +232,6 @@ const boardRoutes = (webDir: string) =>
   );
 
 /**
- * Changes that go through the item's undo history. They run one at a time, and undo waits until
- * no agent is working on the item, since the agent may be editing the same files.
- */
-const historyRoutes = HttpRouter.addAll(
-  Effect.map(Semaphore.make(1), (lock) => {
-    const recorded = <E, R>(change: (id: string) => Effect.Effect<Item, E, R>) =>
-      withId((id) => lock.withPermits(1)(Effect.flatMap(change(id), itemDetail)));
-
-    const travel = <E, R>(change: (id: string) => Effect.Effect<Item, E, R>) =>
-      recorded((id) =>
-        Effect.gen(function* () {
-          const runs = yield* RunRegistry;
-
-          if (yield* runs.isRunning(id)) {
-            return yield* new Conflict({
-              message: "An agent is working on this item; wait for it or stop it first",
-            });
-          }
-
-          return yield* change(id);
-        }),
-      );
-
-    return [
-      json(
-        "PATCH",
-        "/api/item",
-        recorded((id) =>
-          Effect.flatMap(HttpServerRequest.schemaBodyJson(ItemPatch), (patch) =>
-            updateDetails(id, patch),
-          ),
-        ),
-      ),
-      json("POST", "/api/item/history/undo", travel(undo)),
-      json("POST", "/api/item/history/redo", travel(redo)),
-      json(
-        "POST",
-        "/api/item/history/goto",
-        travel((id) =>
-          Effect.flatMap(HttpServerRequest.schemaBodyJson(GoToBody), (body) =>
-            goTo(id, body.entryId),
-          ),
-        ),
-      ),
-      json(
-        "POST",
-        "/api/item/history/version",
-        travel((id) =>
-          Effect.flatMap(HttpServerRequest.schemaBodyJson(VersionBody), (body) =>
-            restoreVersion(id, body.versionId),
-          ),
-        ),
-      ),
-    ];
-  }),
-);
-
-/**
  * Routes that need nothing are added on their own: in a route list they would widen the list's
  * error and requirement types to `any`.
  */
@@ -766,6 +246,8 @@ export const routes = (options: ServerOptions) => {
     staticRoutes,
     apiRoutes,
     agentRoutes(options.cli),
+    itemRoutes,
+    editRoutes,
     importRoutes(options.cli),
     fileRoutes,
     briefRoutes,
