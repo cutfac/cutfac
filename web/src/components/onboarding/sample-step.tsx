@@ -1,5 +1,7 @@
+import { CheckIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useFirstReading } from "@/components/first-ideas";
 import { ErrorAlert } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -52,7 +54,10 @@ export function SampleStep({ onSkip }: { onSkip: () => void }) {
 
   return (
     <div className="flex animate-in flex-col gap-8 duration-300 fade-in slide-in-from-bottom-2">
-      <StepHeader title={t.title} body={t.body} />
+      <div className="flex flex-col gap-4">
+        <StepHeader title={t.title} body={t.body} />
+        <ReadingNote />
+      </div>
       <div className="grid grid-cols-3 gap-3">
         {(samples ?? []).map((sample) => (
           <button
@@ -97,6 +102,36 @@ export function SampleStep({ onSkip }: { onSkip: () => void }) {
           {t.skip}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What the agent is doing meanwhile, quietly: a breathing dot and words a soft light passes over
+ * while it reads, then that it is done. Nothing shows when there was nothing to read.
+ */
+function ReadingNote() {
+  const messages = useMessages();
+  const { titles, reading } = useFirstReading();
+
+  if (!reading && titles.length === 0) return null;
+
+  return (
+    <div
+      key={reading ? "reading" : "read"}
+      className="flex animate-in items-center gap-2.5 self-start rounded-full bg-foreground/5 py-1.5 ps-3 pe-4 text-xs duration-500 fade-in"
+    >
+      {reading ? (
+        <span className="relative flex size-2">
+          <span className="reading-ping absolute inset-0 rounded-full bg-brand/50" />
+          <span className="relative size-2 rounded-full bg-brand" />
+        </span>
+      ) : (
+        <CheckIcon className="size-3.5 text-brand" />
+      )}
+      <span className={reading ? "reading-shine" : "text-muted-foreground"}>
+        {reading ? messages.board.reading(titles) : messages.start.sample.read}
+      </span>
     </div>
   );
 }

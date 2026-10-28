@@ -166,7 +166,8 @@ picked is copied into the workspace in the user's language, with its code, fonts
 opens in the editor with a guide card that moves on as the user does each part of the core loop:
 play it, draw a box on the title, send the suggested request to change it to their product's name,
 then ask for two versions and compare. The copy is the user's own video from then on, so it counts
-as one of the free version's videos, a light nudge that the next ones are worth making well.
+as one of the free version's videos, a light nudge that the next ones are worth making well. While
+the user picks, a quiet line under the offer says what the agent is reading, then that it is done.
 The guide's last card,
 or Skip on the offer, opens an empty editor for the first video of their own, so asking for it is
 the next thing to do; a template can come from a video the user likes later, through Templates. The

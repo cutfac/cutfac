@@ -107,6 +107,8 @@ export const startEn = {
     title: "Try it on a sample first",
     body: "While your agent reads about you, change a short sample video by asking for it. It's one of your free videos.",
     moods: { bold: "Bold", calm: "Calm", playful: "Playful" },
+    /** Once the agent has read the material, while the user tries the sample. */
+    read: "Your agent has read it all. Ideas for your first video are ready when you are.",
     adding: "Copying the sample…",
     skip: "Skip, make my own",
     videoTitle: (title: string) => `Sample: ${title}`,
