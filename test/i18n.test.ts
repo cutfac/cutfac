@@ -7,8 +7,13 @@ import type { Messages } from "../web/src/i18n/index.ts";
 import { ko } from "../web/src/i18n/ko.tsx";
 import { isLocale, resolveLocale } from "../web/src/i18n/locale.ts";
 
-/** Copy that reads the same in every language: product and brand names. */
-const SAME_EVERYWHERE = new Set(["nav.appName", "setup.agents.claude", "setup.agents.codex"]);
+/** Copy that reads the same in every language: product and brand names, and an example address. */
+const SAME_EVERYWHERE = new Set([
+  "nav.appName",
+  "setup.agents.claude",
+  "setup.agents.codex",
+  "start.whatToMake.material.placeholder",
+]);
 
 /** Every plain string in a dictionary, keyed by its dotted path. */
 function strings(dictionary: Messages): Map<string, string> {
