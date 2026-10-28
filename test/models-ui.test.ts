@@ -24,6 +24,7 @@ const codex: AgentStatus = {
       defaultEffort: "low",
     },
     { id: "gpt-b", label: "GPT-B", efforts: ["low", "medium"] },
+    { id: "gpt-c", label: "GPT-C", efforts: ["low", "high"], defaultEffort: "high" },
   ],
   efforts: ["low", "medium"],
 };
@@ -53,10 +54,15 @@ describe("picking a model and effort", () => {
       model: "gpt-b",
       effort: "medium",
     });
-    // With nothing picked, or a model gone, the agent's first model runs with its own effort.
+    // With nothing picked, or a model gone, the agent's first model runs at Medium.
     expect(usableSettings(Option.some(codex), undefined)).toEqual({
       model: "gpt-a",
-      effort: "low",
+      effort: "medium",
+    });
+    // A model without Medium runs at its own effort.
+    expect(usableSettings(Option.some(codex), { model: "gpt-c" })).toEqual({
+      model: "gpt-c",
+      effort: "high",
     });
     expect(usableSettings(Option.some(codex), { model: "gone", effort: "medium" })).toEqual({
       model: "gpt-a",
@@ -69,7 +75,7 @@ describe("picking a model and effort", () => {
   test("with nothing picked, the first listed model runs whatever the agent's config names", () => {
     expect(usableSettings(Option.some({ ...codex, defaultModel: "GPT-B" }), {})).toEqual({
       model: "gpt-a",
-      effort: "low",
+      effort: "medium",
     });
   });
 

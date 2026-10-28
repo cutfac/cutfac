@@ -38,18 +38,16 @@ export function effortsFor(status: AgentStatus, model: string | undefined) {
 /** Whether the agent offers anything to pick, so the picker is worth showing. */
 const offersModels = (status: AgentStatus) => status.models.length > 0 || status.efforts.length > 0;
 
-/** The effort to run with when none is picked: the model's own, else High, else the middle one. */
+/** The effort to run with when none is picked: Medium, else the model's own, else the middle one. */
 function defaultEffort(
   efforts: ReadonlyArray<string>,
   own: Option.Option<string>,
 ): Option.Option<string> {
+  if (efforts.includes("medium")) return Option.some("medium");
+
   const offered = Option.filter(own, (effort) => efforts.includes(effort));
 
-  if (Option.isSome(offered)) return offered;
-
-  return efforts.includes("high")
-    ? Option.some("high")
-    : Array.get(efforts, Math.floor(efforts.length / 2));
+  return Option.isSome(offered) ? offered : Array.get(efforts, Math.floor(efforts.length / 2));
 }
 
 /**
