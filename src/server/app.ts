@@ -11,13 +11,8 @@ import {
 
 import { readAbout } from "../core/about.ts";
 import { agentBin } from "../core/agentCommand.ts";
-import {
-  PermissionChoice,
-  agentPermissions,
-  setAgentPermissions,
-} from "../core/agentPermissions.ts";
 import { RunRegistry } from "../core/agentRun.ts";
-import { type CliEntry, agentStatus, connectAgent, mcpLaunch } from "../core/agents.ts";
+import type { CliEntry } from "../core/agents.ts";
 import type { Approval } from "../core/approval.ts";
 import { buildEditPrompt } from "../core/editPrompt.ts";
 import {
@@ -33,21 +28,7 @@ import { Conflict, InvalidRequest } from "../core/errors.ts";
 import { errorCount, recentLogs } from "../core/feedbackLogs.ts";
 import { formatStatuses } from "../core/formatSpec.ts";
 import { goTo, readHistory, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
-import {
-  ImportRuns,
-  startImport,
-  startTurn,
-  stopAndCloseImport,
-  stopImport,
-} from "../core/importRun.ts";
-import {
-  type Import,
-  type TurnInput,
-  getImport,
-  importFiles,
-  listImports,
-} from "../core/imports.ts";
-import { IMPORT_KINDS } from "../core/importSchema.ts";
+import { ImportRuns } from "../core/importRun.ts";
 import {
   type Item,
   addFeedback,
@@ -56,18 +37,10 @@ import {
   importMedia,
   listItems,
   openFeedback,
-  shortId,
 } from "../core/items.ts";
 import { forget, learn, learnInputOf, listLearned } from "../core/learn.ts";
 import { getFormat, listFormats } from "../core/library.ts";
 import { addLinkedVideo } from "../core/linkedVideos.ts";
-import {
-  McpDecision,
-  McpPluginDecision,
-  decideMcpPlugin,
-  decideMcpServer,
-  mcpServersStatus,
-} from "../core/mcpApprovals.ts";
 import { which } from "../core/process.ts";
 import {
   addReferences,
@@ -87,8 +60,8 @@ import {
 } from "../core/schema.ts";
 import { sendTeamFeedback } from "../core/teamFeedback.ts";
 import { verifyItem } from "../core/verify.ts";
-import { Workspace, type WorkspaceService } from "../core/workspace.ts";
-import { requireTrust, trustProblem, trustStatus, trustWorkspace } from "../core/workspaceTrust.ts";
+import { Workspace } from "../core/workspace.ts";
+import { requireTrust, trustProblem } from "../core/workspaceTrust.ts";
 import {
   type ReportSettings,
   feedbackInstallId,
@@ -98,10 +71,12 @@ import {
 } from "../errorReports.ts";
 import { createCountedItem, planStatus } from "../plan.ts";
 import { trackUsage } from "../usageStats.ts";
+import { agentRoutes, defaultAgent } from "./agents.ts";
 import { approvalRoutes } from "./approvals.ts";
 import { briefRoutes } from "./brief.ts";
 import { fileRoutes } from "./files.ts";
 import { requestGuard } from "./guard.ts";
+import { importRoutes } from "./imports.ts";
 import { renderChanges, renderRoutes } from "./render.ts";
 import { json, queryId, withId } from "./respond.ts";
 import { runStream } from "./runStream.ts";
@@ -170,34 +145,9 @@ const CancelBody = Schema.Struct({ feedbackId: Schema.optional(Schema.NonEmptySt
 
 const RewordBody = Schema.Struct({ feedbackId: Schema.NonEmptyString, body: Schema.String });
 
-const ConnectBody = Schema.Struct({ agent: AgentName });
-
-const TrustBody = Schema.Struct({ fingerprint: Schema.NonEmptyString });
-
-const NewImportBody = Schema.Struct({
-  /** Optional only for a brief import, which may start from no reference. */
-  link: Schema.optional(Schema.String),
-  kind: Schema.optional(Schema.Literals(IMPORT_KINDS)),
-  agent: Schema.optional(AgentName),
-  /** The board's language, for the agent to write in. */
-  locale: Schema.optional(Schema.NonEmptyString),
-});
-
-/** A reply to the import's agent, or Allow with an optional note. */
-const ImportReplyBody = Schema.Struct({
-  body: Schema.optional(Schema.String),
-  allow: Schema.optional(Schema.Boolean),
-});
-
 const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString) });
 
 const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
-
-/** A new import with files the user dropped, pasted or picked to go with the link. */
-const NewImportForm = Schema.Struct({ ...NewImportBody.fields, ...ReferencesForm.fields });
-
-/** A reply to the import's agent with files; Allow carries none, so it stays JSON. */
-const ImportReplyForm = Schema.Struct({ ...ReferencesForm.fields, body: Schema.String });
 
 const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
 
@@ -346,10 +296,6 @@ interface Dispatch {
   readonly warnings: ReadonlyArray<string>;
 }
 
-/** The agent a run uses when the request does not name one. */
-const defaultAgent = (ws: WorkspaceService): AgentName =>
-  ws.config.agent.default === "queue" ? "claude" : ws.config.agent.default;
-
 const queuedInstead = (reason: string): Dispatch => ({
   sent: "queue",
   warnings: [`${reason}; the request is queued instead`],
@@ -486,101 +432,6 @@ const continueRoute = withId((id) =>
 );
 
 // ---------------------------------------------------------------------------------------------
-// Imports
-
-/** An import and whether an agent is on it, as the list of imports shows it. */
-const importSummary = Effect.fn("server.importSummary")(function* (found: Import) {
-  const runs = yield* ImportRuns;
-
-  return { ...found, running: yield* runs.isRunning(found.id) };
-});
-
-/** An import as its chat shows it, with the files the user sent to it. */
-const importDetail = Effect.fn("server.importDetail")(function* (found: Import) {
-  const files = importFiles(found.id);
-
-  return {
-    ...(yield* importSummary(found)),
-    dir: files.owner,
-    references: yield* listReferences(files),
-  };
-});
-
-/** How agents launch this workspace's MCP server. `instead` says what to do when that is unknown. */
-const ownLaunch = (options: ServerOptions, instead: string) =>
-  Effect.gen(function* () {
-    const ws = yield* Workspace;
-
-    if (options.cli === undefined) {
-      return yield* new InvalidRequest({
-        message: `This server does not know how it was launched; ${instead}`,
-      });
-    }
-
-    return mcpLaunch(options.cli, ws.root);
-  });
-
-const COPY_INSTEAD = "copy the import prompt to your agent instead";
-
-/**
- * Start the user's agent on a link, or on the brief, and any files sent with it, read-only until
- * installs are allowed.
- */
-const newImportRoute = (options: ServerOptions) =>
-  Effect.gen(function* () {
-    const ws = yield* Workspace;
-    const request = yield* HttpServerRequest.HttpServerRequest;
-
-    const form = isMultipart(request)
-      ? yield* HttpServerRequest.schemaBodyMultipart(NewImportForm)
-      : undefined;
-
-    const body = form ?? (yield* HttpServerRequest.schemaBodyJson(NewImportBody));
-    const uploads = form === undefined ? [] : yield* uploadsOf(form);
-    const server = yield* ownLaunch(options, COPY_INSTEAD);
-    const agent = body.agent ?? defaultAgent(ws);
-    const input = { link: body.link, kind: body.kind, agent, locale: body.locale };
-    const started = yield* startImport(input, server, uploads);
-
-    return yield* importDetail(started);
-  });
-
-/** Send the user's reply and any files with it, or their Allow, to the import's agent. */
-const importReplyRoute = (options: ServerOptions) =>
-  withId((id) =>
-    Effect.gen(function* () {
-      const request = yield* HttpServerRequest.HttpServerRequest;
-
-      const form = isMultipart(request)
-        ? yield* HttpServerRequest.schemaBodyMultipart(ImportReplyForm)
-        : undefined;
-
-      const body: typeof ImportReplyBody.Type =
-        form ?? (yield* HttpServerRequest.schemaBodyJson(ImportReplyBody));
-
-      const uploads = form === undefined ? [] : yield* uploadsOf(form);
-      const allow = body.allow === true;
-      const text = body.body?.trim() ?? "";
-
-      if (!allow && text === "")
-        return yield* new InvalidRequest({ message: "Write a reply first" });
-
-      const server = yield* ownLaunch(options, COPY_INSTEAD);
-      const turn: TurnInput = { id: yield* shortId, kind: allow ? "allow" : "reply", body: text };
-
-      return yield* importDetail(yield* startTurn(id, turn, server, uploads));
-    }),
-  );
-
-/** Stop the import's agent, if it is working. */
-const stopImportRoute = withId((id) =>
-  Effect.andThen(stopImport(id), Effect.flatMap(getImport(id), importDetail)),
-);
-
-/** Stop the import's agent, if it is working, and set the import aside. */
-const closeImportRoute = withId((id) => Effect.flatMap(stopAndCloseImport(id), importDetail));
-
-// ---------------------------------------------------------------------------------------------
 // Server-sent events
 
 /**
@@ -608,284 +459,231 @@ const changesRoute = Effect.gen(function* () {
 // Routes
 
 /** The board's API and the workspace files it loads. */
-const apiRoutes = (options: ServerOptions) =>
-  HttpRouter.addAll([
-    json("GET", "/api/workspace", workspaceInfo),
-    json("GET", "/api/plan", planStatus()),
-    json("GET", "/api/agents", agentStatus()),
-    json("GET", "/api/trust", trustStatus()),
-    json(
-      "POST",
-      "/api/trust",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(TrustBody), (body) =>
-        trustWorkspace(body.fingerprint),
+const apiRoutes = HttpRouter.addAll([
+  json("GET", "/api/workspace", workspaceInfo),
+  json("GET", "/api/plan", planStatus()),
+
+  json(
+    "GET",
+    "/api/items",
+    Effect.flatMap(listItems(), (items) =>
+      Effect.forEach(items, itemSummary, { concurrency: "unbounded" }),
+    ),
+  ),
+  json(
+    "POST",
+    "/api/items",
+    Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), (body) =>
+      createCountedItem(body).pipe(
+        Effect.tap(() => trackUsage("video_created", { template: body.format !== undefined })),
+        Effect.flatMap(itemDetail),
       ),
     ),
-    json("GET", "/api/agent-permissions", agentPermissions()),
-    json(
-      "POST",
-      "/api/agent-permissions",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(PermissionChoice), setAgentPermissions),
-    ),
-    json("GET", "/api/mcp-servers", mcpServersStatus()),
-    json(
-      "POST",
-      "/api/mcp-servers",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(McpDecision), decideMcpServer),
-    ),
-    json(
-      "POST",
-      "/api/mcp-plugins",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(McpPluginDecision), decideMcpPlugin),
-    ),
-    json(
-      "POST",
-      "/api/agents/connect",
+  ),
+  json(
+    "GET",
+    "/api/item",
+    withId((id) => Effect.flatMap(getItem(id), itemDetail)),
+  ),
+  json(
+    "POST",
+    "/api/item/media",
+    withId((id) =>
       Effect.gen(function* () {
-        const { agent } = yield* HttpServerRequest.schemaBodyJson(ConnectBody);
-        const server = yield* ownLaunch(options, "run `cutfac agent-setup --connect` instead");
+        const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
+        const { item } = yield* importMedia(id, file.path, file.name);
 
-        return yield* connectAgent(agent, server);
+        return yield* itemDetail(item);
       }),
     ),
+  ),
+  json("POST", "/api/item/references", withId(addReferencesRoute)),
+  json(
+    "POST",
+    "/api/item/references/link",
+    withId((id) =>
+      Effect.gen(function* () {
+        const { url } = yield* HttpServerRequest.schemaBodyJson(LinkBody);
+        const added = yield* addLinkedVideo(itemReferences(yield* getItem(id)), url);
 
-    json(
-      "GET",
-      "/api/items",
-      Effect.flatMap(listItems(), (items) =>
-        Effect.forEach(items, itemSummary, { concurrency: "unbounded" }),
+        return { item: yield* itemDetail(yield* getItem(id)), added: [added] };
+      }),
+    ),
+  ),
+  json(
+    "POST",
+    "/api/item/references/remove",
+    withId((id) =>
+      Effect.gen(function* () {
+        const { path } = yield* HttpServerRequest.schemaBodyJson(ReferenceBody);
+        yield* removeReference(yield* getItem(id), path);
+
+        return yield* itemDetail(yield* getItem(id));
+      }),
+    ),
+  ),
+  json(
+    "POST",
+    "/api/item/feedback",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackInput), (input) =>
+        Effect.flatMap(addFeedback(id, input), (added) => itemDetail(added.item)),
       ),
     ),
-    json(
-      "POST",
-      "/api/items",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), (body) =>
-        createCountedItem(body).pipe(
-          Effect.tap(() => trackUsage("video_created", { template: body.format !== undefined })),
+  ),
+  json(
+    "POST",
+    "/api/item/feedback/resolve",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(ResolveBody), (body) =>
+        Effect.flatMap(
+          resolveEdit(id, body.feedbackId, nonEmpty(body.resolution) ?? "Resolved in the web UI"),
+          itemDetail,
+        ),
+      ),
+    ),
+  ),
+  json("POST", "/api/item/edit", editRoute),
+  json("POST", "/api/item/edit/run", runRoute),
+  json("POST", "/api/item/edit/continue", continueRoute),
+  json(
+    "POST",
+    "/api/item/edit/cancel",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(CancelBody), (body) =>
+        Effect.flatMap(cancelWaiting(id, body.feedbackId), itemDetail),
+      ),
+    ),
+  ),
+  json(
+    "POST",
+    "/api/item/edit/reword",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(RewordBody), (body) =>
+        Effect.flatMap(rewordWaiting(id, body.feedbackId, body.body), itemDetail),
+      ),
+    ),
+  ),
+  json(
+    "POST",
+    "/api/item/edit/stop",
+    withId((id) =>
+      Effect.map(
+        Effect.flatMap(RunRegistry, (runs) => runs.stop(id)),
+        (stopped) => ({ ok: true, stopped }),
+      ),
+    ),
+  ),
+  json(
+    "GET",
+    "/api/item/edit/prompt",
+    Effect.gen(function* () {
+      const query = yield* HttpServerRequest.schemaSearchParams(FeedbackQuery);
+      const item = yield* getItem(query.id);
+      const feedback = yield* findFeedback(item, query.feedbackId);
+
+      return { prompt: yield* buildEditPrompt(item, feedback) };
+    }),
+  ),
+  json(
+    "POST",
+    "/api/item/edit/approve",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
+        Effect.flatMap(approveEdit(id, body.feedbackId), itemDetail),
+      ),
+    ),
+  ),
+  json(
+    "POST",
+    "/api/item/edit/pick",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(PickBody), (body) =>
+        pickVariant(id, body.feedbackId, body.variantId).pipe(
+          Effect.tap(() => trackUsage("take_kept")),
           Effect.flatMap(itemDetail),
         ),
       ),
     ),
-    json(
-      "GET",
-      "/api/item",
-      withId((id) => Effect.flatMap(getItem(id), itemDetail)),
+  ),
+  json(
+    "POST",
+    "/api/item/edit/restore",
+    withId((id) =>
+      Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
+        Effect.flatMap(restoreBefore(id, body.feedbackId), itemDetail),
+      ),
     ),
-    json(
-      "POST",
-      "/api/item/media",
-      withId((id) =>
-        Effect.gen(function* () {
-          const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
-          const { item } = yield* importMedia(id, file.path, file.name);
+  ),
+  json("GET", "/api/item/verify", withId(verifyItem)),
+  runStream("/api/item/run", RunRegistry, getItem),
 
-          return yield* itemDetail(item);
-        }),
-      ),
-    ),
-    json("POST", "/api/item/references", withId(addReferencesRoute)),
-    json(
-      "POST",
-      "/api/item/references/link",
-      withId((id) =>
-        Effect.gen(function* () {
-          const { url } = yield* HttpServerRequest.schemaBodyJson(LinkBody);
-          const added = yield* addLinkedVideo(itemReferences(yield* getItem(id)), url);
+  json("GET", "/api/feedback", openFeedback()),
+  json("GET", "/api/learned", learnedList),
+  json(
+    "POST",
+    "/api/learn",
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
 
-          return { item: yield* itemDetail(yield* getItem(id)), added: [added] };
-        }),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/references/remove",
-      withId((id) =>
-        Effect.gen(function* () {
-          const { path } = yield* HttpServerRequest.schemaBodyJson(ReferenceBody);
-          yield* removeReference(yield* getItem(id), path);
+      if (isMultipart(request)) {
+        const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
 
-          return yield* itemDetail(yield* getItem(id));
-        }),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/feedback",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackInput), (input) =>
-          Effect.flatMap(addFeedback(id, input), (added) => itemDetail(added.item)),
-        ),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/feedback/resolve",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(ResolveBody), (body) =>
-          Effect.flatMap(
-            resolveEdit(id, body.feedbackId, nonEmpty(body.resolution) ?? "Resolved in the web UI"),
-            itemDetail,
-          ),
-        ),
-      ),
-    ),
-    json("POST", "/api/item/edit", editRoute),
-    json("POST", "/api/item/edit/run", runRoute),
-    json("POST", "/api/item/edit/continue", continueRoute),
-    json(
-      "POST",
-      "/api/item/edit/cancel",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(CancelBody), (body) =>
-          Effect.flatMap(cancelWaiting(id, body.feedbackId), itemDetail),
-        ),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/edit/reword",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(RewordBody), (body) =>
-          Effect.flatMap(rewordWaiting(id, body.feedbackId, body.body), itemDetail),
-        ),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/edit/stop",
-      withId((id) =>
-        Effect.map(
-          Effect.flatMap(RunRegistry, (runs) => runs.stop(id)),
-          (stopped) => ({ ok: true, stopped }),
-        ),
-      ),
-    ),
-    json(
-      "GET",
-      "/api/item/edit/prompt",
-      Effect.gen(function* () {
-        const query = yield* HttpServerRequest.schemaSearchParams(FeedbackQuery);
-        const item = yield* getItem(query.id);
-        const feedback = yield* findFeedback(item, query.feedbackId);
+        return yield* learn({ file: file.path, name: file.name });
+      }
 
-        return { prompt: yield* buildEditPrompt(item, feedback) };
-      }),
-    ),
-    json(
-      "POST",
-      "/api/item/edit/approve",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
-          Effect.flatMap(approveEdit(id, body.feedbackId), itemDetail),
-        ),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/edit/pick",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(PickBody), (body) =>
-          pickVariant(id, body.feedbackId, body.variantId).pipe(
-            Effect.tap(() => trackUsage("take_kept")),
-            Effect.flatMap(itemDetail),
-          ),
-        ),
-      ),
-    ),
-    json(
-      "POST",
-      "/api/item/edit/restore",
-      withId((id) =>
-        Effect.flatMap(HttpServerRequest.schemaBodyJson(FeedbackRef), (body) =>
-          Effect.flatMap(restoreBefore(id, body.feedbackId), itemDetail),
-        ),
-      ),
-    ),
-    json("GET", "/api/item/verify", withId(verifyItem)),
-    runStream("/api/item/run", RunRegistry, getItem),
+      const body = yield* HttpServerRequest.schemaBodyJson(LearnBody);
 
-    json(
-      "GET",
-      "/api/imports",
-      Effect.flatMap(listImports(), (imports) => Effect.forEach(imports, importSummary)),
-    ),
-    json("POST", "/api/imports", newImportRoute(options)),
-    json(
-      "GET",
-      "/api/import",
-      withId((id) => Effect.flatMap(getImport(id), importDetail)),
-    ),
-    json("POST", "/api/import/reply", importReplyRoute(options)),
-    json("POST", "/api/import/stop", stopImportRoute),
-    json("POST", "/api/import/close", closeImportRoute),
-    runStream("/api/import/run", ImportRuns, getImport),
+      return yield* learn(learnInputOf(body.source));
+    }),
+  ),
+  json(
+    "POST",
+    "/api/team-feedback",
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const { logs, ...body } = yield* HttpServerRequest.schemaBodyJson(TeamFeedbackBody);
 
-    json("GET", "/api/feedback", openFeedback()),
-    json("GET", "/api/learned", learnedList),
-    json(
-      "POST",
-      "/api/learn",
-      Effect.gen(function* () {
-        const request = yield* HttpServerRequest.HttpServerRequest;
+      yield* sendTeamFeedback({
+        ...body,
+        withLogs: logs,
+        agent: body.agent ?? defaultAgent(ws),
+        install: Option.getOrUndefined(yield* feedbackInstallId(logs)),
+      });
 
-        if (isMultipart(request)) {
-          const { file } = yield* HttpServerRequest.schemaBodyMultipart(MediaForm);
-
-          return yield* learn({ file: file.path, name: file.name });
-        }
-
-        const body = yield* HttpServerRequest.schemaBodyJson(LearnBody);
-
-        return yield* learn(learnInputOf(body.source));
-      }),
+      return { ok: true };
+    }),
+  ),
+  json(
+    "GET",
+    "/api/team-feedback/logs",
+    Effect.map(recentLogs, (logs) => ({
+      logs: Option.getOrNull(logs),
+      errors: Option.match(logs, { onNone: () => 0, onSome: errorCount }),
+    })),
+  ),
+  json("GET", "/api/error-reports", Effect.map(reportSettings, reportView)),
+  json(
+    "POST",
+    "/api/error-reports",
+    Effect.flatMap(HttpServerRequest.schemaBodyJson(ReportChoicesBody), (choices) =>
+      Effect.map(setReportChoices(choices), reportView),
     ),
-    json(
-      "POST",
-      "/api/team-feedback",
-      Effect.gen(function* () {
-        const ws = yield* Workspace;
-        const { logs, ...body } = yield* HttpServerRequest.schemaBodyJson(TeamFeedbackBody);
-
-        yield* sendTeamFeedback({
-          ...body,
-          withLogs: logs,
-          agent: body.agent ?? defaultAgent(ws),
-          install: Option.getOrUndefined(yield* feedbackInstallId(logs)),
-        });
-
-        return { ok: true };
-      }),
+  ),
+  json("POST", "/api/error-reports/install-id", Effect.map(resetInstallId(), reportView)),
+  json(
+    "POST",
+    "/api/usage/onboarding-finished",
+    Effect.flatMap(HttpServerRequest.schemaBodyJson(OnboardingFinishedBody), (went) =>
+      Effect.as(trackUsage("onboarding_finished", went), { ok: true }),
     ),
-    json(
-      "GET",
-      "/api/team-feedback/logs",
-      Effect.map(recentLogs, (logs) => ({
-        logs: Option.getOrNull(logs),
-        errors: Option.match(logs, { onNone: () => 0, onSome: errorCount }),
-      })),
-    ),
-    json("GET", "/api/error-reports", Effect.map(reportSettings, reportView)),
-    json(
-      "POST",
-      "/api/error-reports",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(ReportChoicesBody), (choices) =>
-        Effect.map(setReportChoices(choices), reportView),
-      ),
-    ),
-    json("POST", "/api/error-reports/install-id", Effect.map(resetInstallId(), reportView)),
-    json(
-      "POST",
-      "/api/usage/onboarding-finished",
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(OnboardingFinishedBody), (went) =>
-        Effect.as(trackUsage("onboarding_finished", went), { ok: true }),
-      ),
-    ),
-    json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),
-    json("GET", "/api/formats", listFormats()),
-    json("GET", "/api/formats/status", formatStatuses()),
-    json("GET", "/api/format", withId(getFormat)),
-    HttpRouter.route("GET", "/api/events", changesRoute),
-  ]);
+  ),
+  json("POST", "/api/learned/forget", Effect.andThen(withId(forget), learnedList)),
+  json("GET", "/api/formats", listFormats()),
+  json("GET", "/api/formats/status", formatStatuses()),
+  json("GET", "/api/format", withId(getFormat)),
+  HttpRouter.route("GET", "/api/events", changesRoute),
+]);
 
 /** The built board, with unknown paths falling back to its index for client-side routing. */
 const boardRoutes = (webDir: string) =>
@@ -966,7 +764,9 @@ const staticRoutes = Layer.mergeAll(
 export const routes = (options: ServerOptions) => {
   const api = Layer.mergeAll(
     staticRoutes,
-    apiRoutes(options),
+    apiRoutes,
+    agentRoutes(options.cli),
+    importRoutes(options.cli),
     fileRoutes,
     briefRoutes,
     renderRoutes,
