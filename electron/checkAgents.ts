@@ -9,7 +9,6 @@
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
-import { BunServices } from "@effect/platform-bun";
 import {
   type Cause,
   Clock,
@@ -40,6 +39,7 @@ import { codexServers } from "../src/core/mcpServers.ts";
 import { commandOptions, which } from "../src/core/process.ts";
 import { AGENTS, type AgentName } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
+import { runScript } from "./script.ts";
 
 const root = path.resolve(import.meta.dir, "..");
 
@@ -488,11 +488,4 @@ export const checkAgents = Effect.fn("checkAgents")(function* (args: ReadonlyArr
   return failed.length === 0 ? 0 : 1;
 });
 
-if (import.meta.main) {
-  process.exitCode = await Effect.runPromise(
-    checkAgents(Bun.argv.slice(2)).pipe(
-      Effect.catch((error) => Effect.as(Console.error(`[check:agents] ${error.message}`), 1)),
-      Effect.provide(BunServices.layer),
-    ),
-  );
-}
+if (import.meta.main) runScript("check:agents", checkAgents(Bun.argv.slice(2)));

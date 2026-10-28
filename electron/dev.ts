@@ -8,6 +8,7 @@ import path from "node:path";
 // @effect-diagnostics strictEffectProvide:off
 import { BunServices } from "@effect/platform-bun";
 import {
+  Cause,
   Config,
   Console,
   Deferred,
@@ -250,7 +251,9 @@ const program = Effect.gen(function* () {
 const code = await Effect.runPromise(
   program.pipe(
     Effect.provide([BunServices.layer, FetchHttpClient.layer]),
-    Effect.orElseSucceed(() => 1),
+    Effect.catchCause((cause) =>
+      Effect.as(Console.error(`[desktop:dev] ${Cause.pretty(cause)}`), 1),
+    ),
   ),
 );
 

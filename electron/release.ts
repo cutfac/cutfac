@@ -11,7 +11,6 @@
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
-import { BunServices } from "@effect/platform-bun";
 import { Console, Effect, FileSystem, Option, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -34,6 +33,7 @@ import {
   treeProblem,
   versionProblem,
 } from "./releasePlan.ts";
+import { runScript } from "./script.ts";
 
 const root = path.resolve(import.meta.dir, "..");
 
@@ -343,11 +343,4 @@ export const release = Effect.fn("release")(function* (args: ReadonlyArray<strin
   return yield* ship(asked.value).pipe(Effect.provide(ReleaseBucket.layer));
 });
 
-if (import.meta.main) {
-  process.exitCode = await Effect.runPromise(
-    release(Bun.argv.slice(2)).pipe(
-      Effect.catch((error) => Effect.as(Console.error(`[release] ${error.message}`), 1)),
-      Effect.provide(BunServices.layer),
-    ),
-  );
-}
+if (import.meta.main) runScript("release", release(Bun.argv.slice(2)));
