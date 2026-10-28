@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, expect, jest, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, jest, test } from "bun:test";
 
 class FakeSource extends EventTarget {
   static opened: FakeSource[] = [];
@@ -20,9 +20,17 @@ class FakeSource extends EventTarget {
 
 let events: typeof import("../web/src/api/events.ts");
 
+const { location, EventSource } = globalThis;
+
 beforeAll(async () => {
-  Object.assign(globalThis, { location: new URL("http://board.test/"), EventSource: FakeSource });
+  // The API client reads its base once for the whole run: the one test/boardServer.ts gives it.
+  const board = { search: "?api=http://cutfac.test" };
+  Object.assign(globalThis, { location: board, EventSource: FakeSource });
   events = await import("../web/src/api/events.ts");
+});
+
+afterAll(() => {
+  Object.assign(globalThis, { location, EventSource });
 });
 
 afterEach(() => {
