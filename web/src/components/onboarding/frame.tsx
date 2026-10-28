@@ -19,9 +19,6 @@ import { LanguageMenu } from "./language-menu.tsx";
 /** The steps the dots count: what to make, agent, access, and where the work is kept. */
 export const ONBOARDING_STEPS = 4;
 
-/** How long a step shows that it is done before the next one, so the change reads as progress. */
-export const DONE_PAUSE_MS = 900;
-
 const StepProgress = createContext<(within: Option.Option<number>) => void>(() => undefined);
 
 /**

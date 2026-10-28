@@ -59,6 +59,7 @@ export const onboardingEn = {
     link: "Turn on screen recording and app use",
     settingsTitle: "Mac permissions",
     skip: "Skip for now",
+    next: "Next",
     /**
      * Each permission: its name, what it lets the agent do, what to do while its list is open, and
      * the list's title in System Settings, for the picture.

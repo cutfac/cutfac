@@ -52,6 +52,7 @@ export const onboardingKo: OnboardingMessages = {
     on: "켜짐",
     granted: "둘 다 켰어요",
     skip: "나중에 하기",
+    next: "다음",
     link: "화면 녹화·앱 쓰기 켜기",
     settingsTitle: "Mac 권한",
     screen: {
