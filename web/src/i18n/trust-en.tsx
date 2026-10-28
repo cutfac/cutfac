@@ -1,7 +1,4 @@
-import type { ReactNode } from "react";
-
-/** Wraps a phrase in a link, so a translation can put the link wherever its grammar needs it. */
-type Link = (text: string) => ReactNode;
+import type { Link } from "./link.ts";
 
 /** Trusting a workspace's own Claude Code settings before Claude runs there. */
 export const trustEn = {
