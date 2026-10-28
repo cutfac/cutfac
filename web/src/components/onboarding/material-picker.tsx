@@ -62,7 +62,7 @@ export function WebsitePicker({
           onDraft("");
         }}
       >
-        <InputGroup>
+        <InputGroup className="h-11">
           <InputGroupAddon>
             <GlobeIcon />
           </InputGroupAddon>
@@ -106,7 +106,7 @@ export function FolderPicker({ sources, onSources }: Sources) {
   return (
     <div className="flex flex-col items-start gap-3">
       {/* Shaped like the website field on the step before; anywhere on it opens the folder dialog. */}
-      <InputGroup>
+      <InputGroup className="h-11">
         <InputGroupAddon>
           <FolderIcon />
         </InputGroupAddon>
