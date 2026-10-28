@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { Context, Effect, FileSystem, Layer, Option, Schema, Semaphore } from "effect";
+import { Context, Effect, FileSystem, Layer, Option, Redacted, Schema, Semaphore } from "effect";
 import type { Crypto } from "effect/Crypto";
 import type { Path } from "effect/Path";
 
@@ -178,7 +178,9 @@ export const licenseSettings = Layer.effect(
       load: Effect.map(settings.read, savedLicenseOf),
       save: (licenseKey, record) =>
         encodeLicense(Option.getOrUndefined(record)).pipe(
-          Effect.flatMap((license) => settings.write({ licenseKey, license })),
+          Effect.flatMap((license) =>
+            settings.write({ licenseKey: Redacted.value(licenseKey), license }),
+          ),
           Effect.mapError((cause) => new LicenseNotSaved({ cause })),
         ),
     });

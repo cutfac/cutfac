@@ -3,7 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 
 // A workspace made for one check is provided where that check runs.
 // @effect-diagnostics strictEffectProvide:off
-import { Clock, Duration, Effect, FileSystem, Layer, Option, Path } from "effect";
+import { Clock, Duration, Effect, FileSystem, Layer, Option, Path, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 
 import { listItemIds } from "../src/core/items.ts";
@@ -38,7 +38,7 @@ const DAY = 24 * 60 * 60 * 1_000;
 
 const GRACE = Duration.toMillis(OFFLINE_GRACE);
 
-const KEY_1 = Option.some(LicenseKey.make("KEY-1"));
+const KEY_1 = Option.some(Redacted.make(LicenseKey.make("KEY-1")));
 
 /** A grant from cutfac.com, saved as `token`. */
 const granted = (token: string) => Option.some(LicenseRecord.cases.LicenseGrant.make({ token }));
@@ -112,7 +112,7 @@ describe("paid plan", () => {
       const [payload] = signedGrant(NOW).split(".");
       const [, signature] = signedGrant(NOW - DAY).split(".");
       const otherSigner = generateKeyPairSync("ed25519");
-      const key2 = Option.some(LicenseKey.make("KEY-2"));
+      const key2 = Option.some(Redacted.make(LicenseKey.make("KEY-2")));
 
       // The app's own key, which no test holds the private half of.
       const appKey = paidAt(plan, NOW).pipe(

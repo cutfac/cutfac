@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test";
 import path from "node:path";
 
 // @effect-diagnostics strictEffectProvide:off
-import { Effect, Exit, FileSystem, Option, Schema } from "effect";
+import { Effect, Exit, FileSystem, Option, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 
 import { LicenseSettings } from "../electron/license.ts";
@@ -220,7 +220,7 @@ describe("the license in the settings", () => {
         const fs = yield* FileSystem.FileSystem;
         const { file, settingsIn } = yield* appData;
         const now = Date.UTC(2026, 9, 1);
-        const key = yield* Schema.decodeEffect(LicenseKey)("KEY-1");
+        const key = Redacted.make(LicenseKey.make("KEY-1"));
         const record = LicenseRecord.cases.LicenseGrant.make({ token: signedGrant(now) });
 
         yield* TestClock.setTime(now);
@@ -230,10 +230,12 @@ describe("the license in the settings", () => {
 
             yield* license.save(key, Option.some(record));
 
-            expect(yield* license.load).toEqual({
-              key: Option.some(key),
-              record: Option.some(record),
-            });
+            const loaded = yield* license.load;
+
+            expect(Option.map(loaded.key, Redacted.value)).toEqual(
+              Option.some(LicenseKey.make("KEY-1")),
+            );
+            expect(loaded.record).toEqual(Option.some(record));
           }).pipe(Effect.provide(licenseSettings)),
         );
 

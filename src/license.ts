@@ -2,7 +2,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { type KeyObject, createPublicKey, verify } from "node:crypto";
 
-import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
+import { Clock, Context, Duration, Effect, Option, Redacted, Schema } from "effect";
 
 /**
  * The public half of the Ed25519 key cutfac.com signs license grants with, so only a grant it made
@@ -32,6 +32,9 @@ const CLOCK_SKEW = Duration.days(1);
 export const LicenseKey = Schema.NonEmptyString.pipe(Schema.brand("LicenseKey"));
 
 export type LicenseKey = typeof LicenseKey.Type;
+
+/** A key held in memory, which prints as `<redacted>` so it can't slip into a log or an error report. */
+export type SecretLicenseKey = Redacted.Redacted<LicenseKey>;
 
 /** What cutfac.com signs: the key it checked, its time then, and when the plan ends, in epoch ms. */
 const SignedGrant = Schema.Struct({
@@ -66,11 +69,11 @@ const decodeLicenseRecord = Schema.decodeUnknownOption(LicenseRecord);
 
 /** The license key the desktop app saved, and cutfac.com's last answer about it. */
 export interface SavedLicense {
-  readonly key: Option.Option<LicenseKey>;
+  readonly key: Option.Option<SecretLicenseKey>;
   readonly record: Option.Option<LicenseRecord>;
 }
 
-const decodeKey = Schema.decodeUnknownOption(LicenseKey);
+const decodeKey = Schema.decodeUnknownOption(Schema.RedactedFromValue(LicenseKey));
 
 /**
  * The license in the desktop app's settings. Each field is read on its own, so a value written by
@@ -97,10 +100,10 @@ function openGrant(token: string, publicKey: KeyObject): Option.Option<SignedGra
 }
 
 /** The grant in `token`, if cutfac.com signed it for `key`. */
-export const grantFor = Effect.fnUntraced(function* (key: LicenseKey, token: string) {
+export const grantFor = Effect.fnUntraced(function* (key: SecretLicenseKey, token: string) {
   const publicKey = yield* LicensePublicKey;
 
-  return Option.filter(openGrant(token, publicKey), (grant) => grant.key === key);
+  return Option.filter(openGrant(token, publicKey), (grant) => grant.key === Redacted.value(key));
 });
 
 /**

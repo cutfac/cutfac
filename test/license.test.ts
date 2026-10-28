@@ -3,7 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 
 // Each test builds the license it checks, with the saved key and answers that test needs.
 // @effect-diagnostics strictEffectProvide:off
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Redacted } from "effect";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import { TestClock } from "effect/testing";
 
@@ -24,13 +24,14 @@ const NOW = Date.parse("2026-10-20T00:00:00Z");
 
 const HOUR = 60 * 60 * 1_000;
 
-const KEY_1 = LicenseKey.make("KEY-1");
+const KEY_1 = Redacted.make(LicenseKey.make("KEY-1"));
 
-const keyFrom = (text: string) => Option.getOrUndefined(licenseKeyFrom(text));
+const keyFrom = (text: string) =>
+  Option.getOrUndefined(Option.map(licenseKeyFrom(text), Redacted.value));
 
 describe("desktop license keys", () => {
   test("keys lose surrounding space; empty and oversized ones are refused", () => {
-    expect(keyFrom("  KEY-1 \n")).toBe(KEY_1);
+    expect(keyFrom("  KEY-1 \n")).toBe(LicenseKey.make("KEY-1"));
     expect(keyFrom("   ")).toBeUndefined();
     expect(keyFrom("K".repeat(128))).toHaveLength(128);
     expect(keyFrom("K".repeat(129))).toBeUndefined();
@@ -188,11 +189,13 @@ const withLicense = <A, E>(
       LicenseSettings,
       LicenseSettings.of({
         load: Effect.succeed({
-          key: Option.map(Option.fromNullishOr(key), LicenseKey.make),
+          key: Option.map(Option.fromNullishOr(key), (text) =>
+            Redacted.make(LicenseKey.make(text)),
+          ),
           record,
         }),
         save: (saved, answer) =>
-          Effect.sync(() => void events.push(`save ${saved} ${savedAs(answer)}`)),
+          Effect.sync(() => void events.push(`save ${Redacted.value(saved)} ${savedAs(answer)}`)),
       }),
     );
 

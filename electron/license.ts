@@ -13,7 +13,14 @@ import {
 } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-import { LicenseKey, LicenseRecord, grantFor, isPaid, type SavedLicense } from "../src/license.ts";
+import {
+  LicenseKey,
+  LicenseRecord,
+  grantFor,
+  isPaid,
+  type SavedLicense,
+  type SecretLicenseKey,
+} from "../src/license.ts";
 import type { LicenseCheck } from "../web/src/desktop.ts";
 
 /** Where the app asks whether its key unlocks the paid plan. */
@@ -36,7 +43,9 @@ const GrantReply = Schema.Struct({ token: Schema.NonEmptyString });
  * Polar's are far shorter than the limit; anything longer is a paste gone wrong.
  */
 const decodeKey = Schema.decodeUnknownOption(
-  LicenseKey.check(Schema.isMaxLength(128), Schema.isPattern(/^[\x21-\x7e]+$/)),
+  Schema.RedactedFromValue(
+    LicenseKey.check(Schema.isMaxLength(128), Schema.isPattern(/^[\x21-\x7e]+$/)),
+  ),
 );
 
 /** The key as typed or pasted, without surrounding space, if it can be one. */
@@ -58,7 +67,7 @@ const unanswered = (error: { readonly message: string }) =>
 
 /** The grant in cutfac.com's reply, which only counts as an answer if it is signed for `key`. */
 const grantIn = Effect.fnUntraced(function* (
-  key: LicenseKey,
+  key: SecretLicenseKey,
   response: HttpClientResponse.HttpClientResponse,
 ) {
   const { token } = yield* HttpClientResponse.filterStatusOk(response).pipe(
@@ -78,7 +87,7 @@ const grantIn = Effect.fnUntraced(function* (
  */
 export const fetchLicense = Effect.fn("license.fetch")(
   function* (
-    key: LicenseKey,
+    key: SecretLicenseKey,
   ): Effect.fn.Return<LicenseRecord, LicenseUnanswered, HttpClient.HttpClient> {
     const response = yield* HttpClient.execute(
       HttpClientRequest.get(LICENSE_URL).pipe(HttpClientRequest.bearerToken(key)),
@@ -119,7 +128,7 @@ export class LicenseSettings extends Context.Service<
     readonly load: Effect.Effect<SavedLicense>;
     /** Saves both together; no record drops the old one. */
     save(
-      key: LicenseKey,
+      key: SecretLicenseKey,
       record: Option.Option<LicenseRecord>,
     ): Effect.Effect<void, LicenseNotSaved>;
   }
@@ -167,7 +176,7 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
   // Each check runs after the one before, so an answer about an old key never lands on a new one.
   const serialized = (yield* Semaphore.make(1)).withPermits(1);
 
-  const ask = (key: LicenseKey) =>
+  const ask = (key: SecretLicenseKey) =>
     fetchLicense(key).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.option);
 
   /** Tells the board when the plan changed, which a grant running out does on its own. */
@@ -177,7 +186,10 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
     if (yield* Ref.modify(paid, (was) => [was !== next, next])) yield* changed;
   });
 
-  const keep = Effect.fnUntraced(function* (key: LicenseKey, record: Option.Option<LicenseRecord>) {
+  const keep = Effect.fnUntraced(function* (
+    key: SecretLicenseKey,
+    record: Option.Option<LicenseRecord>,
+  ) {
     yield* Ref.set(saved, { key: Option.some(key), record });
 
     // The board's server reads the plan from the saved settings, so they go first.
