@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test";
 import { generateKeyPairSync } from "node:crypto";
 
+import { BunServices } from "@effect/platform-bun";
 // A workspace made for one check is provided where that check runs.
 // @effect-diagnostics strictEffectProvide:off
 import {
@@ -184,7 +185,7 @@ describe("plan", () => {
       });
 
       const folder = yield* Effect.flatMap(AppData, Effect.succeed).pipe(
-        Effect.provide(appData.pipe(Layer.provide(Path.layer))),
+        Effect.provide(appData.pipe(Layer.provide(BunServices.layer))),
         Effect.provideService(ConfigProvider.ConfigProvider, env),
       );
 

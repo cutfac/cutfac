@@ -4,6 +4,7 @@ import { AppData, appendAppRecord } from "./core/appData.ts";
 import { BUNDLED, COMPILED } from "./core/build.ts";
 import { envVar } from "./core/env.ts";
 import { type Item, type NewItemInput, createItem, getItem } from "./core/items.ts";
+import { run } from "./core/process.ts";
 import { nowIso } from "./core/time.ts";
 import { Workspace } from "./core/workspace.ts";
 import { paidInSettings } from "./license.ts";
@@ -66,18 +67,32 @@ export const DesktopData = Context.Reference<Option.Option<string>>("cutfac/Desk
 });
 
 /**
- * The app's folder in Application Support when this is the binary the desktop app bundles. From
- * source, CUTFAC_DESKTOP_DATA names a folder to try the free version with.
+ * The home folder of the account this runs as, from the system's account records rather than HOME,
+ * which an agent's settings can leave out or point elsewhere when they start Cutfac's tools. Bun's
+ * `os.userInfo()` reads HOME, so this asks `id`, whose record ends `…:<home>:<shell>`.
+ */
+const accountHome = run("/usr/bin/id", ["-P"]).pipe(
+  Effect.map(({ code, stdout }) =>
+    code === 0 ? Option.fromUndefinedOr(stdout.trim().split(":").at(-2)) : Option.none<string>(),
+  ),
+  Effect.map(Option.filter((home) => home.startsWith("/"))),
+  Effect.orElseSucceed(Option.none<string>),
+);
+
+/**
+ * The app's folder in Application Support when this is the binary the desktop app bundles, under
+ * the account's home, so its count can't be lost or started over by running it with another HOME.
+ * From source, CUTFAC_DESKTOP_DATA names a folder to try the free version with.
  */
 export const desktopData = Layer.effect(
   DesktopData,
   Effect.gen(function* () {
     if (!BUNDLED) return yield* envVar("CUTFAC_DESKTOP_DATA");
     const path = yield* Path.Path;
+    const account = yield* accountHome;
+    const home = Option.isSome(account) ? account : yield* envVar("HOME");
 
-    return Option.map(yield* envVar("HOME"), (home) =>
-      path.join(home, "Library", "Application Support", "Cutfac"),
-    );
+    return Option.map(home, (dir) => path.join(dir, "Library", "Application Support", "Cutfac"));
   }),
 );
 
