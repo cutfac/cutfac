@@ -23,7 +23,7 @@ import { PLATFORMS, PURPOSES, type BriefDraft, type Purpose } from "../../lib/br
 const choiceCard = cn(
   "flex flex-col items-start gap-1 rounded-2xl bg-foreground/6 p-3 text-left transition-colors outline-none",
   "hover:bg-foreground/10 has-focus-visible:bg-foreground/10",
-  "has-checked:bg-foreground/12 has-checked:ring-1 has-checked:ring-foreground/30",
+  "has-checked:bg-brand/12 has-checked:ring-1 has-checked:ring-brand has-checked:hover:bg-brand/16",
 );
 
 interface PartProps {
@@ -124,7 +124,7 @@ export function PlatformToggles({
       {label === undefined ? null : <FieldTitle>{label}</FieldTitle>}
       <ToggleGroup
         multiple
-        variant="outline"
+        variant="choice"
         disabled={disabled}
         aria-label={t.platformsLabel}
         value={value.platforms}
@@ -136,13 +136,8 @@ export function PlatformToggles({
       >
         {PLATFORMS.map((platform) => (
           <ToggleGroupItem key={platform} value={platform}>
-            {/* A platform not picked is grey, and takes its own colours once picked. */}
-            <span className="flex opacity-40 grayscale transition duration-200 group-aria-pressed/toggle:opacity-100 group-aria-pressed/toggle:grayscale-0">
-              <PlatformIcon platform={platform} />
-            </span>
-            <span className="text-muted-foreground transition-colors duration-200 group-aria-pressed/toggle:text-foreground">
-              {t.platform[platform]}
-            </span>
+            <PlatformIcon platform={platform} />
+            {t.platform[platform]}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

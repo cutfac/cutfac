@@ -13,6 +13,9 @@ const toggleVariants = cva(
         // Filled rather than edged, like the outline button; picked ones fill deeper.
         outline:
           "bg-foreground/6 hover:bg-foreground/10 focus-visible:bg-foreground/10 aria-pressed:bg-foreground/16 aria-pressed:text-foreground",
+        // One of several to pick, as filter chips do: picked ones take the brand's edge and tint.
+        choice:
+          "bg-foreground/6 text-muted-foreground ring-brand hover:bg-foreground/10 focus-visible:bg-foreground/10 aria-pressed:bg-brand/12 aria-pressed:text-foreground aria-pressed:ring-1 aria-pressed:hover:bg-brand/16",
       },
       size: {
         default:
