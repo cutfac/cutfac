@@ -19,7 +19,7 @@ for page in "$here"/*/index.html; do
     cp -R "$here/fonts" "$build/src/"
     cp "$copy" "$build/src/copy.json"
     ln -s "$here/node_modules" "$build/src/node_modules"
-    node "$build/src/render.mjs" "$sample/preview.$lang.mp4" 2>&1 | grep -v '^frame' || true
+    node "$build/src/render.mjs" "$sample/preview.$lang.mp4" 2>&1 | grep -v '^Rendered' || true
     rm -rf "$build"
   done
 done

@@ -5,7 +5,7 @@
 //   node render.mjs [out.mp4]     defaults to `[9x16] <name>.mp4` in the folder above
 
 import { spawn } from "node:child_process";
-import { createReadStream, existsSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, normalize } from "node:path";
@@ -43,6 +43,8 @@ async function open() {
 const first = await open();
 const { video } = first;
 const out = process.argv[2] ?? join(here, "..", `[9x16] ${video.name}.mp4`);
+// Written beside the video and moved over it once whole, so the last render stays playable meanwhile.
+const partial = join(dirname(out), `.${process.pid}.rendering.mp4`);
 const total = Math.round(video.seconds * video.fps);
 const pages = [first.page, ...(await Promise.all(Array.from({ length: WORKERS - 1 }, open))).map((p) => p.page)];
 
@@ -54,7 +56,7 @@ const ffmpeg = spawn(
   "ffmpeg",
   ["-y", "-v", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", String(video.fps), "-i", "-",
     "-i", wav, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium",
-    "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", out],
+    "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", partial],
   { stdio: ["pipe", "inherit", "inherit"] },
 );
 
@@ -70,7 +72,8 @@ const flush = () => {
   while (done.has(next)) {
     ffmpeg.stdin.write(done.get(next));
     done.delete(next);
-    if (next % video.fps === 0) process.stderr.write(`frame ${next}/${total}\n`);
+    // Worded as Cutfac's render progress reads it.
+    if (next % video.fps === 0) process.stderr.write(`Rendered ${next}/${total}\n`);
     next++;
   }
 };
@@ -86,7 +89,12 @@ ffmpeg.stdin.end();
 const code = await new Promise((resolve) => ffmpeg.on("close", resolve));
 await browser.close();
 server.close();
-if (code !== 0) throw new Error(`ffmpeg failed (${code})`);
+if (code !== 0) {
+  rmSync(partial, { force: true });
+  throw new Error(`ffmpeg failed (${code})`);
+}
+renameSync(partial, out);
+process.stderr.write(`Rendered ${total}/${total}\n`);
 console.log(out);
 
 function wavFile(pcm, rate, channels) {
