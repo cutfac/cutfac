@@ -188,15 +188,28 @@ const UNCOUNTED_MESSAGE =
   "This video wasn't made by create_item or the board, so it isn't one of the videos Cutfac's " +
   `free version made. ${LIMIT_MESSAGE}`;
 
+/** Brings the paid plan up once, when the user would think of it, rather than in every reply. */
+const MENTION_ONCE =
+  "Say so to the user once, in a sentence, when a video is done or they ask for a new one; " +
+  "don't bring it up again.";
+
 export function freeVersionNote(plan: Plan): Option.Option<string> {
   if (plan.edition === "open-source" || plan.paid) return Option.none();
   const used = `Cutfac free version: ${plan.used} of ${plan.limit} videos used on this Mac.`;
 
-  return Option.some(
-    plan.used < plan.limit
-      ? used
-      : `${used} New videos need a paid plan (${PRICING_URL}); existing ones stay editable.`,
-  );
+  if (plan.used >= plan.limit) {
+    return Option.some(
+      `${used} New videos need a paid plan (${PRICING_URL}); existing ones stay editable. ${MENTION_ONCE}`,
+    );
+  }
+
+  if (plan.used === plan.limit - 1) {
+    return Option.some(
+      `${used} One free video is left; more need a paid plan (${PRICING_URL}). ${MENTION_ONCE}`,
+    );
+  }
+
+  return Option.some(used);
 }
 
 /**

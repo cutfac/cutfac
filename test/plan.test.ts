@@ -187,8 +187,9 @@ describe("plan", () => {
     }),
   );
 
-  it.effect("agents hear about the free version, and about upgrading once it is used up", () =>
+  it.effect("agents hear about the free version, and about upgrading from its last video on", () =>
     Effect.sync(() => {
+      const lastLeft = Option.getOrThrow(freeVersionNote(free(2)));
       const usedUp = Option.getOrThrow(freeVersionNote(free(3)));
 
       expect(freeVersionNote({ edition: "open-source" })).toEqual(Option.none());
@@ -199,6 +200,10 @@ describe("plan", () => {
       expect(usedUp).toContain("3 of 3 videos used");
       expect(usedUp).toContain(PRICING_URL);
       expect(usedUp).toContain("existing ones stay editable");
+      expect(lastLeft).toContain("One free video is left");
+      expect(lastLeft).toContain(PRICING_URL);
+
+      for (const note of [lastLeft, usedUp]) expect(note).toContain("once");
     }),
   );
 });
