@@ -91,7 +91,11 @@ export function roundRect(ctx, x, y, w, h, r, fill) {
  * Starts a video: fetches the words in copy.json, waits for the fonts, then hands render.mjs
  * `seek(t)` and `soundtrack()`. In a plain browser it plays itself on a loop instead.
  */
-export async function start({ width = 1080, height = 1920, fps = 30, seconds, name, fonts, draw, sound }) {
+/**
+ * Draws the composition and plays or renders it. The video opens `lead` seconds into the
+ * composition's time, and runs to `seconds`; a frame at video time t is the composition at t + lead.
+ */
+export async function start({ width = 1080, height = 1920, fps = 30, seconds, lead = 0, name, fonts, draw, sound }) {
   const canvas = document.querySelector("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -99,18 +103,19 @@ export async function start({ width = 1080, height = 1920, fps = 30, seconds, na
   const copy = await fetch("copy.json").then((response) => response.json());
   await Promise.all(fonts.map((face) => document.fonts.load(face)));
 
-  window.VIDEO = { width, height, fps, seconds, name };
+  const length = seconds - lead;
+  window.VIDEO = { width, height, fps, seconds: length, name };
   window.seek = (t) => {
     ctx.reset();
-    draw(ctx, t, copy);
+    draw(ctx, t + lead, copy);
   };
-  window.soundtrack = () => renderSound(seconds, (audio) => sound(audio, copy));
+  window.soundtrack = () => renderSound(seconds, lead, (audio) => sound(audio, copy));
   window.ready = true;
 
   if (navigator.webdriver) return;
   const began = performance.now();
   const loop = () => {
-    window.seek(((performance.now() - began) / 1000) % seconds);
+    window.seek(((performance.now() - began) / 1000) % length);
     requestAnimationFrame(loop);
   };
   loop();
@@ -118,8 +123,11 @@ export async function start({ width = 1080, height = 1920, fps = 30, seconds, na
 
 const RATE = 44100;
 
-/** The soundtrack as 16-bit stereo PCM in base64, rendered offline by the page's Web Audio. */
-async function renderSound(seconds, build) {
+/**
+ * The soundtrack as 16-bit stereo PCM in base64, rendered offline by the page's Web Audio for the
+ * whole composition, then cut to start at `lead`.
+ */
+async function renderSound(seconds, lead, build) {
   const audio = new OfflineAudioContext(2, Math.ceil(RATE * seconds), RATE);
   const master = audio.createDynamicsCompressor();
   master.threshold.value = -12;
@@ -127,7 +135,8 @@ async function renderSound(seconds, build) {
   master.connect(audio.destination);
   build(sounds(audio, master));
   const buffer = await audio.startRendering();
-  const [l, r] = [buffer.getChannelData(0), buffer.getChannelData(1)];
+  const skip = Math.round(RATE * lead);
+  const [l, r] = [buffer.getChannelData(0).subarray(skip), buffer.getChannelData(1).subarray(skip)];
   const pcm = new Int16Array(l.length * 2);
   for (let i = 0; i < l.length; i++) {
     pcm[i * 2] = clamp(l[i], -1, 1) * 32767;

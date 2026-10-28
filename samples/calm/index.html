@@ -212,7 +212,8 @@
         [784, 1046.5].forEach((f, i) => s.tone(9.9 + i * 0.4, f, { gain: 0.04, decay: 2 }));
       }
 
-      start({ seconds: SECONDS, name: "calm", fonts: ["400 100px Batang"], draw, sound });
+      // The video opens as the title lands, so its first frame, which shows before play, has it.
+      start({ seconds: SECONDS, lead: 1, name: "calm", fonts: ["400 100px Batang"], draw, sound });
     </script>
   </body>
 </html>

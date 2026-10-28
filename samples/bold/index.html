@@ -265,7 +265,8 @@
         [...copy.title].forEach((_, i) => s.pop(13.45 + i * 0.07, 0.16));
       }
 
-      start({ seconds: SECONDS, name: "bold", fonts: ["900 100px Archivo", "900 100px Pretendard", "700 100px Pretendard", "600 100px Pretendard"], draw, sound });
+      // The video opens as the title lands, so its first frame, which shows before play, has it.
+      start({ seconds: SECONDS, lead: 0.6, name: "bold", fonts: ["900 100px Archivo", "900 100px Pretendard", "700 100px Pretendard", "600 100px Pretendard"], draw, sound });
     </script>
   </body>
 </html>

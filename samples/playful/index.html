@@ -374,7 +374,8 @@
         s.tone(13.65, 1046.5, { gain: 0.08, decay: 0.5 });
       }
 
-      start({ seconds: SECONDS, name: "playful", fonts: ["400 100px Jua", "700 100px Pretendard"], draw, sound });
+      // The video opens as the title lands, so its first frame, which shows before play, has it.
+      start({ seconds: SECONDS, lead: 1, name: "playful", fonts: ["400 100px Jua", "700 100px Pretendard"], draw, sound });
     </script>
   </body>
 </html>
