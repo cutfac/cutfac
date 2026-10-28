@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import {
   FileIcon,
   FolderIcon,
@@ -67,7 +68,7 @@ export function SourceChips({ item, onItem }: SourcesProps) {
     <ul className="flex flex-wrap gap-1.5" aria-label={t.composer.sources.list}>
       {sources.map((source) => {
         const view = sourceView(source);
-        const label = view.label ?? t.composer.sources.workspace;
+        const label = Option.getOrElse(view.label, () => t.composer.sources.workspace);
         const Icon = SOURCE_ICONS[view.kind];
 
         return (
@@ -124,8 +125,10 @@ function AddSource({ item, onItem, open, onOpenChange: setOpen, anchor }: AddSou
   // Only the desktop app can open a file dialog that hands back a path.
   const pickPath = desktop?.pickPath;
 
-  function add(source: ItemSource | undefined) {
-    if (source === undefined || saving) return;
+  function add(given: Option.Option<ItemSource>) {
+    if (Option.isNone(given) || saving) return;
+
+    const source = given.value;
 
     setSaving(true);
     saveSources(item, [...item.doc.sources, source], onItem)
@@ -180,7 +183,7 @@ function AddSource({ item, onItem, open, onOpenChange: setOpen, anchor }: AddSou
             disabled={saving}
             onClick={() => {
               pickPath().then((path) => {
-                if (path !== undefined) add({ path });
+                if (path !== undefined) add(Option.some({ path }));
               }, sendFailed);
             }}
           >
