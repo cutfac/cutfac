@@ -4,8 +4,9 @@ import { describe, expect } from "bun:test";
 // @effect-diagnostics strictEffectProvide:off
 import { Effect, FileSystem, Layer, Option } from "effect";
 
+import { listItemIds } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
-import { createCountedItem, DesktopData, FREE_VIDEOS, planStatus, workOn } from "../src/plan.ts";
+import { createCountedItem, DesktopData, FreeLimitReached, planStatus } from "../src/plan.ts";
 import { addSample, listSamples } from "../src/samples.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace, testLicenseKey } from "./support.ts";
@@ -51,18 +52,18 @@ describe("samples", () => {
     }),
   );
 
-  it.live("working on one never uses a free video, even once they are all used", () =>
+  it.live("one copied in is one of the free videos, and past them none is copied", () =>
     Effect.gen(function* () {
-      const sample = yield* addSample("bold", "ko", "샘플: FLOW");
+      yield* addSample("bold", "ko", "샘플: FLOW");
 
-      yield* workOn(sample.id);
+      expect(yield* planStatus()).toMatchObject({ used: 1 });
 
-      expect(yield* planStatus()).toMatchObject({ used: 0 });
+      yield* Effect.forEach(["One", "Two"], (title) => createCountedItem({ title }));
 
-      yield* Effect.forEach(["One", "Two", "Three"], (title) => createCountedItem({ title }));
-      yield* workOn(sample.id);
-
-      expect(yield* planStatus()).toMatchObject({ used: FREE_VIDEOS });
+      expect(yield* Effect.flip(addSample("calm", "ko", "샘플: 숨"))).toBeInstanceOf(
+        FreeLimitReached,
+      );
+      expect(yield* listItemIds()).toHaveLength(3);
     }),
   );
 });

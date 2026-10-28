@@ -105,7 +105,7 @@ export const startEn = {
   /** The end of the first launch: a sample video to try editing while the agent reads. */
   sample: {
     title: "Try it on a sample first",
-    body: "While your agent reads about you, change a short sample video by asking for it. It doesn't use any of your free videos.",
+    body: "While your agent reads about you, change a short sample video by asking for it. It's one of your free videos.",
     moods: { bold: "Bold", calm: "Calm", playful: "Playful" },
     adding: "Copying the sample…",
     skip: "Skip, make my own",

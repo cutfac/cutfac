@@ -2,9 +2,9 @@ import { Context, Effect, Option, Path, Schema } from "effect";
 
 import { COMPILED } from "./core/build.ts";
 import { InvalidRequest, NotFound } from "./core/errors.ts";
-import { createItem, getItem } from "./core/items.ts";
+import { getItem } from "./core/items.ts";
 import { Workspace } from "./core/workspace.ts";
-import { markSample } from "./plan.ts";
+import { createCountedItem } from "./plan.ts";
 
 /**
  * The app's sample videos: each a short motion graphic made with code, which a new user copies into
@@ -94,8 +94,8 @@ const notes = (media: string) =>
   ].join(" ");
 
 /**
- * Copy the sample `id` into the workspace as a new video titled `title`, with its words in `lang`,
- * and mark it a sample so working on it uses no free video.
+ * Copy the sample `id` into the workspace as a new video titled `title`, with its words in `lang`.
+ * It is a video of the user's own from then on, so it counts as one the free version made.
  */
 export const addSample = Effect.fn("samples.add")(function* (
   id: string,
@@ -110,7 +110,7 @@ export const addSample = Effect.fn("samples.add")(function* (
   if (sample === undefined) return yield* new InvalidRequest({ message: `No sample named ${id}` });
 
   const media = `[9x16] ${id}.mp4`;
-  const item = yield* createItem({ title, id: `sample-${id}`, notes: notes(media) });
+  const item = yield* createCountedItem({ title, id: `sample-${id}`, notes: notes(media) });
 
   const files: ReadonlyArray<readonly [string, string]> = [
     [`${dir}/${id}/preview.${lang}.mp4`, media],
@@ -123,8 +123,6 @@ export const addSample = Effect.fn("samples.add")(function* (
   yield* Effect.forEach(files, ([from, to]) => ws.importFile(from, path.join(item.dir, to)), {
     discard: true,
   }).pipe(Effect.onError(() => Effect.ignore(ws.remove(item.dir))));
-
-  yield* markSample(item);
 
   return yield* getItem(item.id);
 });

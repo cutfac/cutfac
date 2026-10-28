@@ -89,7 +89,7 @@ export const startKo: StartMessages = {
   },
   sample: {
     title: "먼저 샘플로 한번 써 볼까요?",
-    body: "에이전트가 자료를 읽는 동안 짧은 샘플 영상을 말로 고쳐 보세요. 무료 영상 횟수는 쓰지 않아요.",
+    body: "에이전트가 자료를 읽는 동안 짧은 샘플 영상을 말로 고쳐 보세요. 무료 영상 하나로 쳐요.",
     moods: { bold: "강렬함", calm: "차분함", playful: "발랄함" },
     adding: "샘플을 가져오는 중…",
     skip: "건너뛰고 바로 만들기",

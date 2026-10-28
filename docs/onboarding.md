@@ -165,8 +165,9 @@ graphics made with code (bold, calm, playful, in `samples/`), shown playing side
 picked is copied into the workspace in the user's language, with its code, fonts and words, and
 opens in the editor with a guide card that moves on as the user does each part of the core loop:
 play it, draw a box on the title, send the suggested request to change it to their product's name,
-then ask for two versions and compare. The app's `videos.log` marks the copy a sample, so working on
-it uses no free video, and editing its folder can't make another video one. The guide's last card,
+then ask for two versions and compare. The copy is the user's own video from then on, so it counts
+as one of the free version's videos, a light nudge that the next ones are worth making well.
+The guide's last card,
 or Skip on the offer, opens an empty editor for the first video of their own, so asking for it is
 the next thing to do; a template can come from a video the user likes later, through Templates. The
 empty video
