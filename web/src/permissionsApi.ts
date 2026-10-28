@@ -32,7 +32,7 @@ export interface PermissionChoice {
   mode: PermissionMode;
 }
 
-/** The board's calls for how each agent's runs may act; see src/server/app.ts. */
+/** The board's calls for how each agent's runs may act; see src/server/agents.ts. */
 export const permissionsApi = {
   list: () => request(Schema.Array(PermissionView), "/api/agent-permissions"),
   set: (choice: PermissionChoice) => send(PermissionView, "POST", "/api/agent-permissions", choice),

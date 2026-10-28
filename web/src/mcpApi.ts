@@ -75,7 +75,7 @@ export interface McpPluginDecision {
   on: boolean;
 }
 
-/** The board's calls for the MCP servers runs from it may use; see src/server/app.ts. */
+/** The board's calls for the MCP servers runs from it may use; see src/server/agents.ts. */
 export const mcpApi = {
   servers: () => request(McpServersStatus, "/api/mcp-servers"),
   decide: (decision: McpDecision) => send(McpServerView, "POST", "/api/mcp-servers", decision),
