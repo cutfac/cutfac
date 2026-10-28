@@ -108,17 +108,11 @@ function start(): void {
   app.on("second-instance", bringToFront);
 
   app.on("window-all-closed", () => app.quit());
-  Effect.runSync(
-    Ref.set(
-      guardWindow,
-      guardQuit({ window: boardWindow, locale: () => readNow(appState.locale) }),
-    ),
-  );
 
   const quitReady = Ref.makeUnsafe(false);
 
-  app.on("before-quit", (event) => {
-    if (readNow(quitReady) || event.defaultPrevented) return;
+  const stopBeforeQuit = (event: Electron.Event) => {
+    if (readNow(quitReady)) return;
 
     Effect.runSync(Ref.set(appState.quitting, true));
 
@@ -142,7 +136,18 @@ function start(): void {
         Effect.andThen(Effect.sync(() => app.quit())),
       ),
     );
-  });
+  };
+
+  Effect.runSync(
+    Ref.set(
+      guardWindow,
+      guardQuit({
+        window: boardWindow,
+        locale: () => readNow(appState.locale),
+        beforeQuit: stopBeforeQuit,
+      }),
+    ),
+  );
 
   // Last resort so a crash in this process never leaves the server behind.
   process.on("exit", () => {

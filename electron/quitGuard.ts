@@ -9,6 +9,7 @@ interface QuitGuardHost {
   /** The board's window, for the question to sit on as a sheet. */
   window: () => BrowserWindow | undefined;
   locale: () => Locale;
+  beforeQuit: (event: Electron.Event) => void;
 }
 
 const confirmQuit = (host: QuitGuardHost) =>
@@ -45,14 +46,18 @@ export function guardQuit(host: QuitGuardHost): (window: BrowserWindow) => void 
   autoUpdater.on("before-quit-for-update", settle);
   void app.whenReady().then(() => powerMonitor.on("shutdown", settle));
 
-  const hold = (event: Electron.Event, go: () => void) => {
-    if (!Effect.runSync(question.mustAsk)) return;
+  const held = (event: Electron.Event, go: () => void) => {
+    if (!Effect.runSync(question.mustAsk)) return false;
 
     event.preventDefault();
     void Effect.runPromise(question.ask).then((quit) => quit && go());
+
+    return true;
   };
 
-  app.on("before-quit", (event) => hold(event, () => app.quit()));
+  app.on("before-quit", (event) => {
+    if (!held(event, () => app.quit())) host.beforeQuit(event);
+  });
 
-  return (window) => void window.on("close", (event) => hold(event, () => window.close()));
+  return (window) => void window.on("close", (event) => held(event, () => window.close()));
 }
