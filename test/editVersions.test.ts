@@ -13,7 +13,7 @@ import {
 import { awaitsDecision, saveVariant } from "../src/core/editVariants.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
 import { readHistory } from "../src/core/history.ts";
-import { addFeedback, createItem } from "../src/core/items.ts";
+import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import { type Feedback, FeedbackInput, MAX_VARIANTS } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
@@ -247,6 +247,23 @@ describe("putting the agent's code back", () => {
 
       expect(yield* read(id, "render/graph.txt")).toBe("yellow circle");
       expect(feedbackOf(kept, feedbackId)?.decision).toBe("restored");
+    }),
+  );
+
+  it.live("picking a version puts back the code that rendered it, not the last one made", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId } = yield* requestOnCode(2);
+      yield* write(id, "render/graph.txt", "coral circle");
+      yield* render(id, feedbackId, "Coral");
+      yield* write(id, "render/graph.txt", "blue circle");
+      yield* render(id, feedbackId, "Blue");
+
+      const coral = feedbackOf(yield* getItem(id), feedbackId)?.variants?.saved[0];
+
+      yield* pickVariant(id, feedbackId, coral?.id ?? "");
+
+      expect(yield* read(id, VIDEO)).toBe("Coral");
+      expect(yield* read(id, "render/graph.txt")).toBe("coral circle");
     }),
   );
 });

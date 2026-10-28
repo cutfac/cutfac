@@ -58,10 +58,16 @@ const filesUnder = (
 
 /**
  * Save the agent's code as it is now beside the request's "before" media, so putting the media
- * back can put the code back with it: every file in the item but its media and Cutfac's own. An
- * item holding more than code does saves none.
+ * back can put the code back with it.
  */
-export const saveCode = Effect.fnUntraced(function* (item: Item, feedbackId: string) {
+export const saveCode = (item: Item, feedbackId: string) =>
+  saveCodeTo(item, codeDir(item, feedbackId));
+
+/**
+ * Save the agent's code as it is now in `dir`: every file in the item but its media and Cutfac's
+ * own. An item holding more than code does saves none.
+ */
+export const saveCodeTo = Effect.fnUntraced(function* (item: Item, dir: string) {
   const ws = yield* Workspace;
   const media = new Set(item.media.map((m) => m.name));
 
@@ -77,7 +83,6 @@ export const saveCode = Effect.fnUntraced(function* (item: Item, feedbackId: str
   const bytes = files.reduce((total, file) => total + file.size, 0);
 
   if (files.length > CODE_FILES || bytes > CODE_TOTAL_BYTES) return;
-  const dir = codeDir(item, feedbackId);
 
   yield* Effect.forEach(files, ({ path }) => ws.copy(`${item.dir}/${path}`, `${dir}/${path}`), {
     discard: true,
@@ -88,9 +93,14 @@ export const saveCode = Effect.fnUntraced(function* (item: Item, feedbackId: str
  * Put the agent's code back as the request found it. Files the request added stay, since Cutfac
  * never deletes what it didn't save; a request made before code was saved puts back nothing.
  */
-export const restoreCode = Effect.fnUntraced(function* (item: Item, feedbackId: string) {
+export const restoreCode = (item: Item, feedbackId: string) =>
+  restoreCodeFrom(item, codeDir(item, feedbackId));
+
+/** Put the agent's code back as `saveCodeTo` saved it in `dir`; nothing when none was saved. */
+export const restoreCodeFrom = Effect.fnUntraced(function* (item: Item, dir: string) {
   const ws = yield* Workspace;
-  const dir = codeDir(item, feedbackId);
+
+  if (!(yield* ws.exists(dir))) return;
   const files = yield* filesUnder(dir, () => false);
 
   yield* Effect.forEach(files, ({ path }) => ws.copy(`${dir}/${path}`, `${item.dir}/${path}`), {

@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
-import { itemRel, variantsDir } from "./editFiles.ts";
+import { saveCodeTo } from "./editCode.ts";
+import { itemRel, variantCodeDir, variantsDir } from "./editFiles.ts";
 import { InvalidRequest } from "./errors.ts";
 import {
   type Decision,
@@ -89,6 +90,11 @@ export const saveVariant = Effect.fn("edits.saveVariant")(function* (
   const variantId = replaced?.id ?? (yield* shortId);
   const file = `${variantsDir(item, f.id)}/${variantId}.${extension(name)}`;
   yield* ws.copy(`${item.dir}/${name}`, file);
+
+  // The code that rendered this version, since the agent goes on to change it for the next one.
+  const code = variantCodeDir(item, f.id, variantId);
+  yield* ws.remove(code);
+  yield* saveCodeTo(item, code);
 
   const variant: Variant = {
     id: variantId,

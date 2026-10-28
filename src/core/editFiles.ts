@@ -6,6 +6,10 @@ export const editDir = (item: Item, feedbackId: string) => `${item.dir}/edits/${
 export const variantsDir = (item: Item, feedbackId: string) =>
   `${editDir(item, feedbackId)}/variants`;
 
+/** Where a version keeps the agent's code that rendered it, to put back if the user keeps it. */
+export const variantCodeDir = (item: Item, feedbackId: string, variantId: string) =>
+  `${variantsDir(item, feedbackId)}/${variantId}.code`;
+
 /** Where a request keeps the media as it was when the request was made. */
 export const beforeFile = (item: Item, feedbackId: string, media: string) =>
   `${editDir(item, feedbackId)}/before.${extension(media)}`;

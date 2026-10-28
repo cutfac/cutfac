@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 
-import { restoreCode } from "./editCode.ts";
+import { restoreCode, restoreCodeFrom } from "./editCode.ts";
 import { buildContext } from "./editContext.ts";
-import { afterFile, itemRel } from "./editFiles.ts";
+import { afterFile, itemRel, variantCodeDir } from "./editFiles.ts";
 import { saveBefore, snapshotAfter } from "./editSnapshots.ts";
 import { closeVariants, pendingVariants } from "./editVariants.ts";
 import { InvalidRequest } from "./errors.ts";
@@ -165,6 +165,7 @@ export const pickVariant = Effect.fn("edits.pickVariant")(function* (
   yield* ws.copy(`${item.dir}/${chosen.file}`, after);
   yield* ws.copy(after, `${item.dir}/${media}`);
   const file = itemRel(item, after);
+  yield* restoreCodeFrom(item, variantCodeDir(item, f.id, chosen.id));
   yield* recordMedia(item, [{ media, file, base: f.context?.before }], {
     cause: "edit",
     feedbackId,
