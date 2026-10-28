@@ -106,7 +106,14 @@ export function FolderPicker({ sources, onSources }: Sources) {
 
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button type="button" size="lg" variant="outline" disabled={picking} onClick={choose}>
+      <Button
+        type="button"
+        size="lg"
+        variant="outline"
+        className="w-full"
+        disabled={picking}
+        onClick={choose}
+      >
         <FolderIcon data-icon="inline-start" />
         {t.choose}
       </Button>
