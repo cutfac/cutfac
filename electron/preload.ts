@@ -116,9 +116,9 @@ const onboarding = {
   startAppDrag: () => ipcRenderer.send(START_APP_DRAG_CHANNEL),
   focusDragHelper: () => ipcRenderer.send(FOCUS_DRAG_HELPER_CHANNEL),
   appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
-  startWorkspace: (name) => ipcRenderer.invoke(START_WORKSPACE_CHANNEL, name),
+  startWorkspace: (name, agent) => ipcRenderer.invoke(START_WORKSPACE_CHANNEL, { name, agent }),
   workspaceFolder: (name) => ipcRenderer.invoke(WORKSPACE_FOLDER_CHANNEL, name),
-  createWorkspace: (name) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, name),
+  createWorkspace: (name, agent) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, { name, agent }),
 } satisfies CutfacOnboarding;
 
 /** The Dev Panel's tools; the dev build passes the flag to that window alone. */

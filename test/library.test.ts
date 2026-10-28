@@ -113,6 +113,24 @@ describe("the first workspace's reading", () => {
     expect(readingAgent([{ agent: "claude", state: "missing" }])).toBeUndefined();
   });
 
+  test("the agent the user picked works the workspace, unless it isn't ready", () => {
+    const both = [
+      { agent: "claude", state: "ready" },
+      { agent: "codex", state: "ready" },
+    ] as const;
+
+    expect(readingAgent(both, Option.some("codex"))).toBe("codex");
+    expect(
+      readingAgent(
+        [
+          { agent: "claude", state: "ready" },
+          { agent: "codex", state: "signedOut" },
+        ],
+        Option.some("codex"),
+      ),
+    ).toBe("claude");
+  });
+
   test("learns a source once, however the user typed it", () => {
     expect(sameSource("cutfac.com", "https://www.cutfac.com/")).toBe(true);
     expect(sameSource(" https://cutfac.com ", "https://cutfac.com")).toBe(true);

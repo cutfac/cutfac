@@ -138,6 +138,8 @@ export interface FirstWorkspaceInput {
     { readonly message: string }
   >;
   readonly locale: string;
+  /** The agent the user picked to work with, when they did. */
+  readonly picked: Option.Option<AgentName>;
 }
 
 export class FirstWorkspace extends Context.Service<
@@ -164,7 +166,7 @@ const make = Effect.gen(function* () {
   const lock = yield* Semaphore.make(1);
   const latest = yield* Ref.make(Option.none<Deferred.Deferred<string, FirstWorkspaceFailed>>());
 
-  const run = ({ library, name, draft, agents, locale }: FirstWorkspaceInput) =>
+  const run = ({ library, name, draft, agents, locale, picked }: FirstWorkspaceInput) =>
     Effect.gen(function* () {
       const workspace = yield* freeWorkspace(library, name);
 
@@ -174,14 +176,14 @@ const make = Effect.gen(function* () {
         });
       }
 
+      // The agent that reads is the one the workspace is made with, so it is ready to work.
+      const agent = readingAgent(yield* agents, picked);
       const server = yield* WorkspaceServer;
-      const served = yield* server.serve(workspace.value);
+      const served = yield* server.serve(workspace.value, agent);
 
       if (Option.isNone(served)) {
         return yield* new FirstWorkspaceFailed({ message: "The app is quitting" });
       }
-
-      const agent = readingAgent(yield* agents);
 
       yield* readInto(served.value.url, draft, agent, locale);
 

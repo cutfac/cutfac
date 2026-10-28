@@ -19,6 +19,7 @@ import { COMPILED } from "./core/build.ts";
 import { describeError } from "./core/errors.ts";
 import { learn, learnInputOf } from "./core/learn.ts";
 import { logDir, logToFile } from "./core/logFile.ts";
+import { AGENTS } from "./core/schema.ts";
 import { syncSkill } from "./core/skill.ts";
 import { Workspace } from "./core/workspace.ts";
 import { CONFIG_FILE, initWorkspace } from "./core/workspaceRoot.ts";
@@ -134,14 +135,19 @@ const init = Command.make(
       Flag.withDescription("Connect Claude Code and Codex; --no-connect prints the setup instead"),
       Flag.withDefault(true),
     ),
+    agent: Flag.Literals("agent", AGENTS).pipe(
+      Flag.withDescription("The agent requests go to unless one is picked (default: claude)"),
+      Flag.optional,
+    ),
   },
-  Effect.fn("cli.init")(function* ({ dir, name, items, connect }) {
+  Effect.fn("cli.init")(function* ({ dir, name, items, connect, agent }) {
     const path = yield* Path.Path;
     const root = path.resolve(dir);
 
     const created = yield* initWorkspace(root, {
       name: Option.getOrElse(name, () => path.basename(root)),
       paths: Option.match(items, { onNone: () => ({}), onSome: (folder) => ({ items: folder }) }),
+      agent: Option.match(agent, { onNone: () => ({}), onSome: (one) => ({ default: one }) }),
     });
 
     yield* Console.log(

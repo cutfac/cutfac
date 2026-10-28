@@ -47,6 +47,9 @@ import { appBadge, hasPermission, SystemAccess, systemVersion } from "./systemAc
 
 const Sample = Schema.Struct({ title: Schema.String, body: Schema.String });
 
+/** The first workspace to make: its name, checked where it is used, and the agent picked for it. */
+const Making = Schema.Struct({ name: Schema.Unknown, agent: Schema.optionalKey(AgentName) });
+
 /** A folder as the workspace step shows it, from the home folder when it is inside it. */
 function folder(target: string, home: string): Folder {
   const relative = path.relative(home, target);
@@ -109,7 +112,7 @@ export function handleOnboarding(host: OnboardingHost): void {
     respond: (input: S["Type"], event: IpcMainInvokeEvent) => Effect.Effect<A, E, AppServices>,
   ) => answerCall(channel, host.isFromApp, { schema, what }, respond);
 
-  const start = (given: Option.Option<string>) =>
+  const start = (given: Option.Option<string>, picked: Option.Option<AgentName>) =>
     Effect.gen(function* () {
       const draft = yield* loadDraft;
       const suggested = yield* checks.suggestion;
@@ -128,16 +131,17 @@ export function handleOnboarding(host: OnboardingHost): void {
         draft: draft.value,
         agents: Effect.provideContext(checks.agentSetups, services),
         locale: host.locale(),
+        picked,
       });
     });
 
-  const createWorkspace = (given: Option.Option<string>) =>
+  const createWorkspace = (given: Option.Option<string>, picked: Option.Option<AgentName>) =>
     Effect.gen(function* () {
       const first = yield* FirstWorkspace;
 
       const ready = yield* Option.match(yield* first.ready, {
         onSome: Effect.succeed,
-        onNone: () => start(given),
+        onNone: () => start(given, picked),
       });
 
       yield* host.openWorkspace(ready);
@@ -192,10 +196,10 @@ export function handleOnboarding(host: OnboardingHost): void {
   });
   answer(APP_ICON_CHANNEL, () => appBadge);
   // It runs while the user goes on; the last step waits for it, and tries again if it failed.
-  answerWith(START_WORKSPACE_CHANNEL, Schema.Unknown, "workspace name", (input) =>
+  answerWith(START_WORKSPACE_CHANNEL, Making, "workspace", ({ name, agent }) =>
     Effect.asVoid(
       Effect.forkDetach(
-        Effect.ignore(start(decodeWorkspaceName(input)), {
+        Effect.ignore(start(decodeWorkspaceName(name), Option.fromUndefinedOr(agent)), {
           log: "Warn",
           message: "Starting the first workspace failed",
         }),
@@ -218,7 +222,7 @@ export function handleOnboarding(host: OnboardingHost): void {
       );
     }),
   );
-  answerWith(CREATE_WORKSPACE_CHANNEL, Schema.Unknown, "workspace name", (input) =>
-    createWorkspace(decodeWorkspaceName(input)),
+  answerWith(CREATE_WORKSPACE_CHANNEL, Making, "workspace", ({ name, agent }) =>
+    createWorkspace(decodeWorkspaceName(name), Option.fromUndefinedOr(agent)),
   );
 }

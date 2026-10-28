@@ -19,6 +19,7 @@ import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { STOP_GRACE, whichIn } from "../src/core/process.ts";
+import type { AgentName } from "../src/core/schema.ts";
 import { isWorkspaceRoot } from "../src/core/workspaceRoot.ts";
 import { cleanEnv, joinPath, readAccount, readShellEnv, serverEnv } from "./env.ts";
 import { bindPort, freePort, HOST } from "./ports.ts";
@@ -267,12 +268,12 @@ const untilHealthy = (url: string, server: Running) => {
   });
 };
 
-const setUp = (launch: Launch, workspace: string) =>
+const setUp = (launch: Launch, workspace: string, agent: AgentName | undefined) =>
   Effect.scoped(
     Effect.gen(function* () {
       const init = yield* spawn(
         launch,
-        ["init", workspace, "--no-connect"],
+        ["init", workspace, "--no-connect", ...(agent === undefined ? [] : ["--agent", agent])],
         workspace,
         "Workspace setup",
       );
@@ -298,6 +299,8 @@ const reportCrashUntilStopped = (
 
 export interface SidecarOptions {
   readonly workspace: string;
+  /** The agent a workspace made now sends requests to. */
+  readonly agent?: AgentName | undefined;
   readonly port: { readonly fixed: number } | { readonly last: Option.Option<number> };
   readonly watch: boolean;
   readonly onCrash: (message: string) => Effect.Effect<void>;
@@ -315,7 +318,9 @@ const serve = Effect.fnUntraced(function* (options: SidecarOptions, scope: Scope
   const port = yield* "fixed" in choice ? bindPort(choice.fixed) : freePort(choice.last);
   const launch = yield* resolveLaunch;
 
-  if (!(yield* isWorkspaceRoot(options.workspace))) yield* setUp(launch, options.workspace);
+  if (!(yield* isWorkspaceRoot(options.workspace))) {
+    yield* setUp(launch, options.workspace, options.agent);
+  }
 
   const server = yield* spawn(
     options.watch ? { ...launch, args: [...launch.watchFlags, ...launch.args] } : launch,

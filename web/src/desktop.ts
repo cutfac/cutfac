@@ -125,10 +125,11 @@ export interface CutfacOnboarding {
   /** The app as a list in System Settings shows it, for the helper window to show as the thing to drag. */
   appIcon: () => Promise<{ icon: string; name: string }>;
   /**
-   * Make the first workspace from the answers so far, named `name` unless the build names it, and
-   * start the agent reading the material while the user goes on. Resolves at once.
+   * Make the first workspace from the answers so far, named `name` unless the build names it, with
+   * `agent` as its agent when it is ready, and start the agent reading the material while the user
+   * goes on. Resolves at once.
    */
-  startWorkspace: (name: string) => Promise<void>;
+  startWorkspace: (name: string, agent?: AgentName) => Promise<void>;
   /**
    * Where the first workspace was made, or, before it is, as after a relaunch, where it will be
    * made under `name`; undefined if neither is known.
@@ -138,7 +139,7 @@ export interface CutfacOnboarding {
    * Open the board on the first workspace, making it now if it wasn't, as after a relaunch; the
    * window moves on by itself. Resolves why it couldn't, or undefined.
    */
-  createWorkspace: (name: string) => Promise<CreateFailure | undefined>;
+  createWorkspace: (name: string, agent?: AgentName) => Promise<CreateFailure | undefined>;
 }
 
 /** What the Dev Panel has an agent be, or `real` to check this Mac for it. */

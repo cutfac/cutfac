@@ -99,11 +99,17 @@ const ORDER: ReadonlyArray<AgentName> = ["claude", "codex"];
 export const candidateNames = (name: string): string[] =>
   Array.from({ length: MAX_TRIES }, (_, index) => (index === 0 ? name : `${name} ${index + 1}`));
 
-/** The agent that reads: Claude Code when it is ready, else the first that is. */
+/**
+ * The agent the workspace works with: the one the user picked when it is ready, else Claude Code
+ * when it is, else the first that is.
+ */
 export const readingAgent = (
   setups: ReadonlyArray<Pick<AgentSetup, "agent" | "state">>,
+  picked: Option.Option<AgentName> = Option.none(),
 ): AgentName | undefined =>
-  ORDER.find((agent) => setups.some((setup) => setup.agent === agent && setup.state === "ready"));
+  [...Option.toArray(picked), ...ORDER].find((agent) =>
+    setups.some((setup) => setup.agent === agent && setup.state === "ready"),
+  );
 
 /** A source as the user typed it and as learning saved it, to tell one learned already. */
 export const sameSource = (given: string, saved: string) => {

@@ -105,6 +105,7 @@ const answers = (library: string, sources: ReadonlyArray<string>): FirstWorkspac
   },
   agents: Effect.succeed([{ agent: "claude", state: "ready" }]),
   locale: "ko",
+  picked: Option.none(),
 });
 
 const setup = Effect.gen(function* () {

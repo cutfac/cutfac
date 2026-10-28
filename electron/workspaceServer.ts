@@ -13,6 +13,7 @@ import {
 import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 
+import type { AgentName } from "../src/core/schema.ts";
 import { AppState } from "./appState.ts";
 import type { PortTaken } from "./ports.ts";
 import { loadPort, savePort, type Settings, type SettingsNotSaved } from "./settings.ts";
@@ -32,8 +33,10 @@ interface Served {
 export class WorkspaceServer extends Context.Service<
   WorkspaceServer,
   {
+    /** Serve `workspace`, making it first with `agent` as its agent when it isn't one yet. */
     serve(
       workspace: string,
+      agent?: AgentName,
     ): Effect.Effect<Option.Option<Sidecar>, SidecarFailed | PortTaken | SettingsNotSaved>;
     readonly stop: Effect.Effect<void>;
     readonly kill: Effect.Effect<void>;
@@ -72,9 +75,10 @@ const make = Effect.gen(function* () {
 
   yield* Effect.addFinalizer(() => stopCurrent);
 
-  const start = Effect.fnUntraced(function* (workspace: string) {
+  const start = Effect.fnUntraced(function* (workspace: string, agent: AgentName | undefined) {
     const sidecar = yield* startSidecar({
       workspace,
+      agent,
       port: Option.isSome(devPort) ? { fixed: devPort.value } : { last: yield* loadPort },
       watch: Option.isSome(devPort),
       onCrash: (message) =>
@@ -94,7 +98,7 @@ const make = Effect.gen(function* () {
     return Option.some(sidecar);
   });
 
-  const serve = (workspace: string) =>
+  const serve = (workspace: string, agent?: AgentName) =>
     lock.withPermits(1)(
       Effect.gen(function* () {
         const served = yield* Ref.get(current);
@@ -105,7 +109,7 @@ const make = Effect.gen(function* () {
 
         yield* stopCurrent;
 
-        return yield* start(workspace);
+        return yield* start(workspace, agent);
       }).pipe(Effect.provideContext(services)),
     );
 
