@@ -153,8 +153,8 @@ describe("hasResult", () => {
   test("shows the versions of the media they were saved from", () => {
     const variants = { media: "cover.png", saved: [] };
 
-    expect(versionsMedia(request("a", 1, { variants }))).toBe("cover.png");
-    expect(versionsMedia(request("b", 1))).toBe("clip.mp4");
+    expect(versionsMedia(request("a", 1, { variants }))).toEqual(Option.some("cover.png"));
+    expect(versionsMedia(request("b", 1))).toEqual(Option.some("clip.mp4"));
   });
 
   test("offers as many versions as the server holds", () => {
@@ -186,22 +186,30 @@ describe("runOffer", () => {
   const idle = { status: Option.none(), running: false };
 
   test("offers to send a request nothing ran yet, and to run a halted one again", () => {
-    expect(runOffer(true, idle, false)).toBe("send");
-    expect(runOffer(true, { status: Option.some("failed"), running: false }, false)).toBe("retry");
-    expect(runOffer(true, { status: Option.some("stopped"), running: false }, false)).toBe("retry");
+    expect(runOffer(true, idle, false)).toEqual(Option.some("send"));
+    expect(runOffer(true, { status: Option.some("failed"), running: false }, false)).toEqual(
+      Option.some("retry"),
+    );
+    expect(runOffer(true, { status: Option.some("stopped"), running: false }, false)).toEqual(
+      Option.some("retry"),
+    );
   });
 
   test("offers nothing while it runs, after it finished, or once it is closed", () => {
-    expect(
-      runOffer(true, { status: Option.some("running"), running: true }, false),
-    ).toBeUndefined();
-    expect(runOffer(true, { status: Option.some("done"), running: false }, false)).toBeUndefined();
-    expect(runOffer(false, idle, false)).toBeUndefined();
+    expect(runOffer(true, { status: Option.some("running"), running: true }, false)).toEqual(
+      Option.none(),
+    );
+    expect(runOffer(true, { status: Option.some("done"), running: false }, false)).toEqual(
+      Option.none(),
+    );
+    expect(runOffer(false, idle, false)).toEqual(Option.none());
   });
 
   test("offers nothing once a result came in, from the user's own agent too", () => {
-    expect(runOffer(true, idle, true)).toBeUndefined();
-    expect(runOffer(true, { status: Option.some("failed"), running: false }, true)).toBeUndefined();
+    expect(runOffer(true, idle, true)).toEqual(Option.none());
+    expect(runOffer(true, { status: Option.some("failed"), running: false }, true)).toEqual(
+      Option.none(),
+    );
   });
 });
 

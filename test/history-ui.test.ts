@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import type {
   Feedback,
   HistoryDoc,
@@ -65,10 +67,10 @@ describe("undo stack", () => {
   test("undo takes back the change before the cursor, redo makes the one after it again", () => {
     const history = doc(entries, 2);
 
-    expect(undoable(history)?.id).toBe("b");
-    expect(redoable(history)?.id).toBe("c");
-    expect(undoable(doc(entries, 0))).toBeUndefined();
-    expect(redoable(doc(entries, 3))).toBeUndefined();
+    expect(Option.map(undoable(history), ({ id }) => id)).toEqual(Option.some("b"));
+    expect(Option.map(redoable(history), ({ id }) => id)).toEqual(Option.some("c"));
+    expect(undoable(doc(entries, 0))).toEqual(Option.none());
+    expect(redoable(doc(entries, 3))).toEqual(Option.none());
   });
 
   test("rows list the newest change first, marking where the item is", () => {

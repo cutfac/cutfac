@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import {
   FolderOpenIcon,
   GraduationCapIcon,
@@ -210,9 +211,9 @@ function SourceLine({ entry }: { entry: Learned }) {
 
   const safe = safeHttpUrl(source.url);
 
-  return safe ? (
+  return Option.isSome(safe) ? (
     <a
-      href={safe}
+      href={safe.value}
       target="_blank"
       rel="noreferrer noopener"
       className="underline underline-offset-4"

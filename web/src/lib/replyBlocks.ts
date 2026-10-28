@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 /** A question the agent asked, with the answers it offers to pick with one click. */
 export interface ReplyQuestion {
   readonly question: string;
@@ -26,14 +28,14 @@ const LIST_ITEM = /^[-*]\s+/;
 function trailingBlock(reply: string) {
   const opening = [...reply.matchAll(OPENING)].at(-1);
 
-  if (opening === undefined) return undefined;
+  if (opening === undefined) return Option.none();
 
   const rest = reply.slice(opening.index + opening[0].length);
   const closing = CLOSING.exec(rest);
 
   // A block still streaming, or text after it: not one the board draws.
   if (closing === null || rest.slice(closing.index + closing[0].length).trim() !== "") {
-    return undefined;
+    return Option.none();
   }
 
   const lines = rest
@@ -42,7 +44,7 @@ function trailingBlock(reply: string) {
     .map((line) => line.trim())
     .filter((line) => line !== "");
 
-  return { kind: opening[1], start: opening.index, lines };
+  return Option.some({ kind: opening[1], start: opening.index, lines });
 }
 
 const isItem = (line: string) => LIST_ITEM.test(line);
@@ -50,9 +52,11 @@ const isItem = (line: string) => LIST_ITEM.test(line);
 const itemText = (line: string) => line.replace(LIST_ITEM, "").trim();
 
 export function replyBlocks(reply: string): ReplyBlocks {
-  const block = trailingBlock(reply);
+  const trailing = trailingBlock(reply);
 
-  if (block === undefined) return { text: reply.trim() };
+  if (Option.isNone(trailing)) return { text: reply.trim() };
+
+  const block = trailing.value;
 
   const text = reply.slice(0, block.start).trim();
 

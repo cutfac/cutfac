@@ -1,7 +1,8 @@
-import { Option } from "effect";
+import { Array, Option } from "effect";
 
 import type { AgentChoice, AgentName, AgentStatus, ImportSummary, ImportTurn } from "../api.ts";
 import { runView, type LiveRun, type RunView } from "./run.ts";
+import { urlOf } from "./utils.ts";
 
 /** Imports open on the Templates page under this prefix, as `#/templates/import/<id>`. */
 const IMPORT_PREFIX = "import/";
@@ -11,7 +12,10 @@ export const importRouteId = (id: string) => `${IMPORT_PREFIX}${id}`;
 
 /** The import a templates route id opens, if it opens one. */
 export const importIdOf = (routeId: string | undefined) =>
-  routeId?.startsWith(IMPORT_PREFIX) ? routeId.slice(IMPORT_PREFIX.length) : undefined;
+  Option.fromUndefinedOr(routeId).pipe(
+    Option.filter((id) => id.startsWith(IMPORT_PREFIX)),
+    Option.map((id) => id.slice(IMPORT_PREFIX.length)),
+  );
 
 /**
  * Reading and installing: the agent is working, before and after the user allowed installs.
@@ -63,15 +67,11 @@ export function importState(detail: ImportSummary, live: LiveRun): ImportState {
 export const isWorking = (state: ImportState) => state === "reading" || state === "installing";
 
 /** The link as a row names it: host and path, without the scheme, `www.`, or a trailing slash. */
-export function linkLabel(link: string): string {
-  try {
-    const { host, pathname } = new URL(link);
-
-    return `${host.replace(/^www\./, "")}${pathname.replace(/\/+$/, "")}`;
-  } catch {
-    return link;
-  }
-}
+export const linkLabel = (link: string): string =>
+  Option.match(urlOf(link), {
+    onNone: () => link,
+    onSome: ({ host, pathname }) => `${host.replace(/^www\./, "")}${pathname.replace(/\/+$/, "")}`,
+  });
 
 /**
  * The agent an import starts with: the workspace default when it is installed, else the first one
@@ -81,12 +81,17 @@ export function linkLabel(link: string): string {
 export function importAgent(
   preferred: AgentChoice | undefined,
   statuses: ReadonlyArray<AgentStatus> | undefined,
-): AgentName | undefined {
-  const wanted = preferred === "queue" ? undefined : preferred;
+): Option.Option<AgentName> {
+  const wanted = Option.filter(
+    Option.fromUndefinedOr(preferred),
+    (agent): agent is AgentName => agent !== "queue",
+  );
 
-  if (statuses === undefined) return wanted ?? "claude";
+  if (statuses === undefined) return Option.orElseSome(wanted, (): AgentName => "claude");
 
   const installed = statuses.flatMap((status) => (status.installed ? [status.agent] : []));
 
-  return wanted !== undefined && installed.includes(wanted) ? wanted : installed[0];
+  return Option.filter(wanted, (agent) => installed.includes(agent)).pipe(
+    Option.orElse(() => Array.head(installed)),
+  );
 }

@@ -129,14 +129,14 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
                 onAnswer={actions.answer}
                 onReply={asks ? (body) => actions.reply(feedback, body) : undefined}
               />
-              {offer === "send" ? (
+              {Option.contains(offer, "send") ? (
                 <p className="text-sm text-muted-foreground">{t.chat.notSent}</p>
               ) : null}
-              {offer === undefined ? null : (
+              {Option.isNone(offer) ? null : (
                 <RunActions
                   feedback={feedback}
                   statuses={statuses}
-                  retry={offer === "retry"}
+                  retry={offer.value === "retry"}
                   actions={actions}
                 />
               )}
@@ -317,7 +317,7 @@ function Result({
       <div className="flex flex-col gap-2 rounded-5xl bg-card p-3 squircle">
         <p className="text-sm">
           {t.chat.versionsReady(
-            <span className="font-medium">{versionsMedia(feedback)}</span>,
+            <span className="font-medium">{Option.getOrUndefined(versionsMedia(feedback))}</span>,
             versions.length,
             feedback.variants?.wanted,
           )}

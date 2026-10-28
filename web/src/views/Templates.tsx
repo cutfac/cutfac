@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import {
   CopyIcon,
   DownloadIcon,
@@ -165,7 +166,11 @@ function AddTemplateForm({
   const [sending, setSending] = useState(false);
   const files = useHeldFiles();
   const openFiles = useRef<() => void>(null);
-  const agent = chosen ?? importAgent(ws.config.agent.default, statuses);
+
+  const agent = Option.orElse(Option.fromUndefinedOr(chosen), () =>
+    importAgent(ws.config.agent.default, statuses),
+  );
+
   const trimmed = link.trim();
   const locale = useLocale();
   const t = useMessages();
@@ -179,12 +184,14 @@ function AddTemplateForm({
   async function start(event: FormEvent) {
     event.preventDefault();
 
-    if (trimmed === "" || agent === undefined || sending) return;
+    if (trimmed === "" || Option.isNone(agent) || sending) return;
 
     setSending(true);
 
     try {
-      onStarted(await api.startImport({ link: trimmed, agent, locale }, files.uploads));
+      onStarted(
+        await api.startImport({ link: trimmed, agent: agent.value, locale }, files.uploads),
+      );
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : String(cause));
       setSending(false);
@@ -233,7 +240,7 @@ function AddTemplateForm({
             </Button>
             <FieldDescription>{t.templates.filesHint}</FieldDescription>
           </Field>
-          {agent === undefined ? (
+          {Option.isNone(agent) ? (
             <FieldDescription>
               {t.imports.noAgent((text) => (
                 <a href={href("setup")}>{text}</a>
@@ -244,7 +251,7 @@ function AddTemplateForm({
               <FieldLabel htmlFor="template-agent">{t.imports.agent}</FieldLabel>
               <Select
                 items={agentItems}
-                value={agent}
+                value={agent.value}
                 onValueChange={(value) => {
                   if (value !== null) setChosen(value);
                 }}
@@ -262,8 +269,8 @@ function AddTemplateForm({
               </Select>
             </Field>
           )}
-          {agent === undefined ? null : (
-            <TrustNote agent={agent} className="text-sm text-muted-foreground" />
+          {Option.isNone(agent) ? null : (
+            <TrustNote agent={agent.value} className="text-sm text-muted-foreground" />
           )}
         </FieldGroup>
         <DialogFooter>
@@ -314,14 +321,13 @@ export function Templates({ selected }: { selected: string | undefined }) {
     return () => clearInterval(timer);
   }, [working]);
 
-  const current =
-    importId !== undefined
-      ? undefined
-      : selected === undefined
-        ? templates?.[0]
-        : templates?.find((s) => s.id === selected);
+  const current = Option.isSome(importId)
+    ? undefined
+    : selected === undefined
+      ? templates?.[0]
+      : templates?.find((s) => s.id === selected);
 
-  const empty = templates?.length === 0 && open.length === 0 && importId === undefined;
+  const empty = templates?.length === 0 && open.length === 0 && Option.isNone(importId);
 
   return (
     <Page
@@ -368,7 +374,11 @@ export function Templates({ selected }: { selected: string | undefined }) {
                 </h2>
                 <ItemGroup>
                   {open.map((detail) => (
-                    <ImportRow key={detail.id} detail={detail} active={detail.id === importId} />
+                    <ImportRow
+                      key={detail.id}
+                      detail={detail}
+                      active={Option.contains(importId, detail.id)}
+                    />
                   ))}
                 </ItemGroup>
               </section>
@@ -379,8 +389,8 @@ export function Templates({ selected }: { selected: string | undefined }) {
               ))}
             </ItemGroup>
           </div>
-          {importId !== undefined ? (
-            <ImportChat key={importId} id={importId} onChange={imports.reload} />
+          {Option.isSome(importId) ? (
+            <ImportChat key={importId.value} id={importId.value} onChange={imports.reload} />
           ) : current ? (
             <TemplateDetail status={current} root={ws?.root} />
           ) : (
@@ -435,11 +445,11 @@ function TemplateRow({ status, active }: { status: FormatStatus; active: boolean
   return (
     <div className="relative rounded-2xl select-none has-focus-visible:*:bg-muted">
       <Item variant={active ? "muted" : "default"} size="sm">
-        <ItemMedia variant={image === undefined ? "icon" : "image"}>
-          {image === undefined ? (
+        <ItemMedia variant={Option.isNone(image) ? "icon" : "image"}>
+          {Option.isNone(image) ? (
             <LayoutTemplateIcon />
           ) : (
-            <img src={fileUrl(image)} alt="" loading="lazy" />
+            <img src={fileUrl(image.value)} alt="" loading="lazy" />
           )}
         </ItemMedia>
         <ItemContent>
@@ -548,7 +558,7 @@ function TemplateDetail({ status, root }: { status: FormatStatus; root: string |
 function FormatBody({ format, status }: { format: Format; status: FormatStatus }) {
   const t = useMessages();
   const { doc } = format;
-  const source = doc.source?.url === undefined ? undefined : safeHttpUrl(doc.source.url);
+  const source = Option.flatMap(Option.fromUndefinedOr(doc.source?.url), safeHttpUrl);
   const missing = missingFiles(status);
 
   return (
@@ -600,11 +610,11 @@ function FormatBody({ format, status }: { format: Format; status: FormatStatus }
           )}
           {doc.source?.url === undefined ? null : (
             <Fact label={t.templates.source}>
-              {source === undefined ? (
+              {Option.isNone(source) ? (
                 <span className="truncate">{doc.source.url}</span>
               ) : (
                 <a
-                  href={source}
+                  href={source.value}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="truncate underline underline-offset-4"

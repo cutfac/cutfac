@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -32,11 +33,11 @@ export function AnnouncementDialog() {
   const seen = parseSeen(useSyncExternalStore(subscribeSeen, storedSeen));
   const next = unseen(ANNOUNCEMENTS, seen);
   // Kept while the dialog closes, so its words don't vanish as it fades.
-  const [shown, setShown] = useState(next);
+  const [shown, setShown] = useState(Option.getOrUndefined(next));
 
-  if (next !== undefined && next !== shown) setShown(next);
+  if (Option.isSome(next) && next.value !== shown) setShown(next.value);
 
-  const firstOpen = seen === undefined;
+  const firstOpen = Option.isNone(seen);
 
   useEffect(() => {
     if (firstOpen) seeAll();
@@ -46,7 +47,7 @@ export function AnnouncementDialog() {
 
   return (
     <Dialog
-      open={next !== undefined}
+      open={Option.isSome(next)}
       onOpenChange={(open) => {
         if (!open) seeAll();
       }}

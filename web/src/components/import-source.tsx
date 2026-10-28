@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import { safeHttpUrl } from "@/lib/utils";
 
 import type { ImportDoc } from "../api.ts";
@@ -8,11 +10,11 @@ import { linkLabel } from "../lib/imports.ts";
 function SourceLink({ link, className }: { link: string; className?: string | undefined }) {
   const url = safeHttpUrl(link);
 
-  if (url === undefined) return <span className={className}>{linkLabel(link)}</span>;
+  if (Option.isNone(url)) return <span className={className}>{linkLabel(link)}</span>;
 
   return (
     <a
-      href={url}
+      href={url.value}
       target="_blank"
       rel="noreferrer noopener"
       className={className ?? "underline underline-offset-4"}

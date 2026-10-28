@@ -1,3 +1,5 @@
+import { Array, Option } from "effect";
+
 import type {
   DetailField,
   DetailsChange,
@@ -14,12 +16,12 @@ const FIELDS: ReadonlyArray<DetailField> = ["title", "status", "hook", "notes"];
 const QUOTE_LENGTH = 48;
 
 /** The change Undo would take back. */
-export const undoable = (history: HistoryDoc): HistoryEntry | undefined =>
-  history.entries[history.cursor - 1];
+export const undoable = (history: HistoryDoc): Option.Option<HistoryEntry> =>
+  Array.get(history.entries, history.cursor - 1);
 
 /** The change Redo would make again. */
-export const redoable = (history: HistoryDoc): HistoryEntry | undefined =>
-  history.entries[history.cursor];
+export const redoable = (history: HistoryDoc): Option.Option<HistoryEntry> =>
+  Array.get(history.entries, history.cursor);
 
 export const changedFields = (entry: DetailsChange): DetailField[] =>
   FIELDS.filter((field) => Object.hasOwn(entry.after, field) || Object.hasOwn(entry.before, field));

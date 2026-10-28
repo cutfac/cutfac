@@ -1,5 +1,8 @@
+import { Array, Option } from "effect";
+
 import type { AgentName, AgentStatus } from "../api.ts";
 import { readStored } from "./storage.ts";
+import { urlOf } from "./utils.ts";
 
 /**
  * The agents a new workspace connects without asking: every one installed and recent enough that
@@ -14,23 +17,20 @@ export const agentsToConnect = (statuses: ReadonlyArray<AgentStatus>): AgentName
  * A name for the first workspace from the website the user gave, as its address reads without
  * `www.`, such as `cutfac.com`; none without one.
  */
-export function nameFromSources(sources: ReadonlyArray<string>): string | undefined {
-  for (const source of sources) {
+export const nameFromSources = (sources: ReadonlyArray<string>): Option.Option<string> =>
+  Array.findFirst(sources, (source) => {
     const text = source.trim();
 
-    if (!URL.canParse(text.includes("://") ? text : `https://${text}`)) continue;
-
-    const { hostname } = new URL(text.includes("://") ? text : `https://${text}`);
-
-    if (hostname.includes(".")) return hostname.replace(/^www\./, "");
-  }
-
-  return undefined;
-}
+    return urlOf(text.includes("://") ? text : `https://${text}`).pipe(
+      Option.map(({ hostname }) => hostname),
+      Option.filter((hostname) => hostname.includes(".")),
+      Option.map((hostname) => hostname.replace(/^www\./, "")),
+    );
+  });
 
 /** The first workspace's name: the website's address, else the default the board names. */
 export const suggestedName = (sources: ReadonlyArray<string>, fallback: string) =>
-  nameFromSources(sources) ?? fallback;
+  Option.getOrElse(nameFromSources(sources), () => fallback);
 
 const skipKey = (root: string) => `cutfac.start.skipped.${root}`;
 

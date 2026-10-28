@@ -173,7 +173,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
 
     const entry = command === "undo" ? undoable(item.history) : redoable(item.history);
 
-    if (entry !== undefined) history.step(command, item.id);
+    if (Option.isSome(entry)) history.step(command, item.id);
   }
 
   const onEdit = useEffectEvent(edit);

@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import { desktop, type EditCommand } from "../desktop.ts";
 
 export type { EditCommand } from "../desktop.ts";
@@ -44,22 +46,22 @@ function dispatch(command: EditCommand, target: EventTarget | null) {
   for (const listener of listeners) listener(command);
 }
 
-function commandOf(event: KeyboardEvent): EditCommand | undefined {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey) return undefined;
+function commandOf(event: KeyboardEvent): Option.Option<EditCommand> {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return Option.none();
 
-  if (event.code === "KeyZ") return event.shiftKey ? "redo" : "undo";
+  if (event.code === "KeyZ") return Option.some(event.shiftKey ? "redo" : "undo");
 
-  return event.code === "KeyY" && !event.shiftKey ? "redo" : undefined;
+  return event.code === "KeyY" && !event.shiftKey ? Option.some("redo") : Option.none();
 }
 
 /** In a browser the keys arrive here; a text field keeps its own undo. */
 function fromKeyboard(event: KeyboardEvent) {
   const command = commandOf(event);
 
-  if (command === undefined || within(event.target, TYPING) || listeners.size === 0) return;
+  if (Option.isNone(command) || within(event.target, TYPING) || listeners.size === 0) return;
 
   event.preventDefault();
-  dispatch(command, event.target);
+  dispatch(command.value, event.target);
 }
 
 /** The desktop menu owns the keys, so text fields get their undo from here too. */

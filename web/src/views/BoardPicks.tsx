@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import type { ItemSummary } from "../api.ts";
@@ -7,7 +8,7 @@ import { archiveItems } from "../lib/items.ts";
 
 /** The card an element is on, by its id. */
 const cardOf = (element: Element | null) =>
-  element?.closest<HTMLElement>("[data-card]")?.dataset.card;
+  Option.fromUndefinedOr(element?.closest<HTMLElement>("[data-card]")?.dataset.card);
 
 /** Focus a card's link, and scroll the card into view. */
 function focusCard(id: string) {
@@ -38,7 +39,7 @@ export function usePicks(items: readonly ItemSummary[], columns: () => string[][
     const from = cardOf(focused);
 
     // Only from a card or from nowhere, so fields, menus and dialogs keep their keys.
-    if (from === undefined && focused !== null && focused !== document.body) return;
+    if (Option.isNone(from) && focused !== null && focused !== document.body) return;
 
     if (event.code === "Escape") {
       if (selected.size === 0) return;
@@ -51,18 +52,18 @@ export function usePicks(items: readonly ItemSummary[], columns: () => string[][
 
     const step = stepOf(event.code);
 
-    if (step === undefined) return;
+    if (Option.isNone(step)) return;
 
     event.preventDefault();
 
-    const to = stepCard(columns(), from, step);
+    const to = stepCard(columns(), from, step.value);
 
-    if (to === undefined) return;
+    if (Option.isNone(to)) return;
 
     if (event.shiftKey)
-      setSelected((current) => new Set([...current, ...(from ? [from] : []), to]));
+      setSelected((current) => new Set([...current, ...Option.toArray(from), to.value]));
 
-    focusCard(to);
+    focusCard(to.value);
   });
 
   useEffect(() => {

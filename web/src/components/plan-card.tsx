@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import type { ComponentProps } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -54,8 +55,10 @@ export function PlanCard({ plan }: { plan: Plan | undefined }) {
     );
   }
 
-  if (free === undefined) return null;
-  const usage = t.plan.used(free.used, free.limit);
+  if (Option.isNone(free)) return null;
+
+  const { used, limit } = free.value;
+  const usage = t.plan.used(used, limit);
 
   return (
     <div className="grid gap-3 rounded-2xl border bg-card p-3 text-card-foreground group-data-[collapsible=icon]:hidden">
@@ -66,8 +69,8 @@ export function PlanCard({ plan }: { plan: Plan | undefined }) {
         </div>
         <Progress
           aria-label={t.plan.freeTitle}
-          value={free.used}
-          max={free.limit}
+          value={used}
+          max={limit}
           getAriaValueText={() => usage}
         />
       </div>

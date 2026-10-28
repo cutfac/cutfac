@@ -122,9 +122,9 @@ describe("import state", () => {
 
 describe("import routes and labels", () => {
   test("an import opens on the Templates page under its own prefix", () => {
-    expect(importIdOf(importRouteId("0a1b2c3d"))).toBe("0a1b2c3d");
-    expect(importIdOf("vertical-explainer")).toBeUndefined();
-    expect(importIdOf(undefined)).toBeUndefined();
+    expect(importIdOf(importRouteId("0a1b2c3d"))).toEqual(Option.some("0a1b2c3d"));
+    expect(importIdOf("vertical-explainer")).toEqual(Option.none());
+    expect(importIdOf(undefined)).toEqual(Option.none());
   });
 
   test("a link is named by its host and path", () => {
@@ -144,24 +144,32 @@ const status = (agent: AgentStatus["agent"], installed: boolean): AgentStatus =>
 
 describe("import agent", () => {
   test("the workspace default is used when it is installed", () => {
-    expect(importAgent("codex", [status("claude", true), status("codex", true)])).toBe("codex");
+    expect(importAgent("codex", [status("claude", true), status("codex", true)])).toEqual(
+      Option.some("codex"),
+    );
   });
 
   test("otherwise the first installed agent is", () => {
-    expect(importAgent("codex", [status("claude", true), status("codex", false)])).toBe("claude");
-    expect(importAgent("queue", [status("claude", false), status("codex", true)])).toBe("codex");
-    expect(importAgent(undefined, [status("claude", true), status("codex", true)])).toBe("claude");
+    expect(importAgent("codex", [status("claude", true), status("codex", false)])).toEqual(
+      Option.some("claude"),
+    );
+    expect(importAgent("queue", [status("claude", false), status("codex", true)])).toEqual(
+      Option.some("codex"),
+    );
+    expect(importAgent(undefined, [status("claude", true), status("codex", true)])).toEqual(
+      Option.some("claude"),
+    );
   });
 
   test("none when no agent is installed", () => {
-    expect(importAgent("claude", [status("claude", false), status("codex", false)])).toBe(
-      undefined,
+    expect(importAgent("claude", [status("claude", false), status("codex", false)])).toEqual(
+      Option.none(),
     );
   });
 
   test("before the list loads the default stands, and copying the prompt is not an agent", () => {
-    expect(importAgent("codex", undefined)).toBe("codex");
-    expect(importAgent("queue", undefined)).toBe("claude");
-    expect(importAgent(undefined, undefined)).toBe("claude");
+    expect(importAgent("codex", undefined)).toEqual(Option.some("codex"));
+    expect(importAgent("queue", undefined)).toEqual(Option.some("claude"));
+    expect(importAgent(undefined, undefined)).toEqual(Option.some("claude"));
   });
 });

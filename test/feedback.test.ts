@@ -1,22 +1,28 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import { feedbackCommand, typingFeedbackCommand } from "../web/src/lib/feedback.ts";
 
 describe("feedbackCommand", () => {
   test("takes what follows /feedback, across lines", () => {
-    expect(feedbackCommand("/feedback the timeline is slow")).toBe("the timeline is slow");
-    expect(feedbackCommand("  /feedback\nline one\nline two  ")).toBe("line one\nline two");
+    expect(feedbackCommand("/feedback the timeline is slow")).toEqual(
+      Option.some("the timeline is slow"),
+    );
+    expect(feedbackCommand("  /feedback\nline one\nline two  ")).toEqual(
+      Option.some("line one\nline two"),
+    );
   });
 
   test("gives an empty message for the command alone", () => {
-    expect(feedbackCommand("/feedback")).toBe("");
-    expect(feedbackCommand("/feedback   ")).toBe("");
+    expect(feedbackCommand("/feedback")).toEqual(Option.some(""));
+    expect(feedbackCommand("/feedback   ")).toEqual(Option.some(""));
   });
 
   test("leaves other messages to the agent", () => {
-    expect(feedbackCommand("make it brighter")).toBeUndefined();
-    expect(feedbackCommand("/feedbackish")).toBeUndefined();
-    expect(feedbackCommand("send /feedback later")).toBeUndefined();
+    expect(feedbackCommand("make it brighter")).toEqual(Option.none());
+    expect(feedbackCommand("/feedbackish")).toEqual(Option.none());
+    expect(feedbackCommand("send /feedback later")).toEqual(Option.none());
   });
 });
 

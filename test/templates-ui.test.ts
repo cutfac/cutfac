@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import type { Format, FormatStatus, InputField } from "../web/src/api.ts";
 import {
   coverOf,
@@ -146,8 +148,8 @@ function withPreviews(...previews: string[]): FormatStatus {
 
 describe("coverOf", () => {
   test("is the first still preview, relative to the workspace", () => {
-    expect(coverOf(withPreviews("previews/ink.mp4", "previews/ink.png"))).toBe(
-      "formats/art/previews/ink.png",
+    expect(coverOf(withPreviews("previews/ink.mp4", "previews/ink.png"))).toEqual(
+      Option.some("formats/art/previews/ink.png"),
     );
   });
 
@@ -163,11 +165,11 @@ describe("coverOf", () => {
     };
 
     expect(missingFiles(art)).toEqual(new Set(["previews/gone.png"]));
-    expect(coverOf(art)).toBe("formats/art/previews/here.png");
+    expect(coverOf(art)).toEqual(Option.some("formats/art/previews/here.png"));
   });
 
-  test("is undefined for a template that does not read or has no stills", () => {
-    expect(coverOf(status("bad", undefined, false))).toBeUndefined();
-    expect(coverOf(withPreviews("previews/ink.webm"))).toBeUndefined();
+  test("is none for a template that does not read or has no stills", () => {
+    expect(coverOf(status("bad", undefined, false))).toEqual(Option.none());
+    expect(coverOf(withPreviews("previews/ink.webm"))).toEqual(Option.none());
   });
 });

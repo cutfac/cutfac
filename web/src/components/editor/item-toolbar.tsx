@@ -72,7 +72,7 @@ export function Toolbar({
             variant="ghost"
             size="icon-sm"
             aria-label={t.history.undo}
-            disabled={running || undoable(item.history) === undefined}
+            disabled={running || Option.isNone(undoable(item.history))}
             onMouseDown={keepFocus}
             onClick={() => onEdit("undo")}
           >
@@ -84,7 +84,7 @@ export function Toolbar({
             variant="ghost"
             size="icon-sm"
             aria-label={t.history.redo}
-            disabled={running || redoable(item.history) === undefined}
+            disabled={running || Option.isNone(redoable(item.history))}
             onMouseDown={keepFocus}
             onClick={() => onEdit("redo")}
           >

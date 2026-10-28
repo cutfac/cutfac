@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Option } from "effect";
+
 import { gridColumns, stepCard, stepOf } from "../web/src/lib/board-keys.ts";
 
 // Drafting has three cards, review none, done two.
@@ -7,39 +9,39 @@ const BOARD = [["a", "b", "c"], [], ["x", "y"]];
 
 describe("stepping through the board", () => {
   test("with no card to start from, the first card is the one", () => {
-    expect(stepCard(BOARD, undefined, "down")).toBe("a");
-    expect(stepCard([[], ["x"]], undefined, "left")).toBe("x");
-    expect(stepCard(BOARD, "gone", "up")).toBe("a");
+    expect(stepCard(BOARD, Option.none(), "down")).toEqual(Option.some("a"));
+    expect(stepCard([[], ["x"]], Option.none(), "left")).toEqual(Option.some("x"));
+    expect(stepCard(BOARD, Option.some("gone"), "up")).toEqual(Option.some("a"));
   });
 
   test("an empty board has nowhere to go", () => {
-    expect(stepCard([[], []], undefined, "down")).toBeUndefined();
+    expect(stepCard([[], []], Option.none(), "down")).toEqual(Option.none());
   });
 
   test("up and down stay in the column and stop at its ends", () => {
-    expect(stepCard(BOARD, "a", "down")).toBe("b");
-    expect(stepCard(BOARD, "b", "up")).toBe("a");
-    expect(stepCard(BOARD, "a", "up")).toBe("a");
-    expect(stepCard(BOARD, "c", "down")).toBe("c");
+    expect(stepCard(BOARD, Option.some("a"), "down")).toEqual(Option.some("b"));
+    expect(stepCard(BOARD, Option.some("b"), "up")).toEqual(Option.some("a"));
+    expect(stepCard(BOARD, Option.some("a"), "up")).toEqual(Option.some("a"));
+    expect(stepCard(BOARD, Option.some("c"), "down")).toEqual(Option.some("c"));
   });
 
   test("left and right skip empty columns and keep the height where they can", () => {
-    expect(stepCard(BOARD, "b", "right")).toBe("y");
-    expect(stepCard(BOARD, "c", "right")).toBe("y");
-    expect(stepCard(BOARD, "x", "left")).toBe("a");
-    expect(stepCard(BOARD, "y", "left")).toBe("b");
+    expect(stepCard(BOARD, Option.some("b"), "right")).toEqual(Option.some("y"));
+    expect(stepCard(BOARD, Option.some("c"), "right")).toEqual(Option.some("y"));
+    expect(stepCard(BOARD, Option.some("x"), "left")).toEqual(Option.some("a"));
+    expect(stepCard(BOARD, Option.some("y"), "left")).toEqual(Option.some("b"));
   });
 
   test("a step off the side stays put", () => {
-    expect(stepCard(BOARD, "a", "left")).toBe("a");
-    expect(stepCard(BOARD, "y", "right")).toBe("y");
+    expect(stepCard(BOARD, Option.some("a"), "left")).toEqual(Option.some("a"));
+    expect(stepCard(BOARD, Option.some("y"), "right")).toEqual(Option.some("y"));
   });
 
   test("J and K step like the arrows, whatever the input language", () => {
-    expect(stepOf("KeyJ")).toBe("down");
-    expect(stepOf("KeyK")).toBe("up");
-    expect(stepOf("ArrowLeft")).toBe("left");
-    expect(stepOf("KeyH")).toBeUndefined();
+    expect(stepOf("KeyJ")).toEqual(Option.some("down"));
+    expect(stepOf("KeyK")).toEqual(Option.some("up"));
+    expect(stepOf("ArrowLeft")).toEqual(Option.some("left"));
+    expect(stepOf("KeyH")).toEqual(Option.none());
   });
 });
 
@@ -52,10 +54,10 @@ describe("stepping through the gallery", () => {
   });
 
   test("up and down go a row, left and right along it", () => {
-    expect(stepCard(GRID, "a", "down")).toBe("d");
-    expect(stepCard(GRID, "e", "up")).toBe("b");
-    expect(stepCard(GRID, "b", "right")).toBe("c");
-    expect(stepCard(GRID, "d", "left")).toBe("d");
+    expect(stepCard(GRID, Option.some("a"), "down")).toEqual(Option.some("d"));
+    expect(stepCard(GRID, Option.some("e"), "up")).toEqual(Option.some("b"));
+    expect(stepCard(GRID, Option.some("b"), "right")).toEqual(Option.some("c"));
+    expect(stepCard(GRID, Option.some("d"), "left")).toEqual(Option.some("d"));
   });
 
   test("a gallery that cannot be measured is one column", () => {

@@ -1,3 +1,5 @@
+import { Array, Option } from "effect";
+
 import type { Locale } from "../i18n/locale.ts";
 import { readStored } from "./storage.ts";
 
@@ -26,25 +28,23 @@ export const ANNOUNCEMENTS: ReadonlyArray<Announcement> = [];
 const SEEN_KEY = "cutfac.announcements.seen";
 
 /**
- * The ids of the announcements the user has seen, from what the board kept: one per line.
- * Undefined when the board hasn't opened here before.
+ * The ids of the announcements the user has seen, from what the board kept: one per line. None
+ * when the board hasn't opened here before.
  */
-export function parseSeen(stored: string | null): ReadonlyArray<string> | undefined {
-  return stored?.split("\n").filter((id) => id !== "");
-}
+export const parseSeen = (stored: string | null): Option.Option<ReadonlyArray<string>> =>
+  Option.map(Option.fromNullishOr(stored), (kept) => kept.split("\n").filter((id) => id !== ""));
 
 /**
  * The announcement to show: the newest the user hasn't seen. None the first time the board opens,
  * since a new user hasn't missed anything; every announcement so far then counts as seen.
  */
-export function unseen(
+export const unseen = (
   all: ReadonlyArray<Announcement>,
-  seen: ReadonlyArray<string> | undefined,
-): Announcement | undefined {
-  if (seen === undefined) return undefined;
-
-  return all.find((announcement) => !seen.includes(announcement.id));
-}
+  seen: Option.Option<ReadonlyArray<string>>,
+): Option.Option<Announcement> =>
+  Option.flatMap(seen, (ids) =>
+    Array.findFirst(all, (announcement) => !ids.includes(announcement.id)),
+  );
 
 /** Every announcement so far, as seen. */
 const allSeen = (all: ReadonlyArray<Announcement>) => all.map((announcement) => announcement.id);
@@ -52,11 +52,11 @@ const allSeen = (all: ReadonlyArray<Announcement>) => all.map((announcement) => 
 /** What was seen, less the newest announcement, so the board shows it again. */
 export function forgetNewest(
   all: ReadonlyArray<Announcement>,
-  seen: ReadonlyArray<string> | undefined,
+  seen: Option.Option<ReadonlyArray<string>>,
 ): ReadonlyArray<string> {
-  const newest = all[0]?.id;
+  const newest = Option.map(Array.head(all), ({ id }) => id);
 
-  return (seen ?? allSeen(all)).filter((id) => id !== newest);
+  return Option.getOrElse(seen, () => allSeen(all)).filter((id) => !Option.contains(newest, id));
 }
 
 const listeners = new Set<() => void>();

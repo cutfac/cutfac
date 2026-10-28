@@ -1,3 +1,5 @@
+import { Array, Option } from "effect";
+
 import type { FormatStatus, InputField } from "../api.ts";
 
 /** Choice previews may be clips as well as stills. */
@@ -22,19 +24,15 @@ export function missingFiles(status: FormatStatus): ReadonlySet<string> {
 }
 
 /** The workspace-relative still that stands for a template: its first choice preview that exists. */
-export function coverOf(status: FormatStatus): string | undefined {
-  const { format } = status;
-
-  if (format === undefined) return undefined;
-
+export function coverOf(status: FormatStatus): Option.Option<string> {
   const missing = missingFiles(status);
 
-  const preview = format.doc.inputs
-    .flatMap((input) => input.choices)
-    .map((choice) => choice.preview)
-    .find((path) => path !== undefined && !isClip(path) && !missing.has(path));
-
-  return preview === undefined ? undefined : `${format.dir}/${preview}`;
+  return Option.flatMap(Option.fromUndefinedOr(status.format), (format) =>
+    Array.findFirst(
+      format.doc.inputs.flatMap((input) => input.choices.flatMap((choice) => choice.preview ?? [])),
+      (path) => !isClip(path) && !missing.has(path),
+    ).pipe(Option.map((preview) => `${format.dir}/${preview}`)),
+  );
 }
 
 /** Ready templates first, then the ones to fix, each by title. */

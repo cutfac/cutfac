@@ -1,3 +1,5 @@
+import { Option } from "effect";
+
 import type { Plan } from "../api.ts";
 import type { Locale } from "../i18n/locale.ts";
 
@@ -14,6 +16,9 @@ export const pricingUrl = (locale: Locale) => siteUrl(locale, "pricing");
 /** Where the desktop app is downloaded. */
 export const downloadUrl = (locale: Locale) => siteUrl(locale, "download");
 
-/** The desktop app's free version and the videos it has made, or undefined on any other plan. */
+/** The desktop app's free version and the videos it has made, or none on any other plan. */
 export const freeVersion = (plan: Plan | undefined) =>
-  plan?.edition === "desktop" && !plan.paid ? plan : undefined;
+  Option.filter(
+    Option.fromUndefinedOr(plan),
+    (known): known is Extract<Plan, { paid: false }> => known.edition === "desktop" && !known.paid,
+  );

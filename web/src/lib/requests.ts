@@ -31,8 +31,8 @@ export const versionsOf = (feedback: Feedback): ReadonlyArray<Variant> =>
   feedback.decision === undefined ? (feedback.variants?.saved ?? []) : [];
 
 /** The media a request's versions are of. */
-export const versionsMedia = (feedback: Feedback): string | undefined =>
-  feedback.variants?.media ?? feedback.media;
+export const versionsMedia = (feedback: Feedback) =>
+  Option.fromUndefinedOr(feedback.variants?.media ?? feedback.media);
 
 /**
  * The media changed since the request's run began, or versions of it were saved: the agent wrote a
@@ -83,10 +83,10 @@ export function runOffer(
   open: boolean,
   run: Pick<RunView, "status" | "running">,
   result: boolean,
-): "send" | "retry" | undefined {
-  if (!open || result || run.running || Option.contains(run.status, "done")) return undefined;
+): Option.Option<"send" | "retry"> {
+  if (!open || result || run.running || Option.contains(run.status, "done")) return Option.none();
 
-  return Option.isNone(run.status) ? "send" : "retry";
+  return Option.some(Option.isNone(run.status) ? "send" : "retry");
 }
 
 /** Where a request still in play stands, as its pin on the frame shows it. */
@@ -99,29 +99,29 @@ export interface Pin {
   readonly state: PinState;
 }
 
-function pinState(item: ItemDetail, feedback: Feedback, live: LiveRun): PinState | undefined {
+function pinState(item: ItemDetail, feedback: Feedback, live: LiveRun): Option.Option<PinState> {
   const run = runView(feedback.run, liveFor(live, feedback), item.running);
 
-  if (run.running) return "working";
+  if (run.running) return Option.some("working");
 
-  if (isWaiting(feedback)) return "waiting";
+  if (isWaiting(feedback)) return Option.some("waiting");
 
-  if (hasResult(item, feedback, false)) return "review";
+  if (hasResult(item, feedback, false)) return Option.some("review");
 
   const open = feedback.status === "open" && feedback.decision === undefined;
 
-  if (open && Option.exists(run.status, (status) => status === "failed" || status === "stopped")) {
-    return "halted";
-  }
-
-  return undefined;
+  return open && Option.exists(run.status, (status) => status === "failed" || status === "stopped")
+    ? Option.some("halted")
+    : Option.none();
 }
 
 /** The requests on `media` still in play: working, waiting, halted, or waiting for a decision. */
 export function pinsOn(item: ItemDetail, media: string | undefined, live: LiveRun): Pin[] {
   return inOrder(item).flatMap((feedback, index) => {
-    const state = feedback.media === media ? pinState(item, feedback, live) : undefined;
+    const state = feedback.media === media ? pinState(item, feedback, live) : Option.none();
 
-    return state === undefined ? [] : [{ feedback, number: index + 1, state }];
+    return Option.toArray(
+      Option.map(state, (pin) => ({ feedback, number: index + 1, state: pin })),
+    );
   });
 }

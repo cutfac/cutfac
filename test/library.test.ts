@@ -36,10 +36,10 @@ describe("a workspace's name", () => {
 });
 
 test("the first workspace is named for the website the user gave", () => {
-  expect(nameFromSources(["https://www.cutfac.com/pricing"])).toBe("cutfac.com");
-  expect(nameFromSources(["/Users/me/brand kit", "cutfac.com"])).toBe("cutfac.com");
-  expect(nameFromSources(["/Users/me/brand kit"])).toBeUndefined();
-  expect(nameFromSources([])).toBeUndefined();
+  expect(nameFromSources(["https://www.cutfac.com/pricing"])).toEqual(Option.some("cutfac.com"));
+  expect(nameFromSources(["/Users/me/brand kit", "cutfac.com"])).toEqual(Option.some("cutfac.com"));
+  expect(nameFromSources(["/Users/me/brand kit"])).toEqual(Option.none());
+  expect(nameFromSources([])).toEqual(Option.none());
 });
 
 describe("the app's folder", () => {

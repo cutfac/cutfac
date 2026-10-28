@@ -1,17 +1,16 @@
+import { Option, Schema } from "effect";
 import type { KeyboardEvent } from "react";
 
 export { cn } from "cn";
 
-/** Only http(s) URLs may reach an `href`, so a `javascript:` or `data:` source can't sneak in. */
-export function safeHttpUrl(url: string): string | undefined {
-  try {
-    const { protocol } = new URL(url);
+export const urlOf = Schema.decodeOption(Schema.URLFromString);
 
-    return protocol === "http:" || protocol === "https:" ? url : undefined;
-  } catch {
-    return undefined;
-  }
-}
+/** Only http(s) URLs may reach an `href`, so a `javascript:` or `data:` source can't sneak in. */
+export const safeHttpUrl = (url: string) =>
+  urlOf(url).pipe(
+    Option.filter(({ protocol }) => protocol === "http:" || protocol === "https:"),
+    Option.as(url),
+  );
 
 export const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
 

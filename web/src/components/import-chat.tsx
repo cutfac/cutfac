@@ -371,7 +371,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
   const working = isWorking(state);
   const text = body.trim();
   // `/feedback` goes to the team, so it can go while the agent works too.
-  const blocked = working && feedbackCommand(text) === undefined;
+  const blocked = working && Option.isNone(feedbackCommand(text));
   const t = useMessages();
 
   /**
@@ -381,7 +381,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
   async function deliver(reply: string): Promise<boolean> {
     const feedback = feedbackCommand(reply);
 
-    if (feedback === undefined) {
+    if (Option.isNone(feedback)) {
       // Files dropped while this one uploads stay held for the next reply.
       const sent = files.entries;
       const taken = await onSend(reply, files.uploads);
@@ -391,7 +391,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
       return taken;
     }
 
-    return sendSlashFeedback(feedback, agent).then(
+    return sendSlashFeedback(feedback.value, agent).then(
       () => true,
       (cause: Error) => {
         toast.error(cause.message);

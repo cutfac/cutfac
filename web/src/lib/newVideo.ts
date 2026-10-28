@@ -1,3 +1,5 @@
+import { Array, Option } from "effect";
+
 import { isVideoLink, linksIn } from "../../../src/core/videoLinks.ts";
 
 /** Longest title taken from what the user wrote, before it is cut at a word. */
@@ -28,22 +30,24 @@ export function withoutLink(text: string, link: string): string {
 
 /**
  * A provisional title from what the user wrote: its first line without links, cut at a word past
- * {@link MAX_TITLE} characters. Undefined when there is nothing but links. The agent gives the item
- * a fitting title once it knows what the video is.
+ * {@link MAX_TITLE} characters. None when there is nothing but links. The agent gives the item a
+ * fitting title once it knows what the video is.
  */
-export function draftTitle(text: string): string | undefined {
+export function draftTitle(text: string): Option.Option<string> {
   const plain = linksIn(text).reduce((rest, link) => rest.split(link).join(" "), text);
 
-  const line = plain
-    .split("\n")
-    .map((part) => part.replace(/\s+/g, " ").trim())
-    .find((part) => part !== "");
+  const line = Array.findFirst(
+    plain.split("\n").map((part) => part.replace(/\s+/g, " ").trim()),
+    (part) => part !== "",
+  );
 
-  if (line === undefined || line.length <= MAX_TITLE) return line;
+  return Option.map(line, (first) => {
+    if (first.length <= MAX_TITLE) return first;
 
-  const cut = line.slice(0, MAX_TITLE);
-  const space = cut.lastIndexOf(" ");
-  const word = space > MAX_TITLE / 2 ? cut.slice(0, space) : cut;
+    const cut = first.slice(0, MAX_TITLE);
+    const space = cut.lastIndexOf(" ");
+    const word = space > MAX_TITLE / 2 ? cut.slice(0, space) : cut;
 
-  return `${word.replace(/[\s,.;:!?·-]+$/u, "")}…`;
+    return `${word.replace(/[\s,.;:!?·-]+$/u, "")}…`;
+  });
 }

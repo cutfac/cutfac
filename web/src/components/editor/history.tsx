@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import {
   FilePenIcon,
   FlagIcon,
@@ -104,9 +105,9 @@ export function useItemHistory(onItem: (item: ItemDetail) => void) {
         // The step just taken sits on the other side of the cursor now.
         const entry = command === "undo" ? redoable(item.history) : undoable(item.history);
 
-        if (entry === undefined) return;
+        if (Option.isNone(entry)) return;
 
-        const name = nameOf(item, entry);
+        const name = nameOf(item, entry.value);
 
         toast(command === "undo" ? t.history.undone(name) : t.history.redone(name), {
           id: "history",
@@ -123,7 +124,10 @@ export function useItemHistory(onItem: (item: ItemDetail) => void) {
         const entry = undoable(item.history);
 
         toast(
-          entry === undefined ? t.history.backToOriginal : t.history.backTo(nameOf(item, entry)),
+          Option.match(entry, {
+            onNone: () => t.history.backToOriginal,
+            onSome: (back) => t.history.backTo(nameOf(item, back)),
+          }),
           {
             id: "history",
           },

@@ -185,8 +185,8 @@ export async function sendRequest(
   const feedback = feedbackCommand(input.body);
 
   // `/feedback` is for the people who make Cutfac, so it never reaches the agent or the item.
-  if (feedback !== undefined) {
-    await sendSlashFeedback(feedback, input.agent);
+  if (Option.isSome(feedback)) {
+    await sendSlashFeedback(feedback.value, input.agent);
 
     return "team";
   }

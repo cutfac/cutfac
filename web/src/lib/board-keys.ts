@@ -1,25 +1,27 @@
+import { Array, Option } from "effect";
+
 /** A step through the board's cards from the keyboard. */
 export type Step = "up" | "down" | "left" | "right";
 
 /** The step a key takes, by its place rather than its letter, so J and K work in any language. */
-export function stepOf(code: string): Step | undefined {
+export function stepOf(code: string): Option.Option<Step> {
   switch (code) {
     case "ArrowUp":
     case "KeyK":
-      return "up";
+      return Option.some("up");
 
     case "ArrowDown":
     case "KeyJ":
-      return "down";
+      return Option.some("down");
 
     case "ArrowLeft":
-      return "left";
+      return Option.some("left");
 
     case "ArrowRight":
-      return "right";
+      return Option.some("right");
 
     default:
-      return undefined;
+      return Option.none();
   }
 }
 
@@ -31,27 +33,31 @@ export function stepOf(code: string): Step | undefined {
  */
 export function stepCard(
   columns: readonly (readonly string[])[],
-  from: string | undefined,
+  from: Option.Option<string>,
   step: Step,
-): string | undefined {
+): Option.Option<string> {
   for (const [column, cards] of columns.entries()) {
-    const row = from === undefined ? -1 : cards.indexOf(from);
+    const row = Option.match(from, { onNone: () => -1, onSome: (id) => cards.indexOf(id) });
 
     if (row === -1) continue;
 
-    if (step === "up") return cards[Math.max(row - 1, 0)];
+    if (step === "up") return Array.get(cards, Math.max(row - 1, 0));
 
-    if (step === "down") return cards[Math.min(row + 1, cards.length - 1)];
+    if (step === "down") return Array.get(cards, Math.min(row + 1, cards.length - 1));
 
     const ahead =
       step === "left" ? columns.slice(0, column).toReversed() : columns.slice(column + 1);
 
-    const next = ahead.find((other) => other.length > 0);
-
-    return next === undefined ? from : next[Math.min(row, next.length - 1)];
+    return Option.match(
+      Array.findFirst(ahead, (other) => other.length > 0),
+      { onNone: () => from, onSome: (next) => Array.get(next, Math.min(row, next.length - 1)) },
+    );
   }
 
-  return columns.find((cards) => cards.length > 0)?.[0];
+  return Option.flatMap(
+    Array.findFirst(columns, (cards) => cards.length > 0),
+    Array.head,
+  );
 }
 
 /**
@@ -61,7 +67,5 @@ export function stepCard(
 export function gridColumns(ids: readonly string[], count: number): string[][] {
   const width = Math.max(count, 1);
 
-  return [...Array.from({ length: width }).keys()].map((column) =>
-    ids.filter((_, index) => index % width === column),
-  );
+  return Array.makeBy(width, (column) => ids.filter((_, index) => index % width === column));
 }

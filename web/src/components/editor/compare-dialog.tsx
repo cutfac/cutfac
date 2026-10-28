@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { CheckIcon, LayersIcon, PlayIcon, Undo2Icon } from "lucide-react";
 import { useRef } from "react";
 
@@ -221,9 +222,11 @@ export function VersionsDialog({
 }: VersionsDialogProps) {
   const grid = useRef<HTMLDivElement>(null);
   const t = useMessages();
-  const media = versionsMedia(feedback);
+  const versioned = versionsMedia(feedback);
 
-  if (media === undefined) return null;
+  if (Option.isNone(versioned)) return null;
+
+  const media = versioned.value;
 
   const current = item.media.find((file) => file.name === media);
   const kind = kindOf(item, media);

@@ -1,4 +1,5 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { Option } from "effect";
 import { LinkIcon, PlusIcon } from "lucide-react";
 import {
   useEffect,
@@ -216,7 +217,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
   async function create() {
     setStage("creating");
 
-    const input: NewItem = { title: draftTitle(body) ?? t.newItem.untitled };
+    const input: NewItem = { title: Option.getOrElse(draftTitle(body), () => t.newItem.untitled) };
 
     if (format) input.format = format;
 
@@ -286,8 +287,8 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
       }}
     >
       <DialogContent data-drop-target="" {...drop.handlers}>
-        {free && free.used >= free.limit ? (
-          <FreeLimit limit={free.limit} onClose={() => setOpen(false)} />
+        {Option.isSome(free) && free.value.used >= free.value.limit ? (
+          <FreeLimit limit={free.value.limit} onClose={() => setOpen(false)} />
         ) : (
           <>
             <DialogHeader>
@@ -374,7 +375,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
                       />
                     ))}
               </FieldGroup>
-              {free && free.limit - free.used === 1 ? (
+              {Option.exists(free, ({ used, limit }) => limit - used === 1) ? (
                 <p className="text-sm text-muted-foreground">{t.plan.lastFree}</p>
               ) : null}
               {error ? <ErrorAlert title={t.newItem.createError} message={error} /> : null}
