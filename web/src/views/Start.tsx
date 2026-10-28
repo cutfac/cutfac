@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { saveReportChoices } from "@/components/error-reports";
 import type { Answers } from "@/components/onboarding/answers";
 import { ONBOARDING_STEPS, OnboardingFrame, StepHeader } from "@/components/onboarding/frame";
+import { SampleStep } from "@/components/onboarding/sample-step";
 import { StartStep } from "@/components/onboarding/start-step";
 import { ListSkeleton } from "@/components/page";
 
@@ -34,12 +35,15 @@ export function Start({ ws, brief }: { ws: WorkspaceInfo | undefined; brief: Liv
   return loaded ? <Begin ws={ws} initial={brief.data ?? EMPTY_BRIEF} /> : <Starting />;
 }
 
-type Begun = { kind: "starting" } | { kind: "ask"; answers: Answers; error?: string };
+type Begun =
+  | { kind: "starting" }
+  | { kind: "ask"; answers: Answers; error?: string }
+  | { kind: "sample" };
 
 /**
- * Hands on what the first launch asked, if it did, and opens the board. The answers are forgotten
- * first, so a reload meanwhile can't save them twice; if they can't be saved, the questions open
- * on them.
+ * Hands on what the first launch asked, if it did, then offers a sample to try before the first
+ * video. The answers are forgotten first, so a reload meanwhile can't save them twice; if they
+ * can't be saved, the questions open on them.
  */
 function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
   const onboarding = desktop?.onboarding;
@@ -49,6 +53,9 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
   const [begun, setBegun] = useState<Begun>(
     onboarding === undefined ? asked : { kind: "starting" },
   );
+
+  const skipSample = useCallback(() => void openFirstVideo(untitled), [untitled]);
+  const offerSample = () => setBegun({ kind: "sample" });
 
   // Development mounts twice; the run starts once.
   const started = useRef(false);
@@ -68,7 +75,7 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
         await handOnSharing(onboarding, draft).catch(() => undefined);
 
         skipStart(ws.root);
-        await openFirstVideo(untitled);
+        offerSample();
       },
       () => setBegun(asked),
     );
@@ -76,9 +83,17 @@ function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
 
   if (begun.kind === "starting") return <Starting />;
 
+  if (begun.kind === "sample") {
+    return (
+      <OnboardingFrame wide>
+        <SampleStep onSkip={skipSample} />
+      </OnboardingFrame>
+    );
+  }
+
   return (
     <OnboardingFrame step={1} wide>
-      <StartStep ws={ws} initial={begun.answers} error={begun.error} />
+      <StartStep ws={ws} initial={begun.answers} error={begun.error} onStarted={offerSample} />
     </OnboardingFrame>
   );
 }

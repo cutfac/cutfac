@@ -87,6 +87,15 @@ export const startKo: StartMessages = {
     link: "알림 켜기",
     sample: { title: "컷팩", body: "에이전트가 기다리면 이렇게 알려 드릴게요." },
   },
+  sample: {
+    title: "먼저 샘플로 한번 써 볼까요?",
+    body: "에이전트가 자료를 읽는 동안 짧은 샘플 영상을 말로 고쳐 보세요. 무료 영상 횟수는 쓰지 않아요.",
+    moods: { bold: "강렬함", calm: "차분함", playful: "발랄함" },
+    adding: "샘플을 가져오는 중…",
+    skip: "건너뛰고 바로 만들기",
+    videoTitle: (title) => `샘플: ${title}`,
+    failed: (message) => `샘플을 가져오지 못했어요: ${message}`,
+  },
   saving: {
     title: "작업 공간을 준비하고 있어요",
     body: "알려 주신 내용을 에이전트가 읽을 수 있게 저장하는 중…",

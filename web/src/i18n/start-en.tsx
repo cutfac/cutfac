@@ -102,6 +102,16 @@ export const startEn = {
     link: "Turn on notifications",
     sample: { title: "Cutfac", body: "This is how Cutfac tells you your agent is waiting." },
   },
+  /** The end of the first launch: a sample video to try editing while the agent reads. */
+  sample: {
+    title: "Try it on a sample first",
+    body: "While your agent reads about you, change a short sample video by asking for it. It doesn't use any of your free videos.",
+    moods: { bold: "Bold", calm: "Calm", playful: "Playful" },
+    adding: "Copying the sample…",
+    skip: "Skip, make my own",
+    videoTitle: (title: string) => `Sample: ${title}`,
+    failed: (message: string) => `Couldn't copy the sample: ${message}`,
+  },
   /** While the first launch's answers go into the new workspace, a moment before the board. */
   saving: {
     title: "Setting up your workspace",

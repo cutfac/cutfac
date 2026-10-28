@@ -9,7 +9,6 @@ import type { WorkspaceInfo } from "../../api.ts";
 import { desktop } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { briefReady } from "../../lib/brief.ts";
-import { openFirstVideo } from "../../lib/firstVideo.ts";
 import { errorText } from "../../lib/notify.ts";
 import { asWebsite, skipStart } from "../../lib/onboarding.ts";
 import { type Answers, saveAnswers } from "./answers.ts";
@@ -208,21 +207,21 @@ export function BriefQuestions({
 
 /**
  * What to make in a workspace that has nothing yet, where the first launch didn't ask already, as
- * in a browser. Start saves the brief and learns the material, then opens the board.
+ * in a browser. Start saves the brief and learns the material, then hands on to `onStarted`.
  */
 export function StartStep({
   ws,
   initial,
   error: failed,
+  onStarted,
 }: {
   ws: WorkspaceInfo;
   initial: Answers;
   /** Why starting from the first launch's answers didn't work, to try again from here. */
   error?: string | undefined;
+  onStarted: () => void;
 }) {
-  const messages = useMessages();
-  const { whatToMake: t } = messages.start;
-  const untitled = messages.newItem.untitled;
+  const { whatToMake: t } = useMessages().start;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(failed);
 
@@ -232,7 +231,7 @@ export function StartStep({
     saveAnswers(answers, t).then(
       () => {
         skipStart(ws.root);
-        void openFirstVideo(untitled);
+        onStarted();
       },
       (cause: unknown) => {
         setError(errorText(cause));
