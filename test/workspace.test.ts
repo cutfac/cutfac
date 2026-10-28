@@ -1,11 +1,11 @@
 // @effect-diagnostics strictEffectProvide:off
-import { expect } from "bun:test";
+import { describe, expect } from "bun:test";
 import { dirname, join } from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, FileSystem } from "effect";
+import { Effect, FileSystem, Ref } from "effect";
 
-import { Workspace } from "../src/core/workspace.ts";
+import { Workspace, type WorkspaceService } from "../src/core/workspace.ts";
 import { initWorkspace } from "../src/core/workspaceRoot.ts";
 import { testEffect } from "./effect.ts";
 
@@ -28,7 +28,13 @@ const folder = Effect.gen(function* () {
     Effect.provide(Workspace.layer(root)),
   );
 
-  return { root, write, exists, read, openName };
+  const inWorkspace = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.andThen(
+      write("cutfac.yaml", "name: Busy\n"),
+      Effect.provide(effect, Workspace.layer(root)),
+    );
+
+  return { root, write, exists, read, openName, inWorkspace };
 });
 
 it.live("opening a workspace from before the rename to Cutfac renames its files", () =>
@@ -74,3 +80,94 @@ it.live("init leaves a workspace from before the rename as it is", () =>
     expect(yield* exists("cutfac.yaml")).toBe(false);
   }),
 );
+
+describe("writing a file", () => {
+  const SIZE = 2_000_000;
+  const FILE = "state.txt";
+  const first = "a".repeat(SIZE);
+  const second = "b".repeat(SIZE);
+
+  const rewriting = <E>(
+    write: (ws: WorkspaceService, text: string) => Effect.Effect<void, E>,
+    read: (ws: WorkspaceService) => Effect.Effect<string, E>,
+  ) =>
+    Effect.gen(function* () {
+      const ws = yield* Workspace;
+      const seen = yield* Ref.make<ReadonlyArray<string>>([]);
+
+      const note = (what: string) => Ref.update(seen, (all) => [...all, what]);
+
+      yield* write(ws, first);
+
+      const reader = Effect.gen(function* () {
+        const text = yield* read(ws);
+
+        if (text !== first && text !== second) yield* note(`read ${text.length} characters`);
+
+        const names = (yield* ws.list("")).map((entry) => entry.name);
+
+        if (names.some((name) => name !== FILE && name !== "cutfac.yaml"))
+          yield* note(`listed ${names.join(", ")}`);
+      }).pipe(Effect.forever);
+
+      const writer = Effect.forEach(
+        Array.from({ length: 150 }, (_, n) => (n % 2 === 0 ? second : first)),
+        (text) => write(ws, text),
+        { discard: true },
+      );
+
+      yield* Effect.raceFirst(
+        writer,
+        Effect.all(
+          Array.from({ length: 4 }, () => reader),
+          { concurrency: "unbounded" },
+        ),
+      );
+
+      expect((yield* Ref.get(seen)).slice(0, 3)).toEqual([]);
+    });
+
+  it.live("a reader never sees a text file empty or half written", () =>
+    Effect.gen(function* () {
+      const { inWorkspace } = yield* folder;
+
+      yield* inWorkspace(
+        rewriting(
+          (ws, text) => ws.writeText(FILE, text),
+          (ws) => ws.readText(FILE),
+        ),
+      );
+    }),
+  );
+
+  it.live("a reader never sees a binary file empty or half written", () =>
+    Effect.gen(function* () {
+      const { inWorkspace } = yield* folder;
+
+      yield* inWorkspace(
+        rewriting(
+          (ws, text) => ws.writeBytes(FILE, new TextEncoder().encode(text)),
+          (ws) => ws.readText(FILE),
+        ),
+      );
+    }),
+  );
+
+  it.live("a write that fails leaves nothing behind", () =>
+    Effect.gen(function* () {
+      const { root, inWorkspace } = yield* folder;
+      const fs = yield* FileSystem.FileSystem;
+
+      yield* inWorkspace(
+        Effect.gen(function* () {
+          const ws = yield* Workspace;
+
+          yield* ws.mkdir("taken");
+          yield* Effect.flip(ws.writeText("taken", "text"));
+        }),
+      );
+
+      expect((yield* fs.readDirectory(root)).toSorted()).toEqual(["cutfac.yaml", "taken"]);
+    }),
+  );
+});

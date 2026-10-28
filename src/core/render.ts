@@ -82,9 +82,6 @@ const alive = (pid: number) =>
     }),
   );
 
-/** How long a read that found the state file cut short waits for the write to finish. */
-const WRITE_GAP = Duration.millis(50);
-
 /**
  * The item's latest render, if it had one. A render still marked running whose process is gone
  * was cut off, when its agent quit say, so it reads as stopped, ended at its last save.
@@ -95,10 +92,7 @@ export const readRender = Effect.fn("render.readRender")(function* (item: string
 
   if (!(yield* ws.exists(path))) return Option.none<RenderState>();
 
-  const read = Effect.map(ws.readText(path), decodeState);
-  const first = yield* read;
-  // Saving truncates the file before writing it, so a read can land in between.
-  const state = Option.isSome(first) ? first : yield* Effect.andThen(Effect.sleep(WRITE_GAP), read);
+  const state = decodeState(yield* ws.readText(path));
 
   if (
     Option.isSome(state) &&

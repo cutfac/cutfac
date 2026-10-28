@@ -1,5 +1,6 @@
 import {
   Context,
+  Crypto,
   Duration,
   Effect,
   FileSystem,
@@ -10,11 +11,18 @@ import {
   Semaphore,
   Stream,
 } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 import { parse, stringify } from "yaml";
 
 import { WorkspaceError } from "./errors.ts";
 import { WorkspaceConfig } from "./schema.ts";
-import { CONFIG_FILE, fileFailure, findRoot, renameLegacyFiles } from "./workspaceRoot.ts";
+import {
+  CONFIG_FILE,
+  fileFailure,
+  findRoot,
+  renameLegacyFiles,
+  replaceFile,
+} from "./workspaceRoot.ts";
 
 export interface FileStat {
   readonly size: number;
@@ -126,6 +134,7 @@ const decodeYaml = Effect.fnUntraced(function* <A, I>(
 const open = Effect.fn("Workspace.open")(function* (start: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const services = yield* Effect.context<FileSystem.FileSystem | Path.Path | Crypto.Crypto>();
   const found = yield* findRoot(start);
 
   if (Option.isNone(found)) {
@@ -161,6 +170,16 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
       .makeDirectory(path.dirname(full), { recursive: true })
       .pipe(Effect.mapError(fileFailure("create the folder for", relPath)));
 
+  const replace = (
+    relPath: string,
+    full: string,
+    write: (temp: string) => Effect.Effect<void, PlatformError>,
+  ) =>
+    replaceFile(full, write).pipe(
+      Effect.provideContext(services),
+      Effect.mapError(fileFailure("write", relPath)),
+    );
+
   const exists = Effect.fn("Workspace.exists")(function* (relPath: string) {
     const full = yield* abs(relPath);
 
@@ -176,7 +195,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   const writeText = Effect.fn("Workspace.writeText")(function* (relPath: string, text: string) {
     const full = yield* abs(relPath);
     yield* ensureParent(full, relPath);
-    yield* fs.writeFileString(full, text).pipe(Effect.mapError(fileFailure("write", relPath)));
+    yield* replace(relPath, full, (temp) => fs.writeFileString(temp, text));
   });
 
   const writeBytes = Effect.fn("Workspace.writeBytes")(function* (
@@ -185,7 +204,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   ) {
     const full = yield* abs(relPath);
     yield* ensureParent(full, relPath);
-    yield* fs.writeFile(full, bytes).pipe(Effect.mapError(fileFailure("write", relPath)));
+    yield* replace(relPath, full, (temp) => fs.writeFile(temp, bytes));
   });
 
   const readYaml = Effect.fn("Workspace.readYaml")(function* <A, I>(

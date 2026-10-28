@@ -1,7 +1,8 @@
-import { Context, Crypto, Effect, FileSystem, Option, Path, Predicate, Stream } from "effect";
+import { Context, Effect, FileSystem, Option, Path, Predicate, Stream } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
 import { WorkspaceError } from "./errors.ts";
+import { replaceFile } from "./workspaceRoot.ts";
 
 /**
  * The folder the app keeps its own records in, such as which workspaces the user trusts, outside
@@ -59,14 +60,8 @@ export const appendAppRecord = Effect.fn("AppData.appendRecord")(function* (
 export const writeAppFile = Effect.fn("AppData.writeFile")(function* (file: string, text: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
   const failed = writeFailed(file);
-  const temp = `${file}.${yield* Effect.orDie(crypto.randomUUIDv4())}.tmp`;
 
   yield* fs.makeDirectory(path.dirname(file), { recursive: true }).pipe(Effect.mapError(failed));
-  yield* fs.writeFileString(temp, text).pipe(Effect.mapError(failed));
-  yield* fs.rename(temp, file).pipe(
-    Effect.mapError(failed),
-    Effect.tapError(() => fs.remove(temp).pipe(Effect.ignore)),
-  );
+  yield* replaceFile(file, (temp) => fs.writeFileString(temp, text)).pipe(Effect.mapError(failed));
 });
