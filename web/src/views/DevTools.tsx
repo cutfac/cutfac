@@ -17,6 +17,7 @@ import {
   type OnboardingStep,
 } from "../desktop.ts";
 import { ANNOUNCEMENTS, showNewestAgain } from "../lib/announcements.ts";
+import { copyText } from "../lib/clipboard.ts";
 import { sendFailed } from "../lib/notify.ts";
 
 /** A choice's values in the order shown, each with its label. */
@@ -350,8 +351,7 @@ function PathRow({
 
 /** A command to run in a terminal, to read and copy. */
 function Command({ command }: { command: string }) {
-  const copy = () =>
-    navigator.clipboard.writeText(command).then(() => toast.success("Copied"), sendFailed);
+  const copy = () => copyText(command, "Copied");
 
   return (
     <div className="flex items-start gap-2">

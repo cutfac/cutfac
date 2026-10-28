@@ -47,12 +47,13 @@ import {
 import { desktop, type NewVideoLink } from "../desktop.ts";
 import { href, type Live, useAgentStatuses, useModelPicks } from "../hooks.ts";
 import { type Messages, useMessages } from "../i18n/index.ts";
+import { copyPrompt } from "../lib/clipboard.ts";
 import { freeVersion } from "../lib/license.ts";
 import { pickedSettings } from "../lib/models.ts";
 import { draftTitle, withoutLink, writtenLinks } from "../lib/newVideo.ts";
 import { errorText } from "../lib/notify.ts";
 import { filledInputs, missingInputs } from "../lib/templates.ts";
-import { copyPrompt, preferredAgent } from "./editor/composer.tsx";
+import { preferredAgent } from "./editor/composer.tsx";
 import {
   FilesField,
   FreeLimit,

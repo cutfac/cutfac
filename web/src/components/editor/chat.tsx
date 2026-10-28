@@ -31,12 +31,13 @@ import {
 } from "../../api.ts";
 import { approvalsApi } from "../../approvalsApi.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { copyPrompt } from "../../lib/clipboard.ts";
 import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { asksUser, inOrder, linePaused, versionsOf, waitingLine } from "../../lib/requests.ts";
 import { liveFor, runView, type LiveRun, type OnRun } from "../../lib/run.ts";
 import { targetOf } from "../../lib/target.ts";
-import { Composer, type ComposerProps, copyPrompt, editInput, sendRequest } from "./composer.tsx";
+import { Composer, type ComposerProps, editInput, sendRequest } from "./composer.tsx";
 import { Request, type RequestActions } from "./request.tsx";
 
 interface ChatProps {

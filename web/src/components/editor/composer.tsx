@@ -29,10 +29,11 @@ import {
   type ModelSettings,
 } from "../../api.ts";
 import { agentInstalled } from "../../hooks.ts";
-import { messages, useMessages } from "../../i18n/index.ts";
+import { useMessages } from "../../i18n/index.ts";
+import { copyPrompt } from "../../lib/clipboard.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
-import { errorText, sendFailed } from "../../lib/notify.ts";
+import { sendFailed } from "../../lib/notify.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
@@ -63,27 +64,6 @@ export function preferredAgent(
   if (preferred !== undefined && usable(preferred)) return preferred;
 
   return statuses.find((status) => status.installed)?.agent ?? "queue";
-}
-
-/** Copy an agent prompt; if the browser refuses, offer a button to try again from a click. */
-export function copyPrompt(prompt: string) {
-  const t = messages();
-
-  navigator.clipboard.writeText(prompt).then(
-    () => toast.success(t.composer.promptCopied),
-    () =>
-      toast(t.composer.promptReady, {
-        action: {
-          label: t.common.copy,
-          onClick: () => {
-            navigator.clipboard.writeText(prompt).then(
-              () => toast.success(t.composer.promptCopied),
-              (cause) => toast.error(t.common.couldNotCopy(errorText(cause))),
-            );
-          },
-        },
-      }),
-  );
 }
 
 /** How many versions the agent should make of one request. */

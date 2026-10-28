@@ -1,6 +1,5 @@
 import { ArrowRightIcon, CheckIcon, CopyIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { AgentLogo } from "@/components/agent-logo";
 import { ErrorAlert } from "@/components/page";
@@ -22,6 +21,7 @@ import { cn } from "@/lib/utils";
 import type { AgentName } from "../../api.ts";
 import type { AgentSetup, CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { copyText } from "../../lib/clipboard.ts";
 import { errorText } from "../../lib/notify.ts";
 import { StepActions, StepHeader } from "./frame.tsx";
 
@@ -291,11 +291,7 @@ function AgentRow({
 function FixFailed({ command, onCheck }: { command: string; onCheck: () => void }) {
   const t = useMessages();
 
-  const copyCommand = () =>
-    navigator.clipboard.writeText(command).then(
-      () => toast.success(t.onboarding.agent.copied),
-      (cause) => toast.error(t.common.couldNotCopy(errorText(cause))),
-    );
+  const copyCommand = () => copyText(command, t.onboarding.agent.copied);
 
   return (
     <div className="flex basis-full flex-col gap-2 pt-1">

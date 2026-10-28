@@ -25,10 +25,10 @@ import {
 } from "../../api.ts";
 import { href, useLive } from "../../hooks.ts";
 import { useLocale, useMessages } from "../../i18n/index.ts";
+import { copyPrompt } from "../../lib/clipboard.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { fixPrompt, templateState } from "../../lib/templates.ts";
 import { formatAgo, formatTime } from "../../lib/time.ts";
-import { copyPrompt } from "./composer.tsx";
 
 /** A safe zone's margins in whole percent, the way the copy states them. */
 const inPercent = (zone: SafeZone): SafeZone => ({
