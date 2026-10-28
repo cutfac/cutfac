@@ -1,5 +1,5 @@
 import { ArrowRightIcon } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ErrorAlert } from "@/components/page";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,13 @@ import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
 import { StepHeader } from "./frame.tsx";
 import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
 
-/** The parts of what to make, asked one at a time. A browser can't pick a folder, so skips it. */
 /** How long a clicked card shows as picked before the next part opens. */
 const PICK_PAUSE_MS = 450;
 
+/** How long typing rests before the answers so far are kept. */
+const KEEP_PAUSE_MS = 400;
+
+/** The parts of what to make, asked one at a time. A browser can't pick a folder, so skips it. */
 const PARTS = ["purpose", "website", "folder", "platforms", "details"] as const;
 
 type Part = (typeof PARTS)[number];
@@ -42,6 +45,7 @@ export function BriefQuestions({
   busy = false,
   error,
   onFinish,
+  onAnswers,
   onBack,
 }: {
   initial: Answers;
@@ -50,6 +54,8 @@ export function BriefQuestions({
   busy?: boolean;
   error?: string | undefined;
   onFinish: (answers: Answers) => void;
+  /** Hears the answers as they change, so leaving the questions part way through keeps them. */
+  onAnswers?: ((answers: Answers) => void) | undefined;
   /** Back from the first part to the step before it, when there is one. */
   onBack?: (() => void) | undefined;
 }) {
@@ -71,6 +77,26 @@ export function BriefQuestions({
 
     return () => clearTimeout(timer);
   }, [picks]);
+
+  const latest = useRef({ brief, sources, onAnswers });
+
+  useEffect(() => {
+    latest.current = { brief, sources, onAnswers };
+
+    const timer = setTimeout(() => onAnswers?.({ brief, sources }), KEEP_PAUSE_MS);
+
+    return () => clearTimeout(timer);
+  }, [brief, sources, onAnswers]);
+
+  // What was answered in the last pause is kept too when the questions close.
+  useEffect(
+    () => () =>
+      latest.current.onAnswers?.({
+        brief: latest.current.brief,
+        sources: latest.current.sources,
+      }),
+    [],
+  );
 
   const index = STEPS.indexOf(part);
   const links = sources.some(isLink) || typed.trim() !== "";
@@ -108,7 +134,13 @@ export function BriefQuestions({
       title: t.material.website.title,
       body: t.material.website.body,
       field: (
-        <WebsitePicker sources={sources} onSources={setSources} draft={typed} onDraft={setTyped} />
+        <WebsitePicker
+          sources={sources}
+          onSources={setSources}
+          draft={typed}
+          onDraft={setTyped}
+          focusOnOpen
+        />
       ),
       primary: next(links ? t.next : t.skipPart),
     },

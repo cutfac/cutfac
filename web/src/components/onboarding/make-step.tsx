@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ListSkeleton } from "@/components/page";
 
@@ -38,6 +38,18 @@ export function MakeStep({
     );
   }, [onboarding]);
 
+  // Kept as they are answered, so the questions open on them again after Back or a restart.
+  const remember = useCallback(
+    (answers: Answers) =>
+      void onboarding
+        .draft()
+        .then((kept) =>
+          onboarding.saveDraft({ ...kept, brief: answers.brief, sources: [...answers.sources] }),
+        )
+        .catch(() => undefined),
+    [onboarding],
+  );
+
   const keep = (answers: Answers) => {
     const sources = answers.sources.filter((source) => source.trim() !== "");
 
@@ -71,6 +83,7 @@ export function MakeStep({
       busy={busy}
       error={error}
       onFinish={keep}
+      onAnswers={remember}
       onBack={onBack}
     />
   );
