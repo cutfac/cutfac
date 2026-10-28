@@ -1,8 +1,7 @@
-import { Effect, Option, Ref, Schema } from "effect";
+import { Effect, Ref, Schema } from "effect";
 import {
   app,
   BrowserWindow,
-  ipcMain,
   Notification,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
@@ -12,12 +11,15 @@ import type { AppCommand } from "../web/src/desktop.ts";
 import type { Locale } from "../web/src/i18n/locale.ts";
 import { askingChanges, askingKey, type Asking } from "./asking.ts";
 import { ATTENTION_CHANNEL } from "./ipc.ts";
+import { listen } from "./ipcHandlers.ts";
 import { MESSAGES } from "./messages.ts";
 import { busyWork } from "./quitQuestion.ts";
 
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
 const Attention = Schema.Struct({
-  waiting: Schema.Finite,
-  busy: Schema.Finite,
+  waiting: Count,
+  busy: Count,
   asking: Schema.Array(
     Schema.Struct({
       id: Schema.String,
@@ -26,8 +28,6 @@ const Attention = Schema.Struct({
     }),
   ),
 });
-
-const decodeAttention = Schema.decodeUnknownOption(Attention);
 
 export interface AttentionHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
@@ -88,9 +88,5 @@ export function handleAttention(host: AttentionHost): void {
       yield* Ref.set(asking, changes.now);
     });
 
-  ipcMain.on(ATTENTION_CHANNEL, (event, next) => {
-    if (!host.isFromApp(event)) return;
-
-    Option.map(decodeAttention(next), (attention) => Effect.runSync(update(attention)));
-  });
+  listen(ATTENTION_CHANNEL, host.isFromApp, { schema: Attention, what: "attention" }, update);
 }

@@ -2,19 +2,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Effect, Option, Queue, Ref, Schema } from "effect";
-import {
-  app,
-  clipboard,
-  dialog,
-  ipcMain,
-  Menu,
-  nativeTheme,
-  type BrowserWindow,
-  type IpcMainInvokeEvent,
-} from "electron";
+import { app, clipboard, dialog, Menu, nativeTheme, type BrowserWindow } from "electron";
 
 import type { AppCommand, EditCommand, OnboardingStep } from "../web/src/desktop.ts";
-import { isLocale, resolveLocale } from "../web/src/i18n/locale.ts";
+import { LOCALES, resolveLocale } from "../web/src/i18n/locale.ts";
 import { handleAttention } from "./attention.ts";
 import { BOARD_URL, onboardingPage, originOf } from "./boardPages.ts";
 import { registerBoardScheme, serveBoard } from "./boardProtocol.ts";
@@ -39,6 +30,8 @@ import {
   SET_LOCALE_CHANNEL,
   START_DRAG_CHANNEL,
 } from "./ipc.ts";
+import { ANY_INPUT } from "./ipcCall.ts";
+import { answer, listen } from "./ipcHandlers.ts";
 import { License } from "./license.ts";
 import { handleLinks } from "./links.ts";
 import { menuTemplate } from "./menu.ts";
@@ -62,6 +55,12 @@ import { Updates } from "./updates.ts";
 import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 import { handleWorkspaces } from "./workspaces.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
+
+const PATH = { schema: Schema.String.check(Schema.isMaxLength(4096)), what: "path" };
+
+const LICENSE_KEY = { schema: Schema.String.check(Schema.isMaxLength(256)), what: "license key" };
+
+const LOCALE = { schema: Schema.Literals(LOCALES), what: "language" };
 
 class BoardNotShown extends Schema.TaggedError<BoardNotShown>()("BoardNotShown", {
   message: Schema.String,
@@ -181,38 +180,29 @@ function start(): void {
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   });
 
-  ipcMain.handle(REVEAL_PATH_CHANNEL, (event, target: string) => {
-    assertFromApp(event);
+  answer(REVEAL_PATH_CHANNEL, isFromApp, PATH, (target) =>
+    revealInWorkspace(Option.getOrUndefined(openWorkspace()), target),
+  );
+  // A file gone since the board showed it just doesn't drag.
+  listen(START_DRAG_CHANNEL, isFromApp, PATH, (target, event) =>
+    Effect.ignore(dragOut(Option.getOrUndefined(openWorkspace()), event.sender, target)),
+  );
+  answer(PICK_PATH_CHANNEL, isFromApp, ANY_INPUT, () =>
+    Effect.map(pickSource(boardWindow(), messages().chooseSource), Option.getOrUndefined),
+  );
+  answer(SET_LICENSE_KEY_CHANNEL, isFromApp, LICENSE_KEY, (key) =>
+    Effect.flatMap(License, (license) => license.setKey(key)),
+  );
+  listen(OPEN_LICENSE_KEY_CHANNEL, isFromApp, ANY_INPUT, () => Effect.sync(requestLicenseKey));
+  listen(SET_LOCALE_CHANNEL, isFromApp, LOCALE, (next) =>
+    Effect.gen(function* () {
+      if (next === (yield* Ref.get(appState.locale))) return;
 
-    return revealInWorkspace(Option.getOrUndefined(openWorkspace()), target);
-  });
-  ipcMain.on(START_DRAG_CHANNEL, (event, target: string) => {
-    if (!isFromApp(event)) return;
-
-    // A file gone since the board showed it just doesn't drag.
-    dragOut(Option.getOrUndefined(openWorkspace()), event.sender, target).catch(() => undefined);
-  });
-  ipcMain.handle(PICK_PATH_CHANNEL, (event) => {
-    assertFromApp(event);
-
-    return runInMain(
-      Effect.map(pickSource(boardWindow(), messages().chooseSource), Option.getOrUndefined),
-    );
-  });
-  ipcMain.handle(SET_LICENSE_KEY_CHANNEL, (event, input: string) => {
-    assertFromApp(event);
-
-    return runInMain(Effect.flatMap(License, (license) => license.setKey(input)));
-  });
-  ipcMain.on(OPEN_LICENSE_KEY_CHANNEL, (event) => {
-    if (isFromApp(event)) requestLicenseKey();
-  });
-  ipcMain.on(SET_LOCALE_CHANNEL, (event, next) => {
-    if (!isFromApp(event) || !isLocale(next) || next === readNow(appState.locale)) return;
-
-    Effect.runSync(Ref.set(appState.locale, next));
-    forkInMain(Effect.andThen(setMenu, Effect.ignore(saveLocale(next))));
-  });
+      yield* Ref.set(appState.locale, next);
+      yield* setMenu;
+      yield* Effect.ignore(saveLocale(next));
+    }),
+  );
   handleAttention({
     isFromApp,
     bringToFront,
@@ -236,10 +226,6 @@ function start(): void {
   });
 
   void app.whenReady().then(() => runInMain(boot(setMenu)));
-}
-
-function assertFromApp(event: IpcMainInvokeEvent): void {
-  if (!isFromApp(event)) throw new Error("Untrusted IPC sender");
 }
 
 const boot = Effect.fn("main.boot")(function* (setMenu: Effect.Effect<void, never, Updates>) {

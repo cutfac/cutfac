@@ -5,7 +5,7 @@ import { BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 
 
 import type { AgentName } from "../src/core/schema.ts";
 import type { AgentFix, DevState, OnboardingStep } from "../web/src/desktop.ts";
-import { NothingToFix } from "./agents.ts";
+import { AgentFixes, NothingToFix } from "./agents.ts";
 import { ONBOARDING_STEPS, originOf } from "./boardPages.ts";
 import { DEV_APP } from "./devApp.ts";
 import {
@@ -29,11 +29,13 @@ import {
   DEV_TOOLS_FLAG,
   OPEN_DEV_PANEL_CHANNEL,
 } from "./ipc.ts";
+import { ANY_INPUT } from "./ipcCall.ts";
+import { answer } from "./ipcHandlers.ts";
 import { WORKSPACES } from "./library.ts";
 import { lockNavigation } from "./navigation.ts";
 import { macChecks, type OnboardingChecks } from "./onboarding.ts";
 import { sandboxed } from "./permissions.ts";
-import { devLaunch, runInMain, type AppServices } from "./runtime.ts";
+import { devLaunch, type AppServices } from "./runtime.ts";
 import {
   loadLibrary,
   loadOnboarding,
@@ -43,7 +45,6 @@ import {
   settingsFile,
   settingsSetAside,
 } from "./settings.ts";
-import { stopFixes } from "./sidecarRuntime.ts";
 import { hasPermission } from "./systemAccess.ts";
 
 const PANEL_SIZE = { width: 420, height: 760 };
@@ -53,18 +54,19 @@ const FAKE_LINE_MS = 600;
 
 const Fake = Schema.Literals(["real", "missing", "outdated", "signedOut", "ready"]);
 
-const decodeFakes = Schema.decodeUnknownOption(
-  Schema.Struct({
+const FAKES = {
+  schema: Schema.Struct({
     agents: Schema.Struct({ claude: Fake, codex: Fake }),
     fixesFail: Schema.Boolean,
     access: Schema.Literals(["real", "granted", "denied"]),
     freshFolder: Schema.Boolean,
   }),
-);
+  what: "fakes",
+};
 
-const isStep = Schema.is(Schema.Literals(ONBOARDING_STEPS));
+const STEP = { schema: Schema.Literals(ONBOARDING_STEPS), what: "step" };
 
-const isText = Schema.is(Schema.String);
+const PATH = { schema: Schema.String, what: "path" };
 
 export interface DevToolsHost {
   boardUrl: string;
@@ -182,94 +184,68 @@ export function handleDevTools(host: DevToolsHost): DevTools {
   const fromPanel = (event: IpcMainInvokeEvent) => {
     const shown = Effect.runSync(Ref.get(panel));
 
-    if (Option.isNone(shown) || event.sender !== shown.value.webContents) {
-      throw new Error("Untrusted IPC sender");
-    }
+    return Option.isSome(shown) && event.sender === shown.value.webContents;
   };
 
-  const stopAgentFixes = Effect.sync(stopFixes);
+  const stopAgentFixes = Effect.flatMap(AgentFixes, (agents) => agents.stopAll);
 
-  ipcMain.handle(DEV_STATE_CHANNEL, (event) => {
-    fromPanel(event);
+  answer(DEV_STATE_CHANNEL, fromPanel, ANY_INPUT, () => state);
+  answer(DEV_SET_FAKES_CHANNEL, fromPanel, FAKES, (next) =>
+    Effect.gen(function* () {
+      const before = yield* Ref.getAndSet(fakes, next);
 
-    return runInMain(state);
-  });
-  ipcMain.handle(DEV_SET_FAKES_CHANNEL, (event, next) => {
-    fromPanel(event);
+      if (!next.freshFolder) yield* forgetFreshName;
 
-    const decoded = Option.getOrUndefined(decodeFakes(next));
-
-    if (decoded === undefined) throw new Error("Unknown fakes");
-
-    return runInMain(
-      Effect.gen(function* () {
-        const before = yield* Ref.getAndSet(fakes, decoded);
-
-        if (!decoded.freshFolder) yield* forgetFreshName;
-
-        if (before.access !== "granted" && decoded.access === "granted") {
-          for (const permission of ["screen", "accessibility"] as const) {
-            host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
-          }
+      if (before.access !== "granted" && next.access === "granted") {
+        for (const permission of ["screen", "accessibility"] as const) {
+          host.window()?.webContents.send(ACCESS_GRANTED_CHANNEL, permission);
         }
+      }
 
-        return yield* state;
-      }),
-    );
-  });
-  ipcMain.handle(DEV_START_OVER_CHANNEL, (event) => {
-    fromPanel(event);
+      return yield* state;
+    }),
+  );
+  answer(DEV_START_OVER_CHANNEL, fromPanel, ANY_INPUT, () =>
+    Effect.gen(function* () {
+      yield* stopAgentFixes;
+      yield* setSettingsAside;
+      yield* forgetFreshName;
 
-    return runInMain(
-      Effect.gen(function* () {
-        yield* stopAgentFixes;
-        yield* setSettingsAside;
-        yield* forgetFreshName;
+      const shown = originOf(host.window()?.webContents.getURL() ?? "");
+      const board = originOf(host.boardUrl);
 
-        const shown = originOf(host.window()?.webContents.getURL() ?? "");
-        const board = originOf(host.boardUrl);
+      yield* host.showOnboarding("welcome");
 
-        yield* host.showOnboarding("welcome");
+      const origins = new Set([...Option.toArray(board), ...Option.toArray(shown)]);
 
-        const origins = new Set([...Option.toArray(board), ...Option.toArray(shown)]);
+      yield* Effect.forEach(origins, (origin) =>
+        Effect.promise(() => session.defaultSession.clearStorageData({ origin })),
+      );
 
-        yield* Effect.forEach(origins, (origin) =>
-          Effect.promise(() => session.defaultSession.clearStorageData({ origin })),
-        );
+      host.window()?.webContents.reload();
+    }),
+  );
+  answer(DEV_RESTORE_CHANNEL, fromPanel, ANY_INPUT, () =>
+    Effect.gen(function* () {
+      yield* stopAgentFixes;
+      yield* restoreSettings;
+      yield* forgetFreshName;
 
-        host.window()?.webContents.reload();
-      }),
-    );
-  });
-  ipcMain.handle(DEV_RESTORE_CHANNEL, (event) => {
-    fromPanel(event);
+      const saved = yield* loadWorkspace;
 
-    return runInMain(
-      Effect.gen(function* () {
-        yield* stopAgentFixes;
-        yield* restoreSettings;
-        yield* forgetFreshName;
+      if (Option.isSome(saved) && (yield* host.activate(saved.value))) return;
 
-        const saved = yield* loadWorkspace;
-
-        if (Option.isSome(saved) && (yield* host.activate(saved.value))) return;
-
-        yield* host.showOnboarding(Option.getOrElse(yield* loadOnboarding, () => "welcome"));
-      }),
-    );
-  });
-  ipcMain.handle(DEV_OPEN_STEP_CHANNEL, (event, step) => {
-    fromPanel(event);
-
-    if (!isStep(step)) throw new Error("Unknown step");
-
-    return runInMain(Effect.andThen(forgetFreshName, host.showOnboarding(step)));
-  });
-  ipcMain.handle(DEV_REVEAL_CHANNEL, (event, target) => {
-    fromPanel(event);
-
-    if (isText(target) && path.isAbsolute(target)) shell.showItemInFolder(target);
-  });
+      yield* host.showOnboarding(Option.getOrElse(yield* loadOnboarding, () => "welcome"));
+    }),
+  );
+  answer(DEV_OPEN_STEP_CHANNEL, fromPanel, STEP, (step) =>
+    Effect.andThen(forgetFreshName, host.showOnboarding(step)),
+  );
+  answer(DEV_REVEAL_CHANNEL, fromPanel, PATH, (target) =>
+    Effect.sync(() => {
+      if (path.isAbsolute(target)) shell.showItemInFolder(target);
+    }),
+  );
 
   const open = () => {
     const shown = Effect.runSync(Ref.get(panel));

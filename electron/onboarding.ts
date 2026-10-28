@@ -36,16 +36,14 @@ import {
   SYSTEM_VERSION_CHANNEL,
   WORKSPACE_FOLDER_CHANNEL,
 } from "./ipc.ts";
+import { type Decodable, ANY_INPUT } from "./ipcCall.ts";
+import { answer as answerCall } from "./ipcHandlers.ts";
 import { decodeWorkspaceName } from "./library.ts";
-import { forkInMain, runInMain, runNow, type AppServices } from "./runtime.ts";
+import { runNow, type AppServices } from "./runtime.ts";
 import { clearDraft, loadDraft, loadLibrary, OnboardingDraft, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
 import { Install } from "./sidecar.ts";
 import { appBadge, hasPermission, SystemAccess, systemVersion } from "./systemAccess.ts";
-
-class UnknownInput extends Schema.TaggedError<UnknownInput>()("UnknownInput", {
-  message: Schema.String,
-}) {}
 
 const Sample = Schema.Struct({ title: Schema.String, body: Schema.String });
 
@@ -99,40 +97,17 @@ export interface OnboardingHost {
 export function handleOnboarding(host: OnboardingHost): void {
   const checks = host.checks ?? macChecks;
 
-  const fromApp = (event: IpcMainInvokeEvent) => {
-    if (!host.isFromApp(event)) throw new Error("Untrusted IPC sender");
-  };
-
   const answer = <A, E extends Failure>(
     channel: string,
     respond: (event: IpcMainInvokeEvent) => Effect.Effect<A, E, AppServices>,
-  ) =>
-    ipcMain.handle(channel, (event) => {
-      fromApp(event);
+  ) => answerCall(channel, host.isFromApp, ANY_INPUT, (_, event) => respond(event));
 
-      return runInMain(respond(event));
-    });
-
-  const answerWith = <
-    S extends Schema.Top & { readonly DecodingServices: never },
-    A,
-    E extends Failure,
-  >(
+  const answerWith = <S extends Decodable, A, E extends Failure>(
     channel: string,
     schema: S,
     what: string,
     respond: (input: S["Type"], event: IpcMainInvokeEvent) => Effect.Effect<A, E, AppServices>,
-  ) =>
-    ipcMain.handle(channel, (event, input) => {
-      fromApp(event);
-
-      return runInMain(
-        Schema.decodeUnknownEffect(schema)(input).pipe(
-          Effect.mapError(() => new UnknownInput({ message: `Unknown ${what}` })),
-          Effect.flatMap((decoded) => respond(decoded, event)),
-        ),
-      );
-    });
+  ) => answerCall(channel, host.isFromApp, { schema, what }, respond);
 
   const start = (given: Option.Option<string>) =>
     Effect.gen(function* () {
@@ -216,11 +191,17 @@ export function handleOnboarding(host: OnboardingHost): void {
     runNow(Effect.flatMap(SystemAccess, (access) => access.dragApp(event.sender)));
   });
   answer(APP_ICON_CHANNEL, () => appBadge);
-  ipcMain.handle(START_WORKSPACE_CHANNEL, (event, input) => {
-    fromApp(event);
-    // It runs while the user goes on; the last step waits for it, and tries again if it failed.
-    forkInMain(Effect.ignore(start(decodeWorkspaceName(input))));
-  });
+  // It runs while the user goes on; the last step waits for it, and tries again if it failed.
+  answerWith(START_WORKSPACE_CHANNEL, Schema.Unknown, "workspace name", (input) =>
+    Effect.asVoid(
+      Effect.forkDetach(
+        Effect.ignore(start(decodeWorkspaceName(input)), {
+          log: "Warn",
+          message: "Starting the first workspace failed",
+        }),
+      ),
+    ),
+  );
   answer(WORKSPACE_FOLDER_CHANNEL, () =>
     Effect.gen(function* () {
       const first = yield* FirstWorkspace;
@@ -231,9 +212,7 @@ export function handleOnboarding(host: OnboardingHost): void {
       );
     }),
   );
-  ipcMain.handle(CREATE_WORKSPACE_CHANNEL, (event, input) => {
-    fromApp(event);
-
-    return runInMain(createWorkspace(decodeWorkspaceName(input)));
-  });
+  answerWith(CREATE_WORKSPACE_CHANNEL, Schema.Unknown, "workspace name", (input) =>
+    createWorkspace(decodeWorkspaceName(input)),
+  );
 }
