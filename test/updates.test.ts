@@ -118,11 +118,16 @@ describe("updating in the background", () => {
         Effect.provideService(UpdateFeed, feed),
       );
 
-      yield* updates.restart;
+      const restart = Effect.flatMap(
+        updates.install,
+        Option.getOrElse(() => Effect.void),
+      );
+
+      yield* restart;
       yield* Queue.offerAll(progress, [30, 60]);
       yield* Queue.offer(downloads, "1.4.0");
       yield* eventually(Effect.map(board.heard, (all) => all.length === 1));
-      yield* updates.restart;
+      yield* restart;
 
       expect(yield* board.heard).toEqual(["Ready 1.4.0"]);
       expect(yield* Ref.get(installs)).toBe(1);

@@ -8,6 +8,9 @@ import { devUpdateFeed } from "./devUpdates.ts";
 import { UPDATE_NOTICE_CHANNEL, UPDATE_STATUS_CHANGED_CHANNEL } from "./ipc.ts";
 import { UpdateCheckFailed, UpdateFeed, type UpdateNotices, type UpdateStatus } from "./updates.ts";
 
+/** How long the installer has to quit the app and open it again once its windows have closed. */
+const INSTALLER_TAKES_OVER = "10 seconds";
+
 /** Each value `subscribe` pushes, until the stream ends and it unsubscribes. */
 const listen = <A>(subscribe: (push: (value: A) => void) => () => void) =>
   Stream.callback<A>((queue) =>
@@ -72,7 +75,14 @@ export const updateFeed = Layer.sync(UpdateFeed, () => {
 
       return () => autoUpdater.off("error", failed);
     }),
-    quitAndInstall: Effect.sync(() => autoUpdater.quitAndInstall()),
+    // Should the installer not take over, the app still quits, and the update installs then.
+    quitAndInstall: Effect.andThen(
+      Effect.sync(() => autoUpdater.quitAndInstall()),
+      Effect.delay(
+        Effect.sync(() => app.quit()),
+        INSTALLER_TAKES_OVER,
+      ),
+    ),
   });
 });
 

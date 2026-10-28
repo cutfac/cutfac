@@ -1,5 +1,5 @@
 import { Effect, Match, Option, Queue, Ref, Stream } from "effect";
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 
 import type { FakeUpdate } from "../web/src/desktop.ts";
 import { UpdateCheckFailed, UpdateFeed } from "./updates.ts";
@@ -27,7 +27,8 @@ const download = Effect.gen(function* () {
 
 /**
  * The dev build has no update feed, so its Dev Panel plays one out in its place: what the next
- * check finds, a download as it goes, and a restart that only quits.
+ * check finds, a download as it goes, and a restart that quits as the installer would, but stays
+ * closed.
  */
 export const devUpdateFeed = UpdateFeed.of({
   enabled: true,
@@ -48,7 +49,12 @@ export const devUpdateFeed = UpdateFeed.of({
   downloaded: Stream.fromQueue(fake.downloaded),
   progress: Stream.fromQueue(fake.progress),
   errors: Stream.empty,
-  quitAndInstall: Effect.sync(() => app.quit()),
+  // As the installer does: the windows close first, then the app quits.
+  quitAndInstall: Effect.sync(() => {
+    for (const window of BrowserWindow.getAllWindows()) window.close();
+
+    app.quit();
+  }),
 });
 
 /** What the next check finds; the checks after it find nothing again. */

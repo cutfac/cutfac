@@ -59,7 +59,7 @@ export const startUpdates = Effect.fn("updates.start")(function* (notices: Updat
       enabled: false,
       checkNow: Effect.void,
       status: Effect.succeed(UpdateStatus.Idle()),
-      restart: Effect.void,
+      install: Effect.succeedNone,
     });
   }
 
@@ -123,11 +123,11 @@ export const startUpdates = Effect.fn("updates.start")(function* (notices: Updat
     Effect.catch((error) => notices.failed(error.message)),
   );
 
-  const restart = Effect.flatMap(Ref.get(status), (now) =>
-    UpdateStatus.$is("Ready")(now) ? feed.quitAndInstall : Effect.void,
+  const install = Effect.map(Ref.get(status), (now) =>
+    UpdateStatus.$is("Ready")(now) ? Option.some(feed.quitAndInstall) : Option.none(),
   );
 
-  return Updates.of({ enabled: true, checkNow, status: Ref.get(status), restart });
+  return Updates.of({ enabled: true, checkNow, status: Ref.get(status), install });
 });
 
 export class Updates extends Context.Service<
@@ -136,8 +136,11 @@ export class Updates extends Context.Service<
     readonly enabled: boolean;
     readonly checkNow: Effect.Effect<void>;
     readonly status: Effect.Effect<UpdateStatus>;
-    /** Quits and installs the version that is ready, if one is. */
-    readonly restart: Effect.Effect<void>;
+    /**
+     * What installs the version that is ready and opens the app again, once one is: the last step
+     * of a restart, after the app has stopped its work.
+     */
+    readonly install: Effect.Effect<Option.Option<Effect.Effect<void>>>;
   }
 >()("cutfac/desktop/Updates") {
   static readonly layer = (notices: UpdateNotices) => Layer.effect(Updates, startUpdates(notices));

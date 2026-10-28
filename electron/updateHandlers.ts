@@ -23,13 +23,26 @@ const updatedTo = Effect.gen(function* () {
   return Option.isSome(seen) ? running : undefined;
 });
 
+export interface UpdatesHost {
+  /** Quits as the app always does, the board saying so, then runs `finish` as its last step. */
+  quit: (finish: Effect.Effect<void>) => void;
+}
+
 /** What the board asks about updates, which it shows at the foot of its sidebar. */
-export function handleUpdates(): void {
+export function handleUpdates(host: UpdatesHost): void {
   answer(UPDATE_STATUS_CHANNEL, isFromApp, ANY_INPUT, () =>
     Effect.flatMap(Updates, (updates) => updates.status),
   );
+  // The installer closes the windows as it takes over, so the app stops its work before that.
   answer(UPDATE_RESTART_CHANNEL, isFromApp, ANY_INPUT, () =>
-    Effect.flatMap(Updates, (updates) => updates.restart),
+    Effect.flatMap(Updates, (updates) => updates.install).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (install) => Effect.sync(() => host.quit(install)),
+        }),
+      ),
+    ),
   );
   answer(UPDATED_TO_CHANNEL, isFromApp, ANY_INPUT, () => updatedTo);
 }

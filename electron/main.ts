@@ -112,18 +112,17 @@ function start(): void {
   registerBoardScheme();
   app.on("second-instance", bringToFront);
 
-  app.on("window-all-closed", () => app.quit());
+  // A quit under way ends the app itself, even when an update's installer closes the windows.
+  app.on("window-all-closed", () => {
+    if (!readNow(appState.quitting)) app.quit();
+  });
 
   const quitReady = Ref.makeUnsafe(false);
 
-  const stopBeforeQuit = (event: Electron.Event) => {
-    if (readNow(quitReady)) return;
-
-    // Hold the quit until the settings are saved, the first launch's step too, and the services
-    // have stopped the server and all else they opened, then quit again with nothing left to stop.
-    // Asked again meanwhile, it waits for the same.
-    event.preventDefault();
-
+  // Saves the settings, the first launch's step too, and has the services stop the server and all
+  // else they opened, then `finish`es with nothing left to stop. Asked again meanwhile, it waits
+  // for the same.
+  const quit = (finish: Effect.Effect<void>) => {
     if (readNow(appState.quitting)) return;
 
     Effect.runSync(Ref.set(appState.quitting, true));
@@ -140,9 +139,16 @@ function start(): void {
       shutDownMain(settingsWritten).pipe(
         Effect.ensuring(Fiber.interrupt(saying)),
         Effect.andThen(Ref.set(quitReady, true)),
-        Effect.andThen(Effect.sync(() => app.quit())),
+        Effect.andThen(finish),
       ),
     );
+  };
+
+  const stopBeforeQuit = (event: Electron.Event) => {
+    if (readNow(quitReady)) return;
+
+    event.preventDefault();
+    quit(Effect.sync(() => app.quit()));
   };
 
   Effect.runSync(
@@ -219,7 +225,7 @@ function start(): void {
       yield* Effect.ignore(saveLocale(next));
     }),
   );
-  handleUpdates();
+  handleUpdates({ quit });
   handleAttention({
     isFromApp,
     bringToFront,
