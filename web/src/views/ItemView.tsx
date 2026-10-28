@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Match, Option } from "effect";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
@@ -26,6 +26,7 @@ import { Transport } from "../components/editor/transport.tsx";
 import { useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
+import { editorKey, type EditorKey } from "../lib/editor-keys.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { pickedSettings } from "../lib/models.ts";
 import { Player, usePlayer } from "../lib/player.ts";
@@ -44,17 +45,6 @@ import {
   withStart,
   type Target,
 } from "../lib/target.ts";
-
-/** Where typing goes to the element, so the editor's single-key shortcuts stay out of the way. */
-const TEXT_ENTRY =
-  "input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog'], [role='listbox'], [role='menu']";
-
-/** Controls that Space and the arrow keys already operate. */
-const CONTROL =
-  "button, a[href], [role='button'], [role='tab'], [role='option'], [role='slider'], [role='separator']";
-
-const within = (target: EventTarget | null, selector: string) =>
-  target instanceof Element && target.closest(selector) !== null;
 
 interface ItemViewProps {
   id: string;
@@ -182,64 +172,48 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   useEffect(() => onEditCommand((command) => onEdit(command)), []);
 
   const onKey = useEffectEvent((event: KeyboardEvent) => {
-    if (event.metaKey || event.ctrlKey || event.altKey || within(event.target, TEXT_ENTRY)) return;
-
-    // `?` is Shift and a different key on each layout, so it goes by the character.
-    if (event.key === "?") {
-      event.preventDefault();
-      setShortcuts(true);
-
-      return;
-    }
-
-    const onControl = within(event.target, CONTROL);
     const now = () => roundTime(player.getState().time);
 
-    switch (event.code) {
-      case "Space":
-        if (!video || onControl) return;
+    const onVideo = (action: () => void) => {
+      if (!video) return false;
 
-        player.toggle();
-        break;
+      action();
 
-      case "KeyI":
-        if (!video) return;
+      return true;
+    };
 
-        setTarget((current) => withStart(current, now()));
-        setGhost(undefined);
-        break;
+    const press = (key: EditorKey) =>
+      Match.valueTags(key, {
+        Shortcuts: () => {
+          setShortcuts(true);
 
-      case "KeyO":
-        if (!video) return;
+          return true;
+        },
+        PlayPause: () => onVideo(() => player.toggle()),
+        MarkIn: () =>
+          onVideo(() => {
+            setTarget((current) => withStart(current, now()));
+            setGhost(undefined);
+          }),
+        MarkOut: () =>
+          onVideo(() => {
+            setTarget((current) => withEnd(current, now()));
+            setGhost(undefined);
+          }),
+        Loop: () => onVideo(() => setLoop((current) => !current)),
+        Step: ({ seconds }) => onVideo(() => player.step(seconds)),
+        Clear: () => {
+          if (isEmptyTarget(target) && ghost === undefined) return false;
 
-        setTarget((current) => withEnd(current, now()));
-        setGhost(undefined);
-        break;
+          clear();
 
-      case "KeyL":
-        if (!video) return;
+          return true;
+        },
+      });
 
-        setLoop((current) => !current);
-        break;
+    const key = editorKey(event);
 
-      case "ArrowLeft":
-      case "ArrowRight":
-        if (!video || onControl) return;
-
-        player.step((event.code === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 1 : 0.1));
-        break;
-
-      case "Escape":
-        if (isEmptyTarget(target) && ghost === undefined) return;
-
-        clear();
-        break;
-
-      default:
-        return;
-    }
-
-    event.preventDefault();
+    if (Option.isSome(key) && press(key.value)) event.preventDefault();
   });
 
   useEffect(() => {
