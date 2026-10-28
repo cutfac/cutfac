@@ -222,6 +222,19 @@ export function freeVersionNote(plan: Plan): Option.Option<string> {
  * the last free video at the same moment can both make it, which errs toward the user.
  */
 export const createCountedItem = Effect.fn("plan.createItem")(function* (input: NewItemInput) {
+  return yield* createWithin(input, "now");
+});
+
+/**
+ * Make an item with nothing asked of it yet, such as the empty editor the first launch opens on.
+ * It counts once work on it starts, as {@link workOn} counts one Cutfac didn't make, so an editor
+ * left empty costs no free video; past the limit it is refused as a counted one would be.
+ */
+export const createEmptyItem = Effect.fn("plan.createEmptyItem")(function* (input: NewItemInput) {
+  return yield* createWithin(input, "onWork");
+});
+
+const createWithin = Effect.fnUntraced(function* (input: NewItemInput, counted: "now" | "onWork") {
   const ws = yield* Workspace;
   const dir = yield* DesktopData;
 
@@ -237,7 +250,7 @@ export const createCountedItem = Effect.fn("plan.createItem")(function* (input: 
 
       const item = yield* createItem(input);
 
-      yield* record(data, "made", videoKey(item));
+      if (counted === "now") yield* record(data, "made", videoKey(item));
 
       return item;
     }),

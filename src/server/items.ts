@@ -17,7 +17,7 @@ import { readRender } from "../core/render.ts";
 import { listReviews } from "../core/review.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
-import { createCountedItem } from "../plan.ts";
+import { createCountedItem, createEmptyItem } from "../plan.ts";
 import { trackUsage } from "../usageStats.ts";
 import { json, withId } from "./respond.ts";
 import { MediaForm, ReferencesForm, uploadsOf } from "./uploads.ts";
@@ -28,6 +28,8 @@ const NewItemBody = Schema.Struct({
   hook: Schema.optional(Schema.String),
   notes: Schema.optional(Schema.String),
   inputs: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  /** Nothing is asked of it yet, so it counts as a video once work on it starts. */
+  empty: Schema.optional(Schema.Boolean),
 });
 
 const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
@@ -115,8 +117,8 @@ export const itemRoutes = HttpRouter.addAll([
   json(
     "POST",
     "/api/items",
-    Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), (body) =>
-      createCountedItem(body).pipe(
+    Effect.flatMap(HttpServerRequest.schemaBodyJson(NewItemBody), ({ empty, ...body }) =>
+      (empty === true ? createEmptyItem(body) : createCountedItem(body)).pipe(
         Effect.tap(() => trackUsage("video_created", { template: body.format !== undefined })),
         Effect.flatMap(itemDetail),
       ),

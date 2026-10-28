@@ -154,6 +154,8 @@ export interface NewItem {
   title: string;
   format?: string;
   inputs?: Record<string, string>;
+  /** Nothing is asked of it yet, so it counts as a video once work on it starts. */
+  empty?: boolean;
 }
 
 const Prompt = Schema.Struct({ prompt: Schema.String });
