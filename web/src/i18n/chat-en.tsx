@@ -20,7 +20,7 @@ export const chatEn = {
       media === undefined ? "Rolled the media back to before" : `Rolled ${media} back to before`,
     editTitle: "Point at it, then say it",
     editBody:
-      "Drag across the timeline to select a part, or drag a box on the video. Then type what should change there and press Enter. An agent makes the edit and you compare before and after.",
+      "Drag across the timeline to select a part, or drag a box on the video. Then type what should change there and press Enter. An agent makes the edit and you compare before and after. Raise the number of versions below to see a few side by side and keep one.",
     newTitle: "Ask for a first cut",
     newBody: "Describe the video you want below and the agent will make a first cut.",
     showTarget: "Show this part on the video",
