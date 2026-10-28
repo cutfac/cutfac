@@ -26,6 +26,7 @@ import {
   saveWorkspace,
   Settings,
   settingsWritten,
+  updatedTo,
 } from "../electron/settings.ts";
 import { LicenseKey, LicenseRecord, paidInSettings } from "../src/license.ts";
 import { testEffect } from "./effect.ts";
@@ -241,5 +242,34 @@ describe("the license in the settings", () => {
 
         expect(yield* paidInSettings(yield* fs.readFileString(file))).toBe(true);
       }).pipe(Effect.provide(testLicenseKey)),
+  );
+});
+
+describe("saying once that the app updated", () => {
+  it.effect.each([
+    {
+      ran: "a version that saved what it was",
+      stored: { seenVersion: "0.4.3", workspace: "/work" },
+      says: Option.some("0.4.4"),
+    },
+    {
+      ran: "a version before 0.4.3, which saved only its workspace",
+      stored: { workspace: "/work" },
+      says: Option.some("0.4.4"),
+    },
+    { ran: "nothing yet, as on a first launch", stored: {}, says: Option.none<string>() },
+  ])("after $ran, says what it updated to, then nothing", ({ stored, says }) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { file, settingsIn } = yield* appData;
+
+      yield* fs.writeFileString(file, JSON.stringify(stored));
+
+      expect(yield* settingsIn(updatedTo("0.4.4"))).toEqual(says);
+
+      yield* settingsIn(saveWorkspace("/work"));
+
+      expect(yield* settingsIn(updatedTo("0.4.4"))).toEqual(Option.none());
+    }),
   );
 });

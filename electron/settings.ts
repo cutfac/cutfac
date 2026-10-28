@@ -169,9 +169,28 @@ export const loadLocale = Effect.map(saved("locale"), decodeLocale);
 
 export const saveLocale = (locale: Locale) => save({ locale });
 
-export const loadSeenVersion = Effect.map(saved("seenVersion"), decodeText);
+const loadSeenVersion = Effect.map(saved("seenVersion"), decodeText);
 
 export const saveSeenVersion = (seenVersion: string) => save({ seenVersion });
+
+/**
+ * The version the app updated to since it was last asked, once; none on a first launch. Versions
+ * before 0.4.3 saved no version, so a workspace saved by one says the app ran before.
+ */
+export const updatedTo = Effect.fn("settings.updatedTo")(function* (running: string) {
+  const seen = yield* loadSeenVersion;
+
+  if (Option.contains(seen, running)) return Option.none<string>();
+
+  const ranBefore = Option.isSome(seen) || Option.isSome(decodeText(yield* saved("workspace")));
+
+  yield* Effect.ignore(saveSeenVersion(running), {
+    log: "Warn",
+    message: "The version wasn't saved",
+  });
+
+  return ranBefore ? Option.some(running) : Option.none<string>();
+});
 
 const encodeLicense = Schema.encodeEffect(Schema.UndefinedOr(LicenseRecord));
 
