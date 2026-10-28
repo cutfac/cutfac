@@ -28,6 +28,14 @@ export function OnboardingFrame({
   wide?: boolean;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-onboarding", true);
+
+    return () => {
+      document.documentElement.toggleAttribute("data-onboarding", false);
+    };
+  }, []);
+
   return (
     <div className="flex h-dvh flex-col bg-background">
       <div

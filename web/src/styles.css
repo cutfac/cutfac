@@ -249,6 +249,11 @@
     color-scheme: dark;
     overscroll-behavior: none;
   }
+  /* The first launch has the whole window for one question, so everything in it, sized in rem,
+     grows with the window: 16px in a small one, up to 20px in a large one. */
+  html[data-onboarding] {
+    font-size: clamp(16px, calc(1.6vmin + 4px), 20px);
+  }
   /* As in a native app, the board's own words (labels, buttons, rows, headings) don't select as
      text. What the user reads or copies, such as chat, guides and errors, opts back in through
      SelectionArea or select-text; text fields always select. See docs/ui.md. */
