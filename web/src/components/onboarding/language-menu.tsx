@@ -39,7 +39,7 @@ export function LanguageMenu() {
           }}
         >
           {LOCALES.map((option) => (
-            <DropdownMenuRadioItem key={option} value={option} lang={option}>
+            <DropdownMenuRadioItem key={option} value={option} lang={option} closeOnClick>
               {LOCALE_NAMES[option]}
             </DropdownMenuRadioItem>
           ))}
