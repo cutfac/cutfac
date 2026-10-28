@@ -29,8 +29,8 @@ and passes on its own when it is: a second Mac, a reinstall or a workspace that 
 templates goes straight to what is missing. Closing the window keeps the progress. Steps 1 to 5
 save the step the user is on, and the next launch opens on it. The workspace is made as soon as
 the user said what they make, and the agent starts reading their material while they finish, so
-the board opens on what it learned. Every step has a small language menu above its title, at its
-right edge, out of the way of its buttons and of the toasts at the bottom.
+the board opens on what it learned. Welcome picks the language under Start; every step after it keeps
+a small language menu in the window's top-right corner, out of the way of the step.
 
 | Step            | Shows                                                                                                                                                                                                                            | Done when                               |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |

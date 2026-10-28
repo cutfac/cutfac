@@ -18,13 +18,15 @@ import {
   useMessages,
 } from "../../i18n/index.ts";
 
-export function LanguagePicker() {
+export function LanguageMenu() {
   const t = useMessages();
   const locale = useLocale();
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button size="sm" variant="ghost" className="-me-3" />}>
+      <DropdownMenuTrigger
+        render={<Button size="sm" variant="ghost" className="[-webkit-app-region:no-drag]" />}
+      >
         <LanguagesIcon data-icon="inline-start" />
         <span className="sr-only">{t.language.label}: </span>
         {LOCALE_NAMES[locale]}

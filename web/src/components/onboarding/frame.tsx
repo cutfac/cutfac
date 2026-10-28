@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 import { desktop, insetTitleBar } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { LanguagePicker } from "./language-picker.tsx";
+import { LanguageMenu } from "./language-menu.tsx";
 
 /** The steps the dots count: what to make, agent, access, and where the work is kept. */
 export const ONBOARDING_STEPS = 4;
@@ -30,10 +30,16 @@ export function OnboardingFrame({
 }) {
   return (
     <div className="flex h-dvh flex-col bg-background">
-      {insetTitleBar ? (
-        // The window has no title bar of its own; this strip drags it and keeps the controls clear.
-        <div aria-hidden className="h-10 shrink-0 [-webkit-app-region:drag]" />
-      ) : null}
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-end px-3",
+          // The window has no title bar of its own; this strip drags it and keeps the controls clear.
+          insetTitleBar ? "h-10 [-webkit-app-region:drag]" : "pt-3",
+        )}
+      >
+        {/* Welcome has its own, under Start; the steps after it keep one out of the way. */}
+        {step === undefined ? null : <LanguageMenu />}
+      </div>
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6">
         <div
           key={step}
@@ -42,9 +48,6 @@ export function OnboardingFrame({
             wide ? "max-w-lg" : "max-w-md",
           )}
         >
-          <div className="-mb-6 flex justify-end">
-            <LanguagePicker />
-          </div>
           <LinkWaiting />
           {children}
         </div>

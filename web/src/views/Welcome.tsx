@@ -1,4 +1,4 @@
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, LanguagesIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AccessStep } from "@/components/onboarding/access-step";
@@ -7,10 +7,18 @@ import { OnboardingFrame } from "@/components/onboarding/frame";
 import { MakeStep } from "@/components/onboarding/make-step";
 import { ReadyStep } from "@/components/onboarding/ready-step";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import type { CutfacOnboarding, OnboardingStep } from "../desktop.ts";
 import { href } from "../hooks.ts";
-import { useMessages } from "../i18n/index.ts";
+import {
+  isLocale,
+  LOCALE_NAMES,
+  LOCALES,
+  setLocale,
+  useLocale,
+  useMessages,
+} from "../i18n/index.ts";
 
 type Step = Exclude<OnboardingStep, "welcome">;
 
@@ -117,6 +125,36 @@ function Greeting({ onboarding, onStart }: { onboarding: CutfacOnboarding; onSta
         {t.start}
         <ArrowRightIcon data-icon="inline-end" />
       </Button>
+      <LanguagePicker />
+    </div>
+  );
+}
+
+function LanguagePicker() {
+  const t = useMessages();
+  const locale = useLocale();
+
+  return (
+    // The icon hangs off the left of the choices, so the choices themselves sit centred.
+    <div className="relative -mt-4 text-muted-foreground">
+      <LanguagesIcon
+        className="absolute top-1/2 right-full mr-1.5 size-3.5 -translate-y-1/2"
+        aria-hidden
+      />
+      <ToggleGroup
+        size="sm"
+        aria-label={t.language.label}
+        value={[locale]}
+        onValueChange={([picked]) => {
+          if (picked !== undefined && isLocale(picked)) setLocale(picked);
+        }}
+      >
+        {LOCALES.map((option) => (
+          <ToggleGroupItem key={option} value={option} lang={option}>
+            {LOCALE_NAMES[option]}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }
