@@ -14,7 +14,8 @@ import {
 } from "./items.ts";
 import { extension } from "./media.ts";
 import { type Feedback, MAX_VARIANTS, type Variant, type Variants } from "./schema.ts";
-import { Workspace, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace } from "./workspace.ts";
 
 /** A request with versions saved that the user has not picked from yet. */
 export type PendingVariants = Feedback & {

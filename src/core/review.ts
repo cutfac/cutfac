@@ -4,7 +4,8 @@ import { InvalidRequest, NotFound } from "./errors.ts";
 import { type Item, getItem } from "./items.ts";
 import { aspectOf, ffmpeg, probe, sceneCuts } from "./media.ts";
 import { ReviewDoc, type ReviewShot, type SafeZone } from "./reviewSchema.ts";
-import { Workspace, foldersWith, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace, foldersWith } from "./workspace.ts";
 
 /** Item subfolder with one review folder per video, named after the video. */
 const REVIEW_DIR = "review";

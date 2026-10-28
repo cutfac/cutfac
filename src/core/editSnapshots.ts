@@ -1,4 +1,4 @@
-import { DateTime, Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import { afterFile, beforeFile, itemRel } from "./editFiles.ts";
 import { pendingVariants } from "./editVariants.ts";
@@ -6,6 +6,7 @@ import { InvalidRequest } from "./errors.ts";
 import { type MediaCapture, putBack, recordMedia } from "./history.ts";
 import { type Item, findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import type { Feedback } from "./schema.ts";
+import { isoMillis } from "./time.ts";
 import { Workspace } from "./workspace.ts";
 
 /**
@@ -34,10 +35,6 @@ export const saveBefore = Effect.fnUntraced(function* (item: Item, f: Feedback) 
 
   return file;
 });
-
-/** Epoch milliseconds of an ISO timestamp; 0 if it does not parse. */
-export const isoMillis = (iso: string) =>
-  Option.match(DateTime.make(iso), { onNone: () => 0, onSome: DateTime.toEpochMillis });
 
 /** When the request's changes start counting, in epoch milliseconds: when work on it began. */
 export const baselineMillis = (f: Feedback) => isoMillis(f.baseline ?? f.at);

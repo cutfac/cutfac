@@ -25,7 +25,8 @@ import {
   RenderProgress,
   START_PROGRESS,
 } from "./renderProgress.ts";
-import { STATE_DIR, Workspace } from "./workspace.ts";
+import { Workspace } from "./workspace.ts";
+import { STATE_DIR } from "./workspaceRoot.ts";
 
 /**
  * Where renders report how far they are. The agent's MCP server runs them and the board reads

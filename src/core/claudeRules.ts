@@ -1,7 +1,8 @@
 import { Effect, Option, Schema } from "effect";
 
 import { FORMAT_FILE, type Format } from "./library.ts";
-import { CONFIG_FILE, Workspace } from "./workspace.ts";
+import { Workspace } from "./workspace.ts";
+import { CONFIG_FILE } from "./workspaceRoot.ts";
 import { SETTINGS_FILES } from "./workspaceTrust.ts";
 
 /**

@@ -1,6 +1,5 @@
 import {
   Context,
-  DateTime,
   Duration,
   Effect,
   FileSystem,
@@ -11,29 +10,11 @@ import {
   Semaphore,
   Stream,
 } from "effect";
-import type { PlatformError } from "effect/PlatformError";
 import { parse, stringify } from "yaml";
 
 import { WorkspaceError } from "./errors.ts";
 import { WorkspaceConfig } from "./schema.ts";
-
-export const CONFIG_FILE = "cutfac.yaml";
-
-/** Where Cutfac keeps a workspace's own records that are not content, such as template imports. */
-export const STATE_DIR = ".cutfac";
-
-const LEGACY_CONFIG_FILE = "factory.yaml";
-
-/**
- * What a workspace made before Content Factory was renamed to Cutfac calls these files, and their
- * names now. Opening the workspace renames them, unless something already has the new name.
- */
-const RENAMED: ReadonlyArray<readonly [before: string, now: string]> = [
-  [LEGACY_CONFIG_FILE, CONFIG_FILE],
-  [".factory", STATE_DIR],
-  [".agents/skills/content-factory", ".agents/skills/cutfac"],
-  [".claude/skills/content-factory", ".claude/skills/cutfac"],
-];
+import { CONFIG_FILE, fileFailure, findRoot, renameLegacyFiles } from "./workspaceRoot.ts";
 
 export interface FileStat {
   readonly size: number;
@@ -125,13 +106,8 @@ const IGNORED_SEGMENTS = new Set(["node_modules", "dist"]);
 const ignoredChange = (rel: string) =>
   rel.split("/").some((segment) => segment.startsWith(".") || IGNORED_SEGMENTS.has(segment));
 
-const reason = (error: PlatformError) => error.reason._tag;
-
-const fail = (action: string, rel: string) => (error: PlatformError) =>
-  new WorkspaceError({ message: `Could not ${action} ${rel} (${reason(error)})` });
-
 /** Parse YAML text and decode it with `schema`. `label` names the source in errors. */
-export const decodeYaml = Effect.fnUntraced(function* <A, I>(
+const decodeYaml = Effect.fnUntraced(function* <A, I>(
   label: string,
   text: string,
   schema: Schema.Codec<A, I>,
@@ -147,89 +123,6 @@ export const decodeYaml = Effect.fnUntraced(function* <A, I>(
   );
 });
 
-const pathExists = Effect.fnUntraced(function* (full: string) {
-  const fs = yield* FileSystem.FileSystem;
-
-  return yield* fs.exists(full).pipe(Effect.orElseSucceed(() => false));
-});
-
-/** Whether `dir` holds a config file, current or from before the rename. */
-const hasConfig = Effect.fnUntraced(function* (dir: string) {
-  const path = yield* Path.Path;
-
-  const found = yield* Effect.forEach([CONFIG_FILE, LEGACY_CONFIG_FILE], (name) =>
-    pathExists(path.join(dir, name)),
-  );
-
-  return found.some(Boolean);
-});
-
-/** Find the folder holding the config file, starting at `start` and walking up. */
-export const findRoot = Effect.fnUntraced(function* (start: string) {
-  const path = yield* Path.Path;
-  let dir = path.resolve(start);
-
-  for (;;) {
-    if (yield* hasConfig(dir)) return Option.some(dir);
-    const parent = path.dirname(dir);
-
-    if (parent === dir) return Option.none<string>();
-    dir = parent;
-  }
-});
-
-/**
- * Write cutfac.yaml into `dir` unless it is a workspace already. Returns whether it wrote one. This
- * and the app's own records in `appData.ts` are the only writes outside an opened workspace: this
- * one is what makes `dir` a workspace.
- */
-export const initWorkspace = Effect.fn("Workspace.init")(function* (
-  dir: string,
-  config: typeof WorkspaceConfig.Encoded,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const file = path.join(dir, CONFIG_FILE);
-
-  const failed = (error: PlatformError | Schema.SchemaError) =>
-    new WorkspaceError({ message: `Could not create ${file}: ${error.message}` });
-
-  if (yield* hasConfig(dir)) return false;
-
-  const encoded = yield* Schema.decodeEffect(WorkspaceConfig)(config).pipe(
-    Effect.flatMap(Schema.encodeEffect(WorkspaceConfig)),
-    Effect.mapError(failed),
-  );
-
-  yield* fs.makeDirectory(dir, { recursive: true }).pipe(Effect.mapError(failed));
-  yield* fs
-    .writeFileString(file, stringify(encoded, { lineWidth: 100 }))
-    .pipe(Effect.mapError(failed));
-
-  return true;
-});
-
-/** Give a file from before the rename its current name, unless something already has it. */
-const moveRenamed = Effect.fnUntraced(function* (root: string, before: string, now: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const from = path.join(root, before);
-  const to = path.join(root, now);
-
-  if (!(yield* pathExists(from)) || (yield* pathExists(to))) return;
-
-  // Another process opening the same workspace may have moved it first.
-  yield* fs
-    .rename(from, to)
-    .pipe(
-      Effect.catch((error) =>
-        Effect.flatMap(pathExists(to), (moved) =>
-          moved ? Effect.void : Effect.fail(fail("rename", `${before} to ${now}`)(error)),
-        ),
-      ),
-    );
-});
-
 const open = Effect.fn("Workspace.open")(function* (start: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -242,9 +135,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   }
 
   const root = found.value;
-  yield* Effect.forEach(RENAMED, ([before, now]) => moveRenamed(root, before, now), {
-    discard: true,
-  });
+  yield* renameLegacyFiles(root);
 
   const abs = (rel: string) =>
     Effect.suspend(() => {
@@ -268,24 +159,24 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   const ensureParent = (full: string, relPath: string) =>
     fs
       .makeDirectory(path.dirname(full), { recursive: true })
-      .pipe(Effect.mapError(fail("create the folder for", relPath)));
+      .pipe(Effect.mapError(fileFailure("create the folder for", relPath)));
 
   const exists = Effect.fn("Workspace.exists")(function* (relPath: string) {
     const full = yield* abs(relPath);
 
-    return yield* fs.exists(full).pipe(Effect.mapError(fail("check", relPath)));
+    return yield* fs.exists(full).pipe(Effect.mapError(fileFailure("check", relPath)));
   });
 
   const readText = Effect.fn("Workspace.readText")(function* (relPath: string) {
     const full = yield* abs(relPath);
 
-    return yield* fs.readFileString(full).pipe(Effect.mapError(fail("read", relPath)));
+    return yield* fs.readFileString(full).pipe(Effect.mapError(fileFailure("read", relPath)));
   });
 
   const writeText = Effect.fn("Workspace.writeText")(function* (relPath: string, text: string) {
     const full = yield* abs(relPath);
     yield* ensureParent(full, relPath);
-    yield* fs.writeFileString(full, text).pipe(Effect.mapError(fail("write", relPath)));
+    yield* fs.writeFileString(full, text).pipe(Effect.mapError(fileFailure("write", relPath)));
   });
 
   const writeBytes = Effect.fn("Workspace.writeBytes")(function* (
@@ -294,7 +185,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   ) {
     const full = yield* abs(relPath);
     yield* ensureParent(full, relPath);
-    yield* fs.writeFile(full, bytes).pipe(Effect.mapError(fail("write", relPath)));
+    yield* fs.writeFile(full, bytes).pipe(Effect.mapError(fileFailure("write", relPath)));
   });
 
   const readYaml = Effect.fn("Workspace.readYaml")(function* <A, I>(
@@ -322,14 +213,14 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     const full = yield* abs(relPath);
     yield* fs
       .makeDirectory(full, { recursive: true })
-      .pipe(Effect.mapError(fail("create", relPath)));
+      .pipe(Effect.mapError(fileFailure("create", relPath)));
   });
 
   const copy = Effect.fn("Workspace.copy")(function* (fromRel: string, toRel: string) {
     const from = yield* abs(fromRel);
     const to = yield* abs(toRel);
     yield* ensureParent(to, toRel);
-    yield* fs.copyFile(from, to).pipe(Effect.mapError(fail(`copy ${fromRel} to`, toRel)));
+    yield* fs.copyFile(from, to).pipe(Effect.mapError(fileFailure(`copy ${fromRel} to`, toRel)));
   });
 
   const copyTree = Effect.fn("Workspace.copyTree")(function* (fromRel: string, toRel: string) {
@@ -338,18 +229,18 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     yield* ensureParent(to, toRel);
     yield* fs
       .copy(from, to, { overwrite: false })
-      .pipe(Effect.mapError(fail(`copy ${fromRel} to`, toRel)));
+      .pipe(Effect.mapError(fileFailure(`copy ${fromRel} to`, toRel)));
   });
 
   const importFile = Effect.fn("Workspace.importFile")(function* (source: string, toRel: string) {
     const to = yield* abs(toRel);
     yield* ensureParent(to, toRel);
-    yield* fs.copyFile(source, to).pipe(Effect.mapError(fail(`copy ${source} to`, toRel)));
+    yield* fs.copyFile(source, to).pipe(Effect.mapError(fileFailure(`copy ${source} to`, toRel)));
   });
 
   const statFull = (full: string, relPath: string) =>
     fs.stat(full).pipe(
-      Effect.mapError(fail("read", relPath)),
+      Effect.mapError(fileFailure("read", relPath)),
       Effect.map((info) => ({
         dir: info.type === "Directory",
         size: Number(info.size),
@@ -367,8 +258,8 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
   const list = Effect.fn("Workspace.list")(function* (relPath: string) {
     const full = yield* abs(relPath);
 
-    if (!(yield* fs.exists(full).pipe(Effect.mapError(fail("check", relPath))))) return [];
-    const names = yield* fs.readDirectory(full).pipe(Effect.mapError(fail("list", relPath)));
+    if (!(yield* fs.exists(full).pipe(Effect.mapError(fileFailure("check", relPath))))) return [];
+    const names = yield* fs.readDirectory(full).pipe(Effect.mapError(fileFailure("list", relPath)));
 
     const visible = names
       .filter((name) => !name.startsWith("."))
@@ -392,11 +283,11 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
     const full = yield* abs(relPath);
     yield* fs
       .remove(full, { recursive: true, force: true })
-      .pipe(Effect.mapError(fail("remove", relPath)));
+      .pipe(Effect.mapError(fileFailure("remove", relPath)));
   });
 
   const peek = Effect.fn("Workspace.peek")(function* (full: string) {
-    const info = yield* fs.stat(full).pipe(Effect.mapError(fail("read", full)));
+    const info = yield* fs.stat(full).pipe(Effect.mapError(fileFailure("read", full)));
 
     if (info.type !== "Directory") {
       const file: Peek = { dir: false };
@@ -404,7 +295,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
       return file;
     }
 
-    const names = yield* fs.readDirectory(full).pipe(Effect.mapError(fail("list", full)));
+    const names = yield* fs.readDirectory(full).pipe(Effect.mapError(fileFailure("list", full)));
 
     const folder: Peek = {
       dir: true,
@@ -420,7 +311,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
       .pipe(
         Stream.decodeText,
         Stream.mkString,
-        Effect.mapError(fail("read", full)),
+        Effect.mapError(fileFailure("read", full)),
         Effect.withSpan("Workspace.peekText"),
       );
 
@@ -429,7 +320,7 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
       .stream(full, { bytesToRead: maxBytes })
       .pipe(
         Stream.mkUint8Array,
-        Effect.mapError(fail("read", full)),
+        Effect.mapError(fileFailure("read", full)),
         Effect.withSpan("Workspace.peekBytes"),
       );
 
@@ -515,5 +406,3 @@ export function slugify(text: string): string {
 
   return slug === "" ? "untitled" : slug;
 }
-
-export const nowIso: Effect.Effect<string> = Effect.map(DateTime.now, DateTime.formatIso);

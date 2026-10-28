@@ -2,13 +2,13 @@ import { Effect, Option, Path } from "effect";
 
 import { ABOUT_FILE } from "./about.ts";
 import { BRIEF_FILE, briefLines, readBrief } from "./brief.ts";
-import { isoMillis } from "./editSnapshots.ts";
 import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
 import type { Item } from "./items.ts";
 import type { Format } from "./library.ts";
 import { mediaKind } from "./media.ts";
 import { REFERENCES } from "./references.ts";
 import type { Feedback } from "./schema.ts";
+import { isoMillis } from "./time.ts";
 import { Workspace } from "./workspace.ts";
 
 const percent = (v: number) => `${Math.round(v * 100)}%`;

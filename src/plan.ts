@@ -3,7 +3,8 @@ import { Config, Context, Effect, Layer, Option, Path, Schema } from "effect";
 import { AppData, appendAppRecord } from "./core/appData.ts";
 import { BUNDLED } from "./core/build.ts";
 import { type NewItemInput, createItem } from "./core/items.ts";
-import { Workspace, nowIso } from "./core/workspace.ts";
+import { nowIso } from "./core/time.ts";
+import { Workspace } from "./core/workspace.ts";
 import { paidInSettings } from "./license.ts";
 
 /** How many videos the desktop app's free version makes on one Mac, with every feature open. */

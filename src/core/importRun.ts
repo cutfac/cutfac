@@ -38,7 +38,8 @@ import { type CodexListed, codexServers } from "./mcpServers.ts";
 import { mediaKind } from "./media.ts";
 import { type ReferenceUpload, addReferences } from "./references.ts";
 import { type Emit, type RunSpec, type Runner, type Runs, runsLayer } from "./runRegistry.ts";
-import { Workspace, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace } from "./workspace.ts";
 import { requireTrust } from "./workspaceTrust.ts";
 
 /**

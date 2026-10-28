@@ -21,7 +21,8 @@ import {
 } from "./items.ts";
 import { extension } from "./media.ts";
 import { type Feedback, type ItemDoc, type ItemPatch, type ItemStatus } from "./schema.ts";
-import { Workspace, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace } from "./workspace.ts";
 
 /** Item subfolder with history.yaml and the media versions that are not edit snapshots. */
 export const HISTORY_DIR = "history";

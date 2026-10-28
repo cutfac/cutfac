@@ -8,7 +8,9 @@ import { carriesSecret } from "./links.ts";
 import type { ReferenceFolder } from "./references.ts";
 import { type AgentName, type AgentRun } from "./schema.ts";
 import { installedSkills, mirrorSkills } from "./skill.ts";
-import { STATE_DIR, Workspace, foldersWith, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace, foldersWith } from "./workspace.ts";
+import { STATE_DIR } from "./workspaceRoot.ts";
 
 /** Imports are the board's own records, so they live in a dot folder the file watcher skips. */
 export const IMPORTS_DIR = `${STATE_DIR}/imports`;

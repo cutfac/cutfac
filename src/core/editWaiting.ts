@@ -5,7 +5,8 @@ import { saveBefore } from "./editSnapshots.ts";
 import { InvalidRequest, type NotFound } from "./errors.ts";
 import { findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import type { AgentName, AgentPick, Feedback, ItemDoc } from "./schema.ts";
-import { Workspace, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace } from "./workspace.ts";
 
 /** A request lined up for the board's agent. */
 export type Waiting = Feedback & { readonly waiting: AgentName };

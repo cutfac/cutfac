@@ -3,7 +3,8 @@ import { Effect } from "effect";
 import { addSection } from "./about.ts";
 import { LearnedDoc, type PreprocessResult } from "./learnedSchema.ts";
 import { shortName } from "./listings.ts";
-import { type WorkspaceService, Workspace, nowIso, slugify } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { type WorkspaceService, Workspace, slugify } from "./workspace.ts";
 
 export const LEARNED_FILE = "learned.yaml";
 

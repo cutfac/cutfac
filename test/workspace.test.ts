@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 import { BunServices } from "@effect/platform-bun";
 import { Effect, FileSystem } from "effect";
 
-import { Workspace, initWorkspace } from "../src/core/workspace.ts";
+import { Workspace } from "../src/core/workspace.ts";
+import { initWorkspace } from "../src/core/workspaceRoot.ts";
 import { testEffect } from "./effect.ts";
 
 const it = testEffect(BunServices.layer);

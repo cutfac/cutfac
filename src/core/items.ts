@@ -14,7 +14,8 @@ import {
   StoredItemStatus,
 } from "./schema.ts";
 import { cleanSources } from "./sources.ts";
-import { Workspace, type WorkspaceService, nowIso, slugify } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace, type WorkspaceService, slugify } from "./workspace.ts";
 
 export const ITEM_FILE = "item.yaml";
 

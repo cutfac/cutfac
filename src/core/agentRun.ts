@@ -30,7 +30,8 @@ import {
 } from "./runRegistry.ts";
 import type { AgentName, AgentPick, AgentRun } from "./schema.ts";
 import { sourceHosts } from "./sources.ts";
-import { Workspace, nowIso } from "./workspace.ts";
+import { nowIso } from "./time.ts";
+import { Workspace } from "./workspace.ts";
 import { askingTrusted, requireTrust } from "./workspaceTrust.ts";
 
 export interface RunInput extends AgentPick {
