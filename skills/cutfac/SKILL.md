@@ -113,7 +113,8 @@ contact sheet) and adds a section to `about.md` marked `> Not read yet`. Then:
    - only real assets appear, and type and color stay consistent with the brief;
    - no frame catches a transition half done in a way that looks broken;
    - cuts land on the sound beats, and the hook reads in the first 2 seconds;
-   - the last frame works on its own as a poster.
+   - the first frame already shows the hook, since the board and feeds show it before play, and
+     the last frame works on its own as a poster.
 
    Name the three largest defects, each with its time, what you see, and a local fix. Fix only
    those, render, and review again. Stop when nothing above fails or after three rounds, and tell

@@ -309,6 +309,7 @@ export function reviewChecklist(review: ReviewDoc): string[] {
       : [
           `The dimmed margins outside the yellow box, ${percent(safeZone.top)} at the top, ${percent(safeZone.bottom)} at the bottom, ${percent(safeZone.left)} on the left, and ${percent(safeZone.right)} on the right, are where platform captions and buttons cover the video. Text, a face, or the thing a frame is about inside them is a defect, even when it looks fine here.`,
         ]),
+    "The first frame is what the board, a gallery, and a feed show before anyone presses play, so it must already show the hook, not an empty background that the hook animates into. The last frame stays up after the video ends, so it must work on its own as a poster.",
     "In each strip, check that motion lands cleanly and that nothing shows for only a frame or two. A line of text has to stay up long enough to read twice; sample its first and last frames with `times` when unsure.",
     "Never call a frame clean without naming what it shows. Report the three largest defects with their times, or say why there are none.",
   ];
