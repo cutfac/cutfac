@@ -21,6 +21,7 @@ export const onboardingEn = {
     title: "Get your agent ready",
     body: "Cutfac makes videos through Claude Code or Codex on this Mac. One is enough.",
     checking: "Looking for agents on this Mac…",
+    checkingOne: "Checking…",
     checkFailed: "Could not look for agents",
     tryAgain: "Try again",
     state: {

@@ -17,6 +17,7 @@ export const onboardingKo: OnboardingMessages = {
     title: "에이전트를 준비할게요",
     body: "컷팩은 이 Mac의 Claude Code나 Codex로 영상을 만들어요. 하나만 있으면 돼요.",
     checking: "이 Mac에서 에이전트를 찾는 중…",
+    checkingOne: "확인하는 중…",
     checkFailed: "에이전트를 확인하지 못했어요",
     tryAgain: "다시 시도",
     state: {

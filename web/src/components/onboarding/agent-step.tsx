@@ -1,5 +1,5 @@
 import { ArrowRightIcon, CheckIcon, CopyIcon, RotateCwIcon } from "lucide-react";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { AgentLogo } from "@/components/agent-logo";
 import { ErrorAlert } from "@/components/page";
@@ -14,7 +14,6 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +61,8 @@ export function AgentStep({
   /** Back to the step before, when there is one. */
   onBack?: (() => void) | undefined;
 }) {
-  const t = useMessages().onboarding.agent;
+  const tr = useMessages();
+  const t = tr.onboarding.agent;
   const [setups, setSetups] = useState<ReadonlyArray<AgentSetup>>();
   const [error, setError] = useState<string>();
   const [runs, setRuns] = useState<Runs>({});
@@ -157,10 +157,22 @@ export function AgentStep({
           </div>
         </div>
       ) : setups === undefined ? (
-        <div className="flex flex-col gap-2.5" aria-busy="true" aria-label={t.checking}>
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
+        // The two apps as they will show, so nothing moves when they are found.
+        <ItemGroup aria-busy="true" aria-label={t.checking}>
+          {CHECKED.map((agent) => (
+            <AgentShell key={agent} agent={agent} lit={false}>
+              <ItemContent className="relative min-w-0">
+                <ItemTitle>{tr.setup.agents[agent]}</ItemTitle>
+                <ItemDescription>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <Spinner className="size-3 shrink-0" />
+                    <span className="truncate">{t.checkingOne}</span>
+                  </span>
+                </ItemDescription>
+              </ItemContent>
+            </AgentShell>
+          ))}
+        </ItemGroup>
       ) : (
         <ItemGroup>
           {setups.map((setup) => (
@@ -175,7 +187,9 @@ export function AgentStep({
           ))}
         </ItemGroup>
       )}
-      {ready ? null : <p className="text-xs/relaxed text-muted-foreground">{t.subscription}</p>}
+      {setups === undefined || ready ? null : (
+        <p className="text-xs/relaxed text-muted-foreground">{t.subscription}</p>
+      )}
       <StepActions onBack={onBack}>
         {ready ? (
           <Button size="lg" onClick={onDone}>
@@ -187,6 +201,9 @@ export function AgentStep({
     </>
   );
 }
+
+/** The agents the step looks for, in the order it shows them. */
+const CHECKED = ["claude", "codex"] as const satisfies ReadonlyArray<AgentName>;
 
 /** The glow behind each agent's mark, in its own colors. */
 const GLOW = {
@@ -224,29 +241,7 @@ function AgentRow({
   const description = state === "outdated" ? copy.state.outdated(setup.version) : copy.state[state];
 
   return (
-    <Item variant="muted" className="relative overflow-hidden">
-      <span
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-0 bg-linear-to-r to-transparent transition-opacity duration-700",
-          WASH[setup.agent],
-          state === "ready" ? "opacity-100" : "opacity-40",
-        )}
-      />
-      <ItemMedia className="relative">
-        {/* The glow sits right behind the mark, so the light comes from it. */}
-        <span
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute top-1/2 left-1/2 size-20 -translate-1/2 rounded-full blur-xl transition-opacity duration-700",
-            GLOW[setup.agent],
-            state === "ready" ? "opacity-50" : "opacity-20",
-          )}
-        />
-        <span className="relative flex size-14 items-center justify-center rounded-2xl bg-background/80">
-          <AgentLogo agent={setup.agent} className="size-9" />
-        </span>
-      </ItemMedia>
+    <AgentShell agent={setup.agent} lit={state === "ready"}>
       <ItemContent className="relative min-w-0">
         <ItemTitle>{t.setup.agents[setup.agent]}</ItemTitle>
         {run?.status === "running" && state !== "ready" ? (
@@ -283,6 +278,45 @@ function AgentRow({
       {run?.status === "failed" && state !== "ready" ? (
         <FixFailed command={run.command} onCheck={onCheck} />
       ) : null}
+    </AgentShell>
+  );
+}
+
+/** An agent's row as both the check and its result show it: its colors, its mark, and what follows. */
+function AgentShell({
+  agent,
+  lit,
+  children,
+}: {
+  agent: AgentName;
+  lit: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Item variant="muted" className="relative overflow-hidden">
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute inset-0 bg-linear-to-r to-transparent transition-opacity duration-700",
+          WASH[agent],
+          lit ? "opacity-100" : "opacity-40",
+        )}
+      />
+      <ItemMedia className="relative">
+        {/* The glow sits right behind the mark, so the light comes from it. */}
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute top-1/2 left-1/2 size-20 -translate-1/2 rounded-full blur-xl transition-opacity duration-700",
+            GLOW[agent],
+            lit ? "opacity-50" : "opacity-20",
+          )}
+        />
+        <span className="relative flex size-14 items-center justify-center rounded-2xl bg-background/80">
+          <AgentLogo agent={agent} className="size-9" />
+        </span>
+      </ItemMedia>
+      {children}
     </Item>
   );
 }
