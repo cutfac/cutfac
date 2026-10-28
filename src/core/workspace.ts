@@ -15,14 +15,9 @@ import type { PlatformError } from "effect/PlatformError";
 import { parse, stringify } from "yaml";
 
 import { WorkspaceError } from "./errors.ts";
+import { replaceFile } from "./replaceFile.ts";
 import { WorkspaceConfig } from "./schema.ts";
-import {
-  CONFIG_FILE,
-  fileFailure,
-  findRoot,
-  renameLegacyFiles,
-  replaceFile,
-} from "./workspaceRoot.ts";
+import { CONFIG_FILE, fileFailure, findRoot, renameLegacyFiles } from "./workspaceRoot.ts";
 
 export interface FileStat {
   readonly size: number;

@@ -2,7 +2,7 @@ import { Context, Effect, FileSystem, Option, Path, Predicate, Stream } from "ef
 import type { PlatformError } from "effect/PlatformError";
 
 import { WorkspaceError } from "./errors.ts";
-import { replaceFile } from "./workspaceRoot.ts";
+import { replaceFile } from "./replaceFile.ts";
 
 /**
  * The folder the app keeps its own records in, such as which workspaces the user trusts, outside
