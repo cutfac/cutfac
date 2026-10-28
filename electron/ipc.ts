@@ -66,6 +66,9 @@ export const LICENSE_KEY_REQUEST_CHANNEL = "cutfac:license-key-request";
 /** Drag a workspace file out of the board, to drop a copy of it in Finder or another app. */
 export const START_DRAG_CHANNEL = "cutfac:start-drag";
 
+/** Save a copy of a workspace file where the user picks, as Download in the editor does. */
+export const DOWNLOAD_FILE_CHANNEL = "cutfac:download-file";
+
 /** Every agent CLI as found on this computer, for the first launch's agent step. */
 export const AGENTS_CHANNEL = "cutfac:agents";
 

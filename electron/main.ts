@@ -31,6 +31,7 @@ import {
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
   START_DRAG_CHANNEL,
+  DOWNLOAD_FILE_CHANNEL,
 } from "./ipc.ts";
 import { ANY_INPUT } from "./ipcCall.ts";
 import { answer, listen } from "./ipcHandlers.ts";
@@ -63,7 +64,7 @@ import {
 import { boardDir, killWorkspaceServer, stopFixes } from "./sidecarRuntime.ts";
 import { handleUpdates } from "./updateHandlers.ts";
 import { Updates } from "./updates.ts";
-import { dragOut, revealInWorkspace } from "./workspaceFiles.ts";
+import { downloadFile, dragOut, revealInWorkspace } from "./workspaceFiles.ts";
 import { handleWorkspaces } from "./workspaces.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
 
@@ -208,6 +209,9 @@ function start(): void {
   // A file gone since the board showed it just doesn't drag.
   listen(START_DRAG_CHANNEL, isFromApp, PATH, (target, event) =>
     Effect.ignore(dragOut(Option.getOrUndefined(openWorkspace()), event.sender, target)),
+  );
+  answer(DOWNLOAD_FILE_CHANNEL, isFromApp, PATH, (target) =>
+    downloadFile(Option.getOrUndefined(openWorkspace()), boardWindow(), target),
   );
   answer(PICK_PATH_CHANNEL, isFromApp, ANY_INPUT, () =>
     Effect.map(pickSource(boardWindow(), messages().chooseSource), Option.getOrUndefined),

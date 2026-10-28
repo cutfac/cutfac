@@ -1,6 +1,7 @@
 import {
   ArchiveIcon,
   ArrowRightLeftIcon,
+  DownloadIcon,
   FolderOpenIcon,
   PencilIcon,
   SquarePenIcon,
@@ -25,11 +26,12 @@ import { STATUSES, type ItemSummary, type Status } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { downloadFile } from "../lib/download.ts";
 import { revealItem } from "../lib/items.ts";
 
 /**
  * What a right click on a video, on the board or in the sidebar, offers: open it, rename it, move it
- * to another column, find its files. For several picked cards, moving and archiving take them all.
+ * to another column, download it, find its files. For several picked cards, moving and archiving take them all.
  */
 export function ItemMenu({
   items,
@@ -46,6 +48,9 @@ export function ItemMenu({
   const t = useMessages();
   const single = items.length === 1 ? items[0] : undefined;
   const archivable = items.filter((i) => i.status !== "archived");
+  // The video it shows, else its picture: what Download in the editor would save.
+  const shown = single?.media.find((media) => media.kind === "video") ?? single?.media[0];
+  const download = single && shown ? `${single.dir}/${shown.name}` : undefined;
 
   return (
     <ContextMenuContent>
@@ -85,6 +90,12 @@ export function ItemMenu({
           </ContextMenuRadioGroup>
         </ContextMenuSubContent>
       </ContextMenuSub>
+      {download === undefined ? null : (
+        <ContextMenuItem onClick={() => downloadFile(download)}>
+          <DownloadIcon />
+          {t.item.download}
+        </ContextMenuItem>
+      )}
       {desktop && single ? (
         <ContextMenuItem onClick={() => void revealItem(single)}>
           <FolderOpenIcon />

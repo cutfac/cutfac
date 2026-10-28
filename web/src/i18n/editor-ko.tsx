@@ -4,6 +4,7 @@ import type { EditorMessages } from "./editor-en.tsx";
 export const editorKo: EditorMessages = {
   item: {
     openError: "이 영상을 열 수 없어요",
+    download: "다운로드",
     imageHint: "이미지 위를 드래그해서 수정할 영역을 표시하세요.",
     chat: "채팅",
     checks: "점검",

@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { ArrowLeftIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
+import { ArrowLeftIcon, DownloadIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api, STATUSES, type ItemDetail, type Status } from "../../api.ts";
 import { href } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { downloadFile } from "../../lib/download.ts";
 import { EDIT_KEYS, type EditCommand } from "../../lib/edit-commands.ts";
 import { redoable, undoable } from "../../lib/history.ts";
 import { agentTitle } from "../../lib/models.ts";
@@ -22,9 +23,13 @@ import { sendFailed } from "../../lib/notify.ts";
 import type { LiveRun } from "../../lib/run.ts";
 import { Hint, keepFocus } from "./hint.tsx";
 
-/** The item's title bar: back to the board, what the agent is doing, undo and redo, and status. */
+/**
+ * The item's title bar: back to the board, what the agent is doing, undo and redo, downloading the
+ * media shown, and status.
+ */
 export function Toolbar({
   item,
+  media,
   running,
   agent,
   asking,
@@ -33,6 +38,8 @@ export function Toolbar({
   onShortcuts,
 }: {
   item: ItemDetail;
+  /** The media file shown, from the workspace's root, to download; none while there is none. */
+  media: string | undefined;
   running: boolean;
   agent: LiveRun["agent"];
   /** What the agent waits on the user for: a tool it asks to use, or its questions. */
@@ -99,6 +106,12 @@ export function Toolbar({
           </Button>
         </Hint>
       </div>
+      {media === undefined ? null : (
+        <Button variant="outline" size="sm" onClick={() => downloadFile(media)}>
+          <DownloadIcon data-icon="inline-start" />
+          {t.item.download}
+        </Button>
+      )}
       <Select
         items={statuses}
         value={item.doc.status}

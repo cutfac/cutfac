@@ -250,6 +250,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
       <InTitleBar>
         <Toolbar
           item={item}
+          media={media === undefined ? undefined : `${item.dir}/${media.name}`}
           running={running}
           agent={run.agent}
           asking={

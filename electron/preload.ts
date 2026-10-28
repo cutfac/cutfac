@@ -61,6 +61,7 @@ import {
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
   START_DRAG_CHANNEL,
+  DOWNLOAD_FILE_CHANNEL,
   UPDATE_NOTICE_CHANNEL,
   UPDATE_RESTART_CHANNEL,
   UPDATE_STATUS_CHANGED_CHANNEL,
@@ -185,6 +186,7 @@ const bridge = {
   revealPath: (target: string): Promise<void> => ipcRenderer.invoke(REVEAL_PATH_CHANNEL, target),
   pickPath: (): Promise<string | undefined> => ipcRenderer.invoke(PICK_PATH_CHANNEL),
   startDrag: (target) => ipcRenderer.send(START_DRAG_CHANNEL, target),
+  downloadFile: (target) => ipcRenderer.invoke(DOWNLOAD_FILE_CHANNEL, target),
   setLocale: (locale) => ipcRenderer.send(SET_LOCALE_CHANNEL, locale),
   setAttention: (attention) => ipcRenderer.send(ATTENTION_CHANNEL, attention),
   onEditCommand: (listener) => {

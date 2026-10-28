@@ -1,5 +1,5 @@
-import { Effect, Path } from "effect";
-import { app, nativeImage, shell, type WebContents } from "electron";
+import { Effect, FileSystem, Path, Schema } from "effect";
+import { app, dialog, nativeImage, shell, type BrowserWindow, type WebContents } from "electron";
 
 import { NotAWorkspacePath, inWorkspace, workspaceRoot } from "./workspacePath.ts";
 
@@ -36,4 +36,38 @@ export const dragOut = Effect.fn("dragOut")(function* (
   ).pipe(Effect.catch(() => Effect.tryPromise(() => app.getFileIcon(file))));
 
   sender.startDrag({ file, icon });
+});
+
+/** A copy the user asked for that couldn't be written where they chose. */
+export class DownloadFailed extends Schema.TaggedError<DownloadFailed>()("DownloadFailed", {
+  message: Schema.String,
+}) {}
+
+/**
+ * Saves a copy of a workspace file where the user picks, starting in Downloads under its name
+ * without the aspect tag, then shows the copy in Finder. Resolves whether it was saved.
+ */
+export const downloadFile = Effect.fn("downloadFile")(function* (
+  root: string | undefined,
+  owner: BrowserWindow | undefined,
+  target: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = yield* inWorkspace(workspaceRoot(root), target);
+  const name = path.basename(file).replace(/^\[\d+x\d+\]\s*/, "");
+  const options = { defaultPath: path.join(app.getPath("downloads"), name) };
+
+  const { canceled, filePath } = yield* Effect.promise(() =>
+    owner ? dialog.showSaveDialog(owner, options) : dialog.showSaveDialog(options),
+  );
+
+  if (canceled || filePath === undefined || filePath === "") return false;
+
+  yield* fs
+    .copyFile(file, filePath)
+    .pipe(Effect.mapError((error) => new DownloadFailed({ message: error.message })));
+  shell.showItemInFolder(filePath);
+
+  return true;
 });
