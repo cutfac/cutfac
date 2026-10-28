@@ -1,5 +1,5 @@
 import { FolderIcon, GlobeIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -47,12 +47,19 @@ export function WebsitePicker({
   onSources,
   draft,
   onDraft,
+  focusOnOpen = false,
 }: Sources & {
   /** What is typed in the field and not added yet. */
   draft: string;
   onDraft: (next: string) => void;
+  focusOnOpen?: boolean;
 }) {
   const t = useMessages().start.whatToMake.material;
+  const field = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusOnOpen) field.current?.focus();
+  }, [focusOnOpen]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -68,6 +75,7 @@ export function WebsitePicker({
             <GlobeIcon />
           </InputGroupAddon>
           <InputGroupInput
+            ref={field}
             value={draft}
             placeholder={t.placeholder}
             aria-label={t.website.title}
