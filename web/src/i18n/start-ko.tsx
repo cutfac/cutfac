@@ -64,7 +64,7 @@ export const startKo: StartMessages = {
     material: {
       website: {
         title: "에이전트가 읽을 웹사이트가 있나요?",
-        body: "제품 페이지나 앱 소개 페이지처럼요.",
+        body: "제품 페이지나 앱 소개 페이지처럼요. 여러 개 넣어도 돼요.",
       },
       folder: {
         title: "에이전트가 읽을 폴더가 있나요?",

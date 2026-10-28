@@ -75,7 +75,7 @@ export const startEn = {
     material: {
       website: {
         title: "Any website your agent should read?",
-        body: "Like your product page or app listing.",
+        body: "Like your product page or app listing. Add as many as you like.",
       },
       folder: {
         title: "Any folder your agent should read?",
