@@ -37,21 +37,26 @@ export function ReadyStep({
   const [sharing, setSharing] = useState<Sharing>();
 
   useEffect(() => {
-    onboarding.workspaceFolder().then(
-      (found) => setFolder(found ?? null),
-      () => setFolder(null),
-    );
     // An answer given here before wins over one from an earlier install.
     Promise.all([onboarding.sharing(), onboarding.draft()]).then(
       ([found, draft]) => {
-        setName(suggestedName(draft?.sources ?? [], t.defaultName));
+        const named = suggestedName(draft?.sources ?? [], t.defaultName);
+
+        setName(named);
+        onboarding.workspaceFolder(named).then(
+          (where) => setFolder(where ?? null),
+          () => setFolder(null),
+        );
         setSharing({
           available: found.available,
           errorReports: draft?.sharing?.errorReports ?? found.errorReports,
           usageStats: draft?.sharing?.usageStats ?? found.usageStats,
         });
       },
-      () => setSharing({ available: false, errorReports: null, usageStats: null }),
+      () => {
+        setFolder(null);
+        setSharing({ available: false, errorReports: null, usageStats: null });
+      },
     );
   }, [onboarding, t.defaultName]);
 

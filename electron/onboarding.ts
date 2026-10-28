@@ -38,7 +38,7 @@ import {
 } from "./ipc.ts";
 import { type Decodable, ANY_INPUT } from "./ipcCall.ts";
 import { answer as answerCall } from "./ipcHandlers.ts";
-import { decodeWorkspaceName } from "./library.ts";
+import { decodeWorkspaceName, WORKSPACES } from "./library.ts";
 import { runNow, type AppServices } from "./runtime.ts";
 import { clearDraft, loadDraft, loadLibrary, OnboardingDraft, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
@@ -202,13 +202,19 @@ export function handleOnboarding(host: OnboardingHost): void {
       ),
     ),
   );
-  answer(WORKSPACE_FOLDER_CHANNEL, () =>
+  answerWith(WORKSPACE_FOLDER_CHANNEL, Schema.Unknown, "workspace name", (input) =>
     Effect.gen(function* () {
       const first = yield* FirstWorkspace;
       const { homePath } = yield* Install;
+      const made = yield* first.ready;
+
+      if (Option.isSome(made)) return folder(made.value, homePath);
+
+      const suggested = yield* checks.suggestion;
+      const name = Option.orElse(suggested.name, () => decodeWorkspaceName(input));
 
       return Option.getOrUndefined(
-        Option.map(yield* first.ready, (ready) => folder(ready, homePath)),
+        Option.map(name, (one) => folder(path.join(suggested.library, WORKSPACES, one), homePath)),
       );
     }),
   );

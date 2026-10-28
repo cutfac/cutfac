@@ -129,8 +129,11 @@ export interface CutfacOnboarding {
    * start the agent reading the material while the user goes on. Resolves at once.
    */
   startWorkspace: (name: string) => Promise<void>;
-  /** Where the first workspace was made, once it is; undefined if it wasn't. */
-  workspaceFolder: () => Promise<Folder | undefined>;
+  /**
+   * Where the first workspace was made, or, before it is, as after a relaunch, where it will be
+   * made under `name`; undefined if neither is known.
+   */
+  workspaceFolder: (name: string) => Promise<Folder | undefined>;
   /**
    * Open the board on the first workspace, making it now if it wasn't, as after a relaunch; the
    * window moves on by itself. Resolves why it couldn't, or undefined.

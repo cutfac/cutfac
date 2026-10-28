@@ -117,7 +117,7 @@ const onboarding = {
   focusDragHelper: () => ipcRenderer.send(FOCUS_DRAG_HELPER_CHANNEL),
   appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
   startWorkspace: (name) => ipcRenderer.invoke(START_WORKSPACE_CHANNEL, name),
-  workspaceFolder: () => ipcRenderer.invoke(WORKSPACE_FOLDER_CHANNEL),
+  workspaceFolder: (name) => ipcRenderer.invoke(WORKSPACE_FOLDER_CHANNEL, name),
   createWorkspace: (name) => ipcRenderer.invoke(CREATE_WORKSPACE_CHANNEL, name),
 } satisfies CutfacOnboarding;
 
