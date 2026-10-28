@@ -136,8 +136,13 @@ export function PlatformToggles({
       >
         {PLATFORMS.map((platform) => (
           <ToggleGroupItem key={platform} value={platform}>
-            <PlatformIcon platform={platform} />
-            {t.platform[platform]}
+            {/* A platform not picked is grey, and takes its own colours once picked. */}
+            <span className="flex opacity-40 grayscale transition duration-200 group-aria-pressed/toggle:opacity-100 group-aria-pressed/toggle:grayscale-0">
+              <PlatformIcon platform={platform} />
+            </span>
+            <span className="text-muted-foreground transition-colors duration-200 group-aria-pressed/toggle:text-foreground">
+              {t.platform[platform]}
+            </span>
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
