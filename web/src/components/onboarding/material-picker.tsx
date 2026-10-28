@@ -3,19 +3,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { badgeVariants } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
 import { desktop } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { linkLabel } from "../../lib/imports.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { asWebsite } from "../../lib/onboarding.ts";
 
 export const isLink = (source: string) => /^https?:\/\//i.test(source);
 
@@ -37,21 +31,22 @@ const added = (sources: ReadonlyArray<string>, source: string) => {
   return trimmed === "" || sources.includes(trimmed) ? [...sources] : [...sources, trimmed];
 };
 
+/** A website as the field shows it: without the scheme `asWebsite` puts back, or a closing slash. */
+export const siteLabel = (link: string) => link.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+
 /**
- * Websites for the agent to read before it makes the template, such as a product page. They are
- * learned into the workspace's about file when the step starts, so the link still in the field
- * counts too.
+ * The one website for the agent to read first, such as a product page; more can come later from
+ * the Brief page. What is in the field is the website, so Enter just moves on.
  */
 export function WebsitePicker({
-  sources,
-  onSources,
-  draft,
-  onDraft,
+  value,
+  onChange,
+  onEnter,
   focusOnOpen = false,
-}: Sources & {
-  /** What is typed in the field and not added yet. */
-  draft: string;
-  onDraft: (next: string) => void;
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onEnter: () => void;
   focusOnOpen?: boolean;
 }) {
   const t = useMessages().start.whatToMake.material;
@@ -62,36 +57,25 @@ export function WebsitePicker({
   }, [focusOnOpen]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSources(added(sources, asWebsite(draft)));
-          onDraft("");
-        }}
-      >
-        <InputGroup className="h-11">
-          <InputGroupAddon className="ml-2">
-            <GlobeIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            ref={field}
-            value={draft}
-            placeholder={t.placeholder}
-            aria-label={t.website.title}
-            onChange={(event) => onDraft(event.target.value)}
-          />
-          {draft.trim() === "" ? null : (
-            <InputGroupAddon align="inline-end" className="mr-1">
-              <InputGroupButton type="submit" variant="secondary" size="xs">
-                {t.add}
-              </InputGroupButton>
-            </InputGroupAddon>
-          )}
-        </InputGroup>
-      </form>
-      <Chips shown={sources.filter(isLink)} sources={sources} onSources={onSources} />
-    </div>
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onEnter();
+      }}
+    >
+      <InputGroup className="h-11">
+        <InputGroupAddon className="ml-2">
+          <GlobeIcon />
+        </InputGroupAddon>
+        <InputGroupInput
+          ref={field}
+          value={value}
+          placeholder={t.placeholder}
+          aria-label={t.website.title}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </InputGroup>
+    </form>
   );
 }
 

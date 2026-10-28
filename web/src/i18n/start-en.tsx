@@ -75,14 +75,13 @@ export const startEn = {
     material: {
       website: {
         title: "Any website your agent should read?",
-        body: "Like your product page or app listing. Add as many as you like.",
+        body: "Like your product page or app listing. You can add more later from Brief.",
       },
       folder: {
         title: "Any folder your agent should read?",
         body: "Like a brand kit or your footage. Your agent reads it where it is.",
       },
       placeholder: "yourwebsite.com",
-      add: "Add",
       choose: "Choose a folder",
       browse: "Browse…",
       remove: (source: string) => `Remove ${source}`,

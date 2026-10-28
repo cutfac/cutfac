@@ -14,7 +14,7 @@ import { asWebsite, skipStart } from "../../lib/onboarding.ts";
 import { type Answers, saveAnswers } from "./answers.ts";
 import { BriefBody, PlatformToggles, PurposeCards } from "./brief-form.tsx";
 import { StepHeader, useStepProgress } from "./frame.tsx";
-import { FolderPicker, isLink, WebsitePicker } from "./material-picker.tsx";
+import { FolderPicker, isLink, siteLabel, WebsitePicker } from "./material-picker.tsx";
 
 /** How long a clicked card shows as picked before the next part opens. */
 const PICK_PAUSE_MS = 450;
@@ -26,6 +26,13 @@ const KEEP_PAUSE_MS = 400;
 const PARTS = ["purpose", "website", "folder", "platforms", "details"] as const;
 
 type Part = (typeof PARTS)[number];
+
+/** The sources with the website in the field among them, once something is typed there. */
+const withSite = (sources: ReadonlyArray<string>, typed: string) => {
+  const site = asWebsite(typed);
+
+  return site === "" || sources.includes(site) ? [...sources] : [...sources, site];
+};
 
 const STEPS: ReadonlyArray<Part> =
   desktop === undefined ? PARTS.filter((part) => part !== "folder") : PARTS;
@@ -60,8 +67,10 @@ export function BriefQuestions({
 }) {
   const { whatToMake: t, brief: b } = useMessages().start;
   const [brief, setBrief] = useState(initial.brief);
-  const [sources, setSources] = useState<string[]>([...initial.sources]);
-  const [typed, setTyped] = useState("");
+  // The website step takes one site, in its field; folders and any older extra links stay as they were.
+  const site = initial.sources.find(isLink);
+  const [sources, setSources] = useState<string[]>(initial.sources.filter((s) => s !== site));
+  const [typed, setTyped] = useState(site === undefined ? "" : siteLabel(site));
   const [part, setPart] = useState<Part>("purpose");
   const [picks, setPicks] = useState(0);
 
@@ -77,15 +86,16 @@ export function BriefQuestions({
     return () => clearTimeout(timer);
   }, [picks]);
 
-  const latest = useRef({ brief, sources, onAnswers });
+  const latest = useRef({ brief, sources: withSite(sources, typed), onAnswers });
 
   useEffect(() => {
-    latest.current = { brief, sources, onAnswers };
+    const answers = { brief, sources: withSite(sources, typed) };
+    latest.current = { ...answers, onAnswers };
 
-    const timer = setTimeout(() => onAnswers?.({ brief, sources }), KEEP_PAUSE_MS);
+    const timer = setTimeout(() => onAnswers?.(answers), KEEP_PAUSE_MS);
 
     return () => clearTimeout(timer);
-  }, [brief, sources, onAnswers]);
+  }, [brief, sources, typed, onAnswers]);
 
   // What was answered in the last pause is kept too when the questions close.
   useEffect(
@@ -134,15 +144,7 @@ export function BriefQuestions({
     website: {
       title: t.material.website.title,
       body: t.material.website.body,
-      field: (
-        <WebsitePicker
-          sources={sources}
-          onSources={setSources}
-          draft={typed}
-          onDraft={setTyped}
-          focusOnOpen
-        />
-      ),
+      field: <WebsitePicker value={typed} onChange={setTyped} onEnter={() => go(1)} focusOnOpen />,
       primary: next(links ? t.next : t.skipPart),
     },
     folder: {
@@ -166,7 +168,7 @@ export function BriefQuestions({
         <Button
           size="lg"
           disabled={busy || !briefReady(brief)}
-          onClick={() => onFinish({ brief, sources: [...sources, asWebsite(typed)] })}
+          onClick={() => onFinish({ brief, sources: withSite(sources, typed) })}
         >
           {busy ? <Spinner data-icon="inline-start" /> : null}
           {busy ? finish.busyLabel : finish.label}
