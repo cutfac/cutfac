@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import { NotFound } from "./errors.ts";
 import { getItem } from "./items.ts";
 import { FORMAT_FILE, getFormat, isSimpleId } from "./library.ts";
 import { type Check, checkVideo, probe } from "./media.ts";
@@ -39,4 +40,16 @@ export const verifyItem = Effect.fn("verify.verifyItem")(function* (id: string) 
     }),
     { concurrency: 2 },
   );
+});
+
+/** Frames per second of one of the item's videos, so the editor's arrow keys can step a frame. */
+export const frameRate = Effect.fn("verify.frameRate")(function* (id: string, file: string) {
+  const ws = yield* Workspace;
+  const item = yield* getItem(id);
+  const video = item.media.find((media) => media.name === file && media.kind === "video");
+
+  if (video === undefined)
+    return yield* new NotFound({ message: `No video named ${file} on ${id}` });
+
+  return (yield* probe(yield* ws.abs(`${item.dir}/${video.name}`))).fps;
 });

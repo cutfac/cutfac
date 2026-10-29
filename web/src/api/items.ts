@@ -208,5 +208,10 @@ export const itemApi = {
   restoreVersion: (id: string, versionId: string) =>
     send(ItemDetail, "POST", `/api/item/history/version${q(id)}`, { versionId }),
   verify: (id: string) => request(Schema.Array(MediaReport), `/api/item/verify${q(id)}`),
+  frameRate: (id: string, file: string) =>
+    request(
+      Schema.Struct({ fps: Schema.Finite }),
+      `/api/item/frame-rate${q(id)}&file=${encodeURIComponent(file)}`,
+    ),
   feedback: () => request(Schema.Array(OpenFeedback), "/api/feedback"),
 };

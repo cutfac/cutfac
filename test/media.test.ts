@@ -16,7 +16,7 @@ import {
 } from "../src/core/media.ts";
 import { frameTimes } from "../src/core/preprocess.ts";
 import { runChecked } from "../src/core/process.ts";
-import { verifyItem } from "../src/core/verify.ts";
+import { frameRate, verifyItem } from "../src/core/verify.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";
@@ -230,6 +230,25 @@ describe("media in a workspace", () => {
         ]);
         expect(reports[0]?.checks.find((check) => check.name === "audio")?.ok).toBe(true);
         expect(reports[0]?.checks.find((check) => check.name === "resolution")?.ok).toBe(false);
+      }),
+    20_000,
+  );
+
+  liveWithFfmpeg(
+    "reads a video's frame rate for the editor, and refuses a file the item lacks",
+    () =>
+      Effect.gen(function* () {
+        const ws = yield* Workspace;
+        const source = join(ws.root, "upload.mp4");
+
+        yield* makeVideo(source);
+
+        const item = yield* createItem({ title: "Clip" });
+        const video = yield* importMedia(item.id, source, "clip.mp4");
+        const missing = yield* Effect.flip(frameRate(item.id, "nope.mp4"));
+
+        expect(yield* frameRate(item.id, video.name)).toBe(30);
+        expect(missing._tag).toBe("NotFound");
       }),
     20_000,
   );

@@ -27,6 +27,7 @@ import { useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
 import { editorKey, type EditorKey } from "../lib/editor-keys.ts";
+import { useFrameRate } from "../lib/frame-rate.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { LiveState } from "../lib/live.ts";
 import { agentTitle, pickedSettings } from "../lib/models.ts";
@@ -74,6 +75,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const media = item === undefined ? undefined : shownMedia(item, mediaName);
   const video = media?.kind === "video";
+  const fps = useFrameRate(id, media);
   const videoRatio = usePlayer(player, (state) => state.ratio);
   // The server refuses to step through the history while an agent writes to the item.
   const running = item !== undefined && (item.running || run.status === "running");
@@ -217,7 +219,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             setGhost(undefined);
           }),
         Loop: () => onVideo(() => setLoop((current) => !current)),
-        Step: ({ seconds }) => onVideo(() => player.step(seconds)),
+        Step: ({ frames }) => onVideo(() => player.step(frames / fps)),
         Go: ({ to }) => {
           const at = goal(to);
 

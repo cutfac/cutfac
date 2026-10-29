@@ -19,7 +19,7 @@ export type EditorKey = Data.TaggedEnum<{
   MarkIn: {};
   MarkOut: {};
   Loop: {};
-  Step: { readonly seconds: number };
+  Step: { readonly frames: number };
   /** Jump to the video's start or end, or to the selection's in or out point. */
   Go: { readonly to: "start" | "end" | "in" | "out" };
   Clear: {};
@@ -62,9 +62,10 @@ export function editorKey(event: KeyboardEvent): Option.Option<EditorKey> {
 
     case "ArrowLeft":
     case "ArrowRight": {
-      const seconds = (event.code === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 1 : 0.1);
+      // A frame, or ten with Shift, as in Final Cut Pro.
+      const frames = (event.code === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 10 : 1);
 
-      return onControl ? Option.none() : Option.some(EditorKey.Step({ seconds }));
+      return onControl ? Option.none() : Option.some(EditorKey.Step({ frames }));
     }
 
     case "Escape":

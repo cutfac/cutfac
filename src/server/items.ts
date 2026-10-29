@@ -14,7 +14,7 @@ import {
   removeReference,
 } from "../core/references.ts";
 import { readRender } from "../core/render.ts";
-import { verifyItem } from "../core/verify.ts";
+import { frameRate, verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
 import { createCountedItem, createEmptyItem } from "../plan.ts";
 import { trackUsage } from "../usageStats.ts";
@@ -35,6 +35,8 @@ const ReferenceBody = Schema.Struct({ path: Schema.NonEmptyString });
 
 /** A video link to download into an item's references. */
 const LinkBody = Schema.Struct({ url: Schema.NonEmptyString });
+
+const FrameRateQuery = Schema.Struct({ id: Schema.NonEmptyString, file: Schema.NonEmptyString });
 
 /**
  * What the board shows for one item: the item, its markdown docs, its undo history, the agent's
@@ -165,4 +167,13 @@ export const itemRoutes = HttpRouter.addAll([
     ),
   ),
   json("GET", "/api/item/verify", withId(verifyItem)),
+  json(
+    "GET",
+    "/api/item/frame-rate",
+    Effect.gen(function* () {
+      const { id, file } = yield* HttpServerRequest.schemaSearchParams(FrameRateQuery);
+
+      return { fps: yield* frameRate(id, file) };
+    }),
+  ),
 ]);
