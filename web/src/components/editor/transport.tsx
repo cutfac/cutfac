@@ -1,13 +1,18 @@
 import { PauseIcon, PlayIcon, RepeatIcon, Volume2Icon, VolumeXIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
+import { readStored, writeStored } from "../../lib/storage.ts";
 import { hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 import { Hint, keepFocus } from "./hint.tsx";
+
+/** Set once the user has pointed at a part, after which the hint on how to stays away. */
+const POINTED_KEY = "cutfac.editor.pointed";
 
 interface TransportProps {
   player: Player;
@@ -24,7 +29,14 @@ export function Transport({ player, target, loop, onLoop }: TransportProps) {
   const paused = usePlayer(player, (state) => state.paused);
   const muted = usePlayer(player, (state) => state.muted);
   const empty = isEmptyTarget(target);
+  const [pointed, setPointed] = useState(() => readStored(POINTED_KEY) !== null);
   const t = useMessages();
+
+  if (!empty && !pointed) setPointed(true);
+
+  useEffect(() => {
+    if (pointed) writeStored(POINTED_KEY, "1");
+  }, [pointed]);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -66,7 +78,9 @@ export function Transport({ player, target, loop, onLoop }: TransportProps) {
           <RepeatIcon />
         </Toggle>
       </Hint>
-      {empty ? <p className="ml-auto text-xs text-muted-foreground">{t.transport.hint}</p> : null}
+      {empty && !pointed ? (
+        <p className="ml-auto text-xs text-muted-foreground">{t.transport.hint}</p>
+      ) : null}
     </div>
   );
 }
