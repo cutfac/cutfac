@@ -103,36 +103,16 @@ const rangeOf = ({ start, end }: Target): Range | undefined =>
 
 type VideoEvent = SyntheticEvent<HTMLVideoElement>;
 
-const othersOf = ({ currentTarget }: VideoEvent) =>
-  [...(currentTarget.closest("[data-linked]")?.querySelectorAll("video") ?? [])].filter(
-    (video) => video !== currentTarget,
-  );
-
 /**
- * Videos side by side, linked: their controls show only while pointed at, so none sits over the
- * picture, and playing, pausing or seeking one does the same to the others in its `data-linked`
- * group.
+ * The browser's controls for a video side by side, shown only while it is pointed at so none sits
+ * over the picture. They play that one alone; the footer's button plays them all together.
  */
-const LINKED = {
+const HOVER_CONTROLS = {
   onMouseEnter: ({ currentTarget }: VideoEvent) => {
     currentTarget.controls = true;
   },
   onMouseLeave: ({ currentTarget }: VideoEvent) => {
     currentTarget.controls = false;
-  },
-  onPlay: (event: VideoEvent) => {
-    for (const video of othersOf(event)) if (video.paused) video.play().catch(() => undefined);
-  },
-  onPause: (event: VideoEvent) => {
-    for (const video of othersOf(event)) if (!video.paused) video.pause();
-  },
-  onSeeked: (event: VideoEvent) => {
-    const at = event.currentTarget.currentTime;
-
-    // Each follows within a frame or so; a smaller gap is the others catching up, not a seek.
-    for (const video of othersOf(event)) {
-      if (Math.abs(video.currentTime - at) > 0.1) video.currentTime = at;
-    }
   },
 };
 
@@ -244,7 +224,7 @@ export function CompareDialog({
             {where === "" ? "" : ` · ${where}`}
           </DialogDescription>
         </DialogHeader>
-        <div data-linked className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {(["before", "after"] as const).map((side) => (
             <figure key={side} className="flex min-w-0 flex-col gap-1.5">
               <figcaption className="text-xs font-medium text-muted-foreground">
@@ -255,7 +235,7 @@ export function CompareDialog({
                 <video
                   ref={side === "before" ? before : after}
                   src={atTime(sides[side], from)}
-                  {...LINKED}
+                  {...HOVER_CONTROLS}
                   playsInline
                   preload="auto"
                   // Both playing aloud would talk over each other; the result is the one to hear.
@@ -392,11 +372,7 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
             {where === "" ? "" : ` · ${where}`}
           </DialogDescription>
         </DialogHeader>
-        <div
-          ref={grid}
-          data-linked
-          className={cn("grid grid-cols-2 gap-3", COLUMNS[panes.length - 1])}
-        >
+        <div ref={grid} className={cn("grid grid-cols-2 gap-3", COLUMNS[panes.length - 1])}>
           {panes.map(({ key, label, src, choice }, index) => (
             <figure key={key} className="flex min-w-0 flex-col gap-1.5">
               <figcaption
@@ -409,7 +385,7 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
                 <video
                   src={atTime(src, from)}
-                  {...LINKED}
+                  {...HOVER_CONTROLS}
                   playsInline
                   preload="auto"
                   muted={index !== audible}
