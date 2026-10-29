@@ -158,8 +158,8 @@ interface TimelineProps {
 /**
  * The video's length as a strip of frames under a thin ruler. Click to jump; drag across the frames
  * to select the part an edit is about; drag the playhead's head or the ruler to move through the
- * video without selecting. The selection shows in the editor's one colour, with the box's frame as a
- * diamond on top.
+ * video without selecting. The selection shows in the editor's one colour, with the box's frame as
+ * a diamond on top.
  */
 export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }: TimelineProps) {
   const duration = usePlayer(player, (state) => state.duration);
@@ -302,8 +302,8 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
 }
 
 /**
- * A range (or point) on the track. The selected one has a grip on each edge that moves it; a point
- * has one, which drags it out into a range.
+ * A range (or point) on the track. Each edge of the selected one drags to move it; a point drags
+ * out into a range.
  */
 function Span({
   start,
@@ -332,14 +332,13 @@ function Span({
   );
 }
 
+/** An edge's border is the grip: a strip a little wider than it, with the resize cursor. */
 function EdgeGrip({ edge }: { edge: "start" | "end" }) {
   return (
     <div
       data-edge={edge}
-      className="group/edge pointer-events-auto absolute inset-y-0 flex w-3 cursor-ew-resize items-center justify-center data-[edge=end]:-right-2 data-[edge=start]:-left-2"
-    >
-      <div className="h-5 w-1 rounded-full bg-selection opacity-0 transition-opacity group-hover/edge:opacity-100" />
-    </div>
+      className="pointer-events-auto absolute inset-y-0 w-3 cursor-ew-resize data-[edge=end]:-right-2 data-[edge=start]:-left-2"
+    />
   );
 }
 
