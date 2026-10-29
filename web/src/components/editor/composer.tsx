@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { ArrowUpIcon, LayersIcon, SquareIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, LayersIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
 import { useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 
@@ -41,7 +41,6 @@ import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
 import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
 import { ModelPicker } from "./model-picker.tsx";
-import { AddMenu, SourceChips } from "./sources.tsx";
 
 /** What the request points at, which picks the starting points and the placeholder. */
 function scopeOf(target: Target, media: Media | undefined) {
@@ -266,10 +265,7 @@ export function Composer({
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
 
-  const chips =
-    item.doc.sources.length > 0 ||
-    files.uploading > 0 ||
-    attachedReferences(item, files.paths).length > 0;
+  const attaching = files.uploading > 0 || attachedReferences(item, files.paths).length > 0;
 
   async function send() {
     if (!ready) return;
@@ -358,13 +354,10 @@ export function Composer({
         )}
         {/* The text on top and the + and send in a row under it, as in Aside and the Codex app. */}
         <InputGroup variant="floating">
-          {/* What the agent reads with the request sits in the box, apart from the target. */}
-          {chips ? (
+          {/* Files sent with the request sit in the box, as in Claude and ChatGPT. */}
+          {attaching ? (
             <InputGroupAddon align="block-start">
-              <div className="flex min-w-0 flex-wrap gap-1.5">
-                <SourceChips item={item} onItem={onItem} />
-                <AttachmentChips item={item} files={files} />
-              </div>
+              <AttachmentChips item={item} files={files} />
             </InputGroupAddon>
           ) : null}
           <InputGroupTextarea
@@ -377,7 +370,15 @@ export function Composer({
             onKeyDown={onKeyDown}
           />
           <InputGroupAddon align="block-end" className="justify-between">
-            <AddMenu item={item} onItem={onItem} onFiles={() => openFiles.current?.()} />
+            <InputGroupButton
+              variant="secondary"
+              size="icon-sm"
+              aria-label={t.attachments.attach}
+              title={t.attachments.attach}
+              onClick={() => openFiles.current?.()}
+            >
+              <PlusIcon />
+            </InputGroupButton>
             {running && text === "" ? (
               <InputGroupButton
                 variant="secondary"

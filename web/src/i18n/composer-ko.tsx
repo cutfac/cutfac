@@ -40,7 +40,7 @@ export const composerKo: ComposerMessages = {
     },
     add: "파일이나 자료 추가",
     sources: {
-      menu: "링크나 폴더…",
+      add: "링크나 폴더 추가",
       list: "에이전트가 읽는 자료",
       title: "참고 자료",
       description: "에이전트가 이 영상을 작업할 때마다 읽어요.",

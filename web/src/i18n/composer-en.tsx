@@ -51,7 +51,7 @@ export const composerEn = {
     /** The composer's + button, which attaches files or adds a source. */
     add: "Add files or sources",
     sources: {
-      menu: "Link or folder…",
+      add: "Add a link or folder",
       list: "What agents read",
       title: "Sources",
       description: "Agents read these whenever they work on this video.",

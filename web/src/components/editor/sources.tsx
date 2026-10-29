@@ -1,36 +1,17 @@
 import { Option } from "effect";
-import {
-  FileIcon,
-  FolderIcon,
-  FolderOpenIcon,
-  LinkIcon,
-  PaperclipIcon,
-  PlusIcon,
-  XIcon,
-} from "lucide-react";
+import { FileIcon, FolderIcon, FolderOpenIcon, LinkIcon, PlusIcon, XIcon } from "lucide-react";
 import { useRef, useState, type RefObject } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import {
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import { composing } from "@/lib/utils";
 
 import { api, type ItemDetail, type ItemSource } from "../../api.ts";
@@ -109,7 +90,7 @@ export function SourceChips({ item, onItem }: SourcesProps) {
 interface AddSourceProps extends SourcesProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** What the popover opens from, since another menu opens it. */
+  /** The button the popover opens from. */
   anchor: RefObject<HTMLElement | null>;
 }
 
@@ -143,15 +124,11 @@ function AddSource({ item, onItem, open, onOpenChange: setOpen, anchor }: AddSou
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverContent
         anchor={anchor}
-        side="top"
+        side="bottom"
         align="start"
         className="w-80"
         initialFocus={inputRef}
       >
-        <PopoverHeader>
-          <PopoverTitle>{t.composer.sources.title}</PopoverTitle>
-          <PopoverDescription>{t.composer.sources.description}</PopoverDescription>
-        </PopoverHeader>
         <InputGroup>
           <InputGroupInput
             ref={inputRef}
@@ -196,38 +173,24 @@ function AddSource({ item, onItem, open, onOpenChange: setOpen, anchor }: AddSou
   );
 }
 
-/** The composer's +: attach files to the request, or add a source the agent reads every time. */
-export function AddMenu({ item, onItem, onFiles }: SourcesProps & { onFiles: () => void }) {
+/** What agents read whenever they work on this item, with a way to add more. */
+export function Sources({ item, onItem }: SourcesProps) {
   const [adding, setAdding] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const t = useMessages();
+  const copy = t.composer.sources;
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <InputGroupButton
-              ref={anchor}
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t.composer.add}
-            />
-          }
-        >
-          <PlusIcon />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-auto">
-          <DropdownMenuItem onClick={onFiles}>
-            <PaperclipIcon />
-            {t.attachments.attach}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setAdding(true)}>
-            <LinkIcon />
-            {t.composer.sources.menu}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <Field>
+      <FieldTitle>{copy.title}</FieldTitle>
+      <FieldDescription>{copy.description}</FieldDescription>
+      <SourceChips item={item} onItem={onItem} />
+      <div>
+        <Button ref={anchor} variant="outline" size="sm" onClick={() => setAdding(true)}>
+          <PlusIcon data-icon="inline-start" />
+          {copy.add}
+        </Button>
+      </div>
       <AddSource
         item={item}
         onItem={onItem}
@@ -235,6 +198,6 @@ export function AddMenu({ item, onItem, onFiles }: SourcesProps & { onFiles: () 
         onOpenChange={setAdding}
         anchor={anchor}
       />
-    </>
+    </Field>
   );
 }

@@ -12,6 +12,7 @@ import { api, type ItemDetail, type ItemPatch } from "../../api.ts";
 import { href, useLive } from "../../hooks.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { sendFailed } from "../../lib/notify.ts";
+import { Sources } from "./sources.tsx";
 
 interface TextFieldProps {
   id: string;
@@ -166,6 +167,7 @@ export function Details({
           multiline
           onSave={(notes) => save({ notes })}
         />
+        <Sources item={item} onItem={onItem} />
       </FieldGroup>
       {doc.format === undefined ? null : (
         <dl className="flex flex-col divide-y">
