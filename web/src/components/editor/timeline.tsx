@@ -103,12 +103,43 @@ function useFilmstrip(src: string | undefined): ReadonlyArray<string> {
 }
 
 interface Scrub {
-  /** Moving the playhead only, grabbed by its handle or the ruler, or dragging out a range. */
-  readonly mode: "seek" | "select";
+  /**
+   * Moving the playhead only, grabbed by its head or the ruler; dragging out a range; or moving one
+   * edge of the selected range.
+   */
+  readonly mode: "seek" | "select" | "edge";
+  /** Where a range drag began, or for an edge, the other edge, which stays put. */
   readonly from: number;
   /** Past the wobble threshold: a range is being dragged out, not a click. */
   readonly dragging: boolean;
   readonly x: number;
+}
+
+/**
+ * What a press on the timeline grabbed: the playhead's head or the ruler, an edge of the selection,
+ * or the frames.
+ */
+function grab(grabbed: Element | undefined, at: number, x: number, target: Target): Scrub {
+  if (grabbed?.closest("[data-grip]") != null)
+    return { mode: "seek", from: at, dragging: false, x };
+
+  const edge = grabbed?.closest<HTMLElement>("[data-edge]")?.dataset.edge;
+
+  if (edge === undefined || target.start === undefined)
+    return { mode: "select", from: at, dragging: false, x };
+
+  const from = edge === "start" ? (target.end ?? target.start) : target.start;
+
+  return { mode: "edge", from, dragging: true, x };
+}
+
+/** The playhead holds still while a range is dragged out (where it began) or an edge moves. */
+function pinnedAt(scrub: Scrub | undefined, target: Target): number | undefined {
+  if (scrub?.mode === "select") return scrub.from;
+
+  if (scrub?.mode === "edge") return target.start;
+
+  return undefined;
 }
 
 interface TimelineProps {
@@ -144,12 +175,15 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
     return clampUnit((event.clientX - rect.left) / rect.width) * duration;
   };
 
-  function startScrub(event: PointerEvent<HTMLDivElement>, mode: Scrub["mode"]) {
+  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
     const at = timeAt(event);
-    setScrub({ mode, from: at, dragging: false, x: event.clientX });
+
+    setScrub(
+      grab(event.target instanceof Element ? event.target : undefined, at, event.clientX, target),
+    );
     player.pause();
     player.seek(at);
   }
@@ -197,15 +231,8 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
         aria-hidden="true"
         // The captured pointer takes this element's cursor, so it keeps the one the drag began with.
         data-scrub={scrub?.mode}
-        className="relative flex touch-none flex-col gap-1 data-[scrub=seek]:cursor-ew-resize data-[scrub=select]:cursor-text"
-        onPointerDown={(event) =>
-          startScrub(
-            event,
-            event.target instanceof Element && event.target.closest("[data-grip]") !== null
-              ? "seek"
-              : "select",
-          )
-        }
+        className="relative flex touch-none flex-col gap-1 data-[scrub=edge]:cursor-ew-resize data-[scrub=seek]:cursor-ew-resize data-[scrub=select]:cursor-text"
+        onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => setScrub(undefined)}
@@ -230,6 +257,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
               start={fraction(ghost.start)}
               width={fraction((ghost.end ?? ghost.start) - ghost.start)}
               ghost
+              point={false}
             />
           )}
           {target.start === undefined ? null : (
@@ -237,6 +265,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
               start={fraction(target.start)}
               width={fraction((target.end ?? target.start) - target.start)}
               ghost={false}
+              point={target.end === undefined}
             />
           )}
           {target.region === undefined ? null : (
@@ -261,11 +290,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
             );
           })}
         </div>
-        <Playhead
-          player={player}
-          duration={duration}
-          pinned={scrub?.mode === "select" ? scrub.from : undefined}
-        />
+        <Playhead player={player} duration={duration} pinned={pinnedAt(scrub, target)} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>0:00.0</span>
@@ -276,14 +301,45 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
   );
 }
 
-/** The selected range (or point) on the track, with handles at its edges. */
-function Span({ start, width, ghost }: { start: string; width: string; ghost: boolean }) {
+/**
+ * A range (or point) on the track. The selected one has a grip on each edge that moves it; a point
+ * has one, which drags it out into a range.
+ */
+function Span({
+  start,
+  width,
+  ghost,
+  point,
+}: {
+  start: string;
+  width: string;
+  ghost: boolean;
+  point: boolean;
+}) {
   return (
     <div
       style={{ "--start": start, "--width": width }}
       data-ghost={ghost}
       className="pointer-events-none absolute inset-y-0 left-(--start) w-(--width) min-w-0.5 border-x-2 border-selection bg-selection/30 data-[ghost=true]:border-dashed data-[ghost=true]:bg-selection/10"
-    />
+    >
+      {ghost ? null : (
+        <>
+          {point ? null : <EdgeGrip edge="start" />}
+          <EdgeGrip edge="end" />
+        </>
+      )}
+    </div>
+  );
+}
+
+function EdgeGrip({ edge }: { edge: "start" | "end" }) {
+  return (
+    <div
+      data-edge={edge}
+      className="group/edge pointer-events-auto absolute inset-y-0 flex w-3 cursor-ew-resize items-center justify-center data-[edge=end]:-right-2 data-[edge=start]:-left-2"
+    >
+      <div className="h-6 w-1 rounded-full bg-selection ring-2 ring-background transition-transform group-hover/edge:scale-y-125" />
+    </div>
   );
 }
 
