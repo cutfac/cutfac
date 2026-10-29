@@ -114,6 +114,19 @@ const ENDINGS = new Set<RunEvent["type"]>(["done", "stopped", "error"]);
 const crashMessage = (cause: Cause.Cause<never>) =>
   firstLine(Cause.pretty(cause)) || "The agent run crashed";
 
+/** A failed run in the log, so a log sent with feedback says what went wrong. */
+const logFailure = (
+  events: ReadonlyArray<RunEvent>,
+  failure: Extract<RunEvent, { type: "error" }>,
+) => {
+  const started = events.find((event) => event.type === "start");
+  const agent = started?.type === "start" ? started.agent : "The agent";
+
+  return Effect.logWarning(`${agent} run failed: ${failure.error}`).pipe(
+    Effect.annotateLogs({ signedOut: failure.signedOut === true }),
+  );
+};
+
 /**
  * Put requests to whoever watches `run`. A request is on the board from the moment it is pending
  * until it is settled, however that happens: an answer, the agent taking it back, or a stop.
@@ -192,8 +205,11 @@ export const makeRunRegistry = Effect.fnUntraced(function* <I, R>(spec: RunSpec<
           }
 
           channel.events.push(event);
+          const published = PubSub.publish(channel.pubsub, event);
 
-          return PubSub.publish(channel.pubsub, event);
+          return event.type === "error"
+            ? Effect.andThen(logFailure(channel.events, event), published)
+            : published;
         }),
       );
 
