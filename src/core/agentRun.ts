@@ -1,4 +1,4 @@
-import { Context, Effect, Option } from "effect";
+import { Array, Context, Effect, Option, Order } from "effect";
 
 import { agentBin, agentInvocation } from "./agentCommand.ts";
 import { runPermissions } from "./agentPermissions.ts";
@@ -28,7 +28,7 @@ import {
   firstLine,
   runsLayer,
 } from "./runRegistry.ts";
-import type { AgentName, AgentPick, AgentRun } from "./schema.ts";
+import type { AgentName, AgentPick, AgentRun, ItemDoc } from "./schema.ts";
 import { sourceHosts } from "./sources.ts";
 import { nowIso } from "./time.ts";
 import { Workspace } from "./workspace.ts";
@@ -50,6 +50,22 @@ const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
       effort: undefined,
     })),
   );
+
+const byStart = Order.mapInput(Order.String, (run: AgentRun) => run.startedAt);
+
+/** How many runs on the item in a row failed just before now, which the next failure adds to. */
+const failedBefore = (doc: ItemDoc): number => {
+  const runs = Array.getSomes(doc.feedback.map((entry) => Option.fromUndefinedOr(entry.run)));
+
+  return Array.match(runs, {
+    onEmpty: () => 0,
+    onNonEmpty: (some) => {
+      const latest = Array.max(some, byStart);
+
+      return latest.status === "failed" ? (latest.failedInARow ?? 1) : 0;
+    },
+  });
+};
 
 /** Where a run stands, as each save of it says. */
 type RunState = Pick<AgentRun, "status" | "reply" | "error" | "signedOut" | "effortKeepsCache">;
@@ -189,10 +205,17 @@ export const runEdit = (cli: CliEntry | undefined) =>
     const startedAt = yield* nowIso;
     const { emit, compacted } = yield* noteCompaction(report);
 
+    // Read before this run's first save replaces the run it retries.
+    const before = yield* getItem(itemId).pipe(
+      Effect.map((item) => failedBefore(item.doc)),
+      Effect.orElseSucceed(() => 0),
+    );
+
     const record: RecordRun = (state) =>
       Effect.gen(function* () {
         const finishedAt = state.status === "running" ? undefined : yield* nowIso;
-        const run = { agent, model, effort, startedAt, ...state, finishedAt };
+        const failedInARow = state.status === "failed" ? before + 1 : undefined;
+        const run = { agent, model, effort, startedAt, ...state, failedInARow, finishedAt };
 
         return yield* setRun(itemId, feedbackId, { ...run, compacted: yield* compacted });
       });

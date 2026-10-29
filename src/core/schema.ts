@@ -173,6 +173,8 @@ export const AgentRun = Schema.Struct({
   error: Schema.optional(Schema.String),
   /** It failed because the agent isn't signed in, or its sign-in stopped working. */
   signedOut: Schema.optional(Schema.Boolean),
+  /** How many runs on the item in a row failed, ending with this one; left out when it didn't fail. */
+  failedInARow: Schema.optional(Schema.Int),
   /** The agent compacted the conversation during the run, so it goes on from a summary. */
   compacted: Schema.optional(Schema.Boolean),
   /**
