@@ -4,6 +4,8 @@ import { type KeyObject, createPublicKey, verify } from "node:crypto";
 
 import { Clock, Context, Duration, Effect, Option, Redacted, Schema } from "effect";
 
+import { RELEASED_AT } from "./core/released.ts";
+
 /**
  * The public half of the Ed25519 key cutfac.com signs license grants with, so only a grant it made
  * unlocks the paid plan. Builds from source have no limit, so they need no way around it.
@@ -12,6 +14,14 @@ export const LICENSE_PUBLIC_KEY = createPublicKey({
   key: Buffer.from("MCowBQYDK2VwAyEAQGBm1GPxoGiY9Gef8a06KpmLalt4VgpwjqftWiNM0Zw=", "base64"),
   format: "der",
   type: "spki",
+});
+
+/**
+ * When the running build was released, which a perpetual license's year of updates is held to.
+ * Tests set their own.
+ */
+export const ReleasedAt = Context.Reference<number | null>("cutfac/ReleasedAt", {
+  defaultValue: () => RELEASED_AT,
 });
 
 /** The key that verifies cutfac.com's license grants. Tests sign their own. */
@@ -36,11 +46,16 @@ export type LicenseKey = typeof LicenseKey.Type;
 /** A key held in memory, which prints as `<redacted>` so it can't slip into a log or an error report. */
 export type SecretLicenseKey = Redacted.Redacted<LicenseKey>;
 
-/** What cutfac.com signs: the key it checked, its time then, and when the plan ends, in epoch ms. */
+/**
+ * What cutfac.com signs: the key it checked, its time then, when the plan ends, and for a perpetual
+ * license when its updates end, in epoch ms. Grants from before perpetual licenses have no end of
+ * updates.
+ */
 const SignedGrant = Schema.Struct({
   key: Schema.String,
   checkedAt: Schema.Finite,
   expiresAt: Schema.OptionFromNullOr(Schema.Finite),
+  updatesUntil: Schema.optional(Schema.NullOr(Schema.Finite)),
 });
 
 type SignedGrant = typeof SignedGrant.Type;
@@ -109,12 +124,22 @@ export const grantFor = Effect.fnUntraced(function* (key: SecretLicenseKey, toke
   return Option.filter(openGrant(token, publicKey), (grant) => grant.key === Redacted.value(key));
 });
 
+/** Whether a build released at `releasedAt` came out after `grant`'s updates ended. */
+const releasedAfterUpdates = (grant: SignedGrant, releasedAt: number | null) =>
+  releasedAt !== null &&
+  grant.updatesUntil !== undefined &&
+  grant.updatesUntil !== null &&
+  releasedAt > grant.updatesUntil;
+
 /**
- * Whether `grant` holds at `now`: it hasn't run out, and cutfac.com made it within the offline
- * grace. A grant timed well after `now`, which a clock set back would show, doesn't hold.
+ * Whether `grant` holds at `now` for a build released at `releasedAt`: it hasn't run out, the build
+ * came out within its updates, and cutfac.com made it within the offline grace. A grant timed well
+ * after `now`, which a clock set back would show, doesn't hold.
  */
-const holdsAt = (now: number) => (grant: SignedGrant) => {
+const holdsAt = (now: number, releasedAt: number | null) => (grant: SignedGrant) => {
   if (Option.exists(grant.expiresAt, (end) => end <= now)) return false;
+
+  if (releasedAfterUpdates(grant, releasedAt)) return false;
 
   const age = now - grant.checkedAt;
 
@@ -137,7 +162,21 @@ export const isPaid = Effect.fnUntraced(function* ({ key, record }: SavedLicense
 
   const grant = yield* grantFor(saved.value.key, saved.value.token);
 
-  return Option.exists(grant, holdsAt(yield* Clock.currentTimeMillis));
+  return Option.exists(grant, holdsAt(yield* Clock.currentTimeMillis, yield* ReleasedAt));
+});
+
+/**
+ * When the saved key's updates end, if cutfac.com signed it as a perpetual license's: a build
+ * released after it runs as the free version.
+ */
+export const updatesUntil = Effect.fnUntraced(function* ({ key, record }: SavedLicense) {
+  const saved = Option.all({ key, token: Option.flatMap(record, tokenOf) });
+
+  if (Option.isNone(saved)) return Option.none<number>();
+
+  const grant = yield* grantFor(saved.value.key, saved.value.token);
+
+  return Option.flatMap(grant, ({ updatesUntil: until }) => Option.fromNullishOr(until));
 });
 
 /** Whether the desktop app's settings.json holds a key that unlocks the paid plan now. */

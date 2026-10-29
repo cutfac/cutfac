@@ -239,7 +239,7 @@ function start(): void {
       yield* Effect.ignore(saveLocale(next));
     }),
   );
-  handleUpdates({ quit });
+  handleUpdates({ quit, locale: () => readNow(appState.locale) });
   handleAttention({
     isFromApp,
     bringToFront,

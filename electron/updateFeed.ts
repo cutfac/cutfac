@@ -26,32 +26,32 @@ export const updateFeed = Layer.sync(UpdateFeed, () => {
   // Read only here: the first read creates the platform updater.
   const { autoUpdater } = electronUpdater;
 
+  // The app decides what to download: a version past a perpetual license's updates stays out.
+  autoUpdater.autoDownload = false;
+
   return UpdateFeed.of({
     enabled: true,
     check: Effect.tryPromise({
       try: () => autoUpdater.checkForUpdates(),
       catch: (cause) => new UpdateCheckFailed({ message: describeError(cause) }),
     }).pipe(
-      Effect.tap((result) =>
-        Option.match(Option.fromNullishOr(result?.downloadPromise), {
-          onNone: () => Effect.void,
-          onSome: (download) =>
-            Effect.forkDetach(
-              Effect.ignore(
-                Effect.tryPromise(() => download),
-                {
-                  log: "Warn",
-                  message: "Downloading the update failed",
-                },
-              ),
-            ),
-        }),
-      ),
       Effect.map((result) =>
         Option.map(Option.fromNullishOr(result), ({ isUpdateAvailable, updateInfo }) => ({
           available: isUpdateAvailable,
           version: updateInfo.version,
+          releasedAt: Option.filter(
+            Option.some(Date.parse(updateInfo.releaseDate)),
+            Number.isFinite,
+          ),
         })),
+      ),
+    ),
+    download: Effect.asVoid(
+      Effect.forkDetach(
+        Effect.ignore(
+          Effect.tryPromise(() => autoUpdater.downloadUpdate()),
+          { log: "Warn", message: "Downloading the update failed" },
+        ),
       ),
     ),
     downloaded: listen<string>((push) => {

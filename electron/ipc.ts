@@ -54,6 +54,9 @@ export const UPDATE_NOTICE_CHANNEL = "cutfac:update-notice";
 /** Quit and install the version that is ready. */
 export const UPDATE_RESTART_CHANNEL = "cutfac:update-restart";
 
+/** Open a checkout that renews the license's updates, to get a version held back. */
+export const UPDATE_RENEW_CHANNEL = "cutfac:update-renew";
+
 /** The version the app updated to since the board last asked, if it did. */
 export const UPDATED_TO_CHANNEL = "cutfac:updated-to";
 

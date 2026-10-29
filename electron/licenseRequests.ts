@@ -10,6 +10,9 @@ export const LICENSE_URL = "https://cutfac.com/api/license";
 /** Where the app activates its Mac for a perpetual license, and frees it again. */
 export const ACTIVATIONS_URL = `${LICENSE_URL}/activations`;
 
+/** Where the app gets a checkout that renews a perpetual license's updates for a year. */
+export const RENEWAL_URL = `${LICENSE_URL}/renewal`;
+
 const REQUEST_TIMEOUT = "8 seconds";
 
 // cutfac.com also says when the plan ends and whether it is a trial's, for apps from before grants
@@ -18,6 +21,10 @@ const GrantReply = Schema.Struct({ token: Schema.NonEmptyString });
 
 /** A perpetual license's activation, or none for a plan key, which needs none. */
 const ActivationReply = Schema.Struct({ activation: Schema.NullOr(Schema.NonEmptyString) });
+
+const RenewalReply = Schema.Struct({
+  url: Schema.NonEmptyString.check(Schema.isPattern(/^https:\/\//u)),
+});
 
 /** cutfac.com couldn't be asked about a key, or gave no clear answer. */
 export class LicenseUnanswered extends Schema.TaggedError<LicenseUnanswered>()(
@@ -170,5 +177,28 @@ export const deactivateMac = Effect.fn("license.deactivate")(function* (
         message: `cutfac.com answered ${response.status} to freeing the Mac`,
       });
     }),
+  );
+});
+
+/**
+ * A checkout that renews `key`'s updates for a year, in the board's `locale`, to open in the
+ * browser. Only a live perpetual license gets one.
+ */
+export const renewalCheckout = Effect.fn("license.renewal")(function* (
+  key: SecretLicenseKey,
+  locale: string,
+): Effect.fn.Return<string, LicenseUnanswered, HttpClient.HttpClient> {
+  return yield* inTime(
+    HttpClient.execute(
+      HttpClientRequest.post(RENEWAL_URL).pipe(
+        HttpClientRequest.setUrlParam("locale", locale),
+        HttpClientRequest.bearerToken(key),
+      ),
+    ).pipe(
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(RenewalReply)),
+      Effect.map(({ url }) => url),
+      Effect.mapError(unanswered),
+    ),
   );
 });

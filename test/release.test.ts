@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
 import { ConfigProvider, Effect, Option, Result } from "effect";
@@ -16,6 +19,7 @@ import {
   tagName,
   treeProblem,
   versionProblem,
+  releasedSource,
 } from "../electron/releasePlan.ts";
 import { testEffect } from "./effect.ts";
 
@@ -242,5 +246,19 @@ describe("release tagging", () => {
       "Maintenance and documentation changes.\n\n",
     );
     expect(releaseNotes([])).toStartWith("Maintenance and documentation changes.");
+  });
+});
+
+describe("the release date in the build", () => {
+  test("the file the release writes is one the build reads the time from", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cutfac-released-"));
+    const file = join(dir, "released.ts");
+
+    await writeFile(file, releasedSource(1_793_000_000_000));
+
+    const built: { RELEASED_AT: number | null } = await import(file);
+
+    expect(built.RELEASED_AT).toBe(1_793_000_000_000);
+    await rm(dir, { recursive: true });
   });
 });

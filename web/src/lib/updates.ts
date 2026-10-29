@@ -2,12 +2,14 @@ import { Schema } from "effect";
 
 /**
  * What the board shows about updates at the foot of its sidebar: nothing, a download the user asked
- * for, or a version ready to install with a restart.
+ * for, a version ready to install with a restart, or one released after the license's updates
+ * ended (in epoch ms), which a renewal gets.
  */
 export const UpdateStatus = Schema.Union([
   Schema.TaggedStruct("Idle", {}),
   Schema.TaggedStruct("Downloading", { version: Schema.String, percent: Schema.Finite }),
   Schema.TaggedStruct("Ready", { version: Schema.String }),
+  Schema.TaggedStruct("Held", { version: Schema.String, updatesEnded: Schema.Finite }),
 ]).pipe(Schema.toTaggedUnion("_tag"));
 
 export type UpdateStatus = typeof UpdateStatus.Type;

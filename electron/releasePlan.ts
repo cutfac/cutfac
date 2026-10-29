@@ -141,6 +141,13 @@ export function signingProblem(identities: string, team: string): Option.Option<
 
 export const tagName = (version: string) => `v${version}`;
 
+/** Where the build learns when it was released, which a perpetual license's updates are held to. */
+export const RELEASED_FILE = path.join("src", "core", "released.ts");
+
+/** That file as the release writes it into the copy it builds, released at `at`. */
+export const releasedSource = (at: number) =>
+  `/** When this build was released, in epoch milliseconds, written by \`bun run release\`. */\nexport const RELEASED_AT: number | null = ${at};\n`;
+
 const COMMIT = /^(?<type>\w+)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?: (?<text>.+)$/;
 
 const SECTIONS = [

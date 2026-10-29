@@ -4,15 +4,27 @@ import { generateKeyPairSync } from "node:crypto";
 // Each test builds the license it checks, with the saved key and answers that test needs.
 // @effect-diagnostics strictEffectProvide:off
 import { Effect, Layer, Option, Redacted } from "effect";
-import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientError, HttpClientResponse, UrlParams } from "effect/http";
 import { TestClock } from "effect/testing";
 
 import { License, LicenseSettings, licenseKeyFrom } from "../electron/license.ts";
-import { ACTIVATIONS_URL, LICENSE_URL, fetchLicense } from "../electron/licenseRequests.ts";
+import {
+  ACTIVATIONS_URL,
+  LICENSE_URL,
+  RENEWAL_URL,
+  fetchLicense,
+} from "../electron/licenseRequests.ts";
 import { MacUnknown, ThisMac, machineOf, platformUuidIn } from "../electron/thisMac.ts";
-import { LICENSE_PUBLIC_KEY, LicenseKey, LicensePublicKey, LicenseRecord } from "../src/license.ts";
+import {
+  LICENSE_PUBLIC_KEY,
+  LicenseKey,
+  LicensePublicKey,
+  LicenseRecord,
+  ReleasedAt,
+  isPaid,
+} from "../src/license.ts";
 import { testEffect } from "./effect.ts";
-import { signedGrant, testLicenseKey } from "./support.ts";
+import { signedGrant, signedPerpetualGrant, testLicenseKey } from "./support.ts";
 
 const it = testEffect(testLicenseKey);
 
@@ -74,11 +86,19 @@ interface Asked {
 const MAC = { label: "Studio Mac", machine: "a".repeat(64) };
 
 /** What one request to cutfac.com was, as the events show it. */
-const eventOf = (method: string, url: string, authorization: string, activation: string) => {
+const eventOf = (
+  method: string,
+  url: string,
+  authorization: string,
+  activation: string,
+  search: string,
+) => {
   if (url === LICENSE_URL)
     return `ask ${authorization}${activation === "" ? "" : ` @${activation}`}`;
 
   if (method === "POST" && url === ACTIVATIONS_URL) return `activate ${authorization}`;
+
+  if (url === RENEWAL_URL) return `renew ${authorization} ${search}`;
 
   return `free ${url.slice(ACTIVATIONS_URL.length + 1)}`;
 };
@@ -93,7 +113,15 @@ const site = (answers: Response[], asked: Asked[], events: Events = []) =>
       const answer = answers.shift();
 
       asked.push({ url: request.url, authorization, activation, machine });
-      events.push(eventOf(request.method, request.url, authorization ?? "", activation ?? ""));
+      events.push(
+        eventOf(
+          request.method,
+          request.url,
+          authorization ?? "",
+          activation ?? "",
+          `?${UrlParams.toString(request.urlParams)}`,
+        ),
+      );
 
       if (answer !== undefined) return Effect.succeed(HttpClientResponse.fromWeb(request, answer));
 
@@ -616,4 +644,100 @@ describe("this Mac", () => {
     expect(machineOf("4C4C4544-0042-3510-8051-B2C04F4D3132")).toMatch(/^[0-9a-f]{64}$/u);
     expect(machineOf("4C4C4544-0042-3510-8051-B2C04F4D3132")).not.toContain("4C4C4544");
   });
+});
+
+/** A perpetual license's grant, as the app saved it. */
+const perpetual = (checkedAt: number, updatesUntil: number) =>
+  Option.some(
+    LicenseRecord.cases.LicenseGrant.make({ token: signedPerpetualGrant(checkedAt, updatesUntil) }),
+  );
+
+const DAY = 24 * HOUR;
+
+describe("a perpetual license's year of updates", () => {
+  it.effect("a build released within it is paid; one released after runs as the free version", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW);
+
+      const saved = { key: Option.some(KEY_1), record: perpetual(NOW, NOW + DAY) };
+
+      const releasedAt = (at: number | null) =>
+        isPaid(saved).pipe(Effect.provideService(ReleasedAt, at));
+
+      expect(yield* releasedAt(NOW + DAY)).toBe(true);
+      expect(yield* releasedAt(NOW + DAY + 1)).toBe(false);
+      // Builds from source, and the dev build, carry no release date.
+      expect(yield* releasedAt(null)).toBe(true);
+    }),
+  );
+
+  it.effect("a grant from before perpetual licenses holds any build", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW);
+
+      const saved = { key: Option.some(KEY_1), record: signed(NOW) };
+
+      expect(yield* isPaid(saved).pipe(Effect.provideService(ReleasedAt, NOW + 365 * DAY))).toBe(
+        true,
+      );
+    }),
+  );
+
+  it.effect("a build it covers is taken without asking cutfac.com", () =>
+    withLicense({ key: "KEY-1", record: perpetual(NOW, NOW + DAY) }, [], (license, events) =>
+      Effect.gen(function* () {
+        yield* launched;
+        events.splice(0);
+
+        expect(yield* license.covers(NOW + DAY)).toBe(true);
+        expect(yield* license.updatesEnd).toEqual(Option.some(NOW + DAY));
+        expect(events).toEqual([]);
+      }),
+    ),
+  );
+
+  it.effect("before holding a build back, it asks again, which counts a renewal", () =>
+    withLicense(
+      { key: "KEY-1", record: perpetual(NOW, NOW + DAY), activation: "act-1" },
+      [
+        Response.json({ token: signedPerpetualGrant(NOW, NOW + DAY) }),
+        Response.json({ token: signedPerpetualGrant(NOW, NOW + 400 * DAY) }),
+      ],
+      (license, events) =>
+        Effect.gen(function* () {
+          yield* launched;
+
+          expect(yield* license.covers(NOW + 2 * DAY)).toBe(true);
+          expect(events.slice(-2)).toEqual(["ask Bearer KEY-1 @act-1", "save KEY-1 grant @act-1"]);
+        }),
+    ),
+  );
+
+  it.effect("a renewal checkout is asked for with the key, in the board's language", () =>
+    withLicense(
+      { key: "KEY-1", record: perpetual(NOW, NOW + DAY) },
+      [
+        Response.json({ token: signedPerpetualGrant(NOW, NOW + DAY) }),
+        Response.json({ url: "https://polar.sh/checkout/renewal" }),
+      ],
+      (license, events) =>
+        Effect.gen(function* () {
+          yield* launched;
+
+          expect(yield* license.renewal("ko")).toEqual(
+            Option.some("https://polar.sh/checkout/renewal"),
+          );
+          expect(events.at(-1)).toBe("renew Bearer KEY-1 ?locale=ko");
+        }),
+    ),
+  );
+
+  it.effect("with no key there's no renewal to ask for", () =>
+    withLicense({}, [], (license, events) =>
+      Effect.gen(function* () {
+        expect(yield* license.renewal("en")).toEqual(Option.none());
+        expect(events).toEqual([]);
+      }),
+    ),
+  );
 });

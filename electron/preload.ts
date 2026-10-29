@@ -67,6 +67,7 @@ import {
   UPDATE_STATUS_CHANGED_CHANNEL,
   UPDATE_STATUS_CHANNEL,
   UPDATED_TO_CHANNEL,
+  UPDATE_RENEW_CHANNEL,
   TAKE_NEW_VIDEO_LINK_CHANNEL,
 } from "./ipc.ts";
 
@@ -154,6 +155,7 @@ const updates = {
     };
   },
   restart: () => ipcRenderer.invoke(UPDATE_RESTART_CHANNEL),
+  renew: () => ipcRenderer.invoke(UPDATE_RENEW_CHANNEL),
   updatedTo: () => ipcRenderer.invoke(UPDATED_TO_CHANNEL),
 } satisfies CutfacUpdates;
 

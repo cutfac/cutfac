@@ -190,6 +190,11 @@ export interface CutfacUpdates {
   onNotice: (listener: (notice: UpdateNotice) => void) => () => void;
   /** Quit and install the version that is ready. */
   restart: () => Promise<void>;
+  /**
+   * Open a checkout in the browser that renews the license's updates, for a version held back.
+   * False when cutfac.com couldn't give one.
+   */
+  renew: () => Promise<boolean>;
   /** The version the app updated to since the board last asked, once. */
   updatedTo: () => Promise<string | undefined>;
 }

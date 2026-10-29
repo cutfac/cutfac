@@ -18,9 +18,16 @@ import {
   isPaid,
   type SavedLicense,
   type SecretLicenseKey,
+  updatesUntil,
 } from "../src/license.ts";
 import type { LicenseCheck } from "../web/src/desktop.ts";
-import { type CheckingMac, activateMac, deactivateMac, fetchLicense } from "./licenseRequests.ts";
+import {
+  type CheckingMac,
+  activateMac,
+  deactivateMac,
+  fetchLicense,
+  renewalCheckout,
+} from "./licenseRequests.ts";
 import { ThisMac } from "./thisMac.ts";
 
 /** While the app runs, it asks again this often. */
@@ -101,6 +108,15 @@ export class License extends Context.Service<
     readonly hasKey: Effect.Effect<boolean>;
     /** Frees this Mac's activation and forgets the key, so it can be used on another Mac. */
     readonly deactivate: Effect.Effect<Deactivation, LicenseNotSaved>;
+    /** When a perpetual license's updates end; none for a plan, the free version or no answer. */
+    readonly updatesEnd: Effect.Effect<Option.Option<number>>;
+    /**
+     * Whether a build released at `releasedAt` keeps the paid plan: always, but past a perpetual
+     * license's updates. Before saying no it asks cutfac.com again, which counts a renewal.
+     */
+    covers(releasedAt: number): Effect.Effect<boolean>;
+    /** A checkout that renews the saved key's updates, in `locale`, if cutfac.com gives one. */
+    renewal(locale: string): Effect.Effect<Option.Option<string>>;
   }
 >()("cutfac/desktop/License") {
   /**
@@ -118,6 +134,9 @@ export class License extends Context.Service<
       refresh: Effect.void,
       hasKey: Effect.succeed(false),
       deactivate: Effect.succeed("unavailable"),
+      updatesEnd: Effect.succeedNone,
+      covers: () => Effect.succeed(true),
+      renewal: () => Effect.succeedNone,
     }),
   );
 }
@@ -321,10 +340,36 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
     yield* check;
   });
 
+  const updatesEnd = Effect.flatMap(Ref.get(saved), updatesUntil);
+
+  const coveredBy = (releasedAt: number) =>
+    Effect.map(updatesEnd, (end) =>
+      Option.match(end, { onNone: () => true, onSome: (until) => releasedAt <= until }),
+    );
+
+  const covers = Effect.fn("License.covers")(function* (releasedAt: number) {
+    if (yield* coveredBy(releasedAt)) return true;
+
+    yield* check;
+
+    return yield* coveredBy(releasedAt);
+  });
+
+  const renewal = (locale: string) =>
+    Effect.flatMap(Ref.get(saved), ({ key }) =>
+      Option.match(key, {
+        onNone: () => Effect.succeedNone,
+        onSome: (held) => online(renewalCheckout(held, locale)),
+      }),
+    );
+
   return License.of({
     setKey,
     refresh,
     hasKey: Effect.map(Ref.get(saved), ({ key }) => Option.isSome(key)),
     deactivate: deactivate(),
+    updatesEnd,
+    covers,
+    renewal,
   });
 });

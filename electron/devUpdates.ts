@@ -35,17 +35,21 @@ export const devUpdateFeed = UpdateFeed.of({
   check: Effect.flatMap(Ref.get(fake.next), (next) =>
     Match.value(next).pipe(
       Match.when("found", () =>
-        Effect.as(
-          Effect.forkDetach(download),
-          Option.some({ available: true, version: FAKE_VERSION }),
-        ),
+        Effect.succeedSome({ available: true, version: FAKE_VERSION, releasedAt: Option.none() }),
       ),
       Match.when("fails", () =>
         Effect.fail(new UpdateCheckFailed({ message: "The update server didn't answer (faked)." })),
       ),
-      Match.orElse(() => Effect.succeedSome({ available: false, version: app.getVersion() })),
+      Match.orElse(() =>
+        Effect.succeedSome({
+          available: false,
+          version: app.getVersion(),
+          releasedAt: Option.none(),
+        }),
+      ),
     ),
   ),
+  download: Effect.asVoid(Effect.forkDetach(download)),
   downloaded: Stream.fromQueue(fake.downloaded),
   progress: Stream.fromQueue(fake.progress),
   errors: Stream.empty,

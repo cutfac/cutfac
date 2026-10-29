@@ -15,6 +15,11 @@ export const shellEn = {
     downloading: (version: string) => `Downloading Cutfac ${version}`,
     ready: (version: string) => `Cutfac ${version} is ready`,
     readyDetail: "It installs the next time you quit, or now with a restart.",
+    held: (version: string) => `Cutfac ${version} is out`,
+    heldDetail: (date: string) =>
+      `Your license's year of updates ended on ${date}. This version keeps working; renew to get the new one.`,
+    renew: "Renew updates",
+    renewFailed: "Couldn't open the renewal. Check your connection and try again.",
     restart: "Restart to update",
     upToDate: (version: string) => `You're up to date. Cutfac ${version} is the newest version.`,
     checkFailed: "Couldn't check for updates",

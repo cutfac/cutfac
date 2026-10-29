@@ -45,11 +45,21 @@ function useUpdateStatus(): UpdateStatus {
 
 /**
  * The app's update at the foot of the sidebar: the download the user asked for as it goes, then a
- * restart to install it, whichever way it came. Nothing otherwise, so it never interrupts.
+ * restart to install it, whichever way it came, or a renewal for a version released after the
+ * license's updates ended. Nothing otherwise, so it never interrupts.
  */
 export function UpdateCard() {
   const t = useMessages().updates;
   const status = useUpdateStatus();
+
+  const renew = () => {
+    desktop?.updates.renew().then(
+      (opened) => {
+        if (!opened) toast.error(t.renewFailed);
+      },
+      () => toast.error(t.renewFailed),
+    );
+  };
 
   return Match.value(status).pipe(
     Match.tag("Idle", () => null),
@@ -57,6 +67,23 @@ export function UpdateCard() {
       <div className="grid gap-2 rounded-2xl border bg-card p-3 text-card-foreground group-data-[collapsible=icon]:hidden">
         <p className="text-sm font-medium">{t.downloading(version)}</p>
         <Progress aria-label={t.downloading(version)} value={percent} max={100} />
+      </div>
+    )),
+    Match.tag("Held", ({ version, updatesEnded }) => (
+      <div className="grid gap-3 rounded-2xl border bg-card p-3 text-card-foreground group-data-[collapsible=icon]:hidden">
+        <div className="grid gap-0.5">
+          <p className="text-sm font-medium">{t.held(version)}</p>
+          <p className="text-xs text-muted-foreground">
+            {t.heldDetail(
+              new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(
+                updatesEnded,
+              ),
+            )}
+          </p>
+        </div>
+        <Button size="sm" onClick={renew}>
+          {t.renew}
+        </Button>
       </div>
     )),
     Match.tag("Ready", ({ version }) => (

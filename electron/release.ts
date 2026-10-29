@@ -12,7 +12,7 @@
 // @effect-diagnostics strictEffectProvide:off
 import path from "node:path";
 
-import { Console, Effect, FileSystem, Option, Redacted } from "effect";
+import { Clock, Console, Effect, FileSystem, Option, Redacted } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { run as runCaptured } from "../src/core/process.ts";
@@ -27,6 +27,8 @@ import {
   branchProblem,
   log,
   missingSettings,
+  RELEASED_FILE,
+  releasedSource,
   releaseArgs,
   releaseNotes,
   releaseSetting,
@@ -319,6 +321,14 @@ const copyCommit = Effect.fnUntraced(function* (commit: string) {
 const buildApp = Effect.fnUntraced(function* (version: string, commit: string) {
   yield* log(`Building Cutfac ${version} in ${path.relative(root, buildRoot)}.`);
   yield* copyCommit(commit);
+
+  const fs = yield* FileSystem.FileSystem;
+
+  // The release time, not the commit's, so every build released after a license's year ends is held.
+  yield* fs.writeFileString(
+    path.join(buildRoot, RELEASED_FILE),
+    releasedSource(yield* Clock.currentTimeMillis),
+  );
   yield* runInCopy(["bun", "run", "build"]);
   yield* runInCopy(["bun", "run", "build:sidecar"]);
   yield* runInCopy(["bun", "run", "build:electron"]);

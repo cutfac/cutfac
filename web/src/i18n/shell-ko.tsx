@@ -17,6 +17,11 @@ export const shellKo: ShellMessages = {
     downloading: (version) => `컷팩 ${version} 버전을 내려받고 있어요`,
     ready: (version) => `컷팩 ${version} 버전이 준비됐어요`,
     readyDetail: "다음에 종료할 때 설치되고, 지금 재시작하면 바로 설치돼요.",
+    held: (version) => `컷팩 ${version} 버전이 나왔어요`,
+    heldDetail: (date) =>
+      `라이선스의 1년 업데이트가 ${date}에 끝났어요. 지금 버전은 계속 쓸 수 있고, 갱신하면 새 버전을 받아요.`,
+    renew: "업데이트 갱신하기",
+    renewFailed: "갱신 페이지를 열지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
     restart: "재시작해서 업데이트",
     upToDate: (version) => `최신 버전이에요. 컷팩 ${version} 버전이 가장 최신이에요.`,
     checkFailed: "업데이트를 확인하지 못했어요",

@@ -88,8 +88,8 @@ export const appServices = Layer.mergeAll(
   FirstWorkspace.layer,
   AgentFixes.layer,
   SystemAccess.layer,
-  license,
-  updates,
+  // Updates ask the license whether it covers a new version, from the one license the app keeps.
+  updates.pipe(Layer.provideMerge(license)),
 ).pipe(Layer.provideMerge(WorkspaceServer.layer), Layer.provideMerge(services));
 
 export type AppServices = Layer.Success<typeof appServices>;

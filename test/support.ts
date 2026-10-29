@@ -206,6 +206,15 @@ export function signedGrant(
   return `${payload.toString("base64url")}.${sign(null, payload, privateKey).toString("base64url")}`;
 }
 
+/** A perpetual license's grant for KEY-1, whose year of updates ends at `updatesUntil`. */
+export function signedPerpetualGrant(checkedAt: number, updatesUntil: number): string {
+  const payload = Buffer.from(
+    JSON.stringify({ key: "KEY-1", checkedAt, expiresAt: null, updatesUntil }),
+  );
+
+  return `${payload.toString("base64url")}.${sign(null, payload, licenseSigning.privateKey).toString("base64url")}`;
+}
+
 /** Checks license grants against `licenseSigning`, so the tests' own grants unlock the plan. */
 export const testLicenseKey = Layer.succeed(LicensePublicKey, licenseSigning.publicKey);
 
