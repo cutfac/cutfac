@@ -8,6 +8,7 @@ import {
   outdatedAgent,
   versionOf,
 } from "./agentVersion.ts";
+import { parseClaudeLine } from "./claudeStream.ts";
 import { run, which } from "./process.ts";
 import { AGENTS, type AgentName } from "./schema.ts";
 
@@ -20,16 +21,45 @@ export const INSTALL_COMMAND: Readonly<Record<AgentName, string>> = {
 /** Checking the sign-in reads local credentials and calls no model; one that hangs is skipped. */
 const SIGN_IN_TIMEOUT = "10 seconds";
 
+const TRY_SIGN_IN_TIMEOUT = "20 seconds";
+
 const ClaudeAuth = Schema.fromJsonString(Schema.Struct({ loggedIn: Schema.Boolean }));
 
 const decodeClaudeAuth = Schema.decodeUnknownOption(ClaudeAuth);
 
 /**
- * Whether the CLI at `bin` is signed in: `claude auth status --json` says so in `loggedIn`, and
- * `codex login status` by its exit code. Undefined when it can't tell, which doesn't hold the user
- * up: a run that needs the sign-in says so itself.
+ * The smallest turn Claude Code takes. `claude auth status` counts a sign-in whose session expired
+ * and can't be refreshed as signed in, and only a call to the model tells them apart.
  */
-const checkSignIn = (agent: AgentName, bin: string) =>
+const CLAUDE_SIGN_IN_TRY = [
+  "-p",
+  "Reply with OK",
+  "--model",
+  "haiku",
+  "--system-prompt",
+  "Reply with OK.",
+  "--tools",
+  "",
+  "--strict-mcp-config",
+  "--setting-sources",
+  "",
+  "--disable-slash-commands",
+  "--no-session-persistence",
+  "--output-format",
+  "stream-json",
+  "--verbose",
+];
+
+const claudeSignInWorks = (bin: string) =>
+  run(bin, CLAUDE_SIGN_IN_TRY).pipe(
+    Effect.map(
+      (result) => !result.stdout.split("\n").some((line) => parseClaudeLine(line).signedOut),
+    ),
+    Effect.timeoutOrElse({ duration: TRY_SIGN_IN_TIMEOUT, orElse: () => Effect.succeed(true) }),
+    Effect.orElseSucceed(() => true),
+  );
+
+const signedInLocally = (agent: AgentName, bin: string) =>
   (agent === "claude"
     ? Effect.map(run(bin, ["auth", "status", "--json"]), (result) =>
         Option.getOrUndefined(Option.map(decodeClaudeAuth(result.stdout), (auth) => auth.loggedIn)),
@@ -39,6 +69,17 @@ const checkSignIn = (agent: AgentName, bin: string) =>
     Effect.timeoutOrElse({ duration: SIGN_IN_TIMEOUT, orElse: () => Effect.undefined }),
     Effect.orElseSucceed(() => undefined),
   );
+
+/**
+ * Whether the CLI at `bin` is signed in: `claude auth status --json` says so in `loggedIn`, and
+ * `codex login status` by its exit code. Undefined when it can't tell, which doesn't hold the user
+ * up: a run that needs the sign-in says so itself.
+ */
+const checkSignIn = Effect.fnUntraced(function* (agent: AgentName, bin: string) {
+  const signedIn = yield* signedInLocally(agent, bin);
+
+  return agent === "claude" && signedIn === true ? yield* claudeSignInWorks(bin) : signedIn;
+});
 
 /** The state an installed agent is in, and what fixes it. */
 export function readiness(

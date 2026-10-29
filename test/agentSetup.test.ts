@@ -17,6 +17,13 @@ const NATIVE = "/Users/ada/.local/share/claude/versions/2.1.1";
 const answering = (version: string, rest: string) =>
   `if [ "$1" = "--version" ]; then echo '${version}'; exit 0; fi\n${rest}`;
 
+/** A fake Claude Code whose `auth status` says it is signed in, and whose turns do `turn`. */
+const claudeAnswering = (turn: string) =>
+  answering(
+    "99.0.0 (Claude Code)",
+    `if [ "$1" = "auth" ]; then echo '{"loggedIn": true}'; exit 0; fi\n${turn}`,
+  );
+
 describe("what an installed agent needs", () => {
   test("an old release needs its update first, whatever its sign-in", () => {
     expect(
@@ -68,6 +75,38 @@ describe("agents on this machine", () => {
         },
         { agent: "codex", state: "missing", fix: INSTALL_COMMAND.codex },
       ]);
+    }),
+  );
+
+  it.live("a Claude sign-in that says it works but no longer does needs signing in again", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+      // What Claude Code 2.1.311 prints for a turn after its session expired.
+      yield* fakes.bin(
+        "claude",
+        claudeAnswering(
+          `echo '{"type":"assistant","message":{"content":[]},"error":"authentication_failed"}'\n` +
+            `echo '{"type":"result","subtype":"success","is_error":true,"result":"Failed to authenticate"}'\n` +
+            "exit 1\n",
+        ),
+      );
+
+      expect((yield* agentSetup())[0]).toEqual({
+        agent: "claude",
+        state: "signedOut",
+        version: "99.0.0",
+        fix: SIGN_IN_COMMAND.claude,
+      });
+
+      // A turn that fails for another reason, such as a usage limit, says nothing of the sign-in.
+      yield* fakes.bin(
+        "claude",
+        claudeAnswering(
+          `echo '{"type":"result","subtype":"success","is_error":true,"result":"Usage limit reached"}'\nexit 1\n`,
+        ),
+      );
+
+      expect((yield* agentSetup())[0]?.state).toBe("ready");
     }),
   );
 
