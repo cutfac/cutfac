@@ -117,6 +117,7 @@ export const editorEn = {
     playBoth: (time: string) => `Play both from ${time}`,
     /** Plays every video over the part the request pointed at, again and again. */
     loopTogether: (range: string) => `Loop ${range} together`,
+    hear: "Hear this one",
     restore: "Restore before",
     keep: "Keep the edit",
   },

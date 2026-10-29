@@ -112,6 +112,7 @@ export const editorKo: EditorMessages = {
     image: (media, side) => `${media ?? "미디어"}, ${side}`,
     playBoth: (time) => `${time}부터 함께 재생`,
     loopTogether: (range) => `${range} 함께 반복`,
+    hear: "이 버전 소리 듣기",
     restore: "이전으로 되돌리기",
     keep: "편집 유지",
   },

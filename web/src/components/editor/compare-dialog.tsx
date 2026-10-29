@@ -1,6 +1,5 @@
 import { Option } from "effect";
-import { CheckIcon, LayersIcon, PlayIcon, Undo2Icon } from "lucide-react";
-import { useRef, type SyntheticEvent } from "react";
+import { CheckIcon, LayersIcon, Undo2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +25,7 @@ import { useMessages } from "../../i18n/index.ts";
 import { ORIGINAL, savedVersions, versionInUse, versionsMedia } from "../../lib/requests.ts";
 import { anchorOf, describeTarget, targetOf, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
+import { HearButton, PlayTogether, useSideBySide } from "./side-by-side.tsx";
 import type { ChooseVersion } from "./version-switcher.tsx";
 
 interface Sides {
@@ -42,118 +42,8 @@ const kindOf = (item: ItemDetail, name: string): MediaKind =>
 /** The video at `url` opening on `from` seconds, with a media fragment, so it shows that frame first. */
 const atTime = (url: string, from: number) => (from > 0 ? `${url}#t=${from}` : url);
 
-/**
- * Seek to `from`, or to the end when the video is shorter, and settle once it can play on from
- * there without stopping to load, so videos started together stay together.
- */
-function seek(video: HTMLVideoElement, from: number): Promise<void> {
-  return new Promise((resolve) => {
-    // A video that fails to load must not hold the others back.
-    video.addEventListener("error", () => resolve(), { once: true });
-
-    const loaded = () => {
-      if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) resolve();
-      else video.addEventListener("canplaythrough", () => resolve(), { once: true });
-    };
-
-    const go = () => {
-      video.addEventListener("seeked", loaded, { once: true });
-      video.currentTime = Math.min(from, video.duration);
-    };
-
-    if (video.error !== null) resolve();
-    else if (video.readyState >= HTMLMediaElement.HAVE_METADATA) go();
-    else video.addEventListener("loadedmetadata", go, { once: true });
-  });
-}
-
-/** Play every video from `from` together: start only once all of them have seeked. */
-async function playFrom(videos: ReadonlyArray<HTMLVideoElement>, from: number) {
-  for (const video of videos) video.pause();
-  await Promise.all(videos.map((video) => seek(video, from)));
-
-  // A pause before playback starts rejects; that is the user's choice, not an error.
-  for (const video of videos) video.play().catch(() => undefined);
-}
-
-/**
- * Play every video over `range` together, back to its start each time. One the user pauses drops
- * out, and the loop ends when none plays.
- */
-async function loopOver(videos: ReadonlyArray<HTMLVideoElement>, range: Range) {
-  await playFrom(videos, range.start);
-
-  const watch = () => {
-    // A part that runs to the end of the video ends it, which also pauses it.
-    const playing = videos.filter((video) => !video.paused || video.ended);
-
-    if (playing.length === 0) return;
-
-    if (playing.some((video) => video.ended || video.currentTime >= range.end)) {
-      void loopOver(playing, range);
-    } else requestAnimationFrame(watch);
-  };
-
-  requestAnimationFrame(watch);
-}
-
-interface Range {
-  readonly start: number;
-  readonly end: number;
-}
-
-const rangeOf = ({ start, end }: Target): Range | undefined =>
-  start === undefined || end === undefined ? undefined : { start, end };
-
-type VideoEvent = SyntheticEvent<HTMLVideoElement>;
-
-/**
- * The browser's controls for a video side by side, shown only while it is pointed at so none sits
- * over the picture. They play that one alone; the footer's button plays them all together.
- */
-const HOVER_CONTROLS = {
-  onMouseEnter: ({ currentTarget }: VideoEvent) => {
-    currentTarget.controls = true;
-  },
-  onMouseLeave: ({ currentTarget }: VideoEvent) => {
-    currentTarget.controls = false;
-  },
-};
-
-/** Play the videos together over the part a request pointed at, or from where its edit shows. */
-function playTogether(videos: ReadonlyArray<HTMLVideoElement>, target: Target) {
-  const range = rangeOf(target);
-
-  void (range === undefined ? playFrom(videos, anchorOf(target) ?? 0) : loopOver(videos, range));
-}
-
-/**
- * Plays the videos side by side together: over the part the request pointed at, looping, or from
- * where its edit shows when it pointed at a moment.
- */
-function PlayTogether({
-  videos,
-  target,
-  label,
-}: {
-  videos: () => ReadonlyArray<HTMLVideoElement>;
-  target: Target;
-  /** The button's text when there is no part to loop, from the time playback starts. */
-  label: (time: string) => string;
-}) {
-  const t = useMessages();
-  const range = rangeOf(target);
-  const from = anchorOf(target) ?? 0;
-
-  return (
-    <Button variant="outline" className="sm:mr-auto" onClick={() => playTogether(videos(), target)}>
-      <PlayIcon data-icon="inline-start" />
-      {range === undefined
-        ? label(formatTime(from))
-        : t.compare.loopTogether(`${formatTime(range.start)}–${formatTime(range.end)}`)}
-    </Button>
-  );
-}
+const rangeText = ({ start, end }: Target) =>
+  start === undefined || end === undefined ? undefined : `${formatTime(start)}–${formatTime(end)}`;
 
 /** URLs of the two versions; `after` is the media as it is now until the result is saved. */
 function sidesOf(item: ItemDetail, feedback: Feedback): Sides | undefined {
@@ -190,17 +80,17 @@ export function CompareDialog({
   onApprove,
   onRestore,
 }: CompareDialogProps) {
-  const before = useRef<HTMLVideoElement>(null);
-  const after = useRef<HTMLVideoElement>(null);
   const t = useMessages();
   const sides = sidesOf(item, feedback);
   const target = targetOf(feedback);
   // The box's frame, else the part's start: where the edit shows.
   const from = anchorOf(target) ?? 0;
+  const { grid, playing, audible, restart, toggle, hear } = useSideBySide(target, 0);
 
   if (sides === undefined) return null;
 
   const where = describeTarget(target, t.target.boxAt);
+  const range = rangeText(target);
 
   return (
     <Dialog
@@ -209,12 +99,7 @@ export function CompareDialog({
       }}
       // Opening it is asking to watch, so both play at once.
       onOpenChangeComplete={(open) => {
-        if (open && sides.kind === "video") {
-          playTogether(
-            [before.current, after.current].filter((video) => video !== null),
-            target,
-          );
-        }
+        if (open && sides.kind === "video") restart();
       }}
     >
       <DialogTrigger render={<Button variant="soft" pill size="xs" />}>
@@ -228,22 +113,23 @@ export function CompareDialog({
             {where === "" ? "" : ` · ${where}`}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
-          {(["before", "after"] as const).map((side) => (
+        <div ref={grid} className="grid grid-cols-2 gap-3">
+          {(["before", "after"] as const).map((side, index) => (
             <figure key={side} className="flex min-w-0 flex-col gap-1.5">
-              <figcaption className="text-xs font-medium text-muted-foreground">
+              <figcaption className="flex h-6 items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
                 {t.compare[side]}
+                {sides.kind === "video" ? (
+                  <HearButton heard={index === audible} onHear={() => hear(index)} />
+                ) : null}
               </figcaption>
               {sides.kind === "video" ? (
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
                 <video
-                  ref={side === "before" ? before : after}
                   src={atTime(sides[side], from)}
-                  {...HOVER_CONTROLS}
                   playsInline
                   preload="auto"
-                  // Both playing aloud would talk over each other; the result is the one to hear.
-                  muted={side === "before"}
+                  muted={index !== audible}
+                  onClick={toggle}
                   className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
                 />
               ) : (
@@ -259,9 +145,13 @@ export function CompareDialog({
         <DialogFooter>
           {sides.kind === "video" ? (
             <PlayTogether
-              videos={() => [before.current, after.current].filter((video) => video !== null)}
-              target={target}
-              label={t.compare.playBoth}
+              playing={playing}
+              label={
+                range === undefined
+                  ? t.compare.playBoth(formatTime(from))
+                  : t.compare.loopTogether(range)
+              }
+              onToggle={toggle}
             />
           ) : null}
           {feedback.decision === undefined ? (
@@ -312,19 +202,25 @@ interface VersionsDialogProps {
  * one showing now is marked.
  */
 export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDialogProps) {
-  const grid = useRef<HTMLDivElement>(null);
   const t = useMessages();
   const versioned = versionsMedia(feedback);
+  const before = feedback.context?.before;
+  const target = targetOf(feedback);
+
+  // The media as it was comes first, when there was one.
+  const { grid, playing, audible, restart, toggle, hear } = useSideBySide(
+    target,
+    before === undefined ? undefined : 0,
+  );
 
   if (Option.isNone(versioned)) return null;
 
   const media = versioned.value;
   const kind = kindOf(item, media);
-  const target = targetOf(feedback);
   // The box's frame, else the part's start: where the edit shows.
   const from = anchorOf(target) ?? 0;
   const where = describeTarget(target, t.target.boxAt);
-  const before = feedback.context?.before;
+  const range = rangeText(target);
   const inUse = Option.getOrUndefined(versionInUse(feedback));
 
   // A request for new media had nothing before it.
@@ -348,10 +244,6 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
     })),
   ];
 
-  // Several playing aloud would talk over each other; the first version is the one to hear, and
-  // each can be unmuted.
-  const audible = before === undefined ? 0 : 1;
-
   return (
     <Dialog
       onOpenChange={(open) => {
@@ -359,9 +251,7 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
       }}
       // Opening it is asking to watch, so all of them play at once.
       onOpenChangeComplete={(open) => {
-        if (open && kind === "video") {
-          playTogether([...(grid.current?.querySelectorAll("video") ?? [])], target);
-        }
+        if (open && kind === "video") restart();
       }}
     >
       <DialogTrigger render={<Button variant="ghost" pill size="xs" />}>
@@ -379,20 +269,22 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
         <div ref={grid} className={cn("grid grid-cols-2 gap-3", COLUMNS[panes.length - 1])}>
           {panes.map(({ key, label, src, choice }, index) => (
             <figure key={key} className="flex min-w-0 flex-col gap-1.5">
-              <figcaption
-                className="truncate text-xs font-medium text-muted-foreground"
-                title={label}
-              >
-                {label}
+              <figcaption className="flex h-6 items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+                <span className="truncate" title={label}>
+                  {label}
+                </span>
+                {kind === "video" ? (
+                  <HearButton heard={index === audible} onHear={() => hear(index)} />
+                ) : null}
               </figcaption>
               {kind === "video" ? (
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
                 <video
                   src={atTime(src, from)}
-                  {...HOVER_CONTROLS}
                   playsInline
                   preload="auto"
                   muted={index !== audible}
+                  onClick={toggle}
                   className={cn(
                     "max-h-[60vh] w-full rounded-3xl bg-muted object-contain",
                     key === inUse && "ring-2 ring-brand",
@@ -427,9 +319,13 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
         {kind === "video" ? (
           <DialogFooter>
             <PlayTogether
-              videos={() => [...(grid.current?.querySelectorAll("video") ?? [])]}
-              target={target}
-              label={t.versions.playAll}
+              playing={playing}
+              label={
+                range === undefined
+                  ? t.versions.playAll(formatTime(from))
+                  : t.compare.loopTogether(range)
+              }
+              onToggle={toggle}
             />
           </DialogFooter>
         ) : null}
