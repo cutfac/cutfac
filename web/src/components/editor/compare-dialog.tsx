@@ -24,7 +24,7 @@ import {
 } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { versionsMedia, versionsOf } from "../../lib/requests.ts";
-import { anchorOf, describeTarget, targetOf } from "../../lib/target.ts";
+import { anchorOf, describeTarget, targetOf, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 
 interface Sides {
@@ -59,14 +59,71 @@ function seek(video: HTMLVideoElement, from: number): Promise<void> {
 }
 
 /** Play every video from `from` together: start only once all of them have seeked. */
-async function playFrom(videos: Iterable<HTMLVideoElement | null>, from: number) {
-  const ready = [...videos].filter((video) => video !== null);
-
-  for (const video of ready) video.pause();
-  await Promise.all(ready.map((video) => seek(video, from)));
+async function playFrom(videos: ReadonlyArray<HTMLVideoElement>, from: number) {
+  for (const video of videos) video.pause();
+  await Promise.all(videos.map((video) => seek(video, from)));
 
   // A pause before playback starts rejects; that is the user's choice, not an error.
-  for (const video of ready) video.play().catch(() => undefined);
+  for (const video of videos) video.play().catch(() => undefined);
+}
+
+/** Play every video over `range` together, back to its start each time, until the first is paused. */
+async function loopOver(videos: ReadonlyArray<HTMLVideoElement>, range: Range) {
+  await playFrom(videos, range.start);
+
+  const [leader] = videos;
+
+  const watch = () => {
+    if (leader === undefined) return;
+
+    // A part that runs to the end of the video ends it, which also pauses it.
+    if (leader.ended || leader.currentTime >= range.end) void loopOver(videos, range);
+    else if (!leader.paused) requestAnimationFrame(watch);
+  };
+
+  requestAnimationFrame(watch);
+}
+
+interface Range {
+  readonly start: number;
+  readonly end: number;
+}
+
+const rangeOf = ({ start, end }: Target): Range | undefined =>
+  start === undefined || end === undefined ? undefined : { start, end };
+
+/**
+ * Plays the videos side by side together: over the part the request pointed at, looping, or from
+ * where its edit shows when it pointed at a moment.
+ */
+function PlayTogether({
+  videos,
+  target,
+  label,
+}: {
+  videos: () => ReadonlyArray<HTMLVideoElement>;
+  target: Target;
+  /** The button's text when there is no part to loop, from the time playback starts. */
+  label: (time: string) => string;
+}) {
+  const t = useMessages();
+  const range = rangeOf(target);
+  const from = anchorOf(target) ?? 0;
+
+  return (
+    <Button
+      variant="outline"
+      className="sm:mr-auto"
+      onClick={() =>
+        void (range === undefined ? playFrom(videos(), from) : loopOver(videos(), range))
+      }
+    >
+      <PlayIcon data-icon="inline-start" />
+      {range === undefined
+        ? label(formatTime(from))
+        : t.compare.loopTogether(`${formatTime(range.start)}–${formatTime(range.end)}`)}
+    </Button>
+  );
 }
 
 /** URLs of the two versions; `after` is the media as it is now until the result is saved. */
@@ -163,14 +220,11 @@ export function CompareDialog({
         </div>
         <DialogFooter>
           {sides.kind === "video" ? (
-            <Button
-              variant="outline"
-              className="sm:mr-auto"
-              onClick={() => void playFrom([before.current, after.current], from)}
-            >
-              <PlayIcon data-icon="inline-start" />
-              {t.compare.playBoth(formatTime(from))}
-            </Button>
+            <PlayTogether
+              videos={() => [before.current, after.current].filter((video) => video !== null)}
+              target={target}
+              label={t.compare.playBoth}
+            />
           ) : null}
           {feedback.decision === undefined ? (
             <>
@@ -321,14 +375,11 @@ export function VersionsDialog({
         </div>
         <DialogFooter>
           {kind === "video" ? (
-            <Button
-              variant="outline"
-              className="sm:mr-auto"
-              onClick={() => void playFrom(grid.current?.querySelectorAll("video") ?? [], from)}
-            >
-              <PlayIcon data-icon="inline-start" />
-              {t.versions.playAll(formatTime(from))}
-            </Button>
+            <PlayTogether
+              videos={() => [...(grid.current?.querySelectorAll("video") ?? [])]}
+              target={target}
+              label={t.versions.playAll}
+            />
           ) : null}
           <DialogClose render={<Button variant="outline" />} onClick={onKeepNone}>
             <Undo2Icon data-icon="inline-start" />

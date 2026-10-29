@@ -117,6 +117,8 @@ export const editorEn = {
     after: "After",
     image: (media: string | undefined, side: string) => `${media ?? "Media"}, ${side}`,
     playBoth: (time: string) => `Play both from ${time}`,
+    /** Plays every video over the part the request pointed at, again and again. */
+    loopTogether: (range: string) => `Loop ${range} together`,
     restore: "Restore before",
     keep: "Keep the edit",
   },
