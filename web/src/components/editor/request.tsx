@@ -67,6 +67,10 @@ interface RequestProps {
   actions: RequestActions;
 }
 
+/** The file a request was about, named only when the item has others to tell it from. */
+const namedFile = (item: ItemDetail, media: string) =>
+  item.media.length > 1 ? Option.some(media) : Option.none<string>();
+
 export function Request({ item, feedback, number, ahead, live, statuses, actions }: RequestProps) {
   const [rewording, setRewording] = useState(false);
   const state = runView(feedback.run, live, item.running);
@@ -78,6 +82,9 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
   const asks = asksUser(item, feedback, state);
   const t = useMessages();
   const locale = useLocale();
+
+  const about =
+    feedback.media === undefined ? Option.some(t.chat.newMedia) : namedFile(item, feedback.media);
 
   return (
     // As far apart as Aside sets a request and its reply.
@@ -113,7 +120,8 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
           )}
           <SentAttachments owner={item} paths={feedback.attachments ?? []} />
           <MessageFooter>
-            <span className="tabular-nums">#{number}</span> · {feedback.media ?? t.chat.newMedia} ·{" "}
+            <span className="tabular-nums">#{number}</span> ·{" "}
+            {Option.match(about, { onNone: () => "", onSome: (name) => `${name} · ` })}
             {clockTime(feedback.at, locale)}
           </MessageFooter>
         </MessageContent>
@@ -310,9 +318,9 @@ function Result({
           {t.chat.versionsReady(
             versions.length,
             feedback.variants?.wanted,
-            item.media.length > 1 ? (
-              <span className="font-medium">{Option.getOrUndefined(versionsMedia(feedback))}</span>
-            ) : undefined,
+            Option.getOrUndefined(
+              Option.flatMap(versionsMedia(feedback), (media) => namedFile(item, media)),
+            ),
           )}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -338,7 +346,15 @@ function Result({
 
   return (
     <div className="flex flex-col gap-2 rounded-5xl bg-card p-3 squircle">
-      <p className="text-sm">{t.chat.edited(feedback.media ?? t.chat.newMedia)}</p>
+      <p className="text-sm">
+        {t.chat.edited(
+          Option.getOrUndefined(
+            Option.flatMap(Option.fromUndefinedOr(feedback.media), (media) =>
+              namedFile(item, media),
+            ),
+          ),
+        )}
+      </p>
       <div className="flex flex-wrap items-center gap-1.5">
         <CompareDialog
           item={item}

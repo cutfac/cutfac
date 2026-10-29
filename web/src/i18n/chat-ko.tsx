@@ -39,12 +39,15 @@ export const chatKo: ChatMessages = {
     retryWith: (agent) => `${agent}로 다시 시도`,
     copyPrompt: "프롬프트 복사",
     connectAgent: "에이전트 연결",
-    edited: (media) => (
-      <>
-        <span className="font-medium">{withParticle(media, "을/를")}</span> 편집했어요. 괜찮아
-        보이나요?
-      </>
-    ),
+    edited: (media) =>
+      media === undefined ? (
+        "편집했어요. 괜찮아 보이나요?"
+      ) : (
+        <>
+          <span className="font-medium">{withParticle(media, "을/를")}</span> 편집했어요. 괜찮아
+          보이나요?
+        </>
+      ),
     keep: "유지",
     restore: "이전으로 되돌리기",
     askAgain: "다시 요청",
@@ -56,7 +59,12 @@ export const chatKo: ChatMessages = {
     kept: "유지함",
     rolledBackBadge: "되돌림",
     versionsReady: (saved, wanted, media) => {
-      const of = media === undefined ? null : <>{media}의 </>;
+      const of =
+        media === undefined ? null : (
+          <>
+            <span className="font-medium">{media}</span>의{" "}
+          </>
+        );
 
       return wanted !== undefined && wanted > saved ? (
         <>

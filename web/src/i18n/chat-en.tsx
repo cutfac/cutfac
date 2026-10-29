@@ -42,11 +42,15 @@ export const chatEn = {
     retryWith: (agent: string) => `Try again with ${agent}`,
     copyPrompt: "Copy prompt",
     connectAgent: "Connect an agent",
-    edited: (media: string) => (
-      <>
-        <span className="font-medium">{media}</span> was edited. Does it look right?
-      </>
-    ),
+    /** `media` names the file when the item has more than one. */
+    edited: (media?: string): ReactNode =>
+      media === undefined ? (
+        "Edited. Does it look right?"
+      ) : (
+        <>
+          <span className="font-medium">{media}</span> was edited. Does it look right?
+        </>
+      ),
     keep: "Keep",
     restore: "Restore before",
     askAgain: "Ask again",
@@ -62,8 +66,14 @@ export const chatEn = {
      * Versions the agent saved; `wanted` is how many the request asked for, and `media` names the
      * file when the item has more than one.
      */
-    versionsReady: (saved: number, wanted: number | undefined, media?: ReactNode) => {
-      const of = media === undefined ? null : <> of {media}</>;
+    versionsReady: (saved: number, wanted: number | undefined, media?: string) => {
+      const of =
+        media === undefined ? null : (
+          <>
+            {" "}
+            of <span className="font-medium">{media}</span>
+          </>
+        );
 
       return wanted !== undefined && wanted > saved ? (
         <>
