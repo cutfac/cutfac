@@ -32,6 +32,7 @@ export const noteCompaction = (emit: Emit) =>
 interface Progress {
   readonly reply: string;
   readonly error: string | undefined;
+  readonly signedOut: boolean;
   /** The session the agent reported, once it has been saved to the item. */
   readonly session: string | undefined;
   /** Whether any line gave a session or a reply, which says the output could be read at all. */
@@ -118,6 +119,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
   const progress = yield* Ref.make<Progress>({
     reply: "",
     error: undefined,
+    signedOut: false,
     session: storedSession,
     understood: false,
     effortKeepsCache: undefined,
@@ -137,6 +139,7 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
     yield* Ref.update(progress, (state) => ({
       reply: parsed.reply ?? state.reply,
       error: parsed.error ?? state.error,
+      signedOut: state.signedOut || parsed.signedOut === true,
       session: parsed.sessionId ?? state.session,
       understood: state.understood || parsed.sessionId !== undefined || parsed.reply !== undefined,
       effortKeepsCache: parsed.effortKeepsCache ?? state.effortKeepsCache,
@@ -219,6 +222,7 @@ export interface TurnResult {
   readonly reply: string;
   /** Why the turn failed, if it did. */
   readonly failure: string | undefined;
+  readonly signedOut?: true | undefined;
   /** Whether a change of effort alone keeps the conversation's prompt cache, if the agent said. */
   readonly effortKeepsCache?: boolean | undefined;
 }
@@ -247,9 +251,12 @@ export const converse = Effect.fnUntraced(function* <R>(conversation: Conversati
 
   const final = staleSession ? yield* Effect.andThen(save(undefined), attempt(undefined)) : first;
 
+  const failure = failureOf(agent, final);
+
   const result: TurnResult = {
     reply: final.reply,
-    failure: failureOf(agent, final),
+    failure,
+    signedOut: (failure !== undefined && final.signedOut) || undefined,
     effortKeepsCache: final.effortKeepsCache,
   };
 

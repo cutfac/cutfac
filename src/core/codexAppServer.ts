@@ -38,7 +38,34 @@ interface TurnState {
   readonly changes: Map<string, ReadonlyArray<string>>;
 }
 
-const failed = (error: string): ParsedLine => ({ events: [], error, ended: true });
+const failed = (error: string, signedOut?: true): ParsedLine => ({
+  events: [],
+  error,
+  signedOut,
+  ended: true,
+});
+
+const decodeUnauthorized = Schema.decodeUnknownOption(Schema.Literal("unauthorized"));
+
+/** A kind of failure with its details, such as `{ httpConnectionFailed: { httpStatusCode: 401 } }`. */
+const decodeFailureDetails = Schema.decodeUnknownOption(
+  Schema.Record(
+    Schema.String,
+    Schema.Struct({ httpStatusCode: Schema.optional(Schema.NullOr(Schema.Finite)) }),
+  ),
+);
+
+/** Whether Codex failed for want of a working sign-in: it says so, or OpenAI answered 401. */
+const unauthorized = (error: Schema.JsonObject | undefined) => {
+  const info = error?.["codexErrorInfo"];
+
+  return (
+    Option.isSome(decodeUnauthorized(info)) ||
+    Option.exists(decodeFailureDetails(info), (kinds) =>
+      Object.values(kinds).some((details) => details.httpStatusCode === 401),
+    )
+  );
+};
 
 /** The `id` of the object at `key`, as threads and turns carry theirs. */
 const idOf = (json: Schema.JsonObject, key: string) => {
@@ -159,7 +186,10 @@ function itemCompleted(item: Schema.JsonObject, root: string | undefined): Parse
 function turnCompleted(turn: Schema.JsonObject, state: TurnState): ParsedLine {
   if (textOf(turn, "status") === "completed") return { events: [], ended: true };
 
-  return failed(messageOf(turn) ?? state.error ?? "Codex failed");
+  return failed(
+    messageOf(turn) ?? state.error ?? "Codex failed",
+    unauthorized(objectOf(turn, "error")) || undefined,
+  );
 }
 
 /** Whether `turnId` is the run's own turn, or may be, while Codex hasn't said which that is. */

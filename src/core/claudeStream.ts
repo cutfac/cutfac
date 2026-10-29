@@ -31,6 +31,8 @@ const ClaudeEnvelope = Schema.Struct({
   session_id: Schema.optional(Schema.String),
   is_error: Schema.optional(Schema.Boolean),
   result: Schema.optional(Schema.String),
+  /** On an `assistant` line Claude Code wrote itself: why the request failed. */
+  error: Schema.optional(Schema.String),
   /** On a `system` `status` line: what Claude Code is busy with, or null once it is not. */
   status: Schema.optional(Schema.NullOr(Schema.String)),
   compact_result: Schema.optional(Schema.String),
@@ -390,6 +392,11 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
       events: [],
       control: Option.getOrUndefined(claudeControl(msg.type, json.value, root)),
     };
+  }
+
+  // Claude Code words a failed sign-in as an assistant line too; the result carries it as the error.
+  if (msg.type === "assistant" && msg.error === "authentication_failed") {
+    return { events: [], sessionId: msg.session_id, signedOut: true };
   }
 
   const events = msg.type === "assistant" ? claudeEvents(json.value, root) : claudeCompaction(msg);

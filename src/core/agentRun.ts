@@ -52,7 +52,7 @@ const setRun = (itemId: string, feedbackId: string, run: AgentRun) =>
   );
 
 /** Where a run stands, as each save of it says. */
-type RunState = Pick<AgentRun, "status" | "reply" | "error" | "effortKeepsCache">;
+type RunState = Pick<AgentRun, "status" | "reply" | "error" | "signedOut" | "effortKeepsCache">;
 
 /** Saves the run as it stands now, with what every save of it carries. */
 type RecordRun = (state: RunState) => ReturnType<typeof setRun>;
@@ -134,39 +134,43 @@ const performEdit = Effect.fnUntraced(function* (
 
   yield* record({ status: "running" });
 
-  const { reply, failure, effortKeepsCache } = yield* askingTrusted(trust, ask, (asking) =>
-    converse({
-      agent,
-      stored: item.doc.sessions[agent],
-      invocation: (session) =>
-        Effect.succeed(
-          agentInvocation(agent, {
-            ...session,
-            bin,
-            prompt,
-            ...servers,
-            ...permissions,
-            images,
-            hosts: sourceHosts(item.doc.sources),
-            model,
-            effort,
-          }),
-        ),
-      save: (sessionId) => saveSession(itemId, agent, sessionId),
-      emit,
-      ask: asking,
-    }),
+  const { reply, failure, signedOut, effortKeepsCache } = yield* askingTrusted(
+    trust,
+    ask,
+    (asking) =>
+      converse({
+        agent,
+        stored: item.doc.sessions[agent],
+        invocation: (session) =>
+          Effect.succeed(
+            agentInvocation(agent, {
+              ...session,
+              bin,
+              prompt,
+              ...servers,
+              ...permissions,
+              images,
+              hosts: sourceHosts(item.doc.sources),
+              model,
+              effort,
+            }),
+          ),
+        save: (sessionId) => saveSession(itemId, agent, sessionId),
+        emit,
+        ask: asking,
+      }),
   );
 
   if (failure !== undefined) {
     yield* record({
       status: "failed",
       error: failure,
+      signedOut,
       reply: reply === "" ? undefined : reply,
       effortKeepsCache,
     });
 
-    return yield* emit({ type: "error", error: failure });
+    return yield* emit({ type: "error", error: failure, signedOut });
   }
 
   yield* settleFeedback(input, reply);

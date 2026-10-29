@@ -22,7 +22,12 @@ export const RunEvent = Schema.Union([
   }),
   Schema.Struct({ type: Schema.Literal("done"), reply: Schema.String }),
   Schema.Struct({ type: Schema.Literal("stopped") }),
-  Schema.Struct({ type: Schema.Literal("error"), error: Schema.String }),
+  Schema.Struct({
+    type: Schema.Literal("error"),
+    error: Schema.String,
+    /** The agent isn't signed in, or its sign-in stopped working: signing in again fixes it. */
+    signedOut: Schema.optional(Schema.Boolean),
+  }),
   /** The agent's own compaction of a long conversation: under way, done, or given up on. */
   Schema.Struct({
     type: Schema.Literal("compaction"),
@@ -59,6 +64,8 @@ export interface ParsedLine {
   readonly sessionId?: string | undefined;
   readonly reply?: string | undefined;
   readonly error?: string | undefined;
+  /** The agent turned the request down because it isn't signed in, or its sign-in stopped working. */
+  readonly signedOut?: true | undefined;
   /** Whether a change of effort alone keeps the conversation's prompt cache, when the line says. */
   readonly effortKeepsCache?: boolean | undefined;
   /** The agent's result for the turn, after which it takes no more input. */

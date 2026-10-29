@@ -196,6 +196,10 @@ describe("a Codex turn's items", () => {
 const error = (message: string, willRetry: boolean) =>
   notify("error", { threadId: THREAD, turnId: TURN, willRetry, error: { message } });
 
+/** A turn's end with what kind of failure Codex says it was. */
+const failedWith = (codexErrorInfo: Schema.Json) =>
+  started()(completed("failed", { error: { message: "denied", codexErrorInfo } }));
+
 describe("a Codex turn's end", () => {
   test("ends when its own turn completes", () => {
     const read = started();
@@ -213,6 +217,22 @@ describe("a Codex turn's end", () => {
 
     expect(started()(completed("failed", { error: { message: "boom" } })).error).toBe("boom");
     expect(started()(completed("interrupted")).error).toBe("Codex failed");
+  });
+
+  test("a turn that failed for want of a working sign-in says so", () => {
+    // As Codex 0.165.0 signed out ends a turn, after its retries.
+    expect(failedWith({ httpConnectionFailed: { httpStatusCode: 401 } })).toEqual({
+      events: [],
+      error: "denied",
+      signedOut: true,
+      ended: true,
+    });
+    expect(failedWith("unauthorized").signedOut).toBe(true);
+    expect(failedWith({ httpConnectionFailed: { httpStatusCode: 500 } }).signedOut).toBeUndefined();
+    expect(failedWith({ responseStreamDisconnected: { httpStatusCode: null } }).signedOut).toBe(
+      undefined,
+    );
+    expect(failedWith("usageLimitExceeded").signedOut).toBeUndefined();
   });
 
   test("passes over an error of another turn", () => {

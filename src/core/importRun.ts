@@ -305,7 +305,7 @@ export const runImportTurn = (input: ImportInput, report: Emit) =>
       const finish = (end: Omit<RunEnd, "finishedAt" | "compacted">) =>
         Effect.flatMap(compacted, (done) => finishTurn(input, { ...end, compacted: done }));
 
-      const { reply, failure } = yield* restore(performTurn(input, emit)).pipe(
+      const { reply, failure, signedOut } = yield* restore(performTurn(input, emit)).pipe(
         Effect.catch((error) => Effect.succeed<TurnResult>({ reply: "", failure: error.message })),
         Effect.onInterrupt(() => Effect.andThen(settle, finish({ status: "stopped" }))),
       );
@@ -316,10 +316,11 @@ export const runImportTurn = (input: ImportInput, report: Emit) =>
         yield* finish({
           status: "failed",
           error: failure,
+          signedOut,
           reply: reply === "" ? undefined : reply,
         });
 
-        return yield* emit({ type: "error", error: failure });
+        return yield* emit({ type: "error", error: failure, signedOut });
       }
 
       yield* finish({ status: "done", reply });
