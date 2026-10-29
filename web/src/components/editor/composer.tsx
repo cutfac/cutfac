@@ -103,7 +103,7 @@ export function VersionsPicker({
               aria-label={`${t.composer.versions.label}: ${value}`}
             >
               <LayersIcon />
-              <span className="tabular-nums">{value}</span>
+              <span className="tabular-nums">{t.composer.versions.count(value)}</span>
             </SelectTrigger>
           }
         />

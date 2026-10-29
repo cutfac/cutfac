@@ -2,6 +2,7 @@ import { Option } from "effect";
 import { ArrowLeftIcon, DownloadIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
 import { toast } from "sonner";
 
+import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -136,6 +137,7 @@ export function Toolbar({
         }}
       >
         <SelectTrigger size="sm" variant="ghost" aria-label={t.item.status}>
+          <StatusDot status={item.doc.status} />
           <SelectValue />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
