@@ -19,9 +19,10 @@ export interface NewVideoLink {
 
 /**
  * What cutfac.com said about a license key: `granted` unlocks the paid plan, `invalid` names no
- * license, `ended` names one whose plan has ended, and `unavailable` means it couldn't be asked.
+ * license, `ended` names one whose plan has ended, `full` names one already on as many Macs as it
+ * allows, and `unavailable` means it couldn't be asked.
  */
-export type LicenseCheck = "granted" | "invalid" | "ended" | "unavailable";
+export type LicenseCheck = "granted" | "invalid" | "ended" | "full" | "unavailable";
 
 /**
  * An agent CLI as the first launch finds it on this computer, before there is a workspace: missing,

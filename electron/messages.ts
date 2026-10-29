@@ -45,6 +45,18 @@ const en = {
   serverStopped: "The local server stopped",
   checkForUpdates: "Check for Updates…",
   licenseKey: "License Key…",
+  deactivateMac: "Deactivate This Mac…",
+  noLicenseKey: "There's no license key on this Mac",
+  deactivateAsk: "Deactivate this Mac?",
+  deactivateDetail:
+    "Cutfac forgets the license key here and frees this Mac, so the key can be used on another one. This Mac goes back to the free version; your videos stay.",
+  deactivate: "Deactivate",
+  deactivateCancel: "Cancel",
+  deactivated: "This Mac is deactivated",
+  deactivatedDetail: "Enter the license key on the Mac you're moving to.",
+  deactivateFailed: "Couldn't deactivate this Mac",
+  deactivateFailedDetail:
+    "Cutfac couldn't reach cutfac.com, so this Mac is still activated. Try again when you're online.",
   asking: "An agent is waiting for your OK",
   question: "An agent is waiting for your answer",
   quitBusy: (count: number) =>
@@ -104,6 +116,18 @@ export const MESSAGES: Record<Locale, Messages> = {
     serverStopped: "로컬 서버가 멈췄어요",
     checkForUpdates: "업데이트 확인…",
     licenseKey: "라이선스 키…",
+    deactivateMac: "이 Mac 비활성화…",
+    noLicenseKey: "이 Mac에는 라이선스 키가 없어요",
+    deactivateAsk: "이 Mac을 비활성화할까요?",
+    deactivateDetail:
+      "이 Mac에서 라이선스 키를 지우고 자리를 비워서, 다른 Mac에서 키를 쓸 수 있게 해요. 이 Mac은 무료 버전으로 돌아가고 영상은 그대로 남아요.",
+    deactivate: "비활성화",
+    deactivateCancel: "취소",
+    deactivated: "이 Mac을 비활성화했어요",
+    deactivatedDetail: "옮겨 갈 Mac에서 라이선스 키를 넣어 주세요.",
+    deactivateFailed: "이 Mac을 비활성화하지 못했어요",
+    deactivateFailedDetail:
+      "cutfac.com에 연결하지 못해서 이 Mac은 아직 활성화돼 있어요. 온라인일 때 다시 시도해 주세요.",
     asking: "에이전트가 허락을 기다려요",
     question: "에이전트가 답을 기다려요",
     quitBusy: (count) => `작업 중인 영상이 ${count}개 있어요`,

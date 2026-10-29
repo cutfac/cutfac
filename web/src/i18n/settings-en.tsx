@@ -55,6 +55,7 @@ export const settingsEn = {
     save: "Save",
     granted: "License key saved.",
     ended: "License key saved, but its plan has ended, so you're on the free version.",
+    full: "License key saved, but it's already on as many Macs as it allows. On a Mac you no longer use, choose Cutfac › Deactivate This Mac; this Mac unlocks the next time you come back to it.",
     unavailable: "License key saved. Couldn't reach cutfac.com to confirm it yet.",
   },
   /**

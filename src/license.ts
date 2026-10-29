@@ -54,11 +54,14 @@ const decodeSignedGrant = Schema.decodeUnknownOption(Schema.fromJsonString(Signe
 export const LicenseRecord = Schema.Union([
   /** cutfac.com vouched for the key, in a token only it can sign. */
   Schema.Struct({ _tag: Schema.tagDefaultOmit("LicenseGrant"), token: Schema.NonEmptyString }),
-  /** cutfac.com said the key names no license, or one whose plan has ended. */
+  /**
+   * cutfac.com said the key names no license, or one whose plan has ended; or that a perpetual
+   * license isn't activated on this Mac, or is already on as many Macs as it allows.
+   */
   Schema.Struct({
     _tag: Schema.tagDefaultOmit("LicenseRefusal"),
     checkedAt: Schema.Finite,
-    refusal: Schema.Literals(["invalid", "ended"]),
+    refusal: Schema.Literals(["invalid", "ended", "unactivated", "full"]),
   }),
 ]).pipe(Schema.toTaggedUnion("_tag"));
 

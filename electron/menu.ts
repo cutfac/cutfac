@@ -16,6 +16,8 @@ export interface MenuActions {
   updatesEnabled: boolean;
   checkForUpdates: () => void;
   requestLicenseKey: () => void;
+  /** Frees this Mac's license activation, after asking, so the key can be used on another Mac. */
+  deactivateThisMac: () => void;
   openWorkspace: () => void;
   appCommand: (command: AppCommand) => void;
   editCommand: (command: EditCommand) => void;
@@ -44,6 +46,7 @@ export function menuTemplate(actions: MenuActions): MenuItemConstructorOptions[]
           ? [
               { label: t.checkForUpdates, click: actions.checkForUpdates },
               { label: t.licenseKey, click: actions.requestLicenseKey },
+              { label: t.deactivateMac, click: actions.deactivateThisMac },
             ]
           : []),
         separator,

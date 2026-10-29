@@ -55,6 +55,7 @@ export const settingsKo: SettingsMessages = {
     save: "저장",
     granted: "라이선스 키를 저장했어요.",
     ended: "라이선스 키를 저장했지만 요금제가 끝나서 무료 버전으로 쓰고 있어요.",
+    full: "라이선스 키를 저장했지만 이 키로 쓸 수 있는 Mac 수를 다 채웠어요. 더 쓰지 않는 Mac에서 Cutfac › 이 Mac 비활성화를 고르면, 다음에 이 Mac으로 돌아올 때 열려요.",
     unavailable: "라이선스 키를 저장했어요. cutfac.com에 연결하지 못해서 아직 확인하지 못했어요.",
   },
   plan: {

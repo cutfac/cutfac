@@ -215,7 +215,7 @@ describe("loading the settings", () => {
 
 describe("the license in the settings", () => {
   it.effect(
-    "a license the app saves unlocks the paid plan for the agent tools reading the file",
+    "a license the app saves unlocks the paid plan for the agent tools reading the file, until it's cleared",
     () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -229,7 +229,7 @@ describe("the license in the settings", () => {
           Effect.gen(function* () {
             const license = yield* LicenseSettings;
 
-            yield* license.save(key, Option.some(record));
+            yield* license.save(key, Option.some(record), Option.some("act-1"));
 
             const loaded = yield* license.load;
 
@@ -237,10 +237,27 @@ describe("the license in the settings", () => {
               Option.some(LicenseKey.make("KEY-1")),
             );
             expect(loaded.record).toEqual(Option.some(record));
+            expect(loaded.activation).toEqual(Option.some("act-1"));
           }).pipe(Effect.provide(licenseSettings)),
         );
 
         expect(yield* paidInSettings(yield* fs.readFileString(file))).toBe(true);
+
+        yield* settingsIn(
+          Effect.gen(function* () {
+            const license = yield* LicenseSettings;
+
+            yield* license.clear;
+
+            const loaded = yield* license.load;
+
+            expect(Option.isNone(loaded.key)).toBe(true);
+            expect(Option.isNone(loaded.record)).toBe(true);
+            expect(Option.isNone(loaded.activation)).toBe(true);
+          }).pipe(Effect.provide(licenseSettings)),
+        );
+
+        expect(yield* paidInSettings(yield* fs.readFileString(file))).toBe(false);
       }).pipe(Effect.provide(testLicenseKey)),
   );
 });

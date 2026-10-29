@@ -4,39 +4,30 @@ import {
   Duration,
   Effect,
   Layer,
-  Match,
   Option,
   Ref,
   Schedule,
   Schema,
   Semaphore,
 } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpClient } from "effect/http";
 
 import {
   LicenseKey,
   LicenseRecord,
-  grantFor,
   isPaid,
   type SavedLicense,
   type SecretLicenseKey,
 } from "../src/license.ts";
 import type { LicenseCheck } from "../web/src/desktop.ts";
-
-/** Where the app asks whether its key unlocks the paid plan. */
-export const LICENSE_URL = "https://cutfac.com/api/license";
-
-const CHECK_TIMEOUT = "8 seconds";
+import { type Activation, activateMac, deactivateMac, fetchLicense } from "./licenseRequests.ts";
+import { ThisMac } from "./thisMac.ts";
 
 /** While the app runs, it asks again this often. */
 const CHECK_EVERY = "1 day";
 
 /** Coming back to the app asks again at most this often. */
 const ASK_AGAIN_AFTER = Duration.minutes(1);
-
-// cutfac.com also says when the plan ends and whether it is a trial's, for apps from before grants
-// were signed. The signed token says when it ends, and any grant unlocks the same plan.
-const GrantReply = Schema.Struct({ token: Schema.NonEmptyString });
 
 /**
  * A key as the board takes it. Keys travel in an HTTP header, which takes visible ASCII only, and
@@ -51,65 +42,15 @@ const decodeKey = Schema.decodeUnknownOption(
 /** The key as typed or pasted, without surrounding space, if it can be one. */
 export const licenseKeyFrom = (input: string) => decodeKey(input.trim());
 
-/** cutfac.com couldn't be asked about a key, or gave no clear answer. */
-export class LicenseUnanswered extends Schema.TaggedError<LicenseUnanswered>()(
-  "LicenseUnanswered",
-  { message: Schema.String },
-) {}
-
 /** The key and cutfac.com's answer about it couldn't be saved. */
 export class LicenseNotSaved extends Schema.TaggedError<LicenseNotSaved>()("LicenseNotSaved", {
   cause: Schema.Defect(),
 }) {}
 
-const unanswered = (error: { readonly message: string }) =>
-  new LicenseUnanswered({ message: error.message });
-
-/** The grant in cutfac.com's reply, which only counts as an answer if it is signed for `key`. */
-const grantIn = Effect.fnUntraced(function* (
-  key: SecretLicenseKey,
-  response: HttpClientResponse.HttpClientResponse,
-) {
-  const { token } = yield* HttpClientResponse.filterStatusOk(response).pipe(
-    Effect.flatMap(HttpClientResponse.schemaBodyJson(GrantReply)),
-    Effect.mapError(unanswered),
-  );
-
-  if (Option.isNone(yield* grantFor(key, token)))
-    return yield* new LicenseUnanswered({ message: "The grant isn't signed for this key" });
-
-  return LicenseRecord.cases.LicenseGrant.make({ token });
-});
-
-/**
- * Asks cutfac.com about `key`: a grant, or a refusal for a key that names no license or one whose
- * plan has ended.
- */
-export const fetchLicense = Effect.fn("license.fetch")(
-  function* (
-    key: SecretLicenseKey,
-  ): Effect.fn.Return<LicenseRecord, LicenseUnanswered, HttpClient.HttpClient> {
-    const response = yield* HttpClient.execute(
-      HttpClientRequest.get(LICENSE_URL).pipe(HttpClientRequest.bearerToken(key)),
-    ).pipe(Effect.mapError(unanswered));
-
-    const checkedAt = yield* Clock.currentTimeMillis;
-
-    const refusal = (reason: "invalid" | "ended") =>
-      Effect.succeed(LicenseRecord.cases.LicenseRefusal.make({ checkedAt, refusal: reason }));
-
-    return yield* Match.value(response.status).pipe(
-      Match.when(401, () => refusal("invalid")),
-      Match.when(402, () => refusal("ended")),
-      Match.orElse(() => grantIn(key, response)),
-    );
-  },
-  Effect.timeoutOrElse({
-    duration: CHECK_TIMEOUT,
-    orElse: () =>
-      Effect.fail(new LicenseUnanswered({ message: "cutfac.com didn't answer in time" })),
-  }),
-);
+/** The license as the desktop app keeps it: the key, cutfac.com's last answer, and this Mac's activation. */
+export interface DesktopLicense extends SavedLicense {
+  readonly activation: Option.Option<string>;
+}
 
 /** What the board hears when it gives a key: no answer, or cutfac.com's. */
 const checkOf = (answer: Option.Option<LicenseRecord>): LicenseCheck =>
@@ -117,20 +58,33 @@ const checkOf = (answer: Option.Option<LicenseRecord>): LicenseCheck =>
     onNone: (): LicenseCheck => "unavailable",
     onSome: LicenseRecord.match({
       LicenseGrant: (): LicenseCheck => "granted",
-      LicenseRefusal: ({ refusal }) => refusal,
+      // Activating right away answers this, so it stands only when that couldn't be done.
+      LicenseRefusal: ({ refusal }): LicenseCheck =>
+        refusal === "unactivated" ? "unavailable" : refusal,
     }),
   });
 
-/** Where the app keeps the license key and cutfac.com's last answer about it. */
+const isUnactivated = LicenseRecord.match({
+  LicenseGrant: () => false,
+  LicenseRefusal: ({ refusal }) => refusal === "unactivated",
+});
+
+/** Freeing this Mac: done, or cutfac.com couldn't be reached, so nothing changed. */
+export type Deactivation = "deactivated" | "unavailable";
+
+/** Where the app keeps the license key, cutfac.com's last answer about it, and the activation. */
 export class LicenseSettings extends Context.Service<
   LicenseSettings,
   {
-    readonly load: Effect.Effect<SavedLicense>;
-    /** Saves both together; no record drops the old one. */
+    readonly load: Effect.Effect<DesktopLicense>;
+    /** Saves all three together; none drops the old one. */
     save(
       key: SecretLicenseKey,
       record: Option.Option<LicenseRecord>,
+      activation: Option.Option<string>,
     ): Effect.Effect<void, LicenseNotSaved>;
+    /** Forgets the key, its answer and its activation. */
+    readonly clear: Effect.Effect<void, LicenseNotSaved>;
   }
 >()("cutfac/desktop/LicenseSettings") {}
 
@@ -145,13 +99,15 @@ export class License extends Context.Service<
     /** Catches up when the user comes back, asking again about a saved key that isn't paid now. */
     readonly refresh: Effect.Effect<void>;
     readonly hasKey: Effect.Effect<boolean>;
+    /** Frees this Mac's activation and forgets the key, so it can be used on another Mac. */
+    readonly deactivate: Effect.Effect<Deactivation, LicenseNotSaved>;
   }
 >()("cutfac/desktop/License") {
   /**
    * Keeps cutfac.com's answer about the saved key fresh: asks at launch and once a day, and again
-   * when the user comes back to a key that doesn't unlock the paid plan, perhaps after renewing or
-   * getting online. `changed` tells the board the paid plan unlocked or ran out, once the settings
-   * that say so are saved.
+   * when the user comes back to a key that doesn't unlock the paid plan, perhaps after renewing,
+   * freeing another Mac or getting online. `changed` tells the board the paid plan unlocked or ran
+   * out, once the settings that say so are saved.
    */
   static readonly layer = (changed: Effect.Effect<void>) => Layer.effect(License, make(changed));
 
@@ -161,13 +117,21 @@ export class License extends Context.Service<
       setKey: () => Effect.succeed("unavailable"),
       refresh: Effect.void,
       hasKey: Effect.succeed(false),
+      deactivate: Effect.succeed("unavailable"),
     }),
   );
+}
+
+/** cutfac.com's answer about a key, if it gave one, and the activation the key holds on this Mac. */
+interface Confirmed {
+  readonly answer: Option.Option<LicenseRecord>;
+  readonly activation: Option.Option<string>;
 }
 
 const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
   const settings = yield* LicenseSettings;
   const client = yield* HttpClient.HttpClient;
+  const thisMac = yield* ThisMac;
   const initial = yield* settings.load;
   const saved = yield* Ref.make(initial);
   const paid = yield* Ref.make(yield* isPaid(initial));
@@ -176,8 +140,54 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
   // Each check runs after the one before, so an answer about an old key never lands on a new one.
   const serialized = (yield* Semaphore.make(1)).withPermits(1);
 
-  const ask = (key: SecretLicenseKey) =>
-    fetchLicense(key).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.option);
+  const online = <A, E>(request: Effect.Effect<A, E, HttpClient.HttpClient>) =>
+    request.pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.option);
+
+  /**
+   * Asks about `key` with this Mac's `activation`. A perpetual license cutfac.com says isn't
+   * activated here is activated, then asked about again: an app from before activations saved the
+   * key, or the activation was freed. A key with no room left on another Mac is refused as `full`.
+   */
+  const confirm = Effect.fnUntraced(function* (
+    key: SecretLicenseKey,
+    activation: Option.Option<string>,
+  ) {
+    const mac = yield* Effect.option(thisMac.mac);
+
+    const sent = (id: Option.Option<string>) =>
+      Option.flatMap(id, (held) =>
+        Option.map(mac, ({ machine }): Activation => ({ id: held, machine })),
+      );
+
+    const first = yield* online(fetchLicense(key, sent(activation)));
+
+    if (!Option.exists(first, isUnactivated))
+      return { answer: first, activation } satisfies Confirmed;
+
+    // A Mac whose hardware ID can't be read can't be activated, which is no answer rather than a refusal.
+    if (Option.isNone(mac)) return { answer: Option.none(), activation } satisfies Confirmed;
+
+    const activated = yield* online(activateMac(key, mac.value));
+
+    if (Option.isNone(activated)) return { answer: Option.none(), activation } satisfies Confirmed;
+
+    if ("refusal" in activated.value) {
+      const checkedAt = yield* Clock.currentTimeMillis;
+      const refusal = activated.value.refusal;
+
+      return {
+        answer: Option.some(LicenseRecord.cases.LicenseRefusal.make({ checkedAt, refusal })),
+        activation: Option.none(),
+      } satisfies Confirmed;
+    }
+
+    const held = activated.value.activation;
+
+    return {
+      answer: yield* online(fetchLicense(key, sent(held))),
+      activation: held,
+    } satisfies Confirmed;
+  });
 
   /** Tells the board when the plan changed, which a grant running out does on its own. */
   const publish = Effect.gen(function* () {
@@ -189,11 +199,12 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
   const keep = Effect.fnUntraced(function* (
     key: SecretLicenseKey,
     record: Option.Option<LicenseRecord>,
+    activation: Option.Option<string>,
   ) {
-    yield* Ref.set(saved, { key: Option.some(key), record });
+    yield* Ref.set(saved, { key: Option.some(key), record, activation });
 
     // The board's server reads the plan from the saved settings, so they go first.
-    yield* settings.save(key, record);
+    yield* settings.save(key, record, activation);
     yield* publish;
   });
 
@@ -203,15 +214,15 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
 
     yield* serialized(
       Effect.gen(function* () {
-        const { key } = yield* Ref.get(saved);
+        const { key, activation } = yield* Ref.get(saved);
 
         if (Option.isNone(key)) return;
 
-        const answer = yield* ask(key.value);
+        const confirmed = yield* confirm(key.value, activation);
 
-        yield* Option.match(answer, {
+        yield* Option.match(confirmed.answer, {
           onNone: () => publish,
-          onSome: (record) => keep(key.value, Option.some(record)),
+          onSome: (record) => keep(key.value, Option.some(record), confirmed.activation),
         });
       }),
     );
@@ -235,22 +246,60 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
 
     return yield* serialized(
       Effect.gen(function* () {
-        const answer = yield* ask(key.value);
-        const result = checkOf(answer);
+        const before = yield* Ref.get(saved);
+        const sameKey = Option.contains(before.key, key.value);
+        const confirmed = yield* confirm(key.value, sameKey ? before.activation : Option.none());
+        const result = checkOf(confirmed.answer);
 
         if (result === "invalid") return result;
 
-        const before = yield* Ref.get(saved);
+        // A new key replaces the old one, whose Mac is freed for another; one cutfac.com can't
+        // free now is freed when the old key is entered again and finds it unactivated.
+        if (!sameKey) {
+          const old = Option.all({ key: before.key, activation: before.activation });
+
+          if (Option.isSome(old)) yield* online(deactivateMac(old.value.key, old.value.activation));
+        }
 
         // An unconfirmed new key stays on the free version until cutfac.com answers for it.
-        const last = Option.contains(before.key, key.value) ? before.record : Option.none();
+        const last = sameKey ? before.record : Option.none();
 
         yield* keep(
           key.value,
-          Option.orElse(answer, () => last),
+          Option.orElse(confirmed.answer, () => last),
+          confirmed.activation,
         );
 
         return result;
+      }),
+    );
+  });
+
+  const deactivate = Effect.fn("License.deactivate")(function* (): Effect.fn.Return<
+    Deactivation,
+    LicenseNotSaved
+  > {
+    return yield* serialized(
+      Effect.gen(function* () {
+        const { key, activation } = yield* Ref.get(saved);
+        const held = Option.all({ key, activation });
+
+        if (Option.isSome(held)) {
+          const freed = yield* online(deactivateMac(held.value.key, held.value.activation));
+
+          // Forgetting the key without freeing the Mac would leave it counted against the license.
+          if (Option.isNone(freed)) return "unavailable";
+        }
+
+        yield* Ref.set(saved, {
+          key: Option.none(),
+          record: Option.none(),
+          activation: Option.none(),
+        });
+        yield* settings.clear;
+        yield* publish;
+
+        return "deactivated";
       }),
     );
   });
@@ -277,5 +326,6 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
     setKey,
     refresh,
     hasKey: Effect.map(Ref.get(saved), ({ key }) => Option.isSome(key)),
+    deactivate: deactivate(),
   });
 });

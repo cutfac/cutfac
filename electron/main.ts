@@ -17,6 +17,7 @@ import {
   isFromApp,
   rememberPlace,
 } from "./boardWindow.ts";
+import { deactivateThisMac } from "./deactivateMac.ts";
 import { DEV_APP } from "./devApp.ts";
 import { handleDevTools } from "./devTools.ts";
 import { pickSource, showStartFailure } from "./dialogs.ts";
@@ -195,6 +196,10 @@ function start(): void {
       updatesEnabled: updates.enabled,
       checkForUpdates: () => forkInMain(updates.checkNow),
       requestLicenseKey,
+      deactivateThisMac: () => {
+        bringToFront();
+        forkInMain(deactivateThisMac(messages(), boardWindow()));
+      },
       openWorkspace: () => void workspaces.choose(),
       appCommand: sendAppCommand,
       editCommand: sendEditCommand,

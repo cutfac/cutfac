@@ -55,7 +55,7 @@ export function LicenseKeyForm({ desktop, saved, onSaved }: LicenseKeyFormProps)
         onSaved();
 
         if (check === "granted") toast.success(t.license.granted);
-        else toast.warning(check === "ended" ? t.license.ended : t.license.unavailable);
+        else toast.warning(t.license[check]);
       })
       .catch(sendFailed)
       .finally(() => setBusy(false));

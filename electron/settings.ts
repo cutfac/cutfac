@@ -39,8 +39,10 @@ interface Saved {
   library: string;
   port: number;
   locale: Locale;
-  licenseKey: string;
+  licenseKey: string | undefined;
   license: typeof LicenseRecord.Encoded | undefined;
+  /** This Mac's activation of a perpetual license, which the app sends with each check. */
+  licenseActivation: string | undefined;
   window: WindowPlace;
   page: typeof Page.Type;
   onboarding: OnboardingStep | undefined;
@@ -200,14 +202,24 @@ export const licenseSettings = Layer.effect(
     const settings = yield* Settings;
 
     return LicenseSettings.of({
-      load: Effect.map(settings.read, savedLicenseOf),
-      save: (licenseKey, record) =>
+      load: Effect.map(settings.read, (saved) => ({
+        ...savedLicenseOf(saved),
+        activation: decodeText(saved.licenseActivation),
+      })),
+      save: (licenseKey, record, activation) =>
         encodeLicense(Option.getOrUndefined(record)).pipe(
           Effect.flatMap((license) =>
-            settings.write({ licenseKey: Redacted.value(licenseKey), license }),
+            settings.write({
+              licenseKey: Redacted.value(licenseKey),
+              license,
+              licenseActivation: Option.getOrUndefined(activation),
+            }),
           ),
           Effect.mapError((cause) => new LicenseNotSaved({ cause })),
         ),
+      clear: settings
+        .write({ licenseKey: undefined, license: undefined, licenseActivation: undefined })
+        .pipe(Effect.mapError((cause) => new LicenseNotSaved({ cause }))),
     });
   }),
 );

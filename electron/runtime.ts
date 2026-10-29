@@ -19,6 +19,7 @@ import { licenseSettings, Settings } from "./settings.ts";
 import { shutDown } from "./shutdown.ts";
 import { Install, ServerEnv, type InstallInfo } from "./sidecar.ts";
 import { SystemAccess } from "./systemAccess.ts";
+import { ThisMac } from "./thisMac.ts";
 import { boardNotices, updateFeed } from "./updateFeed.ts";
 import { Updates } from "./updates.ts";
 import { WorkspaceServer } from "./workspaceServer.ts";
@@ -76,7 +77,7 @@ const license = Layer.unwrap(
     app.isPackaged
       ? License.layer(
           Effect.sync(() => boardWindow()?.webContents.send(LICENSE_CHANGE_CHANNEL)),
-        ).pipe(Layer.provide(licenseSettings))
+        ).pipe(Layer.provide([licenseSettings, ThisMac.layer]))
       : License.unavailable,
   ),
 );
