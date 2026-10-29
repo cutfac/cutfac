@@ -42,14 +42,22 @@ const kindOf = (item: ItemDetail, name: string): MediaKind =>
 /** The video at `url` opening on `from` seconds, with a media fragment, so it shows that frame first. */
 const atTime = (url: string, from: number) => (from > 0 ? `${url}#t=${from}` : url);
 
-/** Seek to `from`, or to the end when the video is shorter, and settle once the frame is there. */
+/**
+ * Seek to `from`, or to the end when the video is shorter, and settle once it can play on from
+ * there without stopping to load, so videos started together stay together.
+ */
 function seek(video: HTMLVideoElement, from: number): Promise<void> {
   return new Promise((resolve) => {
     // A video that fails to load must not hold the others back.
     video.addEventListener("error", () => resolve(), { once: true });
 
+    const loaded = () => {
+      if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) resolve();
+      else video.addEventListener("canplaythrough", () => resolve(), { once: true });
+    };
+
     const go = () => {
-      video.addEventListener("seeked", () => resolve(), { once: true });
+      video.addEventListener("seeked", loaded, { once: true });
       video.currentTime = Math.min(from, video.duration);
     };
 
