@@ -14,7 +14,6 @@ import {
   removeReference,
 } from "../core/references.ts";
 import { readRender } from "../core/render.ts";
-import { listReviews } from "../core/review.ts";
 import { verifyItem } from "../core/verify.ts";
 import { Workspace } from "../core/workspace.ts";
 import { createCountedItem, createEmptyItem } from "../plan.ts";
@@ -56,7 +55,6 @@ export const itemDetail = Effect.fn("server.itemDetail")(function* (item: Item) 
     ...item,
     docs: Object.fromEntries(docs),
     history: yield* readHistory(item),
-    reviews: yield* listReviews(item),
     references: yield* listReferences(itemReferences(item)),
     running: yield* runs.isRunning(item.id),
   };

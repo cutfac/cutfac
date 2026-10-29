@@ -1,5 +1,6 @@
 import { Option } from "effect";
 import { ArrowLeftIcon, DownloadIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -25,8 +26,8 @@ import type { LiveRun } from "../../lib/run.ts";
 import { Hint, keepFocus } from "./hint.tsx";
 
 /**
- * The item's title bar: back to the board, what the agent is doing, undo and redo, downloading the
- * media shown, and status.
+ * The item's title bar: back to the board, what the agent is doing, undo and redo, exporting the
+ * media shown with a warning when it breaks an upload rule, and status.
  */
 export function Toolbar({
   item,
@@ -51,6 +52,20 @@ export function Toolbar({
 }) {
   const t = useMessages();
   const statuses = STATUSES.map((status) => ({ value: status, label: t.status[status] }));
+
+  function exportMedia(path: string) {
+    downloadFile(path, exportName(item.doc.title, path, item.media.length > 1));
+    api.verify(item.id).then((reports) => {
+      const failed = reports
+        .find((report) => path.endsWith(`/${report.file}`))
+        ?.checks.filter((check) => !check.ok);
+
+      if (failed !== undefined && failed.length > 0)
+        toast.warning(t.item.uploadWarning, {
+          description: failed.map((check) => `${check.name}: ${check.detail}`).join("\n"),
+        });
+    }, sendFailed);
+  }
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -108,13 +123,7 @@ export function Toolbar({
         </Hint>
       </div>
       {media === undefined ? null : (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            downloadFile(media, exportName(item.doc.title, media, item.media.length > 1))
-          }
-        >
+        <Button variant="outline" size="sm" onClick={() => exportMedia(media)}>
           <DownloadIcon data-icon="inline-start" />
           {t.item.download}
         </Button>

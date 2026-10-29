@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, onAgentRun, type AgentChoice, type Feedback } from "../api.ts";
 import { ReferenceStrip, useAttachments } from "../components/editor/attachments.tsx";
 import { Chat, ChatComposer } from "../components/editor/chat.tsx";
-import { Checks } from "../components/editor/checks.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
 import { SectionGrip } from "../components/editor/dock-grip.tsx";
@@ -414,7 +413,6 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               <div className="flex items-center gap-1 p-2">
                 <TabsList className="min-w-0 flex-1">
                   <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
-                  <TabsTrigger value="checks">{t.item.checks}</TabsTrigger>
                   <TabsTrigger value="history">{t.item.history}</TabsTrigger>
                   <TabsTrigger value="details">{t.item.details}</TabsTrigger>
                 </TabsList>
@@ -444,11 +442,6 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     onCompare={() => player.pause()}
                   />
                 </RenderProvider>
-              </TabsContent>
-              <TabsContent value="checks" className="min-h-0 overflow-y-auto">
-                <SelectionArea className="p-4">
-                  <Checks item={item} />
-                </SelectionArea>
               </TabsContent>
               <TabsContent value="history" className="min-h-0 overflow-y-auto">
                 <div className="p-4">

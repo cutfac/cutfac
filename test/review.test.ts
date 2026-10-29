@@ -5,11 +5,10 @@ import { Effect, FileSystem, Option, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
-import { createItem, getItem, importMedia } from "../src/core/items.ts";
+import { createItem, importMedia } from "../src/core/items.ts";
 import { runChecked } from "../src/core/process.ts";
 import {
   VERTICAL_SAFE_ZONE,
-  listReviews,
   reviewChecklist,
   reviewMedia,
   safeZoneFilters,
@@ -225,31 +224,6 @@ describe("reviewing an item's video", () => {
 
         expect(clean.safeZone).toBeUndefined();
         expect(Math.abs((yield* redAt(frame, 0.05)) - (yield* redAt(frame, 0.5)))).toBeLessThan(20);
-      }),
-    30_000,
-  );
-
-  liveWithFfmpeg(
-    "lists the last review of each video still in the item, for the board",
-    () =>
-      Effect.gen(function* () {
-        const ws = yield* Workspace;
-        const { id, file } = yield* addVideo;
-        const review = yield* reviewMedia(id, file);
-        const item = yield* getItem(id);
-
-        yield* ws.writeText(
-          `${item.dir}/review/gone/review.yaml`,
-          "file: gone.mp4\nat: x\nframes: []\nstrips: []\nnotes: []\n",
-        );
-        yield* ws.writeText(`${item.dir}/review/broken/review.yaml`, "frames: nope\n");
-
-        const listed = yield* listReviews(item);
-
-        expect(listed).toHaveLength(1);
-        expect(listed[0]).toEqual(review);
-        expect(review.file).toBe("[9x16] cut.mp4");
-        expect(Number.isNaN(Date.parse(review.at))).toBe(false);
       }),
     30_000,
   );

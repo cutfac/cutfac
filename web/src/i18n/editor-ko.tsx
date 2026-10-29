@@ -5,9 +5,9 @@ export const editorKo: EditorMessages = {
   item: {
     openError: "이 영상을 열 수 없어요",
     download: "내보내기",
+    uploadWarning: "내보냈지만, 이 영상은 지금 상태로는 업로드되지 않을 수 있어요",
     imageHint: "이미지 위를 드래그해서 수정할 영역을 표시하세요.",
     chat: "채팅",
-    checks: "점검",
     details: "상세",
     history: "히스토리",
     editing: (agent) => `${withParticle(agent, "이/가")} 편집하는 중`,
@@ -42,27 +42,6 @@ export const editorKo: EditorMessages = {
     narrow: "창이 좁아서 지금은 둘 수 없어요",
     folded: "창이 좁아서 잠시 아래로 옮겨 두었어요. 창을 넓히면 제자리로 돌아가요.",
     resize: "드래그해서 크기 조절, 더블클릭하면 원래 크기",
-  },
-  checks: {
-    template: "템플릿",
-    templateMissing: (id) => `이 워크스페이스에 "${id}" 템플릿이 없어요.`,
-    checklist: "에이전트는 렌더할 때마다 이 체크리스트로 확인해요:",
-    frames: "프레임 검토",
-    framesBody:
-      "에이전트가 각 영상을 마지막으로 확인할 때 본 화면이에요. 처음부터 끝까지의 프레임과 컷마다의 움직임이에요.",
-    noReview: (file) => `${withParticle(file, "은/는")} 아직 검토하지 않았어요.`,
-    noReviewHint: "에이전트는 영상을 넘기기 전에 검토해요. 지금 검토하려면 채팅으로 요청하세요.",
-    reviewed: (ago) => `${ago} 검토함`,
-    stale: "검토한 뒤에 영상이 바뀌었어요.",
-    sheet: (file) => `${file}의 프레임`,
-    strip: (time) => `${time} 전후의 움직임`,
-    safeZone: ({ top, bottom, left, right }) =>
-      `어둡게 칠한 가장자리(위 ${top}%, 아래 ${bottom}%, 왼쪽 ${left}%, 오른쪽 ${right}%)는 릴스, 쇼츠, 틱톡이 캡션과 버튼을 올리는 곳이에요. 중요한 내용은 여기에 두지 않아요.`,
-    rules: "업로드 기준",
-    rulesBody: "영상이 각 플랫폼의 업로드 기준에 맞는지 확인해요.",
-    run: "점검하기",
-    runAgain: "다시 점검",
-    noVideos: "점검할 영상이 없어요.",
   },
   history: {
     undo: "실행 취소",

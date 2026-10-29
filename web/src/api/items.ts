@@ -1,7 +1,6 @@
 import { Schema } from "effect";
 
 import { HistoryDoc } from "../../../src/core/historySchema.ts";
-import { ReviewDoc } from "../../../src/core/reviewSchema.ts";
 import {
   AgentChoice,
   type AgentName,
@@ -34,8 +33,6 @@ export {
   type DetailField,
   type MediaCause,
 } from "../../../src/core/historySchema.ts";
-
-export { SafeZone } from "../../../src/core/reviewSchema.ts";
 
 export const MediaKind = Schema.Literals(["video", "image"]);
 
@@ -82,13 +79,6 @@ export const ItemSummary = Schema.Struct({
 
 export type ItemSummary = typeof ItemSummary.Type;
 
-export const MediaReview = Schema.Struct({
-  dir: Schema.String,
-  ...ReviewDoc.fields,
-});
-
-export type MediaReview = typeof MediaReview.Type;
-
 export const ItemDetail = Schema.Struct({
   id: Schema.String,
   dir: Schema.String,
@@ -98,7 +88,6 @@ export const ItemDetail = Schema.Struct({
   docs: Schema.Record(Schema.String, Schema.String),
   doc: ItemDoc,
   history: HistoryDoc,
-  reviews: Schema.Array(MediaReview),
   updatedAt: Schema.Finite,
 });
 

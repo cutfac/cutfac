@@ -1,13 +1,14 @@
-import type { DetailField, SafeZone } from "../api.ts";
+import type { DetailField } from "../api.ts";
 
 export const editorEn = {
   item: {
     openError: "Cannot open this video",
     /** Saves a copy of the finished file shown; the agent renders it with every edit. */
     download: "Export",
+    /** After an export, when the file breaks a platform's upload rule. */
+    uploadWarning: "Exported, but this video may not upload as it is",
     imageHint: "Drag on the image to mark the area an edit is about.",
     chat: "Chat",
-    checks: "Checks",
     details: "Details",
     history: "History",
     editing: (agent: string) => `${agent} is editing`,
@@ -30,7 +31,7 @@ export const editorEn = {
     titleRequired: "The title cannot be empty.",
   },
   layout: {
-    /** The panel of chat, checks, history and details, as the editor's sections name it. */
+    /** The panel of chat, history and details, as the editor's sections name it. */
     chat: "Chat panel",
     move: (section: string) => `Move ${section}`,
     place: (section: string) => `Where ${section} goes`,
@@ -44,28 +45,6 @@ export const editorEn = {
     narrow: "The window is too narrow for this",
     folded: "Moved down for now, as the window is narrow. It goes back once the window is wider.",
     resize: "Drag to resize, double-click to reset",
-  },
-  checks: {
-    template: "Template",
-    templateMissing: (id: string) => `There is no "${id}" template in this workspace.`,
-    checklist: "The agent holds every render to this checklist:",
-    frames: "Frame review",
-    framesBody:
-      "What the agent looked at when it last checked each video: frames from start to end, and the motion across each cut.",
-    noReview: (file: string) => `${file} has not been reviewed yet.`,
-    noReviewHint: "Agents review a video before handing it off. Ask in the chat to review it now.",
-    reviewed: (ago: string) => `Reviewed ${ago}`,
-    stale: "The video changed after this review.",
-    sheet: (file: string) => `Frames of ${file}`,
-    strip: (time: string) => `Motion around ${time}`,
-    /** Each margin in whole percent. */
-    safeZone: ({ top, bottom, left, right }: SafeZone) =>
-      `The dimmed margins, ${top}% at the top, ${bottom}% at the bottom, ${left}% on the left, and ${right}% on the right, are where Reels, Shorts, and TikTok put captions and buttons. Nothing important should sit there.`,
-    rules: "Upload rules",
-    rulesBody: "Check the videos against what the platforms accept.",
-    run: "Run checks",
-    runAgain: "Run again",
-    noVideos: "No videos to check.",
   },
   history: {
     undo: "Undo",

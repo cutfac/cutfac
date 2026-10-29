@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { resolveEdit } from "../src/core/edits.ts";
@@ -66,33 +66,6 @@ describe("the board's API client against the server's routes: items and the work
     ]);
 
     await writeFile(join(t.root, withVideo.dir, "cover.png"), "png");
-
-    const reviewDir = join(t.root, withVideo.dir, "review", "[9x16] take");
-
-    await mkdir(reviewDir, { recursive: true });
-    await writeFile(
-      join(reviewDir, "review.yaml"),
-      `file: ${JSON.stringify(video)}
-at: "2026-10-20T00:00:00.000Z"
-sheet: sheet.jpg
-frames: [{ t: 0, file: t0.jpg }]
-strips: [{ t: 1.5, file: s1.jpg }]
-safeZone: { top: 0.1, bottom: 0.2, left: 0.05, right: 0.05 }
-notes: [No audio]
-`,
-    );
-
-    expect((await api.item(id)).reviews).toMatchObject([
-      {
-        dir: `${withVideo.dir}/review/[9x16] take`,
-        file: video,
-        sheet: "sheet.jpg",
-        frames: [{ t: 0, file: "t0.jpg" }],
-        strips: [{ t: 1.5, file: "s1.jpg" }],
-        safeZone: { top: 0.1, bottom: 0.2, left: 0.05, right: 0.05 },
-        notes: ["No audio"],
-      },
-    ]);
 
     const dropped = await api.uploadReferences(id, [
       { file: new File(["png"], "logo.png"), path: "logo.png" },

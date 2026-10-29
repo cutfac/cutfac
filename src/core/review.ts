@@ -1,11 +1,11 @@
 import { Effect, Option } from "effect";
 
 import { InvalidRequest, NotFound } from "./errors.ts";
-import { type Item, getItem } from "./items.ts";
+import { getItem } from "./items.ts";
 import { aspectOf, ffmpeg, probe, sceneCuts } from "./media.ts";
 import { ReviewDoc, type ReviewShot, type SafeZone } from "./reviewSchema.ts";
 import { nowIso } from "./time.ts";
-import { Workspace, foldersWith } from "./workspace.ts";
+import { Workspace } from "./workspace.ts";
 
 /** Item subfolder with one review folder per video, named after the video. */
 const REVIEW_DIR = "review";
@@ -314,28 +314,6 @@ export function reviewChecklist(review: ReviewDoc): string[] {
     "Never call a frame clean without naming what it shows. Report the three largest defects with their times, or say why there are none.",
   ];
 }
-
-/** The last review of each of the item's videos that is still there; unreadable ones are skipped. */
-export const listReviews = Effect.fn("review.listReviews")(function* (item: Item) {
-  const ws = yield* Workspace;
-  const root = `${item.dir}/${REVIEW_DIR}`;
-  const folders = yield* foldersWith(root, REVIEW_FILE);
-
-  const reviews = yield* Effect.forEach(
-    folders,
-    (name) => {
-      const dir = `${root}/${name}`;
-
-      return ws.readYaml(`${dir}/${REVIEW_FILE}`, ReviewDoc).pipe(
-        Effect.map((doc): MediaReview[] => [{ dir, ...doc }]),
-        Effect.orElseSucceed((): MediaReview[] => []),
-      );
-    },
-    { concurrency: 4 },
-  );
-
-  return reviews.flat().filter((review) => item.media.some((m) => m.name === review.file));
-});
 
 /** The cuts ffmpeg finds, up to MAX_STRIPS; anything left out or failed is noted. */
 const detectedCuts = Effect.fnUntraced(function* (input: string, notes: string[]) {
