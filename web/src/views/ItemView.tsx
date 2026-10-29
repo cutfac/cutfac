@@ -31,7 +31,7 @@ import { Transport } from "../components/editor/transport.tsx";
 import { useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
-import { editorKey, type EditorKey } from "../lib/editor-keys.ts";
+import { editorKey, goTime, type EditorKey } from "../lib/editor-keys.ts";
 import { useFrameRate } from "../lib/frame-rate.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { LiveState } from "../lib/live.ts";
@@ -211,19 +211,6 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
       return true;
     };
 
-    const goal = (to: "start" | "end" | "in" | "out") => {
-      switch (to) {
-        case "start":
-          return 0;
-        case "end":
-          return player.getState().duration;
-        case "in":
-          return target.start;
-        case "out":
-          return target.end;
-      }
-    };
-
     const press = (key: EditorKey) =>
       Match.valueTags(key, {
         Shortcuts: () => {
@@ -237,11 +224,11 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
         MarkOut: () => onVideo(() => point((current) => withEnd(current, now()))),
         Loop: () => onVideo(() => setLoop((current) => !current)),
         Step: ({ frames }) => onVideo(() => player.step(frames / fps)),
-        Go: ({ to }) => {
-          const at = goal(to);
-
-          return at !== undefined && onVideo(() => player.seek(at));
-        },
+        Go: ({ to }) =>
+          Option.match(goTime(to, player.getState().duration, target), {
+            onNone: () => false,
+            onSome: (at) => onVideo(() => player.seek(at)),
+          }),
         Clear: () => {
           if (isEmptyTarget(target) && ghost === undefined) return false;
 
@@ -451,6 +438,10 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                         retarget(targetOf(feedback), feedback.media)
                       }
                       onCompare={() => player.pause()}
+                      onApplied={(feedback: Feedback) => {
+                        goTo(feedback.media, undefined);
+                        player.seekOnLoad(anchorOf(targetOf(feedback)) ?? 0, true);
+                      }}
                     />
                   </ReplyTimesProvider>
                 </RenderProvider>

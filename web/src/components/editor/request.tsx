@@ -27,6 +27,7 @@ import {
   asksUser,
   hasResult,
   runOffer,
+  ORIGINAL,
   savedVersions,
   versionsMedia,
   versionsOf,
@@ -37,8 +38,9 @@ import { clockTime } from "../../lib/time.ts";
 import { Reply } from "./agent-question.tsx";
 import type { OnAnswer } from "./approval-card.tsx";
 import { SentAttachments } from "./attachments.tsx";
-import { CompareDialog, VersionsDialog } from "./compare-dialog.tsx";
+import { CompareDialog } from "./compare-dialog.tsx";
 import { RunReport } from "./run-report.tsx";
+import { type ChooseVersion, VersionSwitcher } from "./version-switcher.tsx";
 
 /** What the chat can do with a request; one object so each message takes one prop for it. */
 export interface RequestActions {
@@ -53,9 +55,10 @@ export interface RequestActions {
   /** Send the user's answer to the question the agent ended its run with, as the next request. */
   reply: (feedback: Feedback, body: string) => Promise<void>;
   approve: (feedback: Feedback) => void;
-  restore: (feedback: Feedback) => void;
-  /** Keep one of the versions the agent saved; the others are thrown away. */
-  pick: (feedback: Feedback, variant: Variant) => void;
+  /** Roll the media back to before the request; resolves once it is back. */
+  restore: (feedback: Feedback) => Promise<void>;
+  /** Put one of the versions the agent saved in the media; resolves once it is there. */
+  pick: (feedback: Feedback, variant: Variant) => Promise<void>;
   /** Change a waiting request; resolves once the change is saved. */
   reword: (feedback: Feedback, body: string) => Promise<void>;
   cancel: (feedback: Feedback) => void;
@@ -320,7 +323,7 @@ function Result({
 
   if (versions.length > 0) {
     return (
-      <div className="flex flex-col gap-2 rounded-5xl bg-card p-3 squircle">
+      <div className="flex flex-col gap-2.5 rounded-5xl bg-card p-3 squircle">
         <p className="text-sm">
           {t.chat.versionsReady(
             versions.length,
@@ -330,23 +333,17 @@ function Result({
             ),
           )}
         </p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <VersionsDialog
-            item={item}
-            feedback={feedback}
-            onOpen={actions.compare}
-            onPick={(variant) => actions.pick(feedback, variant)}
-            onKeepNone={() => actions.restore(feedback)}
-          />
-          <Button variant="soft" pill size="xs" onClick={() => actions.restore(feedback)}>
-            <Undo2Icon data-icon="inline-start" />
-            {t.chat.keepNone}
-          </Button>
+        <VersionSwitcher
+          item={item}
+          feedback={feedback}
+          onOpen={actions.compare}
+          onChoose={chooser(feedback, actions)}
+        >
           <Button variant="ghost" pill size="xs" onClick={() => actions.retarget(feedback)}>
             <MessageSquareReplyIcon data-icon="inline-start" />
             {t.chat.askAgain}
           </Button>
-        </div>
+        </VersionSwitcher>
       </div>
     );
   }
@@ -387,6 +384,12 @@ function Result({
   );
 }
 
+/** Choosing among a request's versions: the original rolls back, a version is picked. */
+const chooser =
+  (feedback: Feedback, actions: RequestActions): ChooseVersion =>
+  (choice) =>
+    choice === ORIGINAL ? actions.restore(feedback) : actions.pick(feedback, choice);
+
 /** The badge for a decision on a request: kept, rolled back, or no version kept. */
 function decisionBadge(feedback: Feedback, t: Messages) {
   const picked = feedback.variants?.picked;
@@ -408,10 +411,7 @@ function decisionBadge(feedback: Feedback, t: Messages) {
   return { icon: Undo2Icon, text };
 }
 
-/**
- * How the request ended: kept, rolled back (or no version kept), or resolved with a note. Versions
- * decided on stay to switch to until the item is done or exported.
- */
+/** How the request ended: the versions to switch between, kept or rolled back, or a note. */
 function Outcome({
   item,
   feedback,
@@ -425,26 +425,26 @@ function Outcome({
 }) {
   const t = useMessages();
 
+  // Versions decided on stay to switch between, and the row says which one is in.
+  if (feedback.decision !== undefined && savedVersions(feedback).length > 0) {
+    return (
+      <VersionSwitcher
+        item={item}
+        feedback={feedback}
+        onOpen={actions.compare}
+        onChoose={chooser(feedback, actions)}
+      />
+    );
+  }
+
   if (feedback.decision !== undefined) {
     const { icon: Icon, text } = decisionBadge(feedback, t);
 
     return (
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="secondary" pill>
-          <Icon data-icon="inline-start" />
-          {text}
-        </Badge>
-        {savedVersions(feedback).length === 0 ? null : (
-          <VersionsDialog
-            item={item}
-            feedback={feedback}
-            subtle
-            onOpen={actions.compare}
-            onPick={(variant) => actions.pick(feedback, variant)}
-            onKeepNone={() => actions.restore(feedback)}
-          />
-        )}
-      </div>
+      <Badge variant="secondary" pill className="self-start">
+        <Icon data-icon="inline-start" />
+        {text}
+      </Badge>
     );
   }
 

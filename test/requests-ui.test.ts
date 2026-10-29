@@ -10,8 +10,10 @@ import {
   inOrder,
   linePaused,
   MAX_VARIANTS as BOARD_MAX_VARIANTS,
+  ORIGINAL,
   pinsOn,
   runOffer,
+  versionInUse,
   versionsMedia,
   versionsOf,
   waitingLine,
@@ -147,6 +149,19 @@ describe("hasResult", () => {
     expect(hasResult(itemWith([]), open, true)).toBe(false);
     expect(versionsOf(picked)).toEqual([]);
     expect(hasResult(itemWith([]), picked, false)).toBe(false);
+  });
+
+  test("marks the version the media shows: none before a pick, then the kept one or the original", () => {
+    const one = { id: "v1", label: "Big captions", file: "edits/a/variants/v1.mp4", at: at(3) };
+    const two = { id: "v2", label: "Fast cuts", file: "edits/a/variants/v2.mp4", at: at(4) };
+    const variants = { media: "clip.mp4", saved: [one, two], picked: "Fast cuts" };
+    const open = request("a", 1, { variants: { media: "clip.mp4", saved: [one, two] } });
+
+    expect(versionInUse(open)).toEqual(Option.none());
+    expect(versionInUse({ ...open, variants, decision: "approved" })).toEqual(Option.some("v2"));
+    expect(versionInUse({ ...open, variants, decision: "restored" })).toEqual(
+      Option.some(ORIGINAL),
+    );
   });
 
   test("shows the versions of the media they were saved from", () => {

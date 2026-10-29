@@ -82,7 +82,7 @@ export const chatEn = {
       ) : (
         <>
           {saved === 1 ? "1 version" : `${saved} versions`}
-          {of} ready. Compare them and keep one.
+          {of} ready. Click one to put it in the video; you can switch any time.
         </>
       );
     },
@@ -91,7 +91,6 @@ export const chatEn = {
     keptVersion: (label: string) => `Kept “${label}”`,
     /** A kept version undone, which leaves the versions to pick from again. */
     rolledBackVersion: (label: string) => `Rolled back “${label}”`,
-    discarded: "Threw the versions away. The media stays as it was.",
     /** A request lined up behind others on the item; `ahead` is how many run before it. */
     waiting: (agent: string, ahead: number) =>
       ahead === 0

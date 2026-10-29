@@ -27,6 +27,14 @@ export type EditorKey = Data.TaggedEnum<{
 
 export const EditorKey = Data.taggedEnum<EditorKey>();
 
+/** Where a `Go` key lands, in seconds; none when the selection has no such edge. */
+export const goTime = (
+  to: "start" | "end" | "in" | "out",
+  duration: number,
+  selection: { readonly start?: number | undefined; readonly end?: number | undefined },
+): Option.Option<number> =>
+  Option.fromUndefinedOr({ start: 0, end: duration, in: selection.start, out: selection.end }[to]);
+
 /** The shortcut a key press is, if any: none while typing, or with a modifier held. */
 export function editorKey(event: KeyboardEvent): Option.Option<EditorKey> {
   if (event.metaKey || event.ctrlKey || event.altKey || within(event.target, TEXT_ENTRY)) {

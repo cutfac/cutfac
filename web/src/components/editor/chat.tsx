@@ -58,6 +58,8 @@ interface ChatProps {
   onRetarget: (feedback: Feedback) => void;
   /** A comparison opened; the editor's own playback should stop talking over it. */
   onCompare: () => void;
+  /** A request's media changed by the user's choice: play the part it was about. */
+  onApplied: (feedback: Feedback) => void;
 }
 
 /** The conversation with the agent about this item: each request, its run, and its result. */
@@ -74,6 +76,7 @@ export function Chat({
   onShow,
   onRetarget,
   onCompare,
+  onApplied,
 }: ChatProps) {
   const t = useMessages();
 
@@ -126,26 +129,26 @@ export function Chat({
     approve: (feedback) => {
       api.approveEdit(item.id, feedback.id).then(onItem, sendFailed);
     },
-    restore: (feedback) => {
-      const versions = savedVersions(feedback).length > 0;
-
+    restore: (feedback) =>
       api
         .restoreEdit(item.id, feedback.id)
         .then((next) => {
           onItem(next);
-          toast.success(versions ? t.chat.discarded : t.chat.rolledBack(feedback.media));
+          onApplied(feedback);
+
+          // A request's versions stay, and the row they sit in shows the original is in.
+          if (savedVersions(feedback).length === 0)
+            toast.success(t.chat.rolledBack(feedback.media));
         })
-        .catch(sendFailed);
-    },
-    pick: (feedback, variant) => {
+        .catch(sendFailed),
+    pick: (feedback, variant) =>
       api
         .pickVariant(item.id, feedback.id, variant.id)
         .then((next) => {
           onItem(next);
-          toast.success(t.chat.keptVersion(variant.label));
+          onApplied(feedback);
         })
-        .catch(sendFailed);
-    },
+        .catch(sendFailed),
     reword: (feedback, body) => api.rewordWaiting(item.id, feedback.id, body).then(onItem),
     cancel: (feedback) => {
       api.cancelWaiting(item.id, feedback.id).then(onItem, sendFailed);

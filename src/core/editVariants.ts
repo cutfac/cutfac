@@ -1,4 +1,4 @@
-import { Effect, Struct } from "effect";
+import { Effect } from "effect";
 
 import { saveCodeTo } from "./editCode.ts";
 import { isKeptFile, itemRel, variantCodeDir, variantsDir } from "./editFiles.ts";
@@ -147,32 +147,6 @@ export const markKept = Effect.fnUntraced(function* (
       ),
     ),
   );
-});
-
-/**
- * The user keeps none of the versions: record that, then delete them. The verdict goes first so a
- * failed delete leaves stray files, not versions that point at nothing.
- */
-export const keepNone = Effect.fnUntraced(function* (item: Item, feedbackId: string) {
-  const ws = yield* Workspace;
-  const now = yield* nowIso;
-
-  const next = yield* mutateItem(item.id, (doc) =>
-    updateFeedback(doc, item.id, feedbackId, (entry) =>
-      withDecision(
-        {
-          ...entry,
-          variants: { ...Struct.omit(entry.variants ?? { saved: [] }, ["picked"]), saved: [] },
-        },
-        "restored",
-        now,
-      ),
-    ),
-  );
-
-  yield* ws.remove(variantsDir(item, feedbackId));
-
-  return next;
 });
 
 /**

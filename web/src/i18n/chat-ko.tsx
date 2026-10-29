@@ -72,7 +72,7 @@ export const chatKo: ChatMessages = {
         </>
       ) : (
         <>
-          {of}버전 {saved}개가 준비됐어요. 비교하고 하나를 골라 주세요.
+          {of}버전 {saved}개가 준비됐어요. 눌러서 바로 넣어 보고, 언제든 바꿀 수 있어요.
         </>
       );
     },
@@ -80,7 +80,6 @@ export const chatKo: ChatMessages = {
     keptNone: "모두 버림",
     keptVersion: (label) => `“${label}” 유지`,
     rolledBackVersion: (label) => `“${label}” 되돌림`,
-    discarded: "버전을 모두 버렸어요. 미디어는 원래대로예요.",
     waiting: (agent, ahead) =>
       ahead === 0 ? `다음 차례 · ${agent}` : `${agent} 기다리는 중 · 앞에 ${ahead}개`,
     reword: "수정",

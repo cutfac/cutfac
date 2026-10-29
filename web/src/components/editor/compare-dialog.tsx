@@ -23,9 +23,10 @@ import {
   type Variant,
 } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { savedVersions, versionsMedia } from "../../lib/requests.ts";
+import { ORIGINAL, savedVersions, versionInUse, versionsMedia } from "../../lib/requests.ts";
 import { anchorOf, describeTarget, targetOf, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
+import type { ChooseVersion } from "./version-switcher.tsx";
 
 interface Sides {
   readonly before: string;
@@ -259,31 +260,21 @@ interface Pane {
   readonly key: string;
   readonly label: string;
   readonly src: string;
-  readonly variant?: Variant;
+  readonly choice: Variant | typeof ORIGINAL;
 }
 
 interface VersionsDialogProps {
   item: ItemDetail;
   feedback: Feedback;
   onOpen: () => void;
-  onPick: (variant: Variant) => void;
-  onKeepNone: () => void;
-  /** A quieter button, for versions the user already decided on and may switch between. */
-  subtle?: boolean;
+  onChoose: ChooseVersion;
 }
 
 /**
- * The agent's versions of one request side by side with the media as it was before, to keep one,
- * switch to another, or keep none.
+ * The original and the agent's versions of one request side by side, to put one in the video. The
+ * one showing now is marked.
  */
-export function VersionsDialog({
-  item,
-  feedback,
-  onOpen,
-  onPick,
-  onKeepNone,
-  subtle = false,
-}: VersionsDialogProps) {
+export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDialogProps) {
   const grid = useRef<HTMLDivElement>(null);
   const t = useMessages();
   const versioned = versionsMedia(feedback);
@@ -291,41 +282,38 @@ export function VersionsDialog({
   if (Option.isNone(versioned)) return null;
 
   const media = versioned.value;
-
-  const current = item.media.find((file) => file.name === media);
   const kind = kindOf(item, media);
   const target = targetOf(feedback);
   // The box's frame, else the part's start: where the edit shows.
   const from = anchorOf(target) ?? 0;
   const where = describeTarget(target, t.target.boxAt);
-
   const before = feedback.context?.before;
-  const kept = feedback.decision === "approved" ? feedback.variants?.picked : undefined;
+  const inUse = Option.getOrUndefined(versionInUse(feedback));
 
-  // Until one is kept the media is put back as it was; a request for new media had nothing before.
-  const original =
-    before !== undefined
-      ? fileUrl(`${item.dir}/${before}`)
-      : current !== undefined && kept === undefined
-        ? fileUrl(`${item.dir}/${media}`, current.mtime)
-        : undefined;
-
+  // A request for new media had nothing before it.
   const panes: Pane[] = [
-    ...(original === undefined
+    ...(before === undefined
       ? []
-      : [{ key: "original", label: t.versions.original, src: original }]),
+      : [
+          {
+            key: ORIGINAL,
+            label: t.versions.original,
+            src: fileUrl(`${item.dir}/${before}`),
+            choice: ORIGINAL,
+          } as const,
+        ]),
     ...savedVersions(feedback).map((variant) => ({
       key: variant.id,
       label: variant.label,
       // A version saved again under its label keeps its file name, so its time tells copies apart.
       src: fileUrl(`${item.dir}/${variant.file}`, Date.parse(variant.at)),
-      variant,
+      choice: variant,
     })),
   ];
 
   // Several playing aloud would talk over each other; the first version is the one to hear, and
   // each can be unmuted.
-  const audible = original === undefined ? 0 : 1;
+  const audible = before === undefined ? 0 : 1;
 
   return (
     <Dialog
@@ -333,9 +321,9 @@ export function VersionsDialog({
         if (open) onOpen();
       }}
     >
-      <DialogTrigger render={<Button variant={subtle ? "ghost" : "default"} pill size="xs" />}>
+      <DialogTrigger render={<Button variant="ghost" pill size="xs" />}>
         <LayersIcon data-icon="inline-start" />
-        {t.versions.title}
+        {t.versions.sideBySide}
       </DialogTrigger>
       <DialogContent className="sm:max-w-6xl">
         <DialogHeader>
@@ -346,15 +334,13 @@ export function VersionsDialog({
           </DialogDescription>
         </DialogHeader>
         <div ref={grid} className={cn("grid grid-cols-2 gap-3", COLUMNS[panes.length - 1])}>
-          {panes.map(({ key, label, src, variant }, index) => (
+          {panes.map(({ key, label, src, choice }, index) => (
             <figure key={key} className="flex min-w-0 flex-col gap-1.5">
               <figcaption
                 className="truncate text-xs font-medium text-muted-foreground"
                 title={label}
               >
-                {variant?.label === kept && variant !== undefined
-                  ? `${label} · ${t.versions.inUse}`
-                  : label}
+                {label}
               </figcaption>
               {kind === "video" ? (
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
@@ -364,45 +350,46 @@ export function VersionsDialog({
                   playsInline
                   preload="auto"
                   muted={index !== audible}
-                  className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
+                  className={cn(
+                    "max-h-[60vh] w-full rounded-3xl bg-muted object-contain",
+                    key === inUse && "ring-2 ring-brand",
+                  )}
                 />
               ) : (
                 <img
                   src={src}
                   alt={t.compare.image(media, label)}
-                  className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
+                  className={cn(
+                    "max-h-[60vh] w-full rounded-3xl bg-muted object-contain",
+                    key === inUse && "ring-2 ring-brand",
+                  )}
                 />
               )}
-              {variant === undefined ? null : variant.label === kept ? (
-                <Button variant="outline" size="sm" disabled>
+              {key === inUse ? (
+                <Button variant="soft" size="sm" disabled>
                   <CheckIcon data-icon="inline-start" />
                   {t.versions.inUse}
                 </Button>
               ) : (
                 <DialogClose
                   render={<Button variant="outline" size="sm" />}
-                  onClick={() => onPick(variant)}
+                  onClick={() => void onChoose(choice)}
                 >
-                  <CheckIcon data-icon="inline-start" />
                   {t.versions.use}
                 </DialogClose>
               )}
             </figure>
           ))}
         </div>
-        <DialogFooter>
-          {kind === "video" ? (
+        {kind === "video" ? (
+          <DialogFooter>
             <PlayTogether
               videos={() => [...(grid.current?.querySelectorAll("video") ?? [])]}
               target={target}
               label={t.versions.playAll}
             />
-          ) : null}
-          <DialogClose render={<Button variant="outline" />} onClick={onKeepNone}>
-            <Undo2Icon data-icon="inline-start" />
-            {t.chat.keepNone}
-          </DialogClose>
-        </DialogFooter>
+          </DialogFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

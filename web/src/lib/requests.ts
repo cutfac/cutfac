@@ -34,6 +34,20 @@ export const versionsOf = (feedback: Feedback): ReadonlyArray<Variant> =>
 export const savedVersions = (feedback: Feedback): ReadonlyArray<Variant> =>
   feedback.variants?.saved ?? [];
 
+/** What the media shows of a request with versions, when it is the original rather than one. */
+export const ORIGINAL = "original";
+
+/** Which of a request's versions the media shows: `ORIGINAL`, a version's id, or none picked yet. */
+export function versionInUse(feedback: Feedback): Option.Option<string> {
+  if (feedback.decision === "restored") return Option.some(ORIGINAL);
+
+  if (feedback.decision !== "approved") return Option.none();
+
+  const { picked } = feedback.variants ?? {};
+
+  return Option.fromUndefinedOr(savedVersions(feedback).find((v) => v.label === picked)?.id);
+}
+
 /** The media a request's versions are of. */
 export const versionsMedia = (feedback: Feedback) =>
   Option.fromUndefinedOr(feedback.variants?.media ?? feedback.media);

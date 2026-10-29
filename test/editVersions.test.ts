@@ -166,7 +166,7 @@ describe("versions to compare", () => {
     }),
   );
 
-  it.live("keeping none after a pick puts the media back and throws the versions away", () =>
+  it.live("going back to the original after a pick keeps the versions to switch to", () =>
     Effect.gen(function* () {
       const { id, feedbackId } = yield* requestVersions();
       const { variant: chosen } = yield* render(id, feedbackId, "Big captions");
@@ -177,9 +177,15 @@ describe("versions to compare", () => {
 
       expect(yield* read(id, VIDEO)).toBe("first");
       expect(f?.decision).toBe("restored");
-      expect(f?.variants?.saved).toEqual([]);
-      expect(f?.variants?.picked).toBeUndefined();
-      expect(yield* exists(id, other.file)).toBe(false);
+      expect(f?.variants?.saved).toHaveLength(2);
+
+      yield* pickVariant(id, feedbackId, other.id);
+
+      expect(yield* read(id, VIDEO)).toBe("Fast cuts");
+
+      yield* undo(id);
+
+      expect(yield* read(id, VIDEO)).toBe("first");
     }),
   );
 
@@ -203,19 +209,16 @@ describe("versions to compare", () => {
     }),
   );
 
-  it.live("keeping none throws the versions away and leaves the media as it was", () =>
+  it.live("choosing the original over the versions leaves the media as it was", () =>
     Effect.gen(function* () {
       const { id, feedbackId } = yield* requestVersions();
       const { variant } = yield* render(id, feedbackId, "Big captions");
 
-      const kept = yield* restoreBefore(id, feedbackId);
-      const f = feedbackOf(kept, feedbackId);
+      const f = feedbackOf(yield* restoreBefore(id, feedbackId), feedbackId);
 
       expect(f?.decision).toBe("restored");
-      expect(f?.variants?.saved).toEqual([]);
-      expect(f?.variants?.picked).toBeUndefined();
       expect(yield* read(id, VIDEO)).toBe("first");
-      expect(yield* exists(id, variant.file)).toBe(false);
+      expect(yield* exists(id, variant.file)).toBe(true);
       expect(yield* Effect.flip(render(id, feedbackId, "Late"))).toBeInstanceOf(InvalidRequest);
     }),
   );
@@ -300,7 +303,7 @@ describe("putting the agent's code back", () => {
     }),
   );
 
-  it.live("keeping none of the versions puts the code back too", () =>
+  it.live("choosing the original over the versions puts the code back too", () =>
     Effect.gen(function* () {
       const { id, feedbackId } = yield* requestOnCode(2);
       yield* write(id, "render/graph.txt", "sunset background");

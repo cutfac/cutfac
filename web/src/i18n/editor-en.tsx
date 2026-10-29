@@ -127,6 +127,7 @@ export const editorEn = {
     title: "Compare versions",
     /** The media as it was before the request. */
     original: "Original",
+    sideBySide: "Side by side",
     /** The version the media holds now. */
     inUse: "In use",
     use: "Use this",

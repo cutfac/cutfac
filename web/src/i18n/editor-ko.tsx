@@ -120,6 +120,7 @@ export const editorKo: EditorMessages = {
   versions: {
     title: "버전 비교",
     original: "원래",
+    sideBySide: "나란히 비교",
     inUse: "적용됨",
     use: "이걸로",
     playAll: (time) => `${time}부터 모두 재생`,

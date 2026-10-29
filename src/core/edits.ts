@@ -4,7 +4,7 @@ import { restoreCode, restoreCodeFrom } from "./editCode.ts";
 import { buildContext } from "./editContext.ts";
 import { itemRel, keptFile, variantCodeDir } from "./editFiles.ts";
 import { saveBefore, snapshotAfter } from "./editSnapshots.ts";
-import { hasVersions, keepNone, markKept, pendingVariants } from "./editVariants.ts";
+import { hasVersions, markKept, pendingVariants } from "./editVariants.ts";
 import { InvalidRequest } from "./errors.ts";
 import { recordMedia } from "./history.ts";
 import {
@@ -109,7 +109,10 @@ export const approveEdit = Effect.fn("edits.approveEdit")(function* (
   );
 });
 
-/** The user rolls the media, and the agent's code with it, back to how they were when the request was made. */
+/**
+ * The user rolls the media, and the agent's code with it, back to how they were when the request was
+ * made. A request's versions stay to switch to, until the item is done or exported.
+ */
 export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   id: string,
   feedbackId: string,
@@ -118,25 +121,20 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   const item = yield* snapshotAfter(id, feedbackId);
   const f = yield* findFeedback(item, feedbackId);
   const before = f.context?.before;
-  const versions = hasVersions(f);
 
   // Versions not picked from, or a pick undone, already left the media as it was.
-  if (versions && f.decision !== "approved") {
-    yield* restoreCode(item, feedbackId);
+  const asItWas = hasVersions(f) && f.decision !== "approved";
 
-    return yield* keepNone(item, feedbackId);
+  if (!asItWas) {
+    if (f.media === undefined || before === undefined) {
+      return yield* new InvalidRequest({ message: "This request has no saved before version" });
+    }
+
+    yield* ws.copy(`${item.dir}/${before}`, `${item.dir}/${f.media}`);
+    yield* recordMedia(item, [{ media: f.media, file: before }], { cause: "restore", feedbackId });
   }
 
-  if (f.media === undefined || before === undefined) {
-    return yield* new InvalidRequest({ message: "This request has no saved before version" });
-  }
-
-  yield* ws.copy(`${item.dir}/${before}`, `${item.dir}/${f.media}`);
   yield* restoreCode(item, feedbackId);
-  yield* recordMedia(item, [{ media: f.media, file: before }], { cause: "restore", feedbackId });
-
-  if (versions) return yield* keepNone(item, feedbackId);
-
   const now = yield* nowIso;
 
   return yield* mutateItem(id, (doc) =>
