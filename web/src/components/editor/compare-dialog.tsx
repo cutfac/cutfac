@@ -76,18 +76,22 @@ async function playFrom(videos: ReadonlyArray<HTMLVideoElement>, from: number) {
   for (const video of videos) video.play().catch(() => undefined);
 }
 
-/** Play every video over `range` together, back to its start each time, until the first is paused. */
+/**
+ * Play every video over `range` together, back to its start each time. One the user pauses drops
+ * out, and the loop ends when none plays.
+ */
 async function loopOver(videos: ReadonlyArray<HTMLVideoElement>, range: Range) {
   await playFrom(videos, range.start);
 
-  const [leader] = videos;
-
   const watch = () => {
-    if (leader === undefined) return;
-
     // A part that runs to the end of the video ends it, which also pauses it.
-    if (leader.ended || leader.currentTime >= range.end) void loopOver(videos, range);
-    else if (!leader.paused) requestAnimationFrame(watch);
+    const playing = videos.filter((video) => !video.paused || video.ended);
+
+    if (playing.length === 0) return;
+
+    if (playing.some((video) => video.ended || video.currentTime >= range.end)) {
+      void loopOver(playing, range);
+    } else requestAnimationFrame(watch);
   };
 
   requestAnimationFrame(watch);
