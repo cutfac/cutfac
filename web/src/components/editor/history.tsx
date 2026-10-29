@@ -47,7 +47,6 @@ import {
   changeRows,
   describeChange,
   inUse,
-  redoable,
   undoable,
   versionGroups,
   type ChangeState,
@@ -93,24 +92,11 @@ export function useItemHistory(onItem: (item: ItemDetail) => void) {
       });
   }
 
+  // Undo and redo show in the media and the chat themselves, as in other editors; no toast.
   function step(command: EditCommand, id: string) {
-    const again: EditCommand = command === "undo" ? "redo" : "undo";
-
     send(
       () => (command === "undo" ? api.undo(id) : api.redo(id)),
-      (item) => {
-        // The step just taken sits on the other side of the cursor now.
-        const entry = command === "undo" ? redoable(item.history) : undoable(item.history);
-
-        if (Option.isNone(entry)) return;
-
-        const name = nameOf(item, entry.value);
-
-        toast(command === "undo" ? t.history.undone(name) : t.history.redone(name), {
-          id: "history",
-          action: { label: t.history[again], onClick: () => step(again, id) },
-        });
-      },
+      () => undefined,
     );
   }
 

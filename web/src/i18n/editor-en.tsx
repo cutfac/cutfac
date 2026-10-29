@@ -49,8 +49,6 @@ export const editorEn = {
   history: {
     undo: "Undo",
     redo: "Redo",
-    undone: (change: string) => `Undone: ${change}`,
-    redone: (change: string) => `Redone: ${change}`,
     backTo: (change: string) => `Back to right after: ${change}`,
     backToOriginal: "Back to the original",
     restoredVersion: (media: string) => `Restored an earlier ${media}`,

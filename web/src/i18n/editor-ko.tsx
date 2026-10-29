@@ -46,8 +46,6 @@ export const editorKo: EditorMessages = {
   history: {
     undo: "실행 취소",
     redo: "다시 실행",
-    undone: (change) => `실행 취소: ${change}`,
-    redone: (change) => `다시 실행: ${change}`,
     backTo: (change) => `이 변경 직후로 이동: ${change}`,
     backToOriginal: "처음 상태로 이동",
     restoredVersion: (media) => `${media} 이전 버전 복원`,
