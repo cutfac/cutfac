@@ -266,6 +266,11 @@ export function Composer({
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
 
+  const chips =
+    item.doc.sources.length > 0 ||
+    files.uploading > 0 ||
+    attachedReferences(item, files.paths).length > 0;
+
   async function send() {
     if (!ready) return;
 
@@ -337,8 +342,6 @@ export function Composer({
             ))}
           </div>
         )}
-        <SourceChips item={item} onItem={onItem} />
-        <AttachmentChips item={item} files={files} />
         {empty ? null : (
           <span className="flex w-fit items-center gap-1 rounded-full bg-selection py-0.5 pr-0.5 pl-2.5 text-xs font-medium text-selection-foreground tabular-nums">
             {describeTarget(target, t.target.boxAt)}
@@ -355,6 +358,15 @@ export function Composer({
         )}
         {/* The text on top and the + and send in a row under it, as in Aside and the Codex app. */}
         <InputGroup variant="floating">
+          {/* What the agent reads with the request sits in the box, apart from the target. */}
+          {chips ? (
+            <InputGroupAddon align="block-start">
+              <div className="flex min-w-0 flex-wrap gap-1.5">
+                <SourceChips item={item} onItem={onItem} />
+                <AttachmentChips item={item} files={files} />
+              </div>
+            </InputGroupAddon>
+          ) : null}
           <InputGroupTextarea
             ref={inputRef}
             value={body}
