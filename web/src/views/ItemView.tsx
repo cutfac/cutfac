@@ -8,7 +8,12 @@ import type { DroppedFile } from "@/components/ui/dropzone";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { api, onAgentRun, type AgentChoice, type Feedback } from "../api.ts";
-import { ReferenceStrip, useAttachments } from "../components/editor/attachments.tsx";
+import { ReplyTimesProvider, type ReplyTimes } from "../components/editor/agent-question.tsx";
+import {
+  detachEverywhere,
+  ReferenceStrip,
+  useAttachments,
+} from "../components/editor/attachments.tsx";
 import { Chat, ChatComposer } from "../components/editor/chat.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
@@ -77,6 +82,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const video = media?.kind === "video";
   const fps = useFrameRate(id, media);
   const videoRatio = usePlayer(player, (state) => state.ratio);
+  const duration = usePlayer(player, (state) => state.duration);
   // The server refuses to step through the history while an agent writes to the item.
   const running = item !== undefined && (item.running || run.status === "running");
   const history = useItemHistory(setData);
@@ -98,10 +104,13 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     player.setLoop(loop && start !== undefined && end !== undefined ? { start, end } : undefined);
   }, [player, loop, target]);
 
-  const clear = () => {
-    setTarget(NO_TARGET);
+  /** Change what the next request points at, which stops showing a past one's outline. */
+  const point = (change: (current: Target) => Target) => {
+    setTarget(change);
     setGhost(undefined);
   };
+
+  const clear = () => point(() => NO_TARGET);
 
   const focusComposer = () => inputRef.current?.focus({ preventScroll: true });
 
@@ -123,6 +132,22 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     if (switching) player.seekOnLoad(at);
     else player.seek(at);
   }
+
+  /** Point the next request at `next` and show where it starts. */
+  function retarget(next: Target, name?: string) {
+    goTo(name, anchorOf(next));
+    point(() => next);
+  }
+
+  const replyTimes: ReplyTimes | undefined = video
+    ? {
+        duration,
+        onPick: (from, to) => {
+          retarget(withRange(NO_TARGET, from, to));
+          focusComposer();
+        },
+      }
+    : undefined;
 
   // A render that finishes shows what it wrote and plays it from where the request pointed.
   const renderView = useItemRender(id, shellRender(run.steps, run.status === "running"), (done) => {
@@ -208,16 +233,8 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
         },
         PlayPause: () => onVideo(() => player.toggle()),
         Mute: () => onVideo(() => player.toggleMute()),
-        MarkIn: () =>
-          onVideo(() => {
-            setTarget((current) => withStart(current, now()));
-            setGhost(undefined);
-          }),
-        MarkOut: () =>
-          onVideo(() => {
-            setTarget((current) => withEnd(current, now()));
-            setGhost(undefined);
-          }),
+        MarkIn: () => onVideo(() => point((current) => withStart(current, now()))),
+        MarkOut: () => onVideo(() => point((current) => withEnd(current, now()))),
         Loop: () => onVideo(() => setLoop((current) => !current)),
         Step: ({ frames }) => onVideo(() => player.step(frames / fps)),
         Go: ({ to }) => {
@@ -316,10 +333,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                   ratio={aspectRatio(media.aspect)}
                   region={target.region}
                   ghost={ghost?.region}
-                  onRegion={(region) => {
-                    setTarget((current) => withRegion(current, region));
-                    setGhost(undefined);
-                  }}
+                  onRegion={(region) => point((current) => withRegion(current, region))}
                   ask={{
                     item,
                     agent,
@@ -366,10 +380,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     src={mediaUrl(item, media)}
                     target={target}
                     ghost={ghost}
-                    onRange={(from, to) => {
-                      setTarget((current) => withRange(current, from, to));
-                      setGhost(undefined);
-                    }}
+                    onRange={(from, to) => point((current) => withRange(current, from, to))}
                     onMarked={focusComposer}
                     pins={pins}
                   />
@@ -405,17 +416,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                         chatFiles.attach(path);
                         focusComposer();
                       }}
-                      onDetach={(path) => {
-                        const holding = [chatFiles, boxFiles].filter((files) =>
-                          files.paths.includes(path),
-                        );
-
-                        for (const files of holding) files.detach(path);
-
-                        return () => {
-                          for (const files of holding) files.attach(path);
-                        };
-                      }}
+                      onDetach={(path) => detachEverywhere([chatFiles, boxFiles], path)}
                     />
                   ),
               }
@@ -434,26 +435,24 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               {/* Kept mounted so the chat keeps its scroll and a half-written answer across tabs. */}
               <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
                 <RenderProvider value={renderView}>
-                  <Chat
-                    item={item}
-                    media={media}
-                    run={run}
-                    statuses={statuses}
-                    agent={agent}
-                    picks={picks}
-                    inputRef={inputRef}
-                    onItem={setData}
-                    onRun={setRun}
-                    onShow={show}
-                    onRetarget={(feedback: Feedback) => {
-                      const again = targetOf(feedback);
-
-                      goTo(feedback.media, anchorOf(again));
-                      setTarget(again);
-                      setGhost(undefined);
-                    }}
-                    onCompare={() => player.pause()}
-                  />
+                  <ReplyTimesProvider value={replyTimes}>
+                    <Chat
+                      item={item}
+                      media={media}
+                      run={run}
+                      statuses={statuses}
+                      agent={agent}
+                      picks={picks}
+                      inputRef={inputRef}
+                      onItem={setData}
+                      onRun={setRun}
+                      onShow={show}
+                      onRetarget={(feedback: Feedback) =>
+                        retarget(targetOf(feedback), feedback.media)
+                      }
+                      onCompare={() => player.pause()}
+                    />
+                  </ReplyTimesProvider>
                 </RenderProvider>
               </TabsContent>
               <TabsContent value="history" className="min-h-0 overflow-y-auto">

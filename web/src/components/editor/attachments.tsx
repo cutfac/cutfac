@@ -75,6 +75,17 @@ export function useAttachments(id: string, onItem: (item: ItemDetail) => void): 
   };
 }
 
+/** Take `path` off every request holding it; the returned function puts it back. */
+export function detachEverywhere(requests: ReadonlyArray<Attachments>, path: string) {
+  const holding = requests.filter((files) => files.paths.includes(path));
+
+  for (const files of holding) files.detach(path);
+
+  return () => {
+    for (const files of holding) files.attach(path);
+  };
+}
+
 /** The attached files the item still has, in order; one deleted since drops out of the request. */
 export function attachedReferences(item: ItemDetail, paths: ReadonlyArray<string>) {
   return paths.flatMap((path) => item.references.filter((reference) => reference.path === path));

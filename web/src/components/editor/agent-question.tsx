@@ -1,12 +1,24 @@
+import { Option } from "effect";
 import { MessageSquareReplyIcon } from "lucide-react";
-import { useState } from "react";
-import Markdown from "react-markdown";
+import { createContext, useContext, useState, type ComponentProps } from "react";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Button } from "@/components/ui/button";
 
 import { useMessages } from "../../i18n/index.ts";
+import { remarkTimes, timeOfHref } from "../../lib/reply-times.ts";
 import { replyBlocks, replyMarkdown } from "../../lib/replyBlocks.ts";
+
+/** Where a time named in a reply goes when clicked: the video it can pick a part of. */
+export interface ReplyTimes {
+  readonly duration: number;
+  readonly onPick: (from: number, to: number | undefined) => void;
+}
+
+const ReplyTimesContext = createContext<ReplyTimes | undefined>(undefined);
+
+export const ReplyTimesProvider = ReplyTimesContext.Provider;
 
 /**
  * The agent's closing reply. When it ends with a question the agent waits on, the answers it
@@ -81,11 +93,46 @@ export function Answers({
   );
 }
 
+const TIME_LINKS: Components = { a: TimeLink };
+
 export function Reply({ text }: { text: string }) {
+  const times = useContext(ReplyTimesContext);
+
   return (
     <div className="typeset typeset-chat">
-      <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
+      {times === undefined ? (
+        <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
+      ) : (
+        <Markdown remarkPlugins={[remarkGfm, remarkTimes]} components={TIME_LINKS}>
+          {text}
+        </Markdown>
+      )}
     </div>
+  );
+}
+
+/** A time in a reply picks that part of the video; a time past its end stays text. */
+function TimeLink({ node: _node, children, ...props }: ComponentProps<"a"> & { node?: unknown }) {
+  const t = useMessages();
+  const times = useContext(ReplyTimesContext);
+  const time = timeOfHref(props.href);
+
+  if (times === undefined || Option.isNone(time)) return <a {...props}>{children}</a>;
+
+  const { from, to } = time.value;
+  const { duration, onPick } = times;
+
+  if (duration > 0 && from >= duration) return <>{children}</>;
+
+  return (
+    <button
+      type="button"
+      title={t.chat.pickTime}
+      className="rounded-sm font-medium text-brand tabular-nums underline-offset-4 hover:underline"
+      onClick={() => onPick(from, to === undefined || duration === 0 ? to : Math.min(to, duration))}
+    >
+      {children}
+    </button>
   );
 }
 

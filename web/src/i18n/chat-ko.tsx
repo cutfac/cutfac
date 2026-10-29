@@ -52,6 +52,7 @@ export const chatKo: ChatMessages = {
       choices
         ? "답을 기다려요. 하나를 고르거나 아래에 직접 적어 보내세요."
         : "답을 기다려요. 아래에 적어 보내세요.",
+    pickTime: "타임라인에서 이 구간 선택",
     kept: "유지함",
     rolledBackBadge: "되돌림",
     versionsReady: (media, saved, wanted) =>

@@ -55,6 +55,7 @@ export const chatEn = {
       choices
         ? "Waiting for your answer. Pick one, or write your own below."
         : "Waiting for your answer. Write it below.",
+    pickTime: "Select this part on the timeline",
     kept: "Kept",
     rolledBackBadge: "Rolled back",
     /** Versions the agent saved of `media`; `wanted` is how many the request asked for. */
