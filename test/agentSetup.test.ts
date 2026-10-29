@@ -3,7 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { BunServices } from "@effect/platform-bun";
 import { Effect, Layer, Option } from "effect";
 
-import { INSTALL_COMMAND, SIGN_IN_COMMAND, agentSetup, readiness } from "../src/core/agentSetup.ts";
+import { SIGN_IN_COMMAND } from "../src/core/agentReadiness.ts";
+import { INSTALL_COMMAND, agentSetup, readiness } from "../src/core/agentSetup.ts";
 import { MIN_AGENT_VERSION } from "../src/core/agentVersion.ts";
 import { testEffect } from "./effect.ts";
 import { FakeAgentDir, fakeAgents } from "./support.ts";

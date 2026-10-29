@@ -24,6 +24,7 @@ import { ClosingReply, Reply } from "./agent-question.tsx";
 import { ApprovalCard, type OnAnswer } from "./approval-card.tsx";
 import { QuestionCard } from "./question-card.tsx";
 import { useRenderLine } from "./render-card.tsx";
+import { SignInAgain } from "./sign-in-again.tsx";
 
 /** Past this many stretches of text and tool calls, a finished run folds them away behind its reply. */
 const FOLD_STEPS = 4;
@@ -58,7 +59,8 @@ export function RunReport({
   const { steps, reply } = closingReply(run.steps, run.reply);
   const t = useMessages();
   const rendering = useRenderLine();
-  const agent = t.setup.agents[Option.getOrElse(run.agent, (): AgentName => "claude")];
+  const agentName = Option.getOrElse(run.agent, (): AgentName => "claude");
+  const agent = t.setup.agents[agentName];
 
   return (
     <>
@@ -83,15 +85,19 @@ export function RunReport({
         </div>
       ) : null}
       {Match.value(run.status).pipe(
-        Match.when({ _tag: "Some", value: "failed" }, () => (
-          <Bubble variant="destructive">
-            <BubbleContent>
-              <p className="whitespace-pre-wrap">
-                {Option.getOrElse(run.error, () => t.chat.failed)}
-              </p>
-            </BubbleContent>
-          </Bubble>
-        )),
+        Match.when({ _tag: "Some", value: "failed" }, () =>
+          run.signedOut ? (
+            <SignInAgain agent={agentName} error={Option.getOrUndefined(run.error)} />
+          ) : (
+            <Bubble variant="destructive">
+              <BubbleContent>
+                <p className="whitespace-pre-wrap">
+                  {Option.getOrElse(run.error, () => t.chat.failed)}
+                </p>
+              </BubbleContent>
+            </Bubble>
+          ),
+        ),
         Match.when({ _tag: "Some", value: "stopped" }, () => (
           <p className="text-sm text-muted-foreground">{t.chat.stopped}</p>
         )),

@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 
-import type { AgentSetup } from "./agentReadiness.ts";
+import { SIGN_IN_COMMAND, type AgentSetup } from "./agentReadiness.ts";
 import {
   type AgentRelease,
   CODEX_INSTALLER,
@@ -15,12 +15,6 @@ import { AGENTS, type AgentName } from "./schema.ts";
 export const INSTALL_COMMAND: Readonly<Record<AgentName, string>> = {
   claude: "curl -fsSL https://claude.ai/install.sh | bash",
   codex: CODEX_INSTALLER,
-};
-
-/** Signing in opens the browser and returns once the sign-in lands. */
-export const SIGN_IN_COMMAND: Readonly<Record<AgentName, string>> = {
-  claude: "claude auth login --claudeai",
-  codex: "codex login",
 };
 
 /** Checking the sign-in reads local credentials and calls no model; one that hangs is skipped. */

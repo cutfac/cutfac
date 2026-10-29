@@ -204,6 +204,7 @@ describe("run transcript", () => {
       approvals: [],
       reply: Option.some("Saved reply."),
       error: Option.none(),
+      signedOut: false,
     });
     expect(runView(saved, Option.some(live), false)).toMatchObject({
       agent: Option.some("claude"),
@@ -226,6 +227,37 @@ describe("run transcript", () => {
       model: "opus",
       effort: "max",
     });
+  });
+
+  test("a run the agent turned down for want of a sign-in says so, streamed or saved", () => {
+    const signedOut = fold([
+      { type: "start", subject: "f1", agent: "claude" },
+      { type: "error", error: "Not logged in · Please run /login", signedOut: true },
+    ]);
+
+    expect(runView(undefined, Option.some(signedOut), false)).toMatchObject({
+      status: Option.some("failed"),
+      error: Option.some("Not logged in · Please run /login"),
+      signedOut: true,
+    });
+
+    const saved: AgentRun = {
+      agent: "claude",
+      status: "failed",
+      startedAt: "2026-10-12T00:00:00.000Z",
+      error: "Not logged in · Please run /login",
+      signedOut: true,
+    };
+
+    expect(runView(saved, Option.none(), false).signedOut).toBe(true);
+
+    const retried = fold([
+      { type: "start", subject: "f1", agent: "claude" },
+      { type: "error", error: "Overloaded" },
+    ]);
+
+    // The retry failed for another reason, so the sign-in the saved run needed no longer shows.
+    expect(runView(saved, Option.some(retried), false).signedOut).toBe(false);
   });
 
   test("a saved run marked running with no agent behind it was cut off", () => {

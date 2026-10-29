@@ -2,6 +2,12 @@ import { Schema } from "effect";
 
 import { AgentName } from "./schema.ts";
 
+/** Signing in opens the browser and returns once the sign-in lands. */
+export const SIGN_IN_COMMAND: Readonly<Record<AgentName, string>> = {
+  claude: "claude auth login --claudeai",
+  codex: "codex login",
+};
+
 /**
  * Where an agent CLI stands on this machine, as the first launch checks it before there is a
  * workspace: missing, too old, signed out, or ready to run.

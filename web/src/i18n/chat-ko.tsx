@@ -95,4 +95,15 @@ export const chatKo: ChatMessages = {
     },
     title: (number, state) => `#${number} · ${state}`,
   },
+  signIn: {
+    title: (agent) => `${agent}에 다시 로그인해 주세요`,
+    body: "로그인이 만료됐거나 풀려서 이 요청을 처리하지 못했어요. 다시 로그인한 다음 다시 시도해 주세요.",
+    action: "다시 로그인",
+    checking: "로그인 상태를 확인하는 중…",
+    signingIn: "브라우저에서 로그인을 마쳐 주세요…",
+    done: "로그인했어요. 요청을 다시 시도해 주세요.",
+    terminal: "터미널에서 이 명령을 실행한 다음 요청을 다시 시도해 주세요.",
+    failed: "로그인이 끝나지 않았어요. 대신 터미널에서 실행할 수 있어요.",
+    copied: "복사했어요. 터미널에 붙여 넣어 주세요.",
+  },
 };

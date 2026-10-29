@@ -37,6 +37,7 @@ export interface LiveRun {
   readonly compacting?: boolean;
   readonly reply?: string;
   readonly error?: string;
+  readonly signedOut?: boolean | undefined;
   /** A request on its way to an agent that the server has not answered yet. */
   readonly sending?: Sending | undefined;
 }
@@ -107,7 +108,13 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
       return { ...run, status: "stopped", approvals: [] };
 
     case "error":
-      return { ...run, status: "failed", error: message.error, approvals: [] };
+      return {
+        ...run,
+        status: "failed",
+        error: message.error,
+        signedOut: message.signedOut,
+        approvals: [],
+      };
 
     case "compaction":
       if (message.state === "running") return { ...run, compacting: true };
@@ -286,6 +293,7 @@ export interface RunView {
   readonly approvals: ReadonlyArray<Approval>;
   readonly reply: Option.Option<string>;
   readonly error: Option.Option<string>;
+  readonly signedOut: boolean;
 }
 
 /**
@@ -315,5 +323,6 @@ export function runView(
     approvals: running ? (streamed?.approvals ?? []) : [],
     reply: Option.fromUndefinedOr(streamed?.reply ?? saved?.reply),
     error: Option.fromUndefinedOr(streamed?.error ?? saved?.error),
+    signedOut: named?.signedOut === true,
   };
 }

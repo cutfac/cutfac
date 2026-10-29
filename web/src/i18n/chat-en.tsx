@@ -109,6 +109,18 @@ export const chatEn = {
     },
     title: (number: number, state: string) => `#${number} · ${state}`,
   },
+  /** A run the agent turned down because it isn't signed in, or its sign-in stopped working. */
+  signIn: {
+    title: (agent: string) => `Sign in to ${agent} again`,
+    body: "Its sign-in expired or was removed, so it can't work on this. Sign in, then try again.",
+    action: "Sign in again",
+    checking: "Checking the sign-in…",
+    signingIn: "Finish signing in in your browser…",
+    done: "Signed in. Try the request again.",
+    terminal: "Run this in Terminal, then try the request again:",
+    failed: "That didn't finish. You can run it in Terminal instead:",
+    copied: "Copied. Paste it into Terminal.",
+  },
 };
 
 export type ChatMessages = typeof chatEn;
