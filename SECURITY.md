@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately through
-[GitHub's private vulnerability reporting](https://github.com/wyverselabs/cutfac/security/advisories/new),
+[GitHub's private vulnerability reporting](https://github.com/cutfac/cutfac/security/advisories/new),
 not in a public issue or pull request. Include what you found, how to reproduce it, and the version
 or commit you tested.
 

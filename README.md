@@ -34,7 +34,7 @@
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
-  <a href="https://github.com/wyverselabs/cutfac/issues">Issues</a>
+  <a href="https://github.com/cutfac/cutfac/issues">Issues</a>
 </p>
 
 <p align="center">

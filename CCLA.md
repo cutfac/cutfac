@@ -13,13 +13,13 @@ other purpose.
 This version of the Agreement allows an entity (the "Corporation") to submit Contributions to
 Wyverse Labs, to authorize Contributions submitted by its designated employees to Wyverse Labs, and
 to grant copyright and patent licenses thereto. Individuals contributing on their own behalf sign
-the [Individual CLA](https://github.com/wyverselabs/cutfac/blob/main/ICLA.md) instead. To sign this
+the [Individual CLA](https://github.com/cutfac/cutfac/blob/main/ICLA.md) instead. To sign this
 Agreement, ask Wyverse Labs as
-[CONTRIBUTING.md](https://github.com/wyverselabs/cutfac/blob/main/CONTRIBUTING.md#license)
+[CONTRIBUTING.md](https://github.com/cutfac/cutfac/blob/main/CONTRIBUTING.md#license)
 describes. Wyverse Labs sends it for a dated signature, electronic or on paper, and each party keeps
 a signed copy. The Corporation gives its name and address, a point of contact, and the employees it
 designates in Schedule A. A
-[Korean translation](https://github.com/wyverselabs/cutfac/blob/main/CCLA.ko.md) is available for
+[Korean translation](https://github.com/cutfac/cutfac/blob/main/CCLA.ko.md) is available for
 reference.
 
 You accept and agree to the following terms and conditions for Your present and future

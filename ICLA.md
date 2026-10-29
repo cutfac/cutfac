@@ -11,8 +11,8 @@ users. It does not change your rights to use your own Contributions for any othe
 You accept this Agreement by signing it with CLA assistant when you open your first pull request,
 which records the version you signed and when. If you contribute as part of your work for an
 employer, your employer must also sign the
-[Corporate CLA](https://github.com/wyverselabs/cutfac/blob/main/CCLA.md). A
-[Korean translation](https://github.com/wyverselabs/cutfac/blob/main/ICLA.ko.md) is available for
+[Corporate CLA](https://github.com/cutfac/cutfac/blob/main/CCLA.md). A
+[Korean translation](https://github.com/cutfac/cutfac/blob/main/ICLA.ko.md) is available for
 reference.
 
 You accept and agree to the following terms and conditions for Your Contributions (present and
@@ -62,7 +62,7 @@ and to Your Contributions.
    rights to intellectual property that you create that includes your Contributions, you represent
    that you have received permission to make Contributions on behalf of that employer, that your
    employer has waived such rights for your Contributions to Wyverse Labs, or that your employer has
-   executed a separate [Corporate CLA](https://github.com/wyverselabs/cutfac/blob/main/CCLA.md) with
+   executed a separate [Corporate CLA](https://github.com/cutfac/cutfac/blob/main/CCLA.md) with
    Wyverse Labs.
 
 5. You represent that each of Your Contributions is Your original creation (see section 7 for

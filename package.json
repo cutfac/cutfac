@@ -5,11 +5,11 @@
   "license": "AGPL-3.0-only",
   "homepage": "https://cutfac.com",
   "bugs": {
-    "url": "https://github.com/wyverselabs/cutfac/issues"
+    "url": "https://github.com/cutfac/cutfac/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wyverselabs/cutfac.git"
+    "url": "git+https://github.com/cutfac/cutfac.git"
   },
   "author": "Wyverse Labs",
   "bin": {
