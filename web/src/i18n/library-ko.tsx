@@ -8,11 +8,12 @@ export const libraryKo: LibraryMessages = {
       "에이전트가 영상을 만들 때마다 먼저 읽는 페이지예요. 여기서 바꾸면 다음 영상부터 반영돼요.",
     sheet: {
       title: "만드는 것",
-      purpose: "무슨 일을 하나요?",
-      goesTo: (places) => <>영상은 {places}에 올려요</>,
-      where: "어디",
+      purpose: "하는 일",
+      purposeHint: "가장 가까운 걸 골라 주세요.",
+      choose: "고르기",
+      platforms: "올리는 곳",
       aspect: "세로, 9:16",
-      bodyLabel: "직접 적기",
+      bodyLabel: "에이전트에게 남길 말",
       bodyPlaceholder: "누구를 위한 영상인지, 어떤 느낌이면 좋은지, 절대 하면 안 되는 말은 뭔지.",
       saving: "저장하는 중…",
       saved: "저장했어요",
@@ -35,6 +36,8 @@ export const libraryKo: LibraryMessages = {
     unread: "아직 안 읽음",
     unreadBody:
       "에이전트가 아직 읽지 않았어요. 다음 영상을 만들기 전에 읽거나, 지금 읽기를 누르면 바로 읽어요.",
+    showMore: "더 보기",
+    showLess: "접기",
     nothingKept: "에이전트가 여기서 간추린 내용이 없어요.",
     readNow: "지금 읽기",
     readNowHint: (count) =>

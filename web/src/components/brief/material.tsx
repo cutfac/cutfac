@@ -11,7 +11,7 @@ import {
   Trash2Icon,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ComponentProps } from "react";
+import { useLayoutEffect, useRef, useState, type ComponentProps } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
-import { safeHttpUrl } from "@/lib/utils";
+import { cn, safeHttpUrl } from "@/lib/utils";
 
 import { api, fileUrl, type Learned, type LearnedKind, type LearnedList } from "../../api.ts";
 import { useAgentStatuses, useLive, type Live } from "../../hooks.ts";
@@ -214,11 +214,7 @@ function SourceRow({
           ) : kept === "" ? (
             <p className="text-sm text-muted-foreground">{t.learn.nothingKept}</p>
           ) : (
-            <div className="typeset typeset-docs text-sm">
-              <Markdown remarkPlugins={[remarkGfm]} skipHtml>
-                {kept}
-              </Markdown>
-            </div>
+            <KeptNotes text={kept} />
           )}
         </SelectionArea>
       </CollapsibleContent>
@@ -238,6 +234,42 @@ function RowButton(props: ComponentProps<"button">) {
       className="group/trigger flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-2 pl-4 text-left outline-none"
       {...props}
     />
+  );
+}
+
+/** What the agent kept from a source, folded to its first lines when it runs long. */
+function KeptNotes({ text }: { text: string }) {
+  const t = useMessages();
+  const box = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const shown = box.current;
+
+    if (shown) setLong(shown.scrollHeight > shown.clientHeight);
+  }, [text]);
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <div
+        ref={box}
+        className={cn(
+          "typeset typeset-docs text-sm",
+          !open && "max-h-48 overflow-hidden",
+          !open && long && "mask-b-from-60%",
+        )}
+      >
+        <Markdown remarkPlugins={[remarkGfm]} skipHtml>
+          {text}
+        </Markdown>
+      </div>
+      {long ? (
+        <Button variant="link" size="sm" className="-ml-2.5" onClick={() => setOpen(!open)}>
+          {open ? t.learn.showLess : t.learn.showMore}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

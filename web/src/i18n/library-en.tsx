@@ -12,11 +12,12 @@ export const libraryEn = {
       "Your agent reads this page before every video, so the next one follows what you change.",
     sheet: {
       title: "What you make",
-      purpose: "What do you do?",
-      goesTo: (places: ReactNode) => <>Videos go to {places}</>,
-      where: "where?",
+      purpose: "What you do",
+      purposeHint: "Pick the one closest to you.",
+      choose: "Choose",
+      platforms: "Where videos go",
       aspect: "Vertical, 9:16",
-      bodyLabel: "In your words",
+      bodyLabel: "Notes for your agent",
       bodyPlaceholder: "Who it's for, how it should feel, what to never say.",
       saving: "Saving…",
       saved: "Saved",
@@ -39,6 +40,8 @@ export const libraryEn = {
     unread: "Not read yet",
     unreadBody:
       "Your agent hasn't read this yet. It will before your next video, or now with Read now.",
+    showMore: "Show more",
+    showLess: "Show less",
     nothingKept: "Your agent kept nothing from this.",
     readNow: "Read now",
     readNowHint: (count: number) =>

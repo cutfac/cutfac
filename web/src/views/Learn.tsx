@@ -2,7 +2,7 @@ import { FolderOpenIcon } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { BriefSheet } from "@/components/brief/brief-sheet";
+import { BriefSettings } from "@/components/brief/brief-settings";
 import { MaterialSection } from "@/components/brief/material";
 import { Page, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
@@ -17,8 +17,8 @@ import { aboutParts } from "../lib/about.ts";
 import { sendFailed } from "../lib/notify.ts";
 
 /**
- * The Brief page, one sheet the agent reads before every video: what the user makes and where it
- * goes, the material the agent read with what it kept from each, and any other notes in about.md.
+ * The Brief page, what the agent reads before every video: what the user makes and where it goes,
+ * the material the agent read with what it kept from each, and any other notes in about.md.
  */
 export function Learn() {
   const t = useMessages();
@@ -41,9 +41,7 @@ export function Learn() {
 
   return (
     <Page width="narrow" title={t.learn.title} description={t.learn.description}>
-      <Section title={t.learn.sheet.title} body="open">
-        <BriefSheet brief={brief} />
-      </Section>
+      <BriefSettings brief={brief} />
       <MaterialSection learned={learned} kept={kept} />
       {notes === "" ? (
         showFile === null ? null : (
