@@ -239,6 +239,16 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
         onPointerLeave={() => setHover(undefined)}
       >
         <Ruler duration={duration} />
+        {hover === undefined || scrub !== undefined ? null : (
+          // Above the ruler, as a video player's scrubber shows it, so it covers none of the frames.
+          <span
+            style={{ "--at": fraction(hover) }}
+            data-edge={hover < duration * 0.06 ? "start" : hover > duration * 0.94 ? "end" : "mid"}
+            className="pointer-events-none absolute bottom-full left-(--at) mb-1 -translate-x-1/2 rounded-md bg-popover px-1.5 py-0.5 text-xs text-popover-foreground tabular-nums shadow-sm ring-1 ring-foreground/10 data-[edge=end]:-translate-x-full data-[edge=start]:translate-x-0"
+          >
+            {formatTime(hover)}
+          </span>
+        )}
         <div className="group/track relative h-14 cursor-text overflow-hidden rounded-2xl bg-muted">
           <div className="pointer-events-none absolute inset-0 flex">
             {frames.map((frame, index) => (
@@ -274,13 +284,8 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
           {hover === undefined || scrub !== undefined ? null : (
             <div
               style={{ "--at": fraction(hover) }}
-              data-side={hover > duration * 0.85 ? "left" : "right"}
-              className="group/hover pointer-events-none absolute inset-y-0 left-(--at) w-px bg-foreground/40"
-            >
-              <span className="absolute top-1 rounded-sm bg-background/80 px-1 text-xs text-foreground tabular-nums group-data-[side=left]/hover:right-1 group-data-[side=right]/hover:left-1">
-                {formatTime(hover)}
-              </span>
-            </div>
+              className="pointer-events-none absolute inset-y-0 left-(--at) w-px bg-foreground/40"
+            />
           )}
           {pins.map((pin) => {
             const at = anchorOf(targetOf(pin.feedback));
