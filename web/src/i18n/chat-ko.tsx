@@ -79,6 +79,7 @@ export const chatKo: ChatMessages = {
     keepNone: "모두 버리기",
     keptNone: "모두 버림",
     keptVersion: (label) => `“${label}” 유지`,
+    rolledBackVersion: (label) => `“${label}” 되돌림`,
     discarded: "버전을 모두 버렸어요. 미디어는 원래대로예요.",
     waiting: (agent, ahead) =>
       ahead === 0 ? `다음 차례 · ${agent}` : `${agent} 기다리는 중 · 앞에 ${ahead}개`,

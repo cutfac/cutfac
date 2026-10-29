@@ -1,5 +1,6 @@
 import { Effect, type Types } from "effect";
 
+import { pruneVersions, verdictOn } from "./editVariants.ts";
 import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
 import {
   DETAIL_FIELDS,
@@ -10,15 +11,7 @@ import {
   type MediaCause,
   type MediaVersion,
 } from "./historySchema.ts";
-import {
-  type Decision,
-  type Item,
-  getItem,
-  mutateItem,
-  shortId,
-  updateItem,
-  withDecision,
-} from "./items.ts";
+import { type Decision, type Item, getItem, mutateItem, shortId, updateItem } from "./items.ts";
 import { extension } from "./media.ts";
 import { type Feedback, type ItemDoc, type ItemPatch, type ItemStatus } from "./schema.ts";
 import { nowIso } from "./time.ts";
@@ -289,7 +282,7 @@ export const updateDetails = Effect.fn("history.updateDetails")(function* (
 ) {
   const located = yield* getItem(id);
 
-  return yield* mutateHistory(located, (history, save) =>
+  const updated = yield* mutateHistory(located, (history, save) =>
     Effect.gen(function* () {
       // Read inside the lock, so it is the item as the change before this one left it.
       const before = yield* getItem(id);
@@ -314,6 +307,9 @@ export const updateDetails = Effect.fn("history.updateDetails")(function* (
       return item;
     }),
   );
+
+  // A done video won't switch versions any more, so the ones not kept go.
+  return patch.status === "done" ? yield* pruneVersions(id) : updated;
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -347,7 +343,9 @@ const applyEntry = Effect.fnUntraced(function* (
     return doc;
   }
 
-  const next = yield* putVersion(item, doc, direction === "undo" ? entry.from : entry.to);
+  const landing = direction === "undo" ? entry.from : entry.to;
+  const next = yield* putVersion(item, doc, landing);
+  const landed = next.versions.find((v) => v.id === landing)?.file ?? "";
   const decision = VERDICTS[direction][entry.cause];
   const { feedbackId } = entry;
 
@@ -360,7 +358,9 @@ const applyEntry = Effect.fnUntraced(function* (
     yield* mutateItem(item.id, (current) =>
       Effect.succeed({
         ...current,
-        feedback: current.feedback.map((f) => (decided(f) ? withDecision(f, decision, now) : f)),
+        feedback: current.feedback.map((f) =>
+          decided(f) ? verdictOn(f, decision, landed, now) : f,
+        ),
       }),
     );
   }

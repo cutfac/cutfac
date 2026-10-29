@@ -35,7 +35,7 @@ import { useMessages } from "../../i18n/index.ts";
 import { copyPrompt } from "../../lib/clipboard.ts";
 import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { asksUser, inOrder, linePaused, versionsOf, waitingLine } from "../../lib/requests.ts";
+import { asksUser, inOrder, linePaused, savedVersions, waitingLine } from "../../lib/requests.ts";
 import { liveFor, runView, type LiveRun, type OnRun } from "../../lib/run.ts";
 import { targetOf } from "../../lib/target.ts";
 import { Composer, type ComposerProps, editInput, sendRequest } from "./composer.tsx";
@@ -127,7 +127,7 @@ export function Chat({
       api.approveEdit(item.id, feedback.id).then(onItem, sendFailed);
     },
     restore: (feedback) => {
-      const versions = versionsOf(feedback).length > 0;
+      const versions = savedVersions(feedback).length > 0;
 
       api
         .restoreEdit(item.id, feedback.id)

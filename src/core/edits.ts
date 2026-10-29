@@ -2,9 +2,9 @@ import { Effect } from "effect";
 
 import { restoreCode, restoreCodeFrom } from "./editCode.ts";
 import { buildContext } from "./editContext.ts";
-import { afterFile, itemRel, variantCodeDir } from "./editFiles.ts";
+import { itemRel, keptFile, variantCodeDir } from "./editFiles.ts";
 import { saveBefore, snapshotAfter } from "./editSnapshots.ts";
-import { closeVariants, pendingVariants } from "./editVariants.ts";
+import { hasVersions, keepNone, markKept, pendingVariants } from "./editVariants.ts";
 import { InvalidRequest } from "./errors.ts";
 import { recordMedia } from "./history.ts";
 import {
@@ -118,12 +118,13 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   const item = yield* snapshotAfter(id, feedbackId);
   const f = yield* findFeedback(item, feedbackId);
   const before = f.context?.before;
+  const versions = hasVersions(f);
 
-  // Settling the versions already put the media back.
-  if (pendingVariants(f)) {
+  // Versions not picked from, or a pick undone, already left the media as it was.
+  if (versions && f.decision !== "approved") {
     yield* restoreCode(item, feedbackId);
 
-    return yield* closeVariants(item, feedbackId, "restored");
+    return yield* keepNone(item, feedbackId);
   }
 
   if (f.media === undefined || before === undefined) {
@@ -133,6 +134,9 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   yield* ws.copy(`${item.dir}/${before}`, `${item.dir}/${f.media}`);
   yield* restoreCode(item, feedbackId);
   yield* recordMedia(item, [{ media: f.media, file: before }], { cause: "restore", feedbackId });
+
+  if (versions) return yield* keepNone(item, feedbackId);
+
   const now = yield* nowIso;
 
   return yield* mutateItem(id, (doc) =>
@@ -140,7 +144,10 @@ export const restoreBefore = Effect.fn("edits.restoreBefore")(function* (
   );
 });
 
-/** The user keeps one of the versions: it becomes the request's result, and the others go. */
+/**
+ * The user keeps one of the versions: it becomes the request's result. The others stay, so the
+ * user can switch to one, until the item is done or exported.
+ */
 export const pickVariant = Effect.fn("edits.pickVariant")(function* (
   id: string,
   feedbackId: string,
@@ -150,7 +157,7 @@ export const pickVariant = Effect.fn("edits.pickVariant")(function* (
   const item = yield* snapshotAfter(id, feedbackId);
   const f = yield* findFeedback(item, feedbackId);
 
-  if (!pendingVariants(f)) {
+  if (!hasVersions(f)) {
     return yield* new InvalidRequest({ message: `No versions to pick from on ${feedbackId}` });
   }
 
@@ -160,16 +167,18 @@ export const pickVariant = Effect.fn("edits.pickVariant")(function* (
     return yield* new InvalidRequest({ message: `No version ${variantId} on ${feedbackId}` });
   }
 
+  if (f.decision === "approved" && f.variants.picked === chosen.label) return item;
+
   const { media } = f.variants;
-  const after = afterFile(item, f.id, media);
-  yield* ws.copy(`${item.dir}/${chosen.file}`, after);
-  yield* ws.copy(after, `${item.dir}/${media}`);
-  const file = itemRel(item, after);
+  const kept = keptFile(item, f.id, chosen.id, media);
+  yield* ws.copy(`${item.dir}/${chosen.file}`, kept);
+  yield* ws.copy(kept, `${item.dir}/${media}`);
+  const file = itemRel(item, kept);
   yield* restoreCodeFrom(item, variantCodeDir(item, f.id, chosen.id));
   yield* recordMedia(item, [{ media, file, base: f.context?.before }], {
     cause: "edit",
     feedbackId,
   });
 
-  return yield* closeVariants(item, feedbackId, "approved", chosen.label, file);
+  return yield* markKept(item, feedbackId, chosen.label, file);
 });

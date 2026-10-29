@@ -30,6 +30,10 @@ export const MAX_VARIANTS = 4;
 export const versionsOf = (feedback: Feedback): ReadonlyArray<Variant> =>
   feedback.decision === undefined ? (feedback.variants?.saved ?? []) : [];
 
+/** Every version the agent saved, kept from or not, until they are dropped. */
+export const savedVersions = (feedback: Feedback): ReadonlyArray<Variant> =>
+  feedback.variants?.saved ?? [];
+
 /** The media a request's versions are of. */
 export const versionsMedia = (feedback: Feedback) =>
   Option.fromUndefinedOr(feedback.variants?.media ?? feedback.media);

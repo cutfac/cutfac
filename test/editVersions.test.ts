@@ -12,7 +12,7 @@ import {
 } from "../src/core/edits.ts";
 import { awaitsDecision, saveVariant } from "../src/core/editVariants.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
-import { readHistory } from "../src/core/history.ts";
+import { readHistory, undo, updateDetails } from "../src/core/history.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import { type Feedback, FeedbackInput, MAX_VARIANTS } from "../src/core/schema.ts";
 import { Workspace } from "../src/core/workspace.ts";
@@ -102,7 +102,7 @@ describe("versions to compare", () => {
     }),
   );
 
-  it.live("picking a version makes it the result, and the others go", () =>
+  it.live("picking a version makes it the result, and the others stay to switch to", () =>
     Effect.gen(function* () {
       const { id, feedbackId } = yield* requestVersions();
       const { variant: chosen } = yield* render(id, feedbackId, "Big captions");
@@ -115,28 +115,91 @@ describe("versions to compare", () => {
 
       const picked = yield* pickVariant(id, feedbackId, chosen.id);
       const f = feedbackOf(picked, feedbackId);
-      const after = `edits/${feedbackId}/after.mp4`;
 
       expect(f?.decision).toBe("approved");
       expect(f !== undefined && awaitsDecision(f)).toBe(false);
       expect(f?.variants?.picked).toBe("Big captions");
-      expect(f?.variants?.saved).toEqual([]);
-      expect(f?.context?.after).toBe(after);
       expect(yield* read(id, VIDEO)).toBe("Big captions");
-      expect(yield* read(id, after)).toBe("Big captions");
-      expect(yield* exists(id, other.file)).toBe(false);
-
-      const history = yield* readHistory(picked);
-
-      expect(history.entries.at(-1)).toMatchObject({
+      expect(yield* read(id, other.file)).toBe("Fast cuts");
+      expect((yield* readHistory(picked)).entries.at(-1)).toMatchObject({
         kind: "media",
         media: VIDEO,
         cause: "edit",
         feedbackId,
       });
-      expect(yield* Effect.flip(pickVariant(id, feedbackId, chosen.id))).toBeInstanceOf(
-        InvalidRequest,
-      );
+
+      const switched = yield* pickVariant(id, feedbackId, other.id);
+
+      expect(feedbackOf(switched, feedbackId)?.variants?.picked).toBe("Fast cuts");
+      expect(yield* read(id, VIDEO)).toBe("Fast cuts");
+
+      const steps = (yield* readHistory(switched)).entries.length;
+      yield* pickVariant(id, feedbackId, other.id);
+
+      expect((yield* readHistory(yield* getItem(id))).entries).toHaveLength(steps);
+    }),
+  );
+
+  it.live("undoing a switch keeps the version before it, and undoing the pick reopens them", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId } = yield* requestVersions();
+      const { variant: chosen } = yield* render(id, feedbackId, "Big captions");
+      const { variant: other } = yield* render(id, feedbackId, "Fast cuts");
+      yield* pickVariant(id, feedbackId, chosen.id);
+      yield* pickVariant(id, feedbackId, other.id);
+
+      const back = feedbackOf(yield* undo(id), feedbackId);
+
+      expect(yield* read(id, VIDEO)).toBe("Big captions");
+      expect(back?.decision).toBe("approved");
+      expect(back?.variants?.picked).toBe("Big captions");
+
+      const unpicked = feedbackOf(yield* undo(id), feedbackId);
+
+      expect(yield* read(id, VIDEO)).toBe("first");
+      expect(unpicked?.decision).toBe("restored");
+      expect(unpicked?.variants?.saved).toHaveLength(2);
+
+      yield* pickVariant(id, feedbackId, other.id);
+
+      expect(yield* read(id, VIDEO)).toBe("Fast cuts");
+    }),
+  );
+
+  it.live("keeping none after a pick puts the media back and throws the versions away", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId } = yield* requestVersions();
+      const { variant: chosen } = yield* render(id, feedbackId, "Big captions");
+      const { variant: other } = yield* render(id, feedbackId, "Fast cuts");
+      yield* pickVariant(id, feedbackId, chosen.id);
+
+      const f = feedbackOf(yield* restoreBefore(id, feedbackId), feedbackId);
+
+      expect(yield* read(id, VIDEO)).toBe("first");
+      expect(f?.decision).toBe("restored");
+      expect(f?.variants?.saved).toEqual([]);
+      expect(f?.variants?.picked).toBeUndefined();
+      expect(yield* exists(id, other.file)).toBe(false);
+    }),
+  );
+
+  it.live("a done item drops the versions not kept, and keeps those still to pick from", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId: decided } = yield* requestVersions();
+      const { variant: chosen } = yield* render(id, decided, "Big captions");
+      const { variant: other } = yield* render(id, decided, "Fast cuts");
+      yield* pickVariant(id, decided, chosen.id);
+
+      const calmer = yield* requestEdit(id, { body: "Calmer", media: VIDEO, variants: 2 });
+      const pending = calmer.feedback.id;
+      const { variant: waiting } = yield* render(id, pending, "Slow");
+
+      const done = yield* updateDetails(id, { status: "done" });
+
+      expect(feedbackOf(done, decided)?.variants?.saved).toEqual([]);
+      expect(yield* exists(id, other.file)).toBe(false);
+      expect(feedbackOf(done, pending)?.variants?.saved).toHaveLength(1);
+      expect(yield* exists(id, waiting.file)).toBe(true);
     }),
   );
 

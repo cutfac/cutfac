@@ -125,8 +125,10 @@ export const editorEn = {
   /** The agent's versions of one request side by side, to keep one or none. */
   versions: {
     title: "Compare versions",
-    /** The media as it is now, which is how it was before the request. */
-    now: "Now",
+    /** The media as it was before the request. */
+    original: "Original",
+    /** The version the media holds now. */
+    inUse: "In use",
     use: "Use this",
     playAll: (time: string) => `Play all from ${time}`,
   },

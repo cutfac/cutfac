@@ -20,10 +20,17 @@ import { sendOnEnter } from "@/lib/utils";
 
 import type { AgentName, AgentStatus, Feedback, ItemDetail, Variant } from "../../api.ts";
 import { agentInstalled, href } from "../../hooks.ts";
-import { useLocale, useMessages } from "../../i18n/index.ts";
+import { useLocale, useMessages, type Messages } from "../../i18n/index.ts";
 import { AGENTS, agentTitle, answerer } from "../../lib/models.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { asksUser, hasResult, runOffer, versionsMedia, versionsOf } from "../../lib/requests.ts";
+import {
+  asksUser,
+  hasResult,
+  runOffer,
+  savedVersions,
+  versionsMedia,
+  versionsOf,
+} from "../../lib/requests.ts";
 import { closingReply, runView, type LiveRun } from "../../lib/run.ts";
 import { describeTarget, isEmptyTarget, targetOf } from "../../lib/target.ts";
 import { clockTime } from "../../lib/time.ts";
@@ -159,7 +166,7 @@ export function Request({ item, feedback, number, ahead, live, statuses, actions
             />
           )}
           {result ? <Result item={item} feedback={feedback} actions={actions} /> : null}
-          <Outcome feedback={feedback} replied={replied} />
+          <Outcome item={item} feedback={feedback} replied={replied} actions={actions} />
         </MessageContent>
       </Message>
     </div>
@@ -380,26 +387,64 @@ function Result({
   );
 }
 
-/** How the request ended: kept, rolled back (or no version kept), or resolved with a note. */
-function Outcome({ feedback, replied }: { feedback: Feedback; replied: boolean }) {
-  const t = useMessages();
+/** The badge for a decision on a request: kept, rolled back, or no version kept. */
+function decisionBadge(feedback: Feedback, t: Messages) {
   const picked = feedback.variants?.picked;
 
   if (feedback.decision === "approved") {
-    return (
-      <Badge variant="secondary" pill className="self-start">
-        <CheckIcon data-icon="inline-start" />
-        {picked === undefined ? t.chat.kept : t.chat.keptVersion(picked)}
-      </Badge>
-    );
+    return {
+      icon: CheckIcon,
+      text: picked === undefined ? t.chat.kept : t.chat.keptVersion(picked),
+    };
   }
 
-  if (feedback.decision === "restored") {
+  const text =
+    picked !== undefined
+      ? t.chat.rolledBackVersion(picked)
+      : feedback.variants === undefined
+        ? t.chat.rolledBackBadge
+        : t.chat.keptNone;
+
+  return { icon: Undo2Icon, text };
+}
+
+/**
+ * How the request ended: kept, rolled back (or no version kept), or resolved with a note. Versions
+ * decided on stay to switch to until the item is done or exported.
+ */
+function Outcome({
+  item,
+  feedback,
+  replied,
+  actions,
+}: {
+  item: ItemDetail;
+  feedback: Feedback;
+  replied: boolean;
+  actions: RequestActions;
+}) {
+  const t = useMessages();
+
+  if (feedback.decision !== undefined) {
+    const { icon: Icon, text } = decisionBadge(feedback, t);
+
     return (
-      <Badge variant="secondary" pill className="self-start">
-        <Undo2Icon data-icon="inline-start" />
-        {feedback.variants === undefined ? t.chat.rolledBackBadge : t.chat.keptNone}
-      </Badge>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="secondary" pill>
+          <Icon data-icon="inline-start" />
+          {text}
+        </Badge>
+        {savedVersions(feedback).length === 0 ? null : (
+          <VersionsDialog
+            item={item}
+            feedback={feedback}
+            subtle
+            onOpen={actions.compare}
+            onPick={(variant) => actions.pick(feedback, variant)}
+            onKeepNone={() => actions.restore(feedback)}
+          />
+        )}
+      </div>
     );
   }
 

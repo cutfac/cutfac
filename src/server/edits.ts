@@ -5,6 +5,7 @@ import { agentBin } from "../core/agentCommand.ts";
 import { RunRegistry } from "../core/agentRun.ts";
 import { buildEditPrompt } from "../core/editPrompt.ts";
 import { approveEdit, pickVariant, resolveEdit, restoreBefore } from "../core/edits.ts";
+import { pruneVersions } from "../core/editVariants.ts";
 import { cancelWaiting, rewordWaiting, waitingLine, waitingPick } from "../core/editWaiting.ts";
 import { InvalidRequest } from "../core/errors.ts";
 import { type Item, addFeedback, findFeedback, getItem } from "../core/items.ts";
@@ -213,6 +214,12 @@ export const editRoutes = HttpRouter.addAll([
     "POST",
     "/api/item/edit/restore",
     changeItem(FeedbackRef, (id, body) => restoreBefore(id, body.feedbackId)),
+  ),
+  // Exporting is the end of comparing, so the versions not kept go.
+  json(
+    "POST",
+    "/api/item/edit/prune",
+    withId((id) => Effect.flatMap(pruneVersions(id), itemDetail)),
   ),
   runStream("/api/item/run", RunRegistry, getItem),
 ]);

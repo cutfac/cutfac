@@ -23,7 +23,7 @@ import {
   type Variant,
 } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { versionsMedia, versionsOf } from "../../lib/requests.ts";
+import { savedVersions, versionsMedia } from "../../lib/requests.ts";
 import { anchorOf, describeTarget, targetOf, type Target } from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 
@@ -268,15 +268,21 @@ interface VersionsDialogProps {
   onOpen: () => void;
   onPick: (variant: Variant) => void;
   onKeepNone: () => void;
+  /** A quieter button, for versions the user already decided on and may switch between. */
+  subtle?: boolean;
 }
 
-/** The agent's versions of one request side by side with the media as it is, to keep one or none. */
+/**
+ * The agent's versions of one request side by side with the media as it was before, to keep one,
+ * switch to another, or keep none.
+ */
 export function VersionsDialog({
   item,
   feedback,
   onOpen,
   onPick,
   onKeepNone,
+  subtle = false,
 }: VersionsDialogProps) {
   const grid = useRef<HTMLDivElement>(null);
   const t = useMessages();
@@ -293,18 +299,22 @@ export function VersionsDialog({
   const from = anchorOf(target) ?? 0;
   const where = describeTarget(target, t.target.boxAt);
 
-  // A request for new media had nothing before it, so there is nothing to show as it is now.
+  const before = feedback.context?.before;
+  const kept = feedback.decision === "approved" ? feedback.variants?.picked : undefined;
+
+  // Until one is kept the media is put back as it was; a request for new media had nothing before.
+  const original =
+    before !== undefined
+      ? fileUrl(`${item.dir}/${before}`)
+      : current !== undefined && kept === undefined
+        ? fileUrl(`${item.dir}/${media}`, current.mtime)
+        : undefined;
+
   const panes: Pane[] = [
-    ...(current === undefined
+    ...(original === undefined
       ? []
-      : [
-          {
-            key: "now",
-            label: t.versions.now,
-            src: fileUrl(`${item.dir}/${media}`, current.mtime),
-          },
-        ]),
-    ...versionsOf(feedback).map((variant) => ({
+      : [{ key: "original", label: t.versions.original, src: original }]),
+    ...savedVersions(feedback).map((variant) => ({
       key: variant.id,
       label: variant.label,
       // A version saved again under its label keeps its file name, so its time tells copies apart.
@@ -315,7 +325,7 @@ export function VersionsDialog({
 
   // Several playing aloud would talk over each other; the first version is the one to hear, and
   // each can be unmuted.
-  const audible = current === undefined ? 0 : 1;
+  const audible = original === undefined ? 0 : 1;
 
   return (
     <Dialog
@@ -323,7 +333,7 @@ export function VersionsDialog({
         if (open) onOpen();
       }}
     >
-      <DialogTrigger render={<Button pill size="xs" />}>
+      <DialogTrigger render={<Button variant={subtle ? "ghost" : "default"} pill size="xs" />}>
         <LayersIcon data-icon="inline-start" />
         {t.versions.title}
       </DialogTrigger>
@@ -342,7 +352,9 @@ export function VersionsDialog({
                 className="truncate text-xs font-medium text-muted-foreground"
                 title={label}
               >
-                {label}
+                {variant?.label === kept && variant !== undefined
+                  ? `${label} · ${t.versions.inUse}`
+                  : label}
               </figcaption>
               {kind === "video" ? (
                 // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
@@ -361,7 +373,12 @@ export function VersionsDialog({
                   className="max-h-[60vh] w-full rounded-3xl bg-muted object-contain"
                 />
               )}
-              {variant === undefined ? null : (
+              {variant === undefined ? null : variant.label === kept ? (
+                <Button variant="outline" size="sm" disabled>
+                  <CheckIcon data-icon="inline-start" />
+                  {t.versions.inUse}
+                </Button>
+              ) : (
                 <DialogClose
                   render={<Button variant="outline" size="sm" />}
                   onClick={() => onPick(variant)}

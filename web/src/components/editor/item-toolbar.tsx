@@ -56,6 +56,7 @@ export function Toolbar({
 
   function exportMedia(path: string) {
     downloadFile(path, exportName(item.doc.title, path, item.media.length > 1));
+    api.pruneVersions(item.id).then(onItem, sendFailed);
     api.verify(item.id).then((reports) => {
       const failed = reports
         .find((report) => path.endsWith(`/${report.file}`))

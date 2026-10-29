@@ -89,6 +89,8 @@ export const chatEn = {
     keepNone: "Keep none",
     keptNone: "Kept none",
     keptVersion: (label: string) => `Kept “${label}”`,
+    /** A kept version undone, which leaves the versions to pick from again. */
+    rolledBackVersion: (label: string) => `Rolled back “${label}”`,
     discarded: "Threw the versions away. The media stays as it was.",
     /** A request lined up behind others on the item; `ahead` is how many run before it. */
     waiting: (agent: string, ahead: number) =>

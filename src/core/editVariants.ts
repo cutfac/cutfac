@@ -1,7 +1,7 @@
-import { Effect } from "effect";
+import { Effect, Struct } from "effect";
 
 import { saveCodeTo } from "./editCode.ts";
-import { itemRel, variantCodeDir, variantsDir } from "./editFiles.ts";
+import { isKeptFile, itemRel, variantCodeDir, variantsDir } from "./editFiles.ts";
 import { InvalidRequest } from "./errors.ts";
 import {
   type Decision,
@@ -18,13 +18,18 @@ import { type Feedback, MAX_VARIANTS, type Variant, type Variants } from "./sche
 import { nowIso } from "./time.ts";
 import { Workspace } from "./workspace.ts";
 
-/** A request with versions saved that the user has not picked from yet. */
-export type PendingVariants = Feedback & {
+/** A request with versions saved, picked from or not. */
+export type WithVersions = Feedback & {
   readonly variants: Variants & { readonly media: string };
 };
 
-export const pendingVariants = (f: Feedback): f is PendingVariants =>
-  f.decision === undefined && f.variants?.media !== undefined && f.variants.saved.length > 0;
+/** Versions stay after one is kept, to switch to, until the item is done or exported. */
+export const hasVersions = (f: Feedback): f is WithVersions =>
+  f.variants?.media !== undefined && f.variants.saved.length > 0;
+
+/** A request with versions saved that the user has not picked from yet. */
+export const pendingVariants = (f: Feedback): f is WithVersions =>
+  f.decision === undefined && hasVersions(f);
 
 /**
  * The agent left versions to pick from or a result to keep or roll back, and the user hasn't
@@ -120,17 +125,35 @@ export const saveVariant = Effect.fn("edits.saveVariant")(function* (
   return { item: next, variant, saved: variants?.saved.length ?? 0, wanted: variants?.wanted };
 });
 
-/**
- * Record the user's verdict on a request's versions, with the one kept, if any, then delete them.
- * The verdict goes first so a failed delete leaves stray files, not versions that point at nothing.
- */
-export const closeVariants = Effect.fnUntraced(function* (
+/** The user kept `picked`, whose copy is `after`; the other versions stay to switch to. */
+export const markKept = Effect.fnUntraced(function* (
   item: Item,
   feedbackId: string,
-  decision: Decision,
-  picked?: string,
-  after?: string,
+  picked: string,
+  after: string,
 ) {
+  const now = yield* nowIso;
+
+  return yield* mutateItem(item.id, (doc) =>
+    updateFeedback(doc, item.id, feedbackId, (entry) =>
+      withDecision(
+        {
+          ...entry,
+          context: { ...entry.context, after },
+          variants: { saved: [], ...entry.variants, picked },
+        },
+        "approved",
+        now,
+      ),
+    ),
+  );
+});
+
+/**
+ * The user keeps none of the versions: record that, then delete them. The verdict goes first so a
+ * failed delete leaves stray files, not versions that point at nothing.
+ */
+export const keepNone = Effect.fnUntraced(function* (item: Item, feedbackId: string) {
   const ws = yield* Workspace;
   const now = yield* nowIso;
 
@@ -139,16 +162,63 @@ export const closeVariants = Effect.fnUntraced(function* (
       withDecision(
         {
           ...entry,
-          context: after === undefined ? entry.context : { ...entry.context, after },
-          variants: { ...entry.variants, saved: [], picked },
+          variants: { ...Struct.omit(entry.variants ?? { saved: [] }, ["picked"]), saved: [] },
         },
-        decision,
+        "restored",
         now,
       ),
     ),
   );
 
   yield* ws.remove(variantsDir(item, feedbackId));
+
+  return next;
+});
+
+/**
+ * The verdict on a request once undo or redo leaves its media holding `file`: back on a version the
+ * user kept, that version is kept again.
+ */
+export const verdictOn = (f: Feedback, decision: Decision, file: string, now: string) => {
+  const version = f.variants?.saved.find((v) => isKeptFile(file, f.id, v.id));
+
+  if (version === undefined || f.variants === undefined) return withDecision(f, decision, now);
+
+  return withDecision(
+    { ...f, variants: { ...f.variants, picked: version.label } },
+    "approved",
+    now,
+  );
+};
+
+/**
+ * Delete the versions the user didn't keep once the item is done or exported. Requests still
+ * waiting for a pick keep theirs; the kept copies stay for undo.
+ */
+export const pruneVersions = Effect.fn("edits.pruneVersions")(function* (id: string) {
+  const ws = yield* Workspace;
+  const item = yield* getItem(id);
+
+  const settled = new Set(
+    item.doc.feedback.filter((f) => f.decision !== undefined && hasVersions(f)).map((f) => f.id),
+  );
+
+  if (settled.size === 0) return item;
+
+  const next = yield* mutateItem(id, (doc) =>
+    Effect.succeed({
+      ...doc,
+      feedback: doc.feedback.map((f) =>
+        settled.has(f.id) && f.variants !== undefined
+          ? { ...f, variants: { ...f.variants, saved: [] } }
+          : f,
+      ),
+    }),
+  );
+
+  yield* Effect.forEach(settled, (feedbackId) => ws.remove(variantsDir(item, feedbackId)), {
+    discard: true,
+  });
 
   return next;
 });

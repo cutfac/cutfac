@@ -196,6 +196,8 @@ export const itemApi = {
     send(ItemDetail, "POST", `/api/item/edit/pick${q(id)}`, { feedbackId, variantId }),
   restoreEdit: (id: string, feedbackId: string) =>
     send(ItemDetail, "POST", `/api/item/edit/restore${q(id)}`, { feedbackId }),
+  /** Drops the versions not kept, as exporting ends the comparing. */
+  pruneVersions: (id: string) => send(ItemDetail, "POST", `/api/item/edit/prune${q(id)}`, {}),
   undo: (id: string) => send(ItemDetail, "POST", `/api/item/history/undo${q(id)}`, {}),
   redo: (id: string) => send(ItemDetail, "POST", `/api/item/history/redo${q(id)}`, {}),
   goTo: (id: string, entryId: string | undefined) =>

@@ -157,8 +157,16 @@ export const Variants = Schema.Struct({
   media: Schema.optional(
     Schema.String.annotate(describe("the media file the versions are of, once one is saved")),
   ),
-  saved: Schema.Array(Variant).pipe(withDefault([])),
-  picked: Schema.optional(Schema.String.annotate(describe("label of the version the user kept"))),
+  saved: Schema.Array(Variant)
+    .annotate(
+      describe(
+        "versions saved so far; they stay after the user keeps one, to switch to, until the item is done or exported",
+      ),
+    )
+    .pipe(withDefault([])),
+  picked: Schema.optional(
+    Schema.String.annotate(describe("label of the version the user kept, or last kept if undone")),
+  ),
 });
 
 export type Variants = typeof Variants.Type;

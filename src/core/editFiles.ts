@@ -18,5 +18,16 @@ export const beforeFile = (item: Item, feedbackId: string, media: string) =>
 export const afterFile = (item: Item, feedbackId: string, media: string) =>
   `${editDir(item, feedbackId)}/after.${extension(media)}`;
 
+/**
+ * Where a version the user kept stays, one file each, so undo and redo can move between the
+ * versions of a request.
+ */
+export const keptFile = (item: Item, feedbackId: string, variantId: string, media: string) =>
+  `${editDir(item, feedbackId)}/kept-${variantId}.${extension(media)}`;
+
+/** Whether `file`, item-relative, is where `variantId` of the request was kept. */
+export const isKeptFile = (file: string, feedbackId: string, variantId: string) =>
+  file.startsWith(`edits/${feedbackId}/kept-${variantId}.`);
+
 /** Item-relative path (the form feedback.context stores) for a workspace-relative path. */
 export const itemRel = (item: Item, rel: string) => rel.slice(item.dir.length + 1);
