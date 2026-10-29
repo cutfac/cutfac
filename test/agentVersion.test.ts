@@ -437,4 +437,35 @@ echo '{"type":"result","subtype":"success","session_id":"fresh","result":"ok"}'
       expect(yield* runs).toBe(2);
     }),
   );
+
+  it.live("so is one Claude echoes back in the result that says it has no such session", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+      const missing = `No conversation found with session ID: ${STORED}`;
+
+      // As Claude Code 2.1.311 answers a --resume of a session it doesn't have.
+      const bin = yield* fakes.bin(
+        "claude",
+        answeringVersion(
+          "99.0.0 (Claude Code)",
+          `head -n 1 >/dev/null
+${countRun(fakes.calls)}
+case "$*" in
+  *--resume*)
+    echo '{"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"${STORED}","errors":["${missing}"]}'
+    exit 1 ;;
+esac
+echo '{"type":"system","subtype":"init","session_id":"fresh"}'
+echo '{"type":"result","subtype":"success","session_id":"fresh","result":"ok"}'
+`,
+        ),
+      );
+
+      const { result, saved } = yield* turn("claude", bin, STORED);
+
+      expect(result).toEqual({ reply: "ok", failure: undefined });
+      expect(saved).toEqual([undefined, "fresh"]);
+      expect(yield* runs).toBe(2);
+    }),
+  );
 });

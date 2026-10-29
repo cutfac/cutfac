@@ -141,7 +141,11 @@ const attemptAgent = Effect.fnUntraced(function* <R>(
       error: parsed.error ?? state.error,
       signedOut: state.signedOut || parsed.signedOut === true,
       session: parsed.sessionId ?? state.session,
-      understood: state.understood || parsed.sessionId !== undefined || parsed.reply !== undefined,
+      // Claude ends a resume of a session it doesn't have by echoing that session back, unread.
+      understood:
+        state.understood ||
+        (parsed.sessionId !== undefined && parsed.ended !== true) ||
+        parsed.reply !== undefined,
       effortKeepsCache: parsed.effortKeepsCache ?? state.effortKeepsCache,
     }));
 
