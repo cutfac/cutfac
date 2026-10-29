@@ -137,7 +137,7 @@ function briefPrompt(doc: ImportDoc, folder: string): string {
  */
 function learnPrompt(doc: ImportDoc): string {
   return [
-    "The user is setting up Cutfac. They told you what they make in brief.md and gave you material, which about.md lists. You are running in the background while they finish setting up.",
+    "The user told you what they make in brief.md and gave you material, which about.md lists. You are running in the background while they carry on in Cutfac.",
     "Read brief.md, then each section of about.md that says it is not read yet: read its link or folder, rewrite the section with what matters for short videos about it (what it is, who it is for, their own words, the claims it can back up, how it looks, how it sounds), and delete the not-read line. Keep each section's `<!-- learned:id -->` line.",
     "Write only about.md. Make no template, video, or other file, and install nothing.",
     "If a source can't be read, leave its section as it is and say which one.",
