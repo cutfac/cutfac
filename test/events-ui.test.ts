@@ -89,3 +89,21 @@ test("a stream the browser reconnects after an error tells listeners to reload w
   expect(reloads).toBe(2);
   stop();
 });
+
+test("a run stream that goes quiet without closing is opened again, so the run's end still arrives", () => {
+  jest.useFakeTimers();
+  const heard: string[] = [];
+  const stop = events.onAgentRun("item", (message) => heard.push(message.type));
+  const [first] = live();
+  first?.emit("open");
+
+  jest.advanceTimersByTime(events.SILENT_MS);
+
+  const [second] = live();
+  expect(second).not.toBe(first);
+  second?.dispatchEvent(new MessageEvent("run", { data: "f1" }));
+  expect(heard).toEqual(["run"]);
+
+  stop();
+  expect(live()).toEqual([]);
+});
