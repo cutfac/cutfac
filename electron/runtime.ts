@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import { Effect, Layer, ManagedRuntime, Option, Predicate, Ref } from "effect";
-import { FetchHttpClient } from "effect/http";
 import type { PlatformError } from "effect/PlatformError";
 import { app } from "electron";
 
@@ -14,6 +13,7 @@ import { devLaunchOf, type DevLaunch } from "./devEnv.ts";
 import { FirstWorkspace } from "./firstWorkspace.ts";
 import { LICENSE_CHANGE_CHANNEL } from "./ipc.ts";
 import { License } from "./license.ts";
+import { NetHttpClient } from "./netHttp.ts";
 import { platform } from "./platform.ts";
 import { licenseSettings, Settings } from "./settings.ts";
 import { shutDown } from "./shutdown.ts";
@@ -39,9 +39,7 @@ export const installInfo = (): InstallInfo => ({
 
 const appData = Layer.sync(AppData, () => Option.some(app.getPath("userData")));
 
-const appReports = errorReports("app").pipe(
-  Layer.provide([appData, FetchHttpClient.layer, platform]),
-);
+const appReports = errorReports("app").pipe(Layer.provide([appData, NetHttpClient, platform]));
 
 export const appLog = logToFile("app").pipe(
   Layer.provide([Layer.sync(LogDir, () => Option.some(app.getPath("logs"))), appReports, platform]),
@@ -69,13 +67,9 @@ const base = Layer.mergeAll(
   Layer.succeed(AppState, appState),
 );
 
-const services = Layer.mergeAll(
-  settings,
-  ServerEnv.layer,
-  FetchHttpClient.layer,
-  appLog,
-  updateFeed,
-).pipe(Layer.provideMerge(base));
+const services = Layer.mergeAll(settings, ServerEnv.layer, NetHttpClient, appLog, updateFeed).pipe(
+  Layer.provideMerge(base),
+);
 
 const license = Layer.unwrap(
   Effect.sync(() =>
