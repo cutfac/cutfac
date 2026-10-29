@@ -103,6 +103,8 @@ function useFilmstrip(src: string | undefined): ReadonlyArray<string> {
 }
 
 interface Scrub {
+  /** Moving the playhead only, grabbed by its handle or the ruler, or dragging out a range. */
+  readonly mode: "seek" | "select";
   readonly from: number;
   /** Past the wobble threshold: a range is being dragged out, not a click. */
   readonly dragging: boolean;
@@ -123,8 +125,9 @@ interface TimelineProps {
 }
 
 /**
- * The video's length as a strip of frames. Click to jump; drag across it to select the part
- * an edit is about. The selection shows in the editor's one colour, with the box's frame as a
+ * The video's length as a strip of frames under a thin ruler. Click to jump; drag across the frames
+ * to select the part an edit is about; drag the playhead or the ruler to move through the video
+ * without selecting. The selection shows in the editor's one colour, with the box's frame as a
  * diamond on top.
  */
 export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }: TimelineProps) {
@@ -141,12 +144,12 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
     return clampUnit((event.clientX - rect.left) / rect.width) * duration;
   };
 
-  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
+  function startScrub(event: PointerEvent<HTMLDivElement>, mode: Scrub["mode"]) {
     if (event.button !== 0) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
     const at = timeAt(event);
-    setScrub({ from: at, dragging: false, x: event.clientX });
+    setScrub({ mode, from: at, dragging: false, x: event.clientX });
     player.pause();
     player.seek(at);
   }
@@ -156,6 +159,12 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
     setHover(at);
 
     if (scrub === undefined) return;
+
+    if (scrub.mode === "seek") {
+      player.seek(at);
+
+      return;
+    }
 
     const dragging = scrub.dragging || Math.abs(event.clientX - scrub.x) > 4;
 
@@ -172,7 +181,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
 
     setScrub(undefined);
 
-    if (!scrub.dragging) return;
+    if (scrub.mode === "seek" || !scrub.dragging) return;
 
     // Back to the start, so play shows the selection from its beginning.
     player.seek(target.start ?? scrub.from);
@@ -186,61 +195,71 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
       <div
         // Pointer only: the keyboard has I, O and the arrow keys for the same moves.
         aria-hidden="true"
-        className="group/track relative h-14 cursor-text touch-none overflow-hidden rounded-2xl bg-muted"
-        onPointerDown={onPointerDown}
+        className="relative flex touch-none flex-col gap-1"
+        onPointerDown={(event) =>
+          startScrub(
+            event,
+            event.target instanceof Element && event.target.closest("[data-grip]") !== null
+              ? "seek"
+              : "select",
+          )
+        }
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => setScrub(undefined)}
         onPointerLeave={() => setHover(undefined)}
       >
-        <div className="pointer-events-none absolute inset-0 flex">
-          {frames.map((frame, index) => (
-            <img
-              // oxlint-disable-next-line react/no-array-index-key -- frames are positional and the list is replaced whole
-              key={index}
-              src={frame}
-              alt=""
-              draggable={false}
-              className="h-full min-w-0 flex-1 object-cover"
+        <Ruler duration={duration} />
+        <div className="group/track relative h-14 cursor-text overflow-hidden rounded-2xl bg-muted">
+          <div className="pointer-events-none absolute inset-0 flex">
+            {frames.map((frame, index) => (
+              <img
+                // oxlint-disable-next-line react/no-array-index-key -- frames are positional and the list is replaced whole
+                key={index}
+                src={frame}
+                alt=""
+                draggable={false}
+                className="h-full min-w-0 flex-1 object-cover"
+              />
+            ))}
+          </div>
+          {ghost?.start === undefined ? null : (
+            <Span
+              start={fraction(ghost.start)}
+              width={fraction((ghost.end ?? ghost.start) - ghost.start)}
+              ghost
             />
-          ))}
-        </div>
-        {ghost?.start === undefined ? null : (
-          <Span
-            start={fraction(ghost.start)}
-            width={fraction((ghost.end ?? ghost.start) - ghost.start)}
-            ghost
-          />
-        )}
-        {target.start === undefined ? null : (
-          <Span
-            start={fraction(target.start)}
-            width={fraction((target.end ?? target.start) - target.start)}
-            ghost={false}
-          />
-        )}
-        {target.region === undefined ? null : (
-          <BoxMarker at={fraction(target.region.at)} region={target.region} />
-        )}
-        {hover === undefined || scrub !== undefined ? null : (
-          <div
-            style={{ "--at": fraction(hover) }}
-            className="pointer-events-none absolute inset-y-0 left-(--at) w-px bg-foreground/40"
-          />
-        )}
-        <Playhead player={player} duration={duration} />
-        {pins.map((pin) => {
-          const at = anchorOf(targetOf(pin.feedback));
+          )}
+          {target.start === undefined ? null : (
+            <Span
+              start={fraction(target.start)}
+              width={fraction((target.end ?? target.start) - target.start)}
+              ghost={false}
+            />
+          )}
+          {target.region === undefined ? null : (
+            <BoxMarker at={fraction(target.region.at)} region={target.region} />
+          )}
+          {hover === undefined || scrub !== undefined ? null : (
+            <div
+              style={{ "--at": fraction(hover) }}
+              className="pointer-events-none absolute inset-y-0 left-(--at) w-px bg-foreground/40"
+            />
+          )}
+          {pins.map((pin) => {
+            const at = anchorOf(targetOf(pin.feedback));
 
-          return at === undefined ? null : (
-            <PinBadge
-              key={pin.feedback.id}
-              pin={pin}
-              style={{ "--at": fraction(at) }}
-              className="pointer-events-none absolute bottom-1 left-(--at) -translate-x-1/2 scale-90"
-            />
-          );
-        })}
+            return at === undefined ? null : (
+              <PinBadge
+                key={pin.feedback.id}
+                pin={pin}
+                style={{ "--at": fraction(at) }}
+                className="pointer-events-none absolute bottom-1 left-(--at) -translate-x-1/2 scale-90"
+              />
+            );
+          })}
+        </div>
+        <Playhead player={player} duration={duration} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>0:00.0</span>
@@ -274,14 +293,47 @@ function BoxMarker({ at, region }: { at: string; region: Region }) {
   );
 }
 
-/** Its own component, so only it re-renders on every frame while the video plays. */
+/** Whole seconds between ruler ticks: the smallest step that keeps them about 30 across. */
+const TICK_STEPS = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300];
+
+/** Taller ticks on round seconds a few minor ticks apart, so a glance gives the scale. */
+const MAJOR_STEPS = [1, 5, 10, 30, 60, 300, 600];
+
+/** A thin strip of ticks above the frames; dragging it moves the playhead without selecting. */
+function Ruler({ duration }: { duration: number }) {
+  const step = TICK_STEPS.find((candidate) => duration / candidate <= 30) ?? duration / 30;
+  const major = MAJOR_STEPS.find((candidate) => candidate >= step * 4) ?? step * 5;
+  const ticks = Array.from({ length: Math.floor(duration / step) + 1 }, (_, index) => index * step);
+
+  return (
+    <div data-grip="" className="relative h-3 cursor-ew-resize">
+      {ticks.map((at) => (
+        <div
+          key={at}
+          style={{ "--at": percent(clampUnit(at / duration)) }}
+          data-major={at % major === 0}
+          className="pointer-events-none absolute bottom-0 left-(--at) h-1 w-px -translate-x-1/2 bg-muted-foreground/40 data-[major=true]:h-2 data-[major=true]:bg-muted-foreground/70"
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Its own component, so only it re-renders on every frame while the video plays. The head sits on
+ * the ruler and the line runs down through the frames; both take the drag that moves it.
+ */
 function Playhead({ player, duration }: { player: Player; duration: number }) {
   const time = usePlayer(player, (state) => state.time);
 
   return (
     <div
+      data-grip=""
       style={{ "--at": percent(clampUnit(time / duration)) }}
-      className="pointer-events-none absolute inset-y-0 left-(--at) w-0.5 -translate-x-1/2 bg-foreground ring-1 ring-background"
-    />
+      className="group/playhead absolute inset-y-0 left-(--at) flex w-4 -translate-x-1/2 cursor-ew-resize flex-col items-center"
+    >
+      <div className="pointer-events-none h-3.5 w-3 shrink-0 rounded-sm bg-foreground shadow-sm ring-1 ring-background transition-transform group-hover/playhead:scale-110" />
+      <div className="pointer-events-none w-0.5 flex-1 bg-foreground ring-1 ring-background" />
+    </div>
   );
 }
