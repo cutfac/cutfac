@@ -1,8 +1,6 @@
 import { Option } from "effect";
 import {
   AppWindowIcon,
-  ArrowUpRightIcon,
-  ChevronRightIcon,
   FileIcon,
   FilmIcon,
   FolderIcon,
@@ -11,7 +9,7 @@ import {
   Trash2Icon,
   type LucideIcon,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type ComponentProps } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -21,7 +19,6 @@ import { useFirstReading } from "@/components/first-ideas";
 import { ErrorAlert, ListSkeleton, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Popover,
   PopoverContent,
@@ -151,7 +148,7 @@ function ReadNow({
   );
 }
 
-/** A source in a line, opening onto what the agent kept from it. */
+/** A source, with what the agent kept from it under its line. */
 function SourceRow({
   entry,
   kept,
@@ -168,72 +165,51 @@ function SourceRow({
   const image = doc.images[0];
 
   return (
-    <Collapsible render={<RowItem />}>
-      <div className="flex items-center gap-1 pr-2 transition-colors hover:bg-foreground/4 has-focus-visible:bg-foreground/4">
-        <CollapsibleTrigger render={<RowButton />}>
-          <SourceThumb entry={entry} />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-medium">{doc.title}</span>
-            <span className="truncate text-xs text-muted-foreground">
-              {t.learn.kinds[doc.kind]} · <SourceText entry={entry} />
-            </span>
+    <li className="group/row flex flex-col gap-2 border-t py-3 pr-2 pl-4">
+      <div className="flex items-center gap-3">
+        <SourceThumb entry={entry} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-medium">{doc.title}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {t.learn.kinds[doc.kind]} · <SourceText entry={entry} />
           </span>
-          {entry.unread ? (
-            <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-              {reading ? (
-                <Spinner className="size-3" />
-              ) : (
-                <span className="size-1.5 rounded-full bg-brand" />
-              )}
-              {reading ? t.learn.readingOne : t.learn.unread}
-            </span>
-          ) : null}
-          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/60 transition-transform group-data-panel-open/trigger:rotate-90" />
-        </CollapsibleTrigger>
+        </span>
+        {entry.unread ? (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {reading ? (
+              <Spinner className="size-3" />
+            ) : (
+              <span className="size-1.5 rounded-full bg-brand" />
+            )}
+            {reading ? t.learn.readingOne : t.learn.unread}
+          </span>
+        ) : null}
         <ForgetButton entry={entry} onForgot={onForgot} />
       </div>
-      <CollapsibleContent>
-        <SelectionArea className="flex flex-col gap-3 pr-4 pb-4 pl-16">
-          <SourceLink entry={entry} />
-          {doc.video ? (
-            // Saved clips come without caption tracks.
-            // oxlint-disable-next-line jsx-a11y/media-has-caption
-            <video
-              src={fileUrl(`${dir}/${doc.video}`)}
-              poster={image ? fileUrl(`${dir}/${image}`) : undefined}
-              preload="metadata"
-              className="max-h-72 w-full rounded-xl bg-muted object-contain"
-              controls
-              playsInline
-            />
-          ) : null}
-          {entry.unread ? (
-            <p className="text-sm text-muted-foreground">
-              {reading ? t.learn.readingBody : t.learn.unreadBody}
-            </p>
-          ) : kept === "" ? (
-            <p className="text-sm text-muted-foreground">{t.learn.nothingKept}</p>
-          ) : (
-            <KeptNotes text={kept} />
-          )}
-        </SelectionArea>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-function RowItem(props: ComponentProps<"li">) {
-  return <li className="group/row border-t" {...props} />;
-}
-
-/** The whole line opens the row; the line around it tints on hover, as the board's rows do. */
-function RowButton(props: ComponentProps<"button">) {
-  return (
-    <button
-      type="button"
-      className="group/trigger flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-2 pl-4 text-left outline-none"
-      {...props}
-    />
+      <SelectionArea className="flex flex-col gap-3 pr-2 pl-12">
+        {doc.video ? (
+          // Saved clips come without caption tracks.
+          // oxlint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            src={fileUrl(`${dir}/${doc.video}`)}
+            poster={image ? fileUrl(`${dir}/${image}`) : undefined}
+            preload="metadata"
+            className="max-h-72 w-full rounded-xl bg-muted object-contain"
+            controls
+            playsInline
+          />
+        ) : null}
+        {entry.unread ? (
+          <p className="text-sm text-muted-foreground">
+            {reading ? t.learn.readingBody : t.learn.unreadBody}
+          </p>
+        ) : kept === "" ? (
+          <p className="text-sm text-muted-foreground">{t.learn.nothingKept}</p>
+        ) : (
+          <KeptNotes text={kept} />
+        )}
+      </SelectionArea>
+    </li>
   );
 }
 
@@ -256,7 +232,7 @@ function KeptNotes({ text }: { text: string }) {
         ref={box}
         className={cn(
           "typeset typeset-docs text-sm",
-          !open && "max-h-48 overflow-hidden",
+          !open && "max-h-40 overflow-hidden",
           !open && long && "mask-b-from-60%",
         )}
       >
@@ -304,28 +280,20 @@ function SourceText({ entry }: { entry: Learned }) {
 
   if ("path" in source) return <span className="font-mono">{source.path}</span>;
 
-  const url = Option.getOrElse(safeHttpUrl(source.url), () => source.url);
+  const short = source.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+  const url = safeHttpUrl(source.url);
 
-  return <>{url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</>;
-}
-
-/** The source as a link to open, under a row that's open; nothing for a path or an upload. */
-function SourceLink({ entry }: { entry: Learned }) {
-  const t = useMessages();
-  const source = entry.doc.source;
-  const url = source !== undefined && "url" in source ? safeHttpUrl(source.url) : Option.none();
-
-  if (Option.isNone(url)) return null;
+  if (Option.isNone(url)) return <>{short}</>;
 
   return (
     <a
       href={url.value}
       target="_blank"
       rel="noreferrer noopener"
-      className="flex w-fit items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      title={t.learn.open}
+      className="underline-offset-4 hover:text-foreground hover:underline"
     >
-      {t.learn.open}
-      <ArrowUpRightIcon className="size-3" />
+      {short}
     </a>
   );
 }
