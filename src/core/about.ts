@@ -1,24 +1,19 @@
 import { Effect, Option } from "effect";
 
+import { ABOUT_HEADER, UNREAD, aboutSections } from "./aboutSections.ts";
 import { type LearnedDoc } from "./learnedSchema.ts";
 import { clip } from "./learnText.ts";
 import { readOptionalText } from "./library.ts";
 import { Workspace } from "./workspace.ts";
 
+export { UNREAD, aboutSections } from "./aboutSections.ts";
+
 /** What the workspace makes videos about, in the workspace root. Agents read it; anyone edits it. */
 export const ABOUT_FILE = "about.md";
-
-const ABOUT_HEADER =
-  "# About\n\nWhat this workspace makes videos about. Agents read this file before they work; anyone can edit it.\n";
-
-/** Starts the line a new section carries until an agent has read its source. */
-export const UNREAD = "> Not read yet";
 
 const UNREAD_LINE = `${UNREAD}: an agent should read the source, rewrite this section with what matters for the videos, and delete this line.`;
 
 const marker = (id: string) => `<!-- learned:${id} -->`;
-
-const MARKER = /^<!-- learned:(\S+) -->$/;
 
 /** How much of a description goes into about.md; learned.yaml keeps all of it. */
 const SECTION_TEXT = 1200;
@@ -75,32 +70,6 @@ export const removeSection = Effect.fnUntraced(function* (id: string) {
     }),
   );
 });
-
-export interface AboutSection {
-  /** The learned entry it was written for, from its marker line; none for a section a person added. */
-  readonly id?: string | undefined;
-  /** Line indexes: from the heading up to, not including, `end`. */
-  readonly start: number;
-  readonly end: number;
-  readonly unread: boolean;
-}
-
-/** about.md's `#` and `##` sections; deeper headings belong to the section they are in. */
-export function aboutSections(about: string): ReadonlyArray<AboutSection> {
-  const lines = about.split("\n");
-  const starts = lines.flatMap((line, index) => (/^#{1,2} /.test(line) ? [index] : []));
-
-  return starts.map((start, n) => {
-    const end = starts[n + 1] ?? lines.length;
-    const body = lines.slice(start + 1, end);
-
-    const id = body
-      .map((line) => MARKER.exec(line.trim())?.[1])
-      .find((found) => found !== undefined);
-
-    return { id, start, end, unread: body.some((line) => line.startsWith(UNREAD)) };
-  });
-}
 
 function withoutSection(about: string, id: string): string {
   const section = aboutSections(about).find((found) => found.id === id);
