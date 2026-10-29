@@ -320,8 +320,8 @@ function Ruler({ duration }: { duration: number }) {
 }
 
 /**
- * Its own component, so only it re-renders on every frame while the video plays. The head sits on
- * the ruler and the line runs down through the frames; both take the drag that moves it.
+ * Its own component, so only it re-renders on every frame while the video plays. One shape: a head
+ * on the ruler that narrows into the line through the frames, and all of it takes the drag.
  */
 function Playhead({ player, duration }: { player: Player; duration: number }) {
   const time = usePlayer(player, (state) => state.time);
@@ -330,10 +330,12 @@ function Playhead({ player, duration }: { player: Player; duration: number }) {
     <div
       data-grip=""
       style={{ "--at": percent(clampUnit(time / duration)) }}
-      className="group/playhead absolute inset-y-0 left-(--at) flex w-4 -translate-x-1/2 cursor-ew-resize flex-col items-center"
+      className="absolute inset-y-0 left-(--at) flex w-4 -translate-x-1/2 cursor-ew-resize flex-col items-center text-foreground drop-shadow-xs"
     >
-      <div className="pointer-events-none h-3.5 w-3 shrink-0 rounded-sm bg-foreground shadow-sm ring-1 ring-background transition-transform group-hover/playhead:scale-110" />
-      <div className="pointer-events-none w-0.5 flex-1 bg-foreground ring-1 ring-background" />
+      <svg viewBox="0 0 10 12" className="pointer-events-none h-3 w-2.5 shrink-0 fill-current">
+        <path d="M2 0H8A2 2 0 0 1 10 2V5.5L6 10V12H4V10L0 5.5V2A2 2 0 0 1 2 0Z" />
+      </svg>
+      <div className="pointer-events-none w-0.5 flex-1 bg-current" />
     </div>
   );
 }
