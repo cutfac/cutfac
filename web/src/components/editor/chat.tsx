@@ -1,6 +1,6 @@
 import { Option } from "effect";
 import { CrosshairIcon, HourglassIcon, PlayIcon, XIcon } from "lucide-react";
-import type { RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { toast } from "sonner";
 
 import { SelectionArea } from "@/components/selection-area";
@@ -19,6 +19,7 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
 } from "@/components/ui/message-scroller";
 
 import {
@@ -183,6 +184,7 @@ export function Chat({
           </MessageScrollerViewport>
           <MessageScrollerButton />
         </MessageScroller>
+        <FollowNewRequests count={requests.length} />
       </MessageScrollerProvider>
       {linePaused(item, run) ? (
         <Paused
@@ -228,6 +230,23 @@ export function ChatComposer({ run, ...props }: ChatComposerProps) {
       }}
     />
   );
+}
+
+/**
+ * The scroller follows new messages only while it is at the end; a request just sent shows even
+ * when the chat was scrolled up, as in other chat apps.
+ */
+function FollowNewRequests({ count }: { count: number }) {
+  const { scrollToEnd } = useMessageScroller();
+  const seen = useRef(count);
+
+  useEffect(() => {
+    if (count > seen.current) scrollToEnd({ behavior: "smooth" });
+
+    seen.current = count;
+  }, [count, scrollToEnd]);
+
+  return null;
 }
 
 function Welcome({ hasMedia }: { hasMedia: boolean }) {
