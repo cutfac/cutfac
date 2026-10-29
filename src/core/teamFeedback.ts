@@ -21,7 +21,7 @@ const SEND_TIMEOUT = "20 seconds";
 export const MAX_TEAM_FEEDBACK_CHARS = 5000;
 
 /** Which way in the feedback came. */
-export type TeamFeedbackSource = "board" | "slash" | "agent";
+export type TeamFeedbackSource = "board" | "slash" | "agent" | "failure";
 
 export interface TeamFeedback {
   readonly message: string;

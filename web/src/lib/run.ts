@@ -294,6 +294,10 @@ export interface RunView {
   readonly reply: Option.Option<string>;
   readonly error: Option.Option<string>;
   readonly signedOut: boolean;
+  /** When the saved run started, which tells it apart from the item's other runs. */
+  readonly startedAt: Option.Option<string>;
+  /** How many runs on the item in a row failed, ending with this one; 0 when it didn't fail. */
+  readonly failedInARow: number;
 }
 
 /**
@@ -324,5 +328,8 @@ export function runView(
     reply: Option.fromUndefinedOr(streamed?.reply ?? saved?.reply),
     error: Option.fromUndefinedOr(streamed?.error ?? saved?.error),
     signedOut: named?.signedOut === true,
+    startedAt: Option.fromUndefinedOr(saved?.startedAt),
+    // A failure just streamed counts once until the saved run says how many came before it.
+    failedInARow: status === "failed" ? (saved?.failedInARow ?? 1) : 0,
   };
 }

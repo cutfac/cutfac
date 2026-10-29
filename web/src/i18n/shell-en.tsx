@@ -77,6 +77,16 @@ export const shellEn = {
       `The app hit ${count === 1 ? "an error" : `${count} errors`} lately. Sending the log with it helps us find the cause much faster.`,
     sendWithLog: "Send with log",
     sendWithoutLog: "Send without log",
+    /** Under a run that failed for a reason the person can't fix themselves. */
+    reportAction: "Report this problem",
+    keepsFailing: (count: number) =>
+      `This failed ${count} times in a row. Tell us, and we'll look into it.`,
+    reported: "Reported. Thanks for telling us.",
+    reportTitle: "Report a problem",
+    reportDescription:
+      "We'll send the error below as it is. Saying what you were doing helps us find the cause faster.",
+    reportLabel: "What were you doing? (optional)",
+    reportPlaceholder: "For example: I asked it to shorten the caption",
   },
 };
 

@@ -15,11 +15,11 @@ import { trackUsage } from "../usageStats.ts";
 import { defaultAgent } from "./agents.ts";
 import { json } from "./respond.ts";
 
-/** Feedback for the Cutfac team, from the board's dialog or a `/feedback` message. */
+/** Feedback for the Cutfac team: the board's dialog, a `/feedback` message, or a failed run's report. */
 const TeamFeedbackBody = Schema.Struct({
   message: Schema.String,
   email: Schema.optional(Schema.String),
-  source: Schema.Literals(["board", "slash"]),
+  source: Schema.Literals(["board", "slash", "failure"]),
   platform: Schema.optional(Schema.String),
   locale: Schema.optional(Schema.String),
   agent: Schema.optional(Schema.String),

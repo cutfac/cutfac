@@ -76,5 +76,14 @@ export const shellKo: ShellMessages = {
       `최근에 오류가 ${count}번 있었어요. 로그를 함께 보내면 원인을 훨씬 빨리 찾을 수 있어요.`,
     sendWithLog: "로그와 함께 보내기",
     sendWithoutLog: "로그 없이 보내기",
+    reportAction: "이 문제 알려 주기",
+    keepsFailing: (count: number) =>
+      `${count}번 연속으로 실패했어요. 알려 주시면 원인을 찾아볼게요.`,
+    reported: "알려 주셔서 고마워요.",
+    reportTitle: "문제 알려 주기",
+    reportDescription:
+      "아래 오류를 그대로 보내요. 무엇을 하던 중이었는지 적어 주시면 원인을 더 빨리 찾을 수 있어요.",
+    reportLabel: "무엇을 하던 중이었나요? (선택)",
+    reportPlaceholder: "예: 자막을 줄여 달라고 했어요",
   },
 };

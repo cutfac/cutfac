@@ -24,6 +24,7 @@ import { ClosingReply, Reply } from "./agent-question.tsx";
 import { ApprovalCard, type OnAnswer } from "./approval-card.tsx";
 import { QuestionCard } from "./question-card.tsx";
 import { useRenderLine } from "./render-card.tsx";
+import { ReportProblem } from "./report-problem.tsx";
 import { SignInAgain } from "./sign-in-again.tsx";
 
 /** Past this many stretches of text and tool calls, a finished run folds them away behind its reply. */
@@ -87,15 +88,22 @@ export function RunReport({
       {Match.value(run.status).pipe(
         Match.when({ _tag: "Some", value: "failed" }, () =>
           run.signedOut ? (
-            <SignInAgain agent={agentName} error={Option.getOrUndefined(run.error)} />
+            <SignInAgain
+              agent={agentName}
+              error={Option.getOrUndefined(run.error)}
+              report={<ReportProblem run={run} agent={agentName} />}
+            />
           ) : (
-            <Bubble variant="destructive">
-              <BubbleContent>
-                <p className="whitespace-pre-wrap">
-                  {Option.getOrElse(run.error, () => t.chat.failed)}
-                </p>
-              </BubbleContent>
-            </Bubble>
+            <>
+              <Bubble variant="destructive">
+                <BubbleContent>
+                  <p className="whitespace-pre-wrap">
+                    {Option.getOrElse(run.error, () => t.chat.failed)}
+                  </p>
+                </BubbleContent>
+              </Bubble>
+              <ReportProblem run={run} agent={agentName} />
+            </>
           ),
         ),
         Match.when({ _tag: "Some", value: "stopped" }, () => (

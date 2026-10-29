@@ -205,6 +205,8 @@ describe("run transcript", () => {
       reply: Option.some("Saved reply."),
       error: Option.none(),
       signedOut: false,
+      startedAt: Option.some("2026-10-12T00:00:00.000Z"),
+      failedInARow: 0,
     });
     expect(runView(saved, Option.some(live), false)).toMatchObject({
       agent: Option.some("claude"),

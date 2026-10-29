@@ -22,6 +22,7 @@ import { api, type AgentChoice, type TeamFeedback } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
 import { currentLocale, messages, useMessages } from "../i18n/index.ts";
+import { type Failure, failureReport } from "../lib/feedback.ts";
 import { errorText } from "../lib/notify.ts";
 import { SelectionArea } from "./selection-area.tsx";
 
@@ -78,8 +79,19 @@ export function SlashFeedbackHint() {
 /** What the desktop app's log holds now; the web board has none. */
 const noLogs = () => Promise.resolve({ logs: null, errors: 0 });
 
-/** Tell the Cutfac team something, with an optional address to reply to. */
-export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
+/**
+ * Tell the Cutfac team something, with an optional address to reply to. With a failed run `about`,
+ * the report carries the failure, and what the person adds is up to them.
+ */
+export function FeedbackDialog({
+  trigger,
+  about,
+  onSent,
+}: {
+  trigger: ReactElement;
+  about?: Failure | undefined;
+  onSent?: (() => void) | undefined;
+}) {
   const t = useMessages();
   const [open, setOpen] = useState(false);
   // Kept while the dialog is closed, so a draft survives closing it.
@@ -91,10 +103,24 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
       <DialogTrigger render={trigger} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t.teamFeedback.title}</DialogTitle>
-          <DialogDescription>{t.teamFeedback.description}</DialogDescription>
+          <DialogTitle>
+            {about === undefined ? t.teamFeedback.title : t.teamFeedback.reportTitle}
+          </DialogTitle>
+          <DialogDescription>
+            {about === undefined ? t.teamFeedback.description : t.teamFeedback.reportDescription}
+          </DialogDescription>
         </DialogHeader>
+        {about === undefined ? null : (
+          <SelectionArea
+            render={
+              <p className="max-h-32 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap" />
+            }
+          >
+            {about.error}
+          </SelectionArea>
+        )}
         <FeedbackForm
+          about={about}
           message={message}
           email={email}
           onMessage={setMessage}
@@ -102,6 +128,7 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
           onSent={() => {
             setOpen(false);
             setMessage("");
+            onSent?.();
           }}
         />
       </DialogContent>
@@ -110,6 +137,7 @@ export function FeedbackDialog({ trigger }: { trigger: ReactElement }) {
 }
 
 interface FeedbackFormProps {
+  about: Failure | undefined;
   message: string;
   email: string;
   onMessage: (message: string) => void;
@@ -121,7 +149,7 @@ interface FeedbackFormProps {
  * The feedback form, read when the dialog opens. With a log to send, the person picks one of two
  * buttons, with it or without; nothing is chosen for them, and Enter sends without it.
  */
-function FeedbackForm({ message, email, onMessage, onEmail, onSent }: FeedbackFormProps) {
+function FeedbackForm({ about, message, email, onMessage, onEmail, onSent }: FeedbackFormProps) {
   const t = useMessages();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -129,12 +157,26 @@ function FeedbackForm({ message, email, onMessage, onEmail, onSent }: FeedbackFo
   const { data: log } = useLive("team-feedback-logs", desktop ? api.teamFeedbackLogs : noLogs);
   const logs = log?.logs ?? null;
 
+  const noted = message.trim() !== "";
+  // A failure's report already says what went wrong, so it goes without a note.
+  const disabled = busy || (about === undefined && !noted);
+
   function send(withLogs: boolean) {
-    if (!message.trim() || busy) return;
+    if (disabled) return;
 
     setBusy(true);
     setError(undefined);
-    sendTeamFeedback(message, "board", { email, logs: withLogs })
+
+    const sending =
+      about === undefined
+        ? sendTeamFeedback(message, "board", { email, logs: withLogs })
+        : sendTeamFeedback(failureReport(message, about), "failure", {
+            email,
+            agent: about.agent,
+            logs: withLogs,
+          });
+
+    sending
       .then(() => {
         toast.success(t.teamFeedback.sent);
         onSent();
@@ -148,21 +190,23 @@ function FeedbackForm({ message, email, onMessage, onEmail, onSent }: FeedbackFo
     send(false);
   }
 
-  const disabled = !message.trim() || busy;
-
   return (
     <form onSubmit={submit} className="grid gap-6">
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="team-feedback-message">{t.teamFeedback.messageLabel}</FieldLabel>
+          <FieldLabel htmlFor="team-feedback-message">
+            {about === undefined ? t.teamFeedback.messageLabel : t.teamFeedback.reportLabel}
+          </FieldLabel>
           <Textarea
             id="team-feedback-message"
-            required
-            rows={5}
+            required={about === undefined}
+            rows={about === undefined ? 5 : 3}
             maxLength={5000}
             value={message}
             onChange={(e) => onMessage(e.target.value)}
-            placeholder={t.teamFeedback.placeholder}
+            placeholder={
+              about === undefined ? t.teamFeedback.placeholder : t.teamFeedback.reportPlaceholder
+            }
           />
         </Field>
         <Field>

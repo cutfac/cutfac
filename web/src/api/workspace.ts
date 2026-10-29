@@ -92,7 +92,7 @@ export interface ReportChoices {
 export interface TeamFeedback {
   message: string;
   email?: string;
-  source: "board" | "slash";
+  source: "board" | "slash" | "failure";
   platform: string;
   locale: string;
   agent?: AgentName;

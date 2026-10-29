@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { Option } from "effect";
 
-import { feedbackCommand, typingFeedbackCommand } from "../web/src/lib/feedback.ts";
+import {
+  type Failure,
+  failureReport,
+  feedbackCommand,
+  typingFeedbackCommand,
+} from "../web/src/lib/feedback.ts";
 
 describe("feedbackCommand", () => {
   test("takes what follows /feedback, across lines", () => {
@@ -37,5 +42,26 @@ describe("typingFeedbackCommand", () => {
     expect(typingFeedbackCommand("/cut")).toBeFalse();
     expect(typingFeedbackCommand("/feedbackish")).toBeFalse();
     expect(typingFeedbackCommand("hello")).toBeFalse();
+  });
+});
+
+describe("failureReport", () => {
+  const failure: Failure = {
+    error: "API Error: 500",
+    agent: "claude",
+    model: Option.some("claude-opus-5-5"),
+    inARow: 3,
+  };
+
+  test("leads with the failure, the team's mail subject, when the person adds nothing", () => {
+    expect(failureReport("  ", failure)).toBe(
+      "3 runs in a row failed with claude (claude-opus-5-5):\nAPI Error: 500",
+    );
+  });
+
+  test("puts what the person says first", () => {
+    expect(failureReport("Shortening a caption", { ...failure, inARow: 1 })).toBe(
+      "Shortening a caption\n\nA run failed with claude (claude-opus-5-5):\nAPI Error: 500",
+    );
   });
 });
