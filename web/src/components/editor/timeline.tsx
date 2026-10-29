@@ -338,7 +338,7 @@ function EdgeGrip({ edge }: { edge: "start" | "end" }) {
       data-edge={edge}
       className="group/edge pointer-events-auto absolute inset-y-0 flex w-3 cursor-ew-resize items-center justify-center data-[edge=end]:-right-2 data-[edge=start]:-left-2"
     >
-      <div className="h-6 w-1 rounded-full bg-selection ring-2 ring-background transition-transform group-hover/edge:scale-y-125" />
+      <div className="h-5 w-1 rounded-full bg-selection opacity-0 transition-opacity group-hover/edge:opacity-100" />
     </div>
   );
 }
