@@ -29,6 +29,9 @@ export const THREAD = 2;
 
 export const TURN = 3;
 
+/** The id of the one request a sign-in check makes, on a connection of its own. */
+export const ACCOUNT = 2;
+
 export type RequestId = string | number;
 
 type ThreadParams = CodexPermissions & { readonly model?: string | undefined };
@@ -82,6 +85,11 @@ type ClientMessage =
       };
     }
   | { readonly method: "initialized" }
+  | {
+      readonly id: typeof ACCOUNT;
+      readonly method: "account/read";
+      readonly params: { readonly refreshToken: false };
+    }
   | { readonly id: typeof THREAD; readonly method: "thread/start"; readonly params: ThreadParams }
   | {
       readonly id: typeof THREAD;

@@ -1,4 +1,5 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema, Stream } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { SIGN_IN_COMMAND, type AgentSetup } from "./agentReadiness.ts";
 import {
@@ -9,7 +10,8 @@ import {
   versionOf,
 } from "./agentVersion.ts";
 import { parseClaudeLine } from "./claudeStream.ts";
-import { run, which } from "./process.ts";
+import { ACCOUNT, CODEX_INITIALIZE, line as codexLine } from "./codexProtocol.ts";
+import { commandOptions, run, which } from "./process.ts";
 import { AGENTS, type AgentName } from "./schema.ts";
 
 /** Each agent's official installer, which puts the program in ~/.local/bin. */
@@ -50,13 +52,71 @@ const CLAUDE_SIGN_IN_TRY = [
   "--verbose",
 ];
 
-const claudeSignInWorks = (bin: string) =>
-  run(bin, CLAUDE_SIGN_IN_TRY).pipe(
-    Effect.map(
-      (result) => !result.stdout.split("\n").some((line) => parseClaudeLine(line).signedOut),
-    ),
+/** A try at the sign-in that fails, or takes too long, holds nobody up. */
+const unlessTurnedDown = <E, R>(trying: Effect.Effect<boolean, E, R>) =>
+  trying.pipe(
     Effect.timeoutOrElse({ duration: TRY_SIGN_IN_TIMEOUT, orElse: () => Effect.succeed(true) }),
     Effect.orElseSucceed(() => true),
+  );
+
+const claudeSignInWorks = (bin: string) =>
+  unlessTurnedDown(
+    Effect.map(
+      run(bin, CLAUDE_SIGN_IN_TRY),
+      (result) => !result.stdout.split("\n").some((line) => parseClaudeLine(line).signedOut),
+    ),
+  );
+
+/**
+ * The account Codex signs in with. `codex login status` counts a ChatGPT sign-in that can no
+ * longer be refreshed as signed in, and `account/read` asks OpenAI, without a model call.
+ */
+const CODEX_ACCOUNT_READ = [
+  CODEX_INITIALIZE,
+  codexLine({ method: "initialized" }),
+  codexLine({ id: ACCOUNT, method: "account/read", params: { refreshToken: false } }),
+].join("");
+
+const decodeAccountAnswer = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      id: Schema.Literal(ACCOUNT),
+      result: Schema.Struct({
+        account: Schema.NullOr(Schema.Struct({ type: Schema.String })),
+        requiresOpenaiAuth: Schema.Boolean,
+      }),
+    }),
+  ),
+);
+
+const encoder = new TextEncoder();
+
+/** `codex app-server` answers only while its stdin is open, so it stays open until it has. */
+const codexSignInWorks = (bin: string) =>
+  unlessTurnedDown(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const stdin = Stream.concat(Stream.make(encoder.encode(CODEX_ACCOUNT_READ)), Stream.never);
+
+        const handle = yield* spawner.spawn(
+          ChildProcess.make(bin, ["app-server"], commandOptions({ stdin })),
+        );
+
+        const answer = yield* handle.stdout.pipe(
+          Stream.decodeText(),
+          Stream.splitLines,
+          Stream.map((text) => decodeAccountAnswer(text)),
+          Stream.filter(Option.isSome),
+          Stream.runHead,
+        );
+
+        return Option.match(Option.flatten(answer), {
+          onNone: () => true,
+          onSome: ({ result }) => result.account !== null || !result.requiresOpenaiAuth,
+        });
+      }),
+    ),
   );
 
 const signedInLocally = (agent: AgentName, bin: string) =>
@@ -78,7 +138,9 @@ const signedInLocally = (agent: AgentName, bin: string) =>
 const checkSignIn = Effect.fnUntraced(function* (agent: AgentName, bin: string) {
   const signedIn = yield* signedInLocally(agent, bin);
 
-  return agent === "claude" && signedIn === true ? yield* claudeSignInWorks(bin) : signedIn;
+  if (signedIn !== true) return signedIn;
+
+  return yield* agent === "claude" ? claudeSignInWorks(bin) : codexSignInWorks(bin);
 });
 
 /** The state an installed agent is in, and what fixes it. */

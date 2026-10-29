@@ -24,6 +24,19 @@ const claudeAnswering = (turn: string) =>
     `if [ "$1" = "auth" ]; then echo '{"loggedIn": true}'; exit 0; fi\n${turn}`,
   );
 
+/**
+ * A fake Codex whose `login status` says it is signed in, and whose app-server gives `answer` to
+ * `account/read` and, like the real one, keeps running while its stdin is open.
+ */
+const codexAnswering = (answer: string) =>
+  answering(
+    "codex-cli 99.0.0",
+    `if [ "$1" = "login" ]; then echo 'Logged in using ChatGPT'; exit 0; fi
+while read -r line; do
+  case "$line" in *account/read*) echo '{"id":2,"result":${answer}}' ;; esac
+done\n`,
+  );
+
 describe("what an installed agent needs", () => {
   test("an old release needs its update first, whatever its sign-in", () => {
     expect(
@@ -107,6 +120,34 @@ describe("agents on this machine", () => {
       );
 
       expect((yield* agentSetup())[0]?.state).toBe("ready");
+    }),
+  );
+
+  it.live("a Codex sign-in that says it works but has no account behind it needs signing in", () =>
+    Effect.gen(function* () {
+      const fakes = yield* FakeAgentDir;
+
+      // As Codex 0.165.0 answers when OpenAI turns down the sign-in it has.
+      yield* fakes.bin("codex", codexAnswering(`{"account":null,"requiresOpenaiAuth":true}`));
+
+      expect((yield* agentSetup())[1]).toEqual({
+        agent: "codex",
+        state: "signedOut",
+        version: "99.0.0",
+        fix: SIGN_IN_COMMAND.codex,
+      });
+
+      yield* fakes.bin(
+        "codex",
+        codexAnswering(`{"account":{"type":"chatgpt"},"requiresOpenaiAuth":true}`),
+      );
+
+      expect((yield* agentSetup())[1]?.state).toBe("ready");
+
+      // A model provider that needs no OpenAI sign-in has no account to find.
+      yield* fakes.bin("codex", codexAnswering(`{"account":null,"requiresOpenaiAuth":false}`));
+
+      expect((yield* agentSetup())[1]?.state).toBe("ready");
     }),
   );
 
