@@ -137,7 +137,6 @@ export const editorEn = {
   target: {
     /** Follows a range in a selection's summary: `0:01.0–0:02.0 · box at 0:04.0`. */
     boxAt: (time: string) => `box at ${time}`,
-    box: (time: string) => `Box · ${time}`,
     boxMarker: (time: string) => `Box at ${time}`,
     goToBox: "Go to the frame this box is on",
     removeBox: "Remove the box",

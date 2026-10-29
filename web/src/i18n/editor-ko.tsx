@@ -130,7 +130,6 @@ export const editorKo: EditorMessages = {
   },
   target: {
     boxAt: (time) => `${time} 박스`,
-    box: (time) => `박스 · ${time}`,
     boxMarker: (time) => `${time} 박스`,
     goToBox: "이 박스가 있는 프레임으로 이동",
     removeBox: "박스 지우기",

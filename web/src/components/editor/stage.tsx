@@ -368,14 +368,14 @@ function RegionBox({
           <div className="size-3 rounded-full border-2 border-selection bg-background" />
         </div>
       ))}
-      <div className="pointer-events-auto absolute bottom-full left-0 mb-2 flex items-center gap-0.5 rounded-lg bg-selection p-0.5 text-xs font-medium text-selection-foreground">
+      <div className="pointer-events-auto absolute bottom-full left-0 mb-2 flex items-center gap-0.5 rounded-lg bg-selection p-0.5 text-xs font-medium whitespace-nowrap text-selection-foreground">
         <button
           type="button"
           className="rounded-md px-1.5 py-0.5 tabular-nums hover:bg-foreground/10"
           title={t.target.goToBox}
           onClick={() => player.seek(region.at)}
         >
-          {t.target.box(formatTime(region.at))}
+          {formatTime(region.at)}
         </button>
         <button
           type="button"
