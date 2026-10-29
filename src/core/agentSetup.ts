@@ -30,16 +30,16 @@ const ClaudeAuth = Schema.fromJsonString(Schema.Struct({ loggedIn: Schema.Boolea
 const decodeClaudeAuth = Schema.decodeUnknownOption(ClaudeAuth);
 
 /**
- * The smallest turn Claude Code takes. `claude auth status` counts a sign-in whose session expired
- * and can't be refreshed as signed in, and only a call to the model tells them apart.
+ * A request for a model that doesn't exist. `claude auth status` counts a sign-in whose session
+ * expired and can't be refreshed as signed in. Claude Code renews the sign-in before it sends a
+ * request, so the server turns this one down as `model_not_found` when the sign-in works, and
+ * Claude says `authentication_failed` when it doesn't, with no model ever run.
  */
 const CLAUDE_SIGN_IN_TRY = [
   "-p",
-  "Reply with OK",
+  "Sign-in check",
   "--model",
-  "haiku",
-  "--system-prompt",
-  "Reply with OK.",
+  "cutfac-sign-in-check",
   "--tools",
   "",
   "--strict-mcp-config",

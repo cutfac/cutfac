@@ -94,7 +94,8 @@ describe("agents on this machine", () => {
   it.live("a Claude sign-in that says it works but no longer does needs signing in again", () =>
     Effect.gen(function* () {
       const fakes = yield* FakeAgentDir;
-      // What Claude Code 2.1.311 prints for a turn after its session expired.
+
+      // What Claude Code 2.1.311 prints for the request once its session expired.
       yield* fakes.bin(
         "claude",
         claudeAnswering(
@@ -111,11 +112,13 @@ describe("agents on this machine", () => {
         fix: SIGN_IN_COMMAND.claude,
       });
 
-      // A turn that fails for another reason, such as a usage limit, says nothing of the sign-in.
+      // And for it with a sign-in that works: the server turns the model down instead.
       yield* fakes.bin(
         "claude",
         claudeAnswering(
-          `echo '{"type":"result","subtype":"success","is_error":true,"result":"Usage limit reached"}'\nexit 1\n`,
+          `echo '{"type":"assistant","message":{"content":[]},"error":"model_not_found"}'\n` +
+            `echo '{"type":"result","subtype":"success","is_error":true,"api_error_status":404}'\n` +
+            "exit 1\n",
         ),
       );
 
