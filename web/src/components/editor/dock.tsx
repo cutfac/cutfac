@@ -80,13 +80,20 @@ function useWidth(element: HTMLElement | null) {
   return useSyncExternalStore(follow, () => element?.clientWidth ?? window.innerWidth);
 }
 
-const NO_STRIPS: EditorLayout["slots"] = { bottom: [], left: [], right: [] };
+type Strips = Readonly<Partial<Record<StripId, ReactNode>>>;
+
+/** The layout's slots with only the strips that have something to show. */
+const shownSlots = ({ bottom, left, right }: EditorLayout["slots"], strips: Strips) => {
+  const shown = (id: StripId) => strips[id] !== undefined;
+
+  return { bottom: bottom.filter(shown), left: left.filter(shown), right: right.filter(shown) };
+};
 
 interface EditorDockProps {
   /** The preview with what goes under it, or what shows in its place. */
   stage: ReactNode;
-  /** The strips to place around the preview; none while there is nothing to preview. */
-  strips?: Readonly<Record<StripId, ReactNode>> | undefined;
+  /** The strips to place around the preview; one left out takes no room. */
+  strips: Strips;
   /** The chat panel, which fills the height or width it is given. */
   chat: ReactNode;
 }
@@ -97,11 +104,7 @@ export function EditorDock({ stage, strips, chat }: EditorDockProps) {
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const width = useWidth(root);
 
-  // With nothing to preview there are no strips to place.
-  const arrangement = arrange(
-    strips === undefined ? { ...layout, slots: NO_STRIPS } : layout,
-    width,
-  );
+  const arrangement = arrange({ ...layout, slots: shownSlots(layout.slots, strips) }, width);
 
   const [sizer] = useState(createSizer);
   const wants = wantsFor(layout, arrangement);
@@ -150,18 +153,15 @@ export function EditorDock({ stage, strips, chat }: EditorDockProps) {
     >
       <section className="flex min-h-0 flex-1 flex-col p-4 pt-1">
         <div className="relative flex min-h-0 flex-1">
-          {strips === undefined ? (
-            stage
-          ) : (
-            <Columns
-              arrangement={arrangement}
-              layout={layout}
-              sizer={sizer}
-              stage={stage}
-              strips={strips}
-            />
-          )}
-          {strips !== undefined && dragging !== undefined && dragging !== "chat" && (
+          {/* Always in its panel, so a strip appearing beside it leaves a playing video playing. */}
+          <Columns
+            arrangement={arrangement}
+            layout={layout}
+            sizer={sizer}
+            stage={stage}
+            strips={strips}
+          />
+          {dragging !== undefined && dragging !== "chat" && (
             <StripZones layout={layout} strip={dragging} width={width} />
           )}
         </div>
@@ -238,7 +238,7 @@ interface SlotProps {
   arrangement: Arrangement;
   layout: EditorLayout;
   sizer: Sizer;
-  strips: Readonly<Record<StripId, ReactNode>>;
+  strips: Strips;
 }
 
 /**

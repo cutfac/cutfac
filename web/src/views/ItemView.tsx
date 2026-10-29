@@ -381,40 +381,43 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             </>
           )
         }
+        // A strip shows once it holds something to choose from: a second file, or a file kept for agents.
         strips={
           media === undefined
-            ? undefined
+            ? {}
             : {
-                media: (
-                  <MediaStrip
-                    item={item}
-                    shown={media}
-                    onPick={pick}
-                    onItem={setData}
-                    onUploaded={setMediaName}
-                  />
-                ),
-                references: (
-                  <ReferenceStrip
-                    item={item}
-                    onItem={setData}
-                    onAttach={(path) => {
-                      chatFiles.attach(path);
-                      focusComposer();
-                    }}
-                    onDetach={(path) => {
-                      const holding = [chatFiles, boxFiles].filter((files) =>
-                        files.paths.includes(path),
-                      );
+                media:
+                  item.media.length < 2 ? undefined : (
+                    <MediaStrip
+                      item={item}
+                      shown={media}
+                      onPick={pick}
+                      onItem={setData}
+                      onUploaded={setMediaName}
+                    />
+                  ),
+                references:
+                  item.references.length === 0 ? undefined : (
+                    <ReferenceStrip
+                      item={item}
+                      onItem={setData}
+                      onAttach={(path) => {
+                        chatFiles.attach(path);
+                        focusComposer();
+                      }}
+                      onDetach={(path) => {
+                        const holding = [chatFiles, boxFiles].filter((files) =>
+                          files.paths.includes(path),
+                        );
 
-                      for (const files of holding) files.detach(path);
+                        for (const files of holding) files.detach(path);
 
-                      return () => {
-                        for (const files of holding) files.attach(path);
-                      };
-                    }}
-                  />
-                ),
+                        return () => {
+                          for (const files of holding) files.attach(path);
+                        };
+                      }}
+                    />
+                  ),
               }
         }
         chat={
