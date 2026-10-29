@@ -37,10 +37,13 @@ const inTime = <A, R>(request: Effect.Effect<A, LicenseUnanswered, R>) =>
     }),
   );
 
-/** The Mac a perpetual license is activated on, which the app sends with each check. */
-export interface Activation {
-  readonly id: string;
+/**
+ * The Mac a check comes from: the hash of its hardware ID, and the activation a perpetual license
+ * holds there, if any. A check that names no Mac reads as an app from before activations.
+ */
+export interface CheckingMac {
   readonly machine: string;
+  readonly activation: Option.Option<string>;
 }
 
 /** The grant in cutfac.com's reply, which only counts as an answer if it is signed for `key`. */
@@ -59,28 +62,31 @@ const grantIn = Effect.fnUntraced(function* (
   return LicenseRecord.cases.LicenseGrant.make({ token });
 });
 
-const withActivation = (activation: Option.Option<Activation>) =>
-  Option.match(activation, {
+const fromMac = (mac: Option.Option<CheckingMac>) =>
+  Option.match(mac, {
     onNone: () => (request: HttpClientRequest.HttpClientRequest) => request,
-    onSome: ({ id, machine }) =>
-      HttpClientRequest.setHeaders({ "Cutfac-Activation": id, "Cutfac-Machine": machine }),
+    onSome: ({ machine, activation }) =>
+      HttpClientRequest.setHeaders({
+        "Cutfac-Machine": machine,
+        ...Option.match(activation, {
+          onNone: () => ({}),
+          onSome: (id) => ({ "Cutfac-Activation": id }),
+        }),
+      }),
   });
 
 /**
- * Asks cutfac.com about `key` on this Mac: a grant, or a refusal for a key that names no license,
- * one whose plan has ended, or a perpetual license `activation` doesn't hold for.
+ * Asks cutfac.com about `key` on `mac`: a grant, or a refusal for a key that names no license,
+ * one whose plan has ended, or a perpetual license that isn't activated on the Mac.
  */
 export const fetchLicense = Effect.fn("license.fetch")(function* (
   key: SecretLicenseKey,
-  activation: Option.Option<Activation>,
+  mac: Option.Option<CheckingMac>,
 ): Effect.fn.Return<LicenseRecord, LicenseUnanswered, HttpClient.HttpClient> {
   return yield* inTime(
     Effect.gen(function* () {
       const response = yield* HttpClient.execute(
-        HttpClientRequest.get(LICENSE_URL).pipe(
-          HttpClientRequest.bearerToken(key),
-          withActivation(activation),
-        ),
+        HttpClientRequest.get(LICENSE_URL).pipe(HttpClientRequest.bearerToken(key), fromMac(mac)),
       ).pipe(Effect.mapError(unanswered));
 
       const checkedAt = yield* Clock.currentTimeMillis;

@@ -406,9 +406,10 @@ describe("activating a perpetual license on this Mac", () => {
 
       const asked: Asked[] = [];
 
-      const record = yield* fetchLicense(KEY_1, Option.some({ id: "act-1", ...MAC })).pipe(
-        Effect.provideService(HttpClient.HttpClient, site([unactivated()], asked)),
-      );
+      const record = yield* fetchLicense(
+        KEY_1,
+        Option.some({ machine: MAC.machine, activation: Option.some("act-1") }),
+      ).pipe(Effect.provideService(HttpClient.HttpClient, site([unactivated()], asked)));
 
       expect(record).toEqual(
         LicenseRecord.cases.LicenseRefusal.make({ checkedAt: NOW, refusal: "unactivated" }),
@@ -437,6 +438,28 @@ describe("activating a perpetual license on this Mac", () => {
         ]);
       }),
     ),
+  );
+
+  it.effect(
+    "every check names this Mac, so the server holds a perpetual license to activations",
+    () =>
+      Effect.gen(function* () {
+        const asked: Asked[] = [];
+
+        yield* fetchLicense(
+          KEY_1,
+          Option.some({ machine: MAC.machine, activation: Option.none() }),
+        ).pipe(Effect.option, Effect.provideService(HttpClient.HttpClient, site([grant()], asked)));
+
+        expect(asked).toEqual([
+          {
+            url: LICENSE_URL,
+            authorization: "Bearer KEY-1",
+            activation: undefined,
+            machine: MAC.machine,
+          },
+        ]);
+      }),
   );
 
   it.effect(

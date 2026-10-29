@@ -20,7 +20,7 @@ import {
   type SecretLicenseKey,
 } from "../src/license.ts";
 import type { LicenseCheck } from "../web/src/desktop.ts";
-import { type Activation, activateMac, deactivateMac, fetchLicense } from "./licenseRequests.ts";
+import { type CheckingMac, activateMac, deactivateMac, fetchLicense } from "./licenseRequests.ts";
 import { ThisMac } from "./thisMac.ts";
 
 /** While the app runs, it asks again this often. */
@@ -154,10 +154,9 @@ const make = Effect.fnUntraced(function* (changed: Effect.Effect<void>) {
   ) {
     const mac = yield* Effect.option(thisMac.mac);
 
-    const sent = (id: Option.Option<string>) =>
-      Option.flatMap(id, (held) =>
-        Option.map(mac, ({ machine }): Activation => ({ id: held, machine })),
-      );
+    // The Mac goes with every check, so cutfac.com holds a perpetual license to its activations.
+    const sent = (held: Option.Option<string>) =>
+      Option.map(mac, ({ machine }): CheckingMac => ({ machine, activation: held }));
 
     const first = yield* online(fetchLicense(key, sent(activation)));
 
