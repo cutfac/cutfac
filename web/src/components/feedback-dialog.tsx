@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type SubmitEvent } from "react";
+import { useEffect, useState, type ReactElement, type SubmitEvent } from "react";
 import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, type AgentChoice, type TeamFeedback } from "../api.ts";
 import { desktop } from "../desktop.ts";
 import { useLive } from "../hooks.ts";
-import { currentLocale, messages, useMessages } from "../i18n/index.ts";
+import { currentLocale, useMessages } from "../i18n/index.ts";
 import { type Failure, failureReport } from "../lib/feedback.ts";
 import { errorText } from "../lib/notify.ts";
 import { SelectionArea } from "./selection-area.tsx";
@@ -55,18 +55,59 @@ function sendTeamFeedback(message: string, source: TeamFeedback["source"], extra
   return api.teamFeedback(feedback);
 }
 
+/** A `/feedback` message waiting in the dialog, and the box waiting to hear whether it went. */
+interface SlashAsk {
+  readonly message: string;
+  readonly agent: AgentChoice | undefined;
+  readonly settle: (sent: boolean) => void;
+}
+
+const slashHosts = new Set<(ask: SlashAsk) => void>();
+
 /**
- * Send what follows `/feedback` in a message box to the Cutfac team instead of `agent`, the one
- * the box would have asked. Rejects, for the box to show, when nothing follows the command or the
- * team could not be reached.
+ * Open the feedback dialog with what follows `/feedback` in a message box, written for the Cutfac
+ * team instead of `agent`, the one the box would have asked. It is the dialog every way in opens,
+ * so the person picks whether the log goes along. True once they sent it.
  */
-export async function sendSlashFeedback(message: string, agent?: AgentChoice): Promise<void> {
-  const t = messages();
+export function sendSlashFeedback(message: string, agent?: AgentChoice): Promise<boolean> {
+  return new Promise((settle) => {
+    if (slashHosts.size === 0) return settle(false);
 
-  if (message === "") throw new Error(t.teamFeedback.slashEmpty);
+    for (const host of slashHosts) host({ message, agent, settle });
+  });
+}
 
-  await sendTeamFeedback(message, "slash", { agent });
-  toast.success(t.teamFeedback.sent);
+/** Where `/feedback` opens the feedback dialog, mounted once beside the app. */
+export function SlashFeedbackHost() {
+  const [ask, setAsk] = useState<SlashAsk>();
+
+  useEffect(() => {
+    slashHosts.add(setAsk);
+
+    return () => {
+      slashHosts.delete(setAsk);
+    };
+  }, []);
+
+  if (ask === undefined) return null;
+
+  const close = (sent: boolean) => {
+    ask.settle(sent);
+    setAsk(undefined);
+  };
+
+  return (
+    <FeedbackDialog
+      open
+      draft={ask.message}
+      source="slash"
+      agent={ask.agent}
+      onOpenChange={(open) => {
+        if (!open) close(false);
+      }}
+      onSent={() => close(true)}
+    />
+  );
 }
 
 /** A line under a message box that says `/feedback` goes to the team, not the agent. */
@@ -79,28 +120,49 @@ export function SlashFeedbackHint() {
 /** What the desktop app's log holds now; the web board has none. */
 const noLogs = () => Promise.resolve({ logs: null, errors: 0 });
 
+interface FeedbackDialogProps {
+  /** What opens it; without one, `open` says whether it shows. */
+  trigger?: ReactElement | undefined;
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  /** What the message starts as. */
+  draft?: string | undefined;
+  source?: "board" | "slash" | undefined;
+  agent?: AgentChoice | undefined;
+  about?: Failure | undefined;
+  onSent?: (() => void) | undefined;
+}
+
 /**
- * Tell the Cutfac team something, with an optional address to reply to. With a failed run `about`,
- * the report carries the failure, and what the person adds is up to them.
+ * Tell the Cutfac team something, with an optional address to reply to, from the sidebar, a
+ * `/feedback` message, or a failed run. With a failed run `about`, the report carries the failure,
+ * and what the person adds is up to them.
  */
 export function FeedbackDialog({
   trigger,
+  open: shownFromOutside,
+  onOpenChange,
+  draft = "",
+  source = "board",
+  agent,
   about,
   onSent,
-}: {
-  trigger: ReactElement;
-  about?: Failure | undefined;
-  onSent?: (() => void) | undefined;
-}) {
+}: FeedbackDialogProps) {
   const t = useMessages();
-  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(false);
   // Kept while the dialog is closed, so a draft survives closing it.
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(draft);
   const [email, setEmail] = useState("");
+  const open = shownFromOutside ?? shown;
+
+  function setOpen(next: boolean) {
+    setShown(next);
+    onOpenChange?.(next);
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={trigger} />
+      {trigger === undefined ? null : <DialogTrigger render={trigger} />}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
@@ -120,15 +182,17 @@ export function FeedbackDialog({
           </SelectionArea>
         )}
         <FeedbackForm
+          source={source}
+          agent={agent}
           about={about}
           message={message}
           email={email}
           onMessage={setMessage}
           onEmail={setEmail}
           onSent={() => {
-            setOpen(false);
             setMessage("");
             onSent?.();
+            setOpen(false);
           }}
         />
       </DialogContent>
@@ -137,6 +201,8 @@ export function FeedbackDialog({
 }
 
 interface FeedbackFormProps {
+  source: "board" | "slash";
+  agent: AgentChoice | undefined;
   about: Failure | undefined;
   message: string;
   email: string;
@@ -149,7 +215,16 @@ interface FeedbackFormProps {
  * The feedback form, read when the dialog opens. With a log to send, the person picks one of two
  * buttons, with it or without; nothing is chosen for them, and Enter sends without it.
  */
-function FeedbackForm({ about, message, email, onMessage, onEmail, onSent }: FeedbackFormProps) {
+function FeedbackForm({
+  source,
+  agent,
+  about,
+  message,
+  email,
+  onMessage,
+  onEmail,
+  onSent,
+}: FeedbackFormProps) {
   const t = useMessages();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -169,7 +244,7 @@ function FeedbackForm({ about, message, email, onMessage, onEmail, onSent }: Fee
 
     const sending =
       about === undefined
-        ? sendTeamFeedback(message, "board", { email, logs: withLogs })
+        ? sendTeamFeedback(message, source, { email, agent, logs: withLogs })
         : sendTeamFeedback(failureReport(message, about), "failure", {
             email,
             agent: about.agent,

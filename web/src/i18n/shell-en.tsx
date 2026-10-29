@@ -68,7 +68,6 @@ export const shellEn = {
     sent: "Thanks! Your feedback reached the Cutfac team.",
     /** Shows under a message box while its text starts with `/feedback`. */
     slashHint: "/feedback sends the rest of the message to the Cutfac team, not to your agent.",
-    slashEmpty: "Write what to tell us after /feedback.",
     logsHint:
       "The log is what the app did lately and any errors, which helps us find the cause. Never a video, a prompt, a chat or a key.",
     showLogs: "See what's sent",

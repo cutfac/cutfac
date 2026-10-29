@@ -68,7 +68,6 @@ export const shellKo: ShellMessages = {
     failed: "피드백을 보내지 못했어요",
     sent: "고마워요! 피드백이 컷팩 팀에 전달됐어요.",
     slashHint: "/feedback 뒤의 내용은 에이전트가 아니라 컷팩 팀에 전달돼요.",
-    slashEmpty: "/feedback 뒤에 전할 내용을 적어주세요.",
     logsHint:
       "로그에는 앱이 최근에 한 일과 오류가 담겨 원인을 찾는 데 도움이 돼요. 영상, 프롬프트, 대화, 키는 들어가지 않아요.",
     showLogs: "보내는 내용 보기",

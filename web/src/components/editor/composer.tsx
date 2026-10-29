@@ -148,9 +148,10 @@ export function editInput(
 
 /**
  * Where a request went: onto the item as an edit, or to the Cutfac team as `/feedback`, which
- * leaves the item, and what was picked on it, as they were.
+ * leaves the item, and what was picked on it, as they were. A `/feedback` closed unsent is kept,
+ * still in the box.
  */
-export type SentTo = "item" | "team";
+export type SentTo = "item" | "team" | "kept";
 
 /**
  * Ask for an edit, or pass a `/feedback` message on to the Cutfac team. The item comes back with
@@ -167,9 +168,7 @@ export async function sendRequest(
 
   // `/feedback` is for the people who make Cutfac, so it never reaches the agent or the item.
   if (Option.isSome(feedback)) {
-    await sendSlashFeedback(feedback.value, input.agent);
-
-    return "team";
+    return (await sendSlashFeedback(feedback.value, input.agent)) ? "team" : "kept";
   }
 
   onRun((run) => sendingRun(run, item, input));
@@ -281,6 +280,8 @@ export function Composer({
         onItem,
         onRun,
       );
+
+      if (sentTo === "kept") return;
 
       if (sentTo === "item" && item.doc.title === t.newItem.untitled) {
         nameNewVideo(item, picked?.prompt === text ? picked.title : text, onItem);

@@ -78,6 +78,8 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
         attachedReferences(ask.item, files.paths).map((reference) => reference.path),
       )
       .then((sentTo) => {
+        if (sentTo === "kept") return;
+
         setBody("");
 
         if (sentTo === "item") {

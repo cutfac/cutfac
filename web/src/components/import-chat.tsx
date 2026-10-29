@@ -391,14 +391,7 @@ function ImportComposer({ state, agent, files, onAttach, onSend, onStop }: Impor
       return taken;
     }
 
-    return sendSlashFeedback(feedback.value, agent).then(
-      () => true,
-      (cause) => {
-        sendFailed(cause);
-
-        return false;
-      },
-    );
+    return sendSlashFeedback(feedback.value, agent);
   }
 
   async function send() {
