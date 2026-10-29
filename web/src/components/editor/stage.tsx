@@ -5,6 +5,15 @@ import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
 
 import type { Feedback, Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
+import {
+  MIN_BOX,
+  boxBetween,
+  editBox,
+  isHandle,
+  type Box,
+  type Handle,
+  type Point,
+} from "../../lib/box.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import type { Pin } from "../../lib/requests.ts";
 import { clampUnit, percent, roundTime } from "../../lib/target.ts";
@@ -12,38 +21,28 @@ import { formatTime } from "../../lib/time.ts";
 import { BoxPrompt, type BoxAsk } from "./box-prompt.tsx";
 import { PinBadge, usePinTitle } from "./pin.tsx";
 
-/** A drag shorter than this, as a fraction of the frame, was a click that wobbled. */
-const MIN_BOX = 0.02;
-
 /** How far the playhead may be from a box's frame before the box fades: it marks one moment. */
 const BOX_NEAR = 0.15;
 
-interface Point {
-  readonly x: number;
-  readonly y: number;
-}
+type Drag =
+  | {
+      readonly kind: "draw";
+      readonly from: Point;
+      readonly to: Point;
+      /** Past the wobble threshold: a box is being drawn, not a click. */
+      readonly drawing: boolean;
+    }
+  | {
+      readonly kind: "edit";
+      readonly handle: Handle;
+      readonly from: Point;
+      readonly to: Point;
+      readonly box: Region;
+    };
 
-interface Box {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
-}
-
-interface Drag {
-  readonly from: Point;
-  readonly to: Point;
-  /** Past the wobble threshold: a box is being drawn, not a click. */
-  readonly drawing: boolean;
-}
-
-const thousandths = (value: number) => Math.round(value * 1000) / 1000;
-
-const boxBetween = (from: Point, to: Point): Box => ({
-  x: thousandths(Math.min(from.x, to.x)),
-  y: thousandths(Math.min(from.y, to.y)),
-  w: thousandths(Math.abs(to.x - from.x)),
-  h: thousandths(Math.abs(to.y - from.y)),
+const edited = (drag: Extract<Drag, { kind: "edit" }>): Region => ({
+  ...editBox(drag.box, drag.handle, drag.to.x - drag.from.x, drag.to.y - drag.from.y),
+  at: drag.box.at,
 });
 
 /** Where the pointer is on the element, as fractions of its size. */
@@ -90,7 +89,8 @@ interface StageProps {
 /**
  * The frame being edited. Click plays and pauses; dragging across it marks a box on the current
  * frame, which is how the user points at something in the picture, and opens a small request box
- * beside it. Requests still in play keep a numbered pin on their box.
+ * beside it. The box moves by its inside and resizes by its corners. Requests still in play keep a
+ * numbered pin on their box.
  */
 export function Stage({
   player,
@@ -115,17 +115,33 @@ export function Stage({
   const t = useMessages();
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
+    const grabbed = event.target instanceof Element ? event.target : undefined;
+
+    // The box's own buttons and the pins take their clicks themselves.
+    if (event.button !== 0 || grabbed?.closest("button") != null) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
     const at = pointOn(event);
-    setDrag({ from: at, to: at, drawing: false });
+    const handle = grabbed?.closest<HTMLElement>("[data-handle]")?.dataset.handle;
+
+    setDrag(
+      region !== undefined && isHandle(handle)
+        ? { kind: "edit", handle, from: at, to: at, box: region }
+        : { kind: "draw", from: at, to: at, drawing: false },
+    );
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     if (drag === undefined) return;
 
     const to = pointOn(event);
+
+    if (drag.kind === "edit") {
+      setDrag({ ...drag, to });
+
+      return;
+    }
+
     const rect = event.currentTarget.getBoundingClientRect();
 
     const moved = Math.hypot((to.x - drag.from.x) * rect.width, (to.y - drag.from.y) * rect.height);
@@ -134,13 +150,31 @@ export function Stage({
 
     if (drawing && !drag.drawing) player.pause();
 
-    setDrag({ from: drag.from, to, drawing });
+    setDrag({ kind: "draw", from: drag.from, to, drawing });
   }
 
   function onPointerUp() {
     if (drag === undefined) return;
 
     setDrag(undefined);
+
+    if (drag.kind === "edit") {
+      const next = edited(drag);
+
+      if (
+        next.x === drag.box.x &&
+        next.y === drag.box.y &&
+        next.w === drag.box.w &&
+        next.h === drag.box.h
+      )
+        return;
+
+      onRegion(next);
+
+      if (asking === drag.box) setAsking(next);
+
+      return;
+    }
 
     if (!drag.drawing) {
       if (kind === "video") player.toggle();
@@ -157,7 +191,8 @@ export function Stage({
     setAsking(marked);
   }
 
-  const draft = drag?.drawing === true ? boxBetween(drag.from, drag.to) : undefined;
+  const draft = drag?.kind === "draw" && drag.drawing ? boxBetween(drag.from, drag.to) : undefined;
+  const shown = drag?.kind === "edit" ? edited(drag) : region;
 
   /** With a box drawn, a dropped file is about the box; otherwise it goes to the chat. */
   function onFiles(files: ReadonlyArray<DroppedFile>) {
@@ -181,7 +216,13 @@ export function Stage({
       >
         <div
           style={{ "--ratio": frameRatio }}
-          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] overflow-hidden rounded-3xl bg-muted"
+          // The captured pointer takes this element's cursor, so it keeps the one the drag began with.
+          data-drag={drag?.kind === "edit" ? drag.handle : drag?.kind}
+          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] touch-none overflow-hidden rounded-3xl bg-muted data-[drag=draw]:cursor-crosshair data-[drag=move]:cursor-move data-[drag=ne]:cursor-nesw-resize data-[drag=nw]:cursor-nwse-resize data-[drag=se]:cursor-nwse-resize data-[drag=sw]:cursor-nesw-resize"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => setDrag(undefined)}
         >
           {kind === "video" ? (
             // oxlint-disable-next-line jsx-a11y/media-has-caption -- the user's own footage in edit; there is no caption track to offer yet
@@ -205,14 +246,7 @@ export function Stage({
               }}
             />
           )}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 cursor-crosshair touch-none"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={() => setDrag(undefined)}
-          />
+          <div aria-hidden="true" className="absolute inset-0 cursor-crosshair" />
           {ghost !== undefined && ghost !== region ? <AreaMark box={ghost} look="ghost" /> : null}
           {pins.map((pin) =>
             pin.feedback.region === undefined ? null : (
@@ -225,11 +259,11 @@ export function Stage({
               />
             ),
           )}
-          {region !== undefined && draft === undefined ? (
+          {shown !== undefined && draft === undefined ? (
             <RegionBox
               ref={setAnchor}
               player={player}
-              region={region}
+              region={shown}
               onRemove={() => onRegion(undefined)}
             />
           ) : null}
@@ -283,6 +317,15 @@ function PinMark({
   );
 }
 
+/** Each corner's grip, centred on the corner, with the cursor for its diagonal. */
+const CORNERS = [
+  ["nw", "top-0 left-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize"],
+  ["ne", "top-0 right-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize"],
+  ["sw", "bottom-0 left-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize"],
+  ["se", "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize"],
+] as const;
+
+/** The box that will be sent: move it by its inside, resize it by its corners. */
 function RegionBox({
   ref,
   player,
@@ -299,7 +342,15 @@ function RegionBox({
 
   return (
     <AreaMark ref={ref} box={region} look="set" near={near}>
-      <div className="pointer-events-auto absolute -top-8 left-0 flex items-center gap-0.5 rounded-lg bg-selection p-0.5 text-xs font-medium text-selection-foreground">
+      <div data-handle="move" className="pointer-events-auto absolute inset-0 cursor-move" />
+      {CORNERS.map(([handle, place]) => (
+        <div
+          key={handle}
+          data-handle={handle}
+          className={`pointer-events-auto absolute size-3 rounded-full border-2 border-selection bg-background ${place}`}
+        />
+      ))}
+      <div className="pointer-events-auto absolute bottom-full left-0 mb-2 flex items-center gap-0.5 rounded-lg bg-selection p-0.5 text-xs font-medium text-selection-foreground">
         <button
           type="button"
           className="rounded-md px-1.5 py-0.5 tabular-nums hover:bg-foreground/10"
