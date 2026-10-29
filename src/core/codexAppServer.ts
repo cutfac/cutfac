@@ -38,13 +38,6 @@ interface TurnState {
   readonly changes: Map<string, ReadonlyArray<string>>;
 }
 
-const failed = (error: string, signedOut?: true): ParsedLine => ({
-  events: [],
-  error,
-  signedOut,
-  ended: true,
-});
-
 const decodeUnauthorized = Schema.decodeUnknownOption(Schema.Literal("unauthorized"));
 
 /** A kind of failure with its details, such as `{ httpConnectionFailed: { httpStatusCode: 401 } }`. */
@@ -67,6 +60,20 @@ const unauthorized = (error: Schema.JsonObject | undefined) => {
   );
 };
 
+/**
+ * How Codex words a sign-in that failed when its error says no more than `other`, such as
+ * `workspace routing discovery unauthorized (401)` or `... Please log out and sign in again.`
+ */
+const SIGNED_OUT_WORDING = /\bunauthorized\b|\bsign in again\b/i;
+
+/** A failed turn, from Codex's error object when there is one. */
+const failed = (message: string, error?: Schema.JsonObject): ParsedLine => ({
+  events: [],
+  error: message,
+  signedOut: unauthorized(error) || SIGNED_OUT_WORDING.test(message) || undefined,
+  ended: true,
+});
+
 /** The `id` of the object at `key`, as threads and turns carry theirs. */
 const idOf = (json: Schema.JsonObject, key: string) => {
   const object = objectOf(json, key);
@@ -87,7 +94,9 @@ function response(
   run: CodexRun,
   state: TurnState,
 ): ParsedLine {
-  if (objectOf(json, "error") !== undefined) return failed(messageOf(json) ?? "Codex failed");
+  const error = objectOf(json, "error");
+
+  if (error !== undefined) return failed(messageOf(json) ?? "Codex failed", error);
   const result = objectOf(json, "result") ?? {};
 
   if (id === INITIALIZE) {
@@ -186,10 +195,7 @@ function itemCompleted(item: Schema.JsonObject, root: string | undefined): Parse
 function turnCompleted(turn: Schema.JsonObject, state: TurnState): ParsedLine {
   if (textOf(turn, "status") === "completed") return { events: [], ended: true };
 
-  return failed(
-    messageOf(turn) ?? state.error ?? "Codex failed",
-    unauthorized(objectOf(turn, "error")) || undefined,
-  );
+  return failed(messageOf(turn) ?? state.error ?? "Codex failed", objectOf(turn, "error"));
 }
 
 /** Whether `turnId` is the run's own turn, or may be, while Codex hasn't said which that is. */

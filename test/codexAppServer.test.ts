@@ -196,6 +196,10 @@ describe("a Codex turn's items", () => {
 const error = (message: string, willRetry: boolean) =>
   notify("error", { threadId: THREAD, turnId: TURN, willRetry, error: { message } });
 
+/** Whether a turn that failed with `message` and no more than `other` asks for a sign-in. */
+const failedSaying = (message: string) =>
+  started()(completed("failed", { error: { message, codexErrorInfo: "other" } })).signedOut;
+
 /** A turn's end with what kind of failure Codex says it was. */
 const failedWith = (codexErrorInfo: Schema.Json) =>
   started()(completed("failed", { error: { message: "denied", codexErrorInfo } }));
@@ -233,6 +237,15 @@ describe("a Codex turn's end", () => {
       undefined,
     );
     expect(failedWith("usageLimitExceeded").signedOut).toBeUndefined();
+  });
+
+  test("so does one whose error says only `other`, when Codex words it as a sign-in", () => {
+    // As Codex 0.165.0 fails with a ChatGPT sign-in it can't refresh.
+    expect(failedSaying("workspace routing discovery unauthorized (401)")).toBe(true);
+    expect(
+      failedSaying("Your access token could not be refreshed. Please log out and sign in again."),
+    ).toBe(true);
+    expect(failedSaying("stream disconnected before completion")).toBeUndefined();
   });
 
   test("passes over an error of another turn", () => {
