@@ -195,7 +195,9 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
       <div
         // Pointer only: the keyboard has I, O and the arrow keys for the same moves.
         aria-hidden="true"
-        className="relative flex touch-none flex-col gap-1"
+        // The captured pointer takes this element's cursor, so it keeps the one the drag began with.
+        data-scrub={scrub?.mode}
+        className="relative flex touch-none flex-col gap-1 data-[scrub=seek]:cursor-ew-resize data-[scrub=select]:cursor-text"
         onPointerDown={(event) =>
           startScrub(
             event,
