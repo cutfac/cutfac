@@ -17,3 +17,8 @@ test("dragging a corner moves only that corner, inside the frame", () => {
 test("a corner dragged past the opposite one leaves the smallest box, not a flipped one", () => {
   expect(editBox(box, "ne", -1, 1)).toEqual({ x: 0.2, y: 0.48, w: MIN_BOX, h: MIN_BOX });
 });
+
+test("dragging an edge moves only that edge", () => {
+  expect(editBox(box, "n", 0.1, 0.05)).toEqual({ x: 0.2, y: 0.35, w: 0.4, h: 0.15 });
+  expect(editBox(box, "e", 0.1, 0.05)).toEqual({ x: 0.2, y: 0.3, w: 0.5, h: 0.2 });
+});

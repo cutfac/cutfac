@@ -92,7 +92,19 @@ export function BoxPrompt({ ask, open, onClose, anchor, side }: BoxPromptProps) 
   return (
     <Popover
       open={open && anchor !== null}
-      onOpenChange={(next) => {
+      onOpenChange={(next, details) => {
+        // A drag on the frame captures the pointer, so its click lands on the frame: moving or
+        // resizing the box keeps this open, as does any other press on the frame.
+        if (
+          details.reason === "outside-press" &&
+          details.event.target instanceof Node &&
+          anchor?.parentElement?.contains(details.event.target) === true
+        ) {
+          details.cancel();
+
+          return;
+        }
+
         if (!next) onClose();
       }}
     >

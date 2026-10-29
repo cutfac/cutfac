@@ -38,6 +38,8 @@ type Drag =
       readonly from: Point;
       readonly to: Point;
       readonly box: Region;
+      /** The request box was open for it, so it stays with the edited box. */
+      readonly reopen: boolean;
     };
 
 const edited = (drag: Extract<Drag, { kind: "edit" }>): Region => ({
@@ -89,8 +91,8 @@ interface StageProps {
 /**
  * The frame being edited. Click plays and pauses; dragging across it marks a box on the current
  * frame, which is how the user points at something in the picture, and opens a small request box
- * beside it. The box moves by its inside and resizes by its corners. Requests still in play keep a
- * numbered pin on their box.
+ * beside it. The box moves by its inside and resizes by its edges and corners. Requests still in
+ * play keep a numbered pin on their box.
  */
 export function Stage({
   player,
@@ -126,7 +128,7 @@ export function Stage({
 
     setDrag(
       region !== undefined && isHandle(handle)
-        ? { kind: "edit", handle, from: at, to: at, box: region }
+        ? { kind: "edit", handle, from: at, to: at, box: region, reopen: asking === region }
         : { kind: "draw", from: at, to: at, drawing: false },
     );
   }
@@ -161,17 +163,15 @@ export function Stage({
     if (drag.kind === "edit") {
       const next = edited(drag);
 
-      if (
+      const same =
         next.x === drag.box.x &&
         next.y === drag.box.y &&
         next.w === drag.box.w &&
-        next.h === drag.box.h
-      )
-        return;
+        next.h === drag.box.h;
 
-      onRegion(next);
+      if (!same) onRegion(next);
 
-      if (asking === drag.box) setAsking(next);
+      if (drag.reopen) setAsking(same ? drag.box : next);
 
       return;
     }
@@ -218,7 +218,7 @@ export function Stage({
           style={{ "--ratio": frameRatio }}
           // The captured pointer takes this element's cursor, so it keeps the one the drag began with.
           data-drag={drag?.kind === "edit" ? drag.handle : drag?.kind}
-          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] touch-none overflow-hidden rounded-3xl bg-muted data-[drag=draw]:cursor-crosshair data-[drag=move]:cursor-move data-[drag=ne]:cursor-nesw-resize data-[drag=nw]:cursor-nwse-resize data-[drag=se]:cursor-nwse-resize data-[drag=sw]:cursor-nesw-resize"
+          className="relative aspect-(--ratio) w-[min(100cqw,100cqh*var(--ratio))] touch-none overflow-hidden rounded-3xl bg-muted data-[drag=draw]:cursor-crosshair data-[drag=e]:cursor-ew-resize data-[drag=move]:cursor-move data-[drag=n]:cursor-ns-resize data-[drag=ne]:cursor-nesw-resize data-[drag=nw]:cursor-nwse-resize data-[drag=s]:cursor-ns-resize data-[drag=se]:cursor-nwse-resize data-[drag=sw]:cursor-nesw-resize data-[drag=w]:cursor-ew-resize"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -317,6 +317,14 @@ function PinMark({
   );
 }
 
+/** Each edge's grip: a strip across it, wider than the line, with the cursor for its direction. */
+const EDGES = [
+  ["n", "inset-x-2 top-0 h-4 -translate-y-1/2 cursor-ns-resize"],
+  ["s", "inset-x-2 bottom-0 h-4 translate-y-1/2 cursor-ns-resize"],
+  ["w", "inset-y-2 left-0 w-4 -translate-x-1/2 cursor-ew-resize"],
+  ["e", "inset-y-2 right-0 w-4 translate-x-1/2 cursor-ew-resize"],
+] as const;
+
 /** Each corner's grip, centred on the corner, with the cursor for its diagonal. */
 const CORNERS = [
   ["nw", "top-0 left-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize"],
@@ -325,7 +333,7 @@ const CORNERS = [
   ["se", "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize"],
 ] as const;
 
-/** The box that will be sent: move it by its inside, resize it by its corners. */
+/** The box that will be sent: move it by its inside, resize it by its edges and corners. */
 function RegionBox({
   ref,
   player,
@@ -343,12 +351,22 @@ function RegionBox({
   return (
     <AreaMark ref={ref} box={region} look="set" near={near}>
       <div data-handle="move" className="pointer-events-auto absolute inset-0 cursor-move" />
-      {CORNERS.map(([handle, place]) => (
+      {EDGES.map(([handle, place]) => (
         <div
           key={handle}
           data-handle={handle}
-          className={`pointer-events-auto absolute size-3 rounded-full border-2 border-selection bg-background ${place}`}
+          className={`pointer-events-auto absolute ${place}`}
         />
+      ))}
+      {CORNERS.map(([handle, place]) => (
+        // The grip is wider than the dot it shows, so a corner is easy to catch.
+        <div
+          key={handle}
+          data-handle={handle}
+          className={`pointer-events-auto absolute flex size-6 items-center justify-center ${place}`}
+        >
+          <div className="size-3 rounded-full border-2 border-selection bg-background" />
+        </div>
       ))}
       <div className="pointer-events-auto absolute bottom-full left-0 mb-2 flex items-center gap-0.5 rounded-lg bg-selection p-0.5 text-xs font-medium text-selection-foreground">
         <button

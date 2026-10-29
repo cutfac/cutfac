@@ -13,8 +13,8 @@ export interface Box {
   readonly h: number;
 }
 
-/** What a press on a set box grabbed: its inside, which moves it, or a corner, which resizes it. */
-export const HANDLES = ["move", "nw", "ne", "sw", "se"] as const;
+/** What a press on a set box grabbed: its inside moves it, a corner or an edge resizes it. */
+export const HANDLES = ["move", "nw", "ne", "sw", "se", "n", "s", "e", "w"] as const;
 
 export type Handle = (typeof HANDLES)[number];
 
@@ -26,8 +26,8 @@ export const thousandths = (value: number) => Math.round(value * 1000) / 1000;
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /**
- * The box moved, or one corner dragged, by a fraction of the frame. It stays inside the frame and
- * no smaller than MIN_BOX.
+ * The box moved, or one corner or edge dragged, by a fraction of the frame. It stays inside the
+ * frame and no smaller than MIN_BOX.
  */
 export function editBox(box: Box, handle: Handle, dx: number, dy: number): Box {
   if (handle === "move") {
