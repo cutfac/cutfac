@@ -274,8 +274,13 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
           {hover === undefined || scrub !== undefined ? null : (
             <div
               style={{ "--at": fraction(hover) }}
-              className="pointer-events-none absolute inset-y-0 left-(--at) w-px bg-foreground/40"
-            />
+              data-side={hover > duration * 0.85 ? "left" : "right"}
+              className="group/hover pointer-events-none absolute inset-y-0 left-(--at) w-px bg-foreground/40"
+            >
+              <span className="absolute top-1 rounded-sm bg-background/80 px-1 text-xs text-foreground tabular-nums group-data-[side=left]/hover:right-1 group-data-[side=right]/hover:left-1">
+                {formatTime(hover)}
+              </span>
+            </div>
           )}
           {pins.map((pin) => {
             const at = anchorOf(targetOf(pin.feedback));
@@ -291,11 +296,6 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
           })}
         </div>
         <Playhead player={player} duration={duration} pinned={pinnedAt(scrub, target)} />
-      </div>
-      <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
-        <span>0:00.0</span>
-        {hover === undefined ? null : <span className="text-foreground">{formatTime(hover)}</span>}
-        <span>{formatTime(duration)}</span>
       </div>
     </div>
   );
