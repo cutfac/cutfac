@@ -146,25 +146,3 @@ export function PlatformToggles({
     </Field>
   );
 }
-
-/**
- * The whole brief on one form, as the Brief page edits it: what the videos are for, in the user's
- * words, and where they go. The first launch asks for the same parts one at a time.
- */
-export function BriefForm({ value, onChange, disabled = false }: PartProps) {
-  const t = useMessages().start.brief;
-  const parts = { value, onChange, disabled };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <PurposeCards {...parts} label={t.purposeLabel} />
-      {value.purpose === null ? null : (
-        // Opens once a purpose is picked, so the example it shows fits the pick.
-        <div className="animate-in duration-200 fade-in">
-          <BriefBody {...parts} label={value.purpose === "own" ? t.ownBodyLabel : t.bodyLabel} />
-        </div>
-      )}
-      <PlatformToggles {...parts} label={t.platformsLabel} hint={t.platformsHint} />
-    </div>
-  );
-}

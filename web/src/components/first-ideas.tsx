@@ -14,8 +14,8 @@ import { ideasIn, type Idea } from "../lib/ideas.ts";
 const READING_POLL_MS = 3000;
 
 /**
- * The reading of the first launch's material: what is being read, whether the agent is still at
- * it, and the first videos it suggested once done.
+ * The agent's reading of the material, which the first launch and the Brief page start: what is
+ * being read, whether the agent is still at it, and the first videos it suggested once done.
  */
 export function useFirstReading() {
   const learned = useLive("learned", api.learned);
@@ -26,10 +26,12 @@ export function useFirstReading() {
     imports.data?.some(({ doc, running }) => doc.kind === "learn" && !doc.closed && running) ??
     false;
 
-  const reload = useEffectEvent(() => {
+  function reloadBoth() {
     learned.reload();
     imports.reload();
-  });
+  }
+
+  const reload = useEffectEvent(reloadBoth);
 
   useEffect(() => {
     if (!reading) return;
@@ -48,7 +50,7 @@ export function useFirstReading() {
     wasReading.current = reading;
   }, [reading]);
 
-  return { titles, reading, ideas: ideasIn(imports.data) };
+  return { titles, reading, ideas: ideasIn(imports.data), reload: reloadBoth };
 }
 
 /** A first video picked from the suggestions: the request to write in, and the title it gives. */

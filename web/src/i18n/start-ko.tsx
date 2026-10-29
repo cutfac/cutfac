@@ -4,7 +4,6 @@ import type { StartMessages } from "./start-en.tsx";
 /** 브리프와 첫 템플릿 문구, 해요체. */
 export const startKo: StartMessages = {
   brief: {
-    purposeLabel: "무슨 일을 하나요?",
     purpose: {
       promote: {
         title: "사업을 해요",
@@ -47,10 +46,6 @@ export const startKo: StartMessages = {
       reels: "릴스",
       other: "기타",
     },
-    title: "목적과 플랫폼",
-    body: "에이전트가 템플릿과 영상을 만들기 전에 매번 읽어요.",
-    save: "저장",
-    saved: "브리프를 저장했어요",
     saveFailed: (message) => `브리프를 저장하지 못했어요: ${message}`,
   },
   whatToMake: {

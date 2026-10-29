@@ -15,7 +15,6 @@ interface PurposeCopy {
  */
 export const startEn = {
   brief: {
-    purposeLabel: "What do you do?",
     purpose: {
       promote: {
         title: "I run a business",
@@ -58,10 +57,6 @@ export const startEn = {
       reels: "Reels",
       other: "Other",
     } satisfies Record<Platform, string>,
-    title: "Purpose and platforms",
-    body: "Your agent reads it before every template and video.",
-    save: "Save",
-    saved: "Brief saved",
     saveFailed: (message: string) => `Could not save the brief: ${message}`,
   },
   whatToMake: {
