@@ -93,6 +93,13 @@ interface Range {
 const rangeOf = ({ start, end }: Target): Range | undefined =>
   start === undefined || end === undefined ? undefined : { start, end };
 
+/** Play the videos together over the part a request pointed at, or from where its edit shows. */
+function playTogether(videos: ReadonlyArray<HTMLVideoElement>, target: Target) {
+  const range = rangeOf(target);
+
+  void (range === undefined ? playFrom(videos, anchorOf(target) ?? 0) : loopOver(videos, range));
+}
+
 /**
  * Plays the videos side by side together: over the part the request pointed at, looping, or from
  * where its edit shows when it pointed at a moment.
@@ -112,13 +119,7 @@ function PlayTogether({
   const from = anchorOf(target) ?? 0;
 
   return (
-    <Button
-      variant="outline"
-      className="sm:mr-auto"
-      onClick={() =>
-        void (range === undefined ? playFrom(videos(), from) : loopOver(videos(), range))
-      }
-    >
+    <Button variant="outline" className="sm:mr-auto" onClick={() => playTogether(videos(), target)}>
       <PlayIcon data-icon="inline-start" />
       {range === undefined
         ? label(formatTime(from))
@@ -178,6 +179,15 @@ export function CompareDialog({
     <Dialog
       onOpenChange={(open) => {
         if (open) onOpen();
+      }}
+      // Opening it is asking to watch, so both play at once.
+      onOpenChangeComplete={(open) => {
+        if (open && sides.kind === "video") {
+          playTogether(
+            [before.current, after.current].filter((video) => video !== null),
+            target,
+          );
+        }
       }}
     >
       <DialogTrigger render={<Button variant="soft" pill size="xs" />}>
@@ -319,6 +329,12 @@ export function VersionsDialog({ item, feedback, onOpen, onChoose }: VersionsDia
     <Dialog
       onOpenChange={(open) => {
         if (open) onOpen();
+      }}
+      // Opening it is asking to watch, so all of them play at once.
+      onOpenChangeComplete={(open) => {
+        if (open && kind === "video") {
+          playTogether([...(grid.current?.querySelectorAll("video") ?? [])], target);
+        }
       }}
     >
       <DialogTrigger render={<Button variant="ghost" pill size="xs" />}>
