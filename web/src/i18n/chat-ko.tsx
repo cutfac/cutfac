@@ -55,16 +55,19 @@ export const chatKo: ChatMessages = {
     pickTime: "타임라인에서 이 구간 선택",
     kept: "유지함",
     rolledBackBadge: "되돌림",
-    versionsReady: (media, saved, wanted) =>
-      wanted !== undefined && wanted > saved ? (
+    versionsReady: (saved, wanted, media) => {
+      const of = media === undefined ? null : <>{media}의 </>;
+
+      return wanted !== undefined && wanted > saved ? (
         <>
-          {media}의 버전 {wanted}개 중 {saved}개가 준비됐어요.
+          {of}버전 {wanted}개 중 {saved}개가 준비됐어요.
         </>
       ) : (
         <>
-          {media}의 버전 {saved}개가 준비됐어요. 비교하고 하나를 골라 주세요.
+          {of}버전 {saved}개가 준비됐어요. 비교하고 하나를 골라 주세요.
         </>
-      ),
+      );
+    },
     keepNone: "모두 버리기",
     keptNone: "모두 버림",
     keptVersion: (label) => `“${label}” 유지`,

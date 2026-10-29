@@ -58,18 +58,24 @@ export const chatEn = {
     pickTime: "Select this part on the timeline",
     kept: "Kept",
     rolledBackBadge: "Rolled back",
-    /** Versions the agent saved of `media`; `wanted` is how many the request asked for. */
-    versionsReady: (media: ReactNode, saved: number, wanted: number | undefined) =>
-      wanted !== undefined && wanted > saved ? (
+    /**
+     * Versions the agent saved; `wanted` is how many the request asked for, and `media` names the
+     * file when the item has more than one.
+     */
+    versionsReady: (saved: number, wanted: number | undefined, media?: ReactNode) => {
+      const of = media === undefined ? null : <> of {media}</>;
+
+      return wanted !== undefined && wanted > saved ? (
         <>
-          {saved} of {wanted} versions of {media} are ready to compare.
+          {saved} of {wanted} versions{of} are ready to compare.
         </>
       ) : (
         <>
-          {saved === 1 ? "1 version" : `${saved} versions`} of {media} ready. Compare them and keep
-          one.
+          {saved === 1 ? "1 version" : `${saved} versions`}
+          {of} ready. Compare them and keep one.
         </>
-      ),
+      );
+    },
     keepNone: "Keep none",
     keptNone: "Kept none",
     keptVersion: (label: string) => `Kept “${label}”`,
