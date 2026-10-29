@@ -184,6 +184,19 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
       return true;
     };
 
+    const goal = (to: "start" | "end" | "in" | "out") => {
+      switch (to) {
+        case "start":
+          return 0;
+        case "end":
+          return player.getState().duration;
+        case "in":
+          return target.start;
+        case "out":
+          return target.end;
+      }
+    };
+
     const press = (key: EditorKey) =>
       Match.valueTags(key, {
         Shortcuts: () => {
@@ -192,6 +205,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           return true;
         },
         PlayPause: () => onVideo(() => player.toggle()),
+        Mute: () => onVideo(() => player.toggleMute()),
         MarkIn: () =>
           onVideo(() => {
             setTarget((current) => withStart(current, now()));
@@ -204,6 +218,11 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           }),
         Loop: () => onVideo(() => setLoop((current) => !current)),
         Step: ({ seconds }) => onVideo(() => player.step(seconds)),
+        Go: ({ to }) => {
+          const at = goal(to);
+
+          return at !== undefined && onVideo(() => player.seek(at));
+        },
         Clear: () => {
           if (isEmptyTarget(target) && ghost === undefined) return false;
 
@@ -352,18 +371,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     onMarked={focusComposer}
                     pins={pins}
                   />
-                  <Transport
-                    player={player}
-                    target={target}
-                    loop={loop}
-                    onLoop={setLoop}
-                    onIn={() =>
-                      setTarget((current) => withStart(current, roundTime(player.getState().time)))
-                    }
-                    onOut={() =>
-                      setTarget((current) => withEnd(current, roundTime(player.getState().time)))
-                    }
-                  />
+                  <Transport player={player} target={target} loop={loop} onLoop={setLoop} />
                 </>
               ) : (
                 <p className="text-center text-xs text-muted-foreground">{t.item.imageHint}</p>

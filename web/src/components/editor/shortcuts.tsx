@@ -26,6 +26,9 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
         [t.shortcuts.playPause, ["Space"]],
         [t.shortcuts.step, ["←", "→"]],
         [t.shortcuts.stepLong, [`${SHIFT_KEY}←`, `${SHIFT_KEY}→`]],
+        [t.shortcuts.mute, ["M"]],
+        [t.shortcuts.toStart, ["Home"]],
+        [t.shortcuts.toEnd, ["End"]],
       ],
     },
     {
@@ -33,6 +36,8 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
       rows: [
         [t.shortcuts.markIn, ["I"]],
         [t.shortcuts.markOut, ["O"]],
+        [t.shortcuts.toIn, [`${SHIFT_KEY}I`]],
+        [t.shortcuts.toOut, [`${SHIFT_KEY}O`]],
         [t.shortcuts.loop, ["L"]],
         [t.shortcuts.clear, ["Esc"]],
       ],

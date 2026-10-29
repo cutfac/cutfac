@@ -4,6 +4,7 @@ export interface PlayerState {
   readonly time: number;
   readonly duration: number;
   readonly paused: boolean;
+  readonly muted: boolean;
   /** Width over height of the frame, once the video's metadata has loaded. */
   readonly ratio: number | undefined;
 }
@@ -20,7 +21,13 @@ interface Resume {
   readonly time: number;
 }
 
-const INITIAL: PlayerState = { time: 0, duration: 0, paused: true, ratio: undefined };
+const INITIAL: PlayerState = {
+  time: 0,
+  duration: 0,
+  paused: true,
+  muted: false,
+  ratio: undefined,
+};
 
 /** The file a URL points at, without the `?v=` that busts the cache after an agent rewrites it. */
 const pathOf = (url: string) => url.split("?")[0] ?? url;
@@ -42,6 +49,8 @@ export class Player {
   #cue: number | undefined;
   /** Whether to play the next file once it loads, as a finished render's does. */
   #playOnLoad = false;
+  /** Kept here so a muted editor stays muted when an agent's render swaps the file. */
+  #muted = false;
   readonly #listeners = new Set<() => void>();
 
   subscribe = (listener: () => void) => {
@@ -59,6 +68,7 @@ export class Player {
     if (video === null) return undefined;
 
     this.#video = video;
+    video.muted = this.#muted;
 
     const onMetadata = () => {
       const resume = this.#resume;
@@ -99,6 +109,7 @@ export class Player {
     video.addEventListener("timeupdate", onTime);
     video.addEventListener("seeked", onTime);
     video.addEventListener("emptied", onTime);
+    video.addEventListener("volumechange", onTime);
 
     return () => {
       cancelAnimationFrame(this.#frame);
@@ -111,6 +122,7 @@ export class Player {
       video.removeEventListener("timeupdate", onTime);
       video.removeEventListener("seeked", onTime);
       video.removeEventListener("emptied", onTime);
+      video.removeEventListener("volumechange", onTime);
 
       if (this.#video === video) this.#video = undefined;
     };
@@ -138,6 +150,12 @@ export class Player {
   toggle() {
     if (this.#video?.paused === false) this.pause();
     else this.play();
+  }
+
+  toggleMute() {
+    this.#muted = !this.#muted;
+
+    if (this.#video !== undefined) this.#video.muted = this.#muted;
   }
 
   /** Move the playhead now; the state follows at once so scrubbing feels direct. */
@@ -208,6 +226,7 @@ export class Player {
       time: video.currentTime,
       duration: Number.isFinite(video.duration) ? video.duration : 0,
       paused: video.paused,
+      muted: video.muted,
       ratio,
     });
   }
@@ -219,6 +238,7 @@ export class Player {
       prev.time === next.time &&
       prev.duration === next.duration &&
       prev.paused === next.paused &&
+      prev.muted === next.muted &&
       prev.ratio === next.ratio
     ) {
       return;

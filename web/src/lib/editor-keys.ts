@@ -15,10 +15,13 @@ const within = (target: EventTarget | null, selector: string) =>
 export type EditorKey = Data.TaggedEnum<{
   Shortcuts: {};
   PlayPause: {};
+  Mute: {};
   MarkIn: {};
   MarkOut: {};
   Loop: {};
   Step: { readonly seconds: number };
+  /** Jump to the video's start or end, or to the selection's in or out point. */
+  Go: { readonly to: "start" | "end" | "in" | "out" };
   Clear: {};
 }>;
 
@@ -39,11 +42,20 @@ export function editorKey(event: KeyboardEvent): Option.Option<EditorKey> {
     case "Space":
       return onControl ? Option.none() : Option.some(EditorKey.PlayPause());
 
+    case "KeyM":
+      return Option.some(EditorKey.Mute());
+
     case "KeyI":
-      return Option.some(EditorKey.MarkIn());
+      return Option.some(event.shiftKey ? EditorKey.Go({ to: "in" }) : EditorKey.MarkIn());
 
     case "KeyO":
-      return Option.some(EditorKey.MarkOut());
+      return Option.some(event.shiftKey ? EditorKey.Go({ to: "out" }) : EditorKey.MarkOut());
+
+    case "Home":
+      return Option.some(EditorKey.Go({ to: "start" }));
+
+    case "End":
+      return Option.some(EditorKey.Go({ to: "end" }));
 
     case "KeyL":
       return Option.some(EditorKey.Loop());

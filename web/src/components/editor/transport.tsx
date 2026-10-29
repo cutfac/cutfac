@@ -1,4 +1,4 @@
-import { PauseIcon, PlayIcon, RepeatIcon } from "lucide-react";
+import { PauseIcon, PlayIcon, RepeatIcon, Volume2Icon, VolumeXIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
@@ -14,16 +14,15 @@ interface TransportProps {
   target: Target;
   loop: boolean;
   onLoop: (loop: boolean) => void;
-  onIn: () => void;
-  onOut: () => void;
 }
 
 /**
- * Play, mark in and out at the playhead, and loop the selection. The selection itself shows in
- * the composer, where it goes with the request.
+ * Play, mute, and loop the selection; I and O mark the selection at the playhead from the keyboard.
+ * The selection itself shows in the composer, where it goes with the request.
  */
-export function Transport({ player, target, loop, onLoop, onIn, onOut }: TransportProps) {
+export function Transport({ player, target, loop, onLoop }: TransportProps) {
   const paused = usePlayer(player, (state) => state.paused);
+  const muted = usePlayer(player, (state) => state.muted);
   const empty = isEmptyTarget(target);
   const t = useMessages();
 
@@ -42,15 +41,17 @@ export function Transport({ player, target, loop, onLoop, onIn, onOut }: Transpo
       </Hint>
       <Clock player={player} />
       <div className="mx-1 h-5 w-px bg-border" />
-      <Hint label={t.transport.inHint} keys="I">
-        <Button variant="outline" size="sm" onMouseDown={keepFocus} onClick={onIn}>
-          {t.transport.in}
-        </Button>
-      </Hint>
-      <Hint label={t.transport.outHint} keys="O">
-        <Button variant="outline" size="sm" onMouseDown={keepFocus} onClick={onOut}>
-          {t.transport.out}
-        </Button>
+      <Hint label={muted ? t.transport.unmute : t.transport.mute} keys="M">
+        <Toggle
+          size="sm"
+          variant="outline"
+          aria-label={t.transport.mute}
+          pressed={muted}
+          onMouseDown={keepFocus}
+          onPressedChange={() => player.toggleMute()}
+        >
+          {muted ? <VolumeXIcon /> : <Volume2Icon />}
+        </Toggle>
       </Hint>
       <Hint label={t.transport.loopHint} keys="L">
         <Toggle
