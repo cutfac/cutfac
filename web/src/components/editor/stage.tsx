@@ -380,7 +380,8 @@ function RegionBox({
         <button
           type="button"
           aria-label={t.target.removeBox}
-          className="rounded-md p-1 hover:bg-foreground/10"
+          // Shown while the box is pointed at, or its label has focus, so the time stands alone.
+          className="hidden rounded-md p-1 group-focus-within/box:block group-hover/box:block hover:bg-foreground/10"
           onClick={onRemove}
         >
           <XIcon className="size-3" />
@@ -418,7 +419,7 @@ function AreaMark({
       }}
       data-look={look}
       data-near={near}
-      className="pointer-events-none absolute top-(--y) left-(--x) h-(--h) w-(--w) rounded-sm border-2 border-selection transition-opacity data-[look=draft]:bg-selection/15 data-[look=ghost]:border-dashed data-[look=ghost]:border-selection/80 data-[look=set]:bg-selection/10 data-[look=set]:shadow-spotlight data-[near=false]:opacity-40"
+      className="group/box pointer-events-none absolute top-(--y) left-(--x) h-(--h) w-(--w) rounded-sm border-2 border-selection transition-opacity data-[look=draft]:bg-selection/15 data-[look=ghost]:border-dashed data-[look=ghost]:border-selection/80 data-[look=set]:bg-selection/10 data-[look=set]:shadow-spotlight data-[near=false]:opacity-40"
     >
       {children}
     </div>
