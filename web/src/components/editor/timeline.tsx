@@ -126,8 +126,8 @@ interface TimelineProps {
 
 /**
  * The video's length as a strip of frames under a thin ruler. Click to jump; drag across the frames
- * to select the part an edit is about; drag the playhead or the ruler to move through the video
- * without selecting. The selection shows in the editor's one colour, with the box's frame as a
+ * to select the part an edit is about; drag the playhead's head or the ruler to move through the
+ * video without selecting. The selection shows in the editor's one colour, with the box's frame as a
  * diamond on top.
  */
 export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }: TimelineProps) {
@@ -259,7 +259,11 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
             );
           })}
         </div>
-        <Playhead player={player} duration={duration} />
+        <Playhead
+          player={player}
+          duration={duration}
+          pinned={scrub?.mode === "select" ? scrub.from : undefined}
+        />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         <span>0:00.0</span>
@@ -321,21 +325,34 @@ function Ruler({ duration }: { duration: number }) {
 
 /**
  * Its own component, so only it re-renders on every frame while the video plays. One shape: a head
- * on the ruler that narrows into the line through the frames, and all of it takes the drag.
+ * on the ruler that narrows into the line through the frames. Only the head takes a drag, so a
+ * selection can start right where the video stopped. While a part is dragged out the preview shows
+ * its moving edge, and the playhead stays `pinned` where the drag began.
  */
-function Playhead({ player, duration }: { player: Player; duration: number }) {
+function Playhead({
+  player,
+  duration,
+  pinned,
+}: {
+  player: Player;
+  duration: number;
+  pinned: number | undefined;
+}) {
   const time = usePlayer(player, (state) => state.time);
 
   return (
     <div
-      data-grip=""
-      style={{ "--at": percent(clampUnit(time / duration)) }}
-      className="absolute inset-y-0 left-(--at) flex w-4 -translate-x-1/2 cursor-ew-resize flex-col items-center text-foreground drop-shadow-xs"
+      style={{ "--at": percent(clampUnit((pinned ?? time) / duration)) }}
+      className="pointer-events-none absolute inset-y-0 left-(--at) flex -translate-x-1/2 flex-col items-center text-foreground drop-shadow-xs"
     >
-      <svg viewBox="0 0 10 12" className="pointer-events-none h-3 w-2.5 shrink-0 fill-current">
+      <svg
+        data-grip=""
+        viewBox="0 0 10 12"
+        className="pointer-events-auto h-3 w-2.5 shrink-0 cursor-ew-resize fill-current"
+      >
         <path d="M2 0H8A2 2 0 0 1 10 2V5.5L6 10V12H4V10L0 5.5V2A2 2 0 0 1 2 0Z" />
       </svg>
-      <div className="pointer-events-none w-0.5 flex-1 bg-current" />
+      <div className="w-0.5 flex-1 bg-current" />
     </div>
   );
 }
