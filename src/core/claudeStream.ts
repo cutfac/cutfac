@@ -31,6 +31,8 @@ const ClaudeEnvelope = Schema.Struct({
   session_id: Schema.optional(Schema.String),
   is_error: Schema.optional(Schema.Boolean),
   result: Schema.optional(Schema.String),
+  /** On a `result` line that ended in an error without a result: what went wrong. */
+  errors: Schema.optional(Schema.Array(Schema.String)),
   /** On an `assistant` line Claude Code wrote itself: why the request failed. */
   error: Schema.optional(Schema.String),
   /** On a `system` `status` line: what Claude Code is busy with, or null once it is not. */
@@ -411,7 +413,7 @@ export function parseClaudeLine(line: string, root?: string): ParsedLine {
     events,
     sessionId: msg.session_id,
     reply: failed ? undefined : msg.result,
-    error: failed ? (msg.result ?? msg.subtype ?? "Claude failed") : undefined,
+    error: failed ? (msg.result ?? msg.errors?.[0] ?? msg.subtype ?? "Claude failed") : undefined,
     ended: true,
   };
 }
