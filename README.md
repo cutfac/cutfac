@@ -103,15 +103,15 @@ History tab keeps each saved version. Press `?` for shortcuts.
 
 ## Mac app or from source
 
-The signed Mac app at [cutfac.com](https://cutfac.com) is built from this repository, so both have
-every feature; nothing is held back from the source. The app saves you the build and keeps itself up
-to date.
+Both are the same code with every feature; nothing is held back from the source. Build it yourself
+and it's free, with no limit. If you'd rather skip the build, the signed Mac app at
+[cutfac.com](https://cutfac.com) is ready to open and keeps itself up to date.
 
-|         | Signed Mac app                        | Built from source                  |
-| ------- | ------------------------------------- | ---------------------------------- |
-| Cost    | First 3 videos free, then a paid plan | Free under the AGPL-3.0, no limit  |
-| Setup   | Download it and open it               | Install Bun and ffmpeg, then build |
-| Updates | Install themselves                    | Pull and rebuild                   |
+|         | Signed Mac app                                                                       | Built from source                  |
+| ------- | ------------------------------------------------------------------------------------ | ---------------------------------- |
+| Cost    | First 3 videos free, then a one-time license ([pricing](https://cutfac.com/pricing)) | Free under the AGPL-3.0, no limit  |
+| Setup   | Download it and open it                                                              | Install Bun and ffmpeg, then build |
+| Updates | Install themselves                                                                   | Pull and rebuild                   |
 
 ## Privacy
 
@@ -127,8 +127,9 @@ to date.
 - The server listens on `127.0.0.1` unless you pass `--host`, and refuses requests from other
   websites.
 - It goes online only when you ask: learning from a link, or sending feedback. The Mac app also
-  checks for updates, with a license key whether the plan is active, and sends what you agreed to
-  share.
+  checks for updates and sends what you agreed to share. With a license key, it checks the key
+  with cutfac.com, along with a hash of this Mac's hardware ID and its name, so the key counts the
+  Macs it's activated on.
 - Learn only from videos you're allowed to download.
 
 See [SECURITY.md](SECURITY.md) to report a problem.
