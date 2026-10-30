@@ -76,13 +76,13 @@ function Setting({
         }
       >
         <span className="truncate">{shown}</span>
-        <ChevronDownIcon
-          className={
-            bare
-              ? "hidden text-muted-foreground group-hover/setting:block group-data-popup-open/setting:block"
-              : "text-muted-foreground"
-          }
-        />
+        {bare ? (
+          <span className="-ml-1 flex w-0 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover/setting:ml-0 group-hover/setting:w-3.5 group-hover/setting:opacity-100 group-data-popup-open/setting:ml-0 group-data-popup-open/setting:w-3.5 group-data-popup-open/setting:opacity-100">
+            <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          </span>
+        ) : (
+          <ChevronDownIcon className="text-muted-foreground" />
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="top"
