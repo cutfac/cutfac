@@ -19,6 +19,7 @@ import { useFirstReading } from "@/components/first-ideas";
 import { ErrorAlert, ListSkeleton, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field";
 import {
   Popover,
   PopoverContent,
@@ -306,17 +307,16 @@ function ForgetButton({
   onForgot: (rest: LearnedList) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string>();
   const t = useMessages();
 
   function forget() {
     setBusy(true);
+    setFailure(undefined);
     api
       .forgetLearned(entry.id)
-      .then((rest) => {
-        toast.success(t.learn.forgotten(entry.doc.title));
-        onForgot(rest);
-      })
-      .catch((cause) => toast.error(`${t.learn.forgetError}: ${errorText(cause)}`))
+      .then(onForgot)
+      .catch((cause) => setFailure(`${t.learn.forgetError}: ${errorText(cause)}`))
       .finally(() => setBusy(false));
   }
 
@@ -339,6 +339,7 @@ function ForgetButton({
           {busy ? <Spinner data-icon="inline-start" /> : null}
           {t.learn.forget}
         </Button>
+        <FieldError className="select-text">{failure}</FieldError>
       </PopoverContent>
     </Popover>
   );

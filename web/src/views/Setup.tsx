@@ -1,6 +1,5 @@
 import { CheckIcon, FolderOpenIcon } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { AgentPermissions } from "@/components/agent-permissions";
 import { ErrorReportsCard } from "@/components/error-reports";
@@ -148,15 +147,9 @@ function AgentRow({ status, permissions, onChange }: AgentRowProps) {
       .connectAgent(status.agent)
       .then((result) => {
         setOutcome(result);
-
-        if (result.ok) toast.success(t.setup.connected(label));
-        else toast.error(t.setup.connectFailed(label));
         onChange();
       })
-      .catch((cause) => {
-        setOutcome({ ok: false, detail: errorText(cause) });
-        toast.error(t.setup.connectFailed(label));
-      })
+      .catch((cause) => setOutcome({ ok: false, detail: errorText(cause) }))
       .finally(() => setBusy(false));
   };
 
@@ -180,7 +173,7 @@ function AgentRow({ status, permissions, onChange }: AgentRowProps) {
               />
             }
           >
-            {outcome.detail}
+            {outcome.ok ? outcome.detail : `${t.setup.connectFailed(label)}: ${outcome.detail}`}
           </SelectionArea>
         ) : null}
       </ItemContent>

@@ -27,7 +27,6 @@ export const permissionsEn = {
   /** Before what following the user's settings comes to: whether they set any. */
   followed: (agent: string, set: boolean) =>
     set ? `Following your ${agent} settings.` : `You haven't set this in ${agent}.`,
-  saved: (agent: string, mode: string) => `${agent}'s next runs use “${mode}”`,
   failed: (agent: string) => `Could not change ${agent}'s permissions`,
   error: "Could not read your agents' permission settings",
 };

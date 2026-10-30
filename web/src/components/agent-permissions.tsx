@@ -1,7 +1,7 @@
 import { TriangleAlertIcon } from "lucide-react";
 import { useId, useState } from "react";
-import { toast } from "sonner";
 
+import { FieldError } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -45,6 +45,7 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
   // What the last choice kept, until a fresh read of `view` takes over.
   const [kept, setKept] = useState<{ from: PermissionView; view: PermissionView }>();
   const [busy, setBusy] = useState<PermissionMode>();
+  const [failure, setFailure] = useState<string>();
   const shown = kept?.from === view ? kept.view : view;
   const mode = busy ?? shown.mode;
   const access = mode === "follow" ? shown.follows : mode;
@@ -53,15 +54,11 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
 
   const choose = (next: PermissionMode) => {
     setBusy(next);
+    setFailure(undefined);
     permissionsApi
       .set({ agent: view.agent, mode: next })
-      .then((chosen) => {
-        setKept({ from: view, view: chosen });
-        toast.success(t.permissions.saved(agent, t.permissions.modes[next]));
-      })
-      .catch((cause) => {
-        toast.error(t.permissions.failed(agent), { description: errorText(cause) });
-      })
+      .then((chosen) => setKept({ from: view, view: chosen }))
+      .catch((cause) => setFailure(`${t.permissions.failed(agent)}: ${errorText(cause)}`))
       .finally(() => setBusy(undefined));
   };
 
@@ -102,6 +99,7 @@ export function AgentPermissions({ view }: { view: PermissionView }) {
           {accessText(access, agent, t)}
         </span>
       </p>
+      <FieldError className="select-text">{failure}</FieldError>
     </div>
   );
 }

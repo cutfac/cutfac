@@ -23,7 +23,6 @@ export const permissionsKo: PermissionsMessages = {
   },
   followed: (agent, set) =>
     set ? `내 ${agent} 설정을 따라요.` : `${agent}에 따로 정한 설정이 없어요.`,
-  saved: (agent, mode) => `다음 실행부터 ${agent}에 '${mode}' 권한을 적용해요`,
   failed: (agent) => `${agent}의 권한을 바꾸지 못했어요`,
   error: "에이전트의 권한 설정을 읽지 못했어요",
 };

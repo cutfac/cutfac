@@ -23,7 +23,6 @@ export const settingsEn = {
     folder: "Folder",
     defaultAgent: "Default agent",
     showFolder: "Show folder",
-    connected: (agent: string) => `${agent} is connected`,
     connectFailed: (agent: string) => `Could not connect ${agent}`,
     agentReady: "Connected. Its own chat can use Cutfac's tools too.",
     agentFound: "Found on this computer. Connect it to use Cutfac from its own chat too.",

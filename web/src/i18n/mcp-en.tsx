@@ -33,15 +33,11 @@ export const mcpEn = {
     /** The title of a server the user hasn't decided on yet. */
     ask: (name: string) => `Use the ${name} server for video work?`,
     access: "With it on, your agent can use all of its tools during video work.",
-    turnedOn: (name: string) => `Video work now uses the ${name} server`,
-    turnedOff: (name: string) => `Video work won't use the ${name} server`,
     failed: (name: string) => `Could not change the ${name} server`,
   },
   plugin: {
     ask: (title: string) => `Use the ${title} plugin for video work?`,
     access: (title: string) => `With it on, your agent can reach ${title} during video work.`,
-    turnedOn: (title: string) => `Video work now uses the ${title} plugin`,
-    turnedOff: (title: string) => `Video work won't use the ${title} plugin`,
     failed: (title: string) => `Could not change the ${title} plugin`,
   },
 };

@@ -1,9 +1,9 @@
 import { CheckIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { ListSkeleton, Section } from "@/components/page";
 import { PlatformIcon } from "@/components/platform-icon";
+import { FieldError } from "@/components/ui/field";
 import {
   Item,
   ItemActions,
@@ -79,6 +79,7 @@ function useAutosave(brief: Live<BriefView>) {
   const saved = brief.data ?? EMPTY_BRIEF;
   const [draft, setDraft] = useState<BriefDraft>(saved);
   const [state, setState] = useState<SaveState>("idle");
+  const [failure, setFailure] = useState<string>();
   const written = useRef<BriefDraft>(saved);
   const queue = useRef(Promise.resolve());
   const typing = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -112,6 +113,7 @@ function useAutosave(brief: Live<BriefView>) {
     queue.current = queue.current.then(async () => {
       if (sameBrief(next, written.current)) return;
       setState("saving");
+      setFailure(undefined);
 
       try {
         const view = await briefApi.updateBrief(briefPatch(next));
@@ -120,7 +122,7 @@ function useAutosave(brief: Live<BriefView>) {
         setState("saved");
       } catch (cause) {
         setState("idle");
-        toast.error(t.start.brief.saveFailed(errorText(cause)));
+        setFailure(t.start.brief.saveFailed(errorText(cause)));
       }
     });
   }
@@ -137,7 +139,7 @@ function useAutosave(brief: Live<BriefView>) {
     typing.current = setTimeout(() => save(next), TYPING_REST_MS);
   }
 
-  return { draft, state, pick, type, flush: () => save(draft) };
+  return { draft, state, failure, pick, type, flush: () => save(draft) };
 }
 
 function BriefRows({ brief }: { brief: Live<BriefView> }) {
@@ -146,7 +148,7 @@ function BriefRows({ brief }: { brief: Live<BriefView> }) {
   const sheet = t.learn.sheet;
   const purposeId = useId();
   const bodyId = useId();
-  const { draft, state, pick, type, flush } = useAutosave(brief);
+  const { draft, state, failure, pick, type, flush } = useAutosave(brief);
   const own = draft.purpose === "own";
   const vertical = draft.platforms.some((platform) => VERTICAL.has(platform));
   const purposes = PURPOSES.map((value) => ({ value, label: words.purpose[value].title }));
@@ -229,6 +231,7 @@ function BriefRows({ brief }: { brief: Live<BriefView> }) {
           </ItemContent>
         </Item>
       </ItemGroup>
+      <FieldError className="mb-3 select-text">{failure}</FieldError>
     </Section>
   );
 }

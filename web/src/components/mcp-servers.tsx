@@ -7,13 +7,13 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { ErrorAlert, Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { FieldError } from "@/components/ui/field";
 import {
   Item,
   ItemActions,
@@ -169,7 +169,6 @@ function PluginRow({ plugin, state, kept }: RowProps & { plugin: McpPluginView }
       state={state}
       decision={{
         send: (on) => mcpApi.decidePlugin({ agent, id, fingerprint, on }),
-        done: (on) => (on ? t.mcp.plugin.turnedOn(title) : t.mcp.plugin.turnedOff(title)),
         failed: t.mcp.plugin.failed(title),
         kept,
       }}
@@ -199,7 +198,6 @@ function ServerRow({ server, state, kept }: RowProps & { server: McpServerView }
       state={state}
       decision={{
         send: (on) => mcpApi.decide({ agent, name, fingerprint, on }),
-        done: (on) => (on ? t.mcp.server.turnedOn(name) : t.mcp.server.turnedOff(name)),
         failed: t.mcp.server.failed(name),
         kept,
       }}
@@ -227,7 +225,7 @@ interface McpRowProps {
   /** What turning it on gives the agent, said while it waits. */
   access: string;
   state: McpState;
-  decision: Omit<DecisionProps, "name" | "state">;
+  decision: Omit<DecisionProps, "name" | "state" | "onFailure">;
   /** How it starts. */
   children: ReactNode;
 }
@@ -236,6 +234,7 @@ interface McpRowProps {
 function McpRow({ media, name, ask, about, access, state, decision, children }: McpRowProps) {
   const t = useMessages();
   const [open, setOpen] = useState(false);
+  const [failure, setFailure] = useState<string>();
   const pending = waits(state);
 
   return (
@@ -251,6 +250,7 @@ function McpRow({ media, name, ask, about, access, state, decision, children }: 
             {t.mcp.changedNote}
           </p>
         ) : null}
+        <FieldError className="select-text">{failure}</FieldError>
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger render={<Button variant="ghost" size="xs" className="-ml-2" />}>
             {t.mcp.starts}
@@ -261,7 +261,7 @@ function McpRow({ media, name, ask, about, access, state, decision, children }: 
           </CollapsibleContent>
         </Collapsible>
       </ItemContent>
-      <Decision name={name} state={state} {...decision} />
+      <Decision name={name} state={state} onFailure={setFailure} {...decision} />
     </Item>
   );
 }
@@ -304,17 +304,16 @@ interface DecisionProps {
   name: string;
   state: McpState;
   send: (on: boolean) => Promise<{ state: McpState }>;
-  /** What the toast says once the choice is kept. */
-  done: (on: boolean) => string;
   failed: string;
   kept: (state: McpState | undefined) => void;
+  onFailure: (message: string | undefined) => void;
 }
 
 /**
  * The question's two answers while it waits for the user, and a switch once they've answered,
  * which keeps the keyboard focus where the answer was.
  */
-function Decision({ name, state, send, done, failed, kept }: DecisionProps) {
+function Decision({ name, state, send, failed, kept, onFailure }: DecisionProps) {
   const t = useMessages();
   const [busy, setBusy] = useState<boolean>();
   const actions = useRef<HTMLDivElement>(null);
@@ -332,13 +331,11 @@ function Decision({ name, state, send, done, failed, kept }: DecisionProps) {
   const decide = (on: boolean) => {
     refocus.current = actions.current?.contains(document.activeElement) === true;
     setBusy(on);
+    onFailure(undefined);
     send(on)
-      .then((view) => {
-        toast.success(done(on));
-        kept(view.state);
-      })
+      .then((view) => kept(view.state))
       .catch((cause) => {
-        toast.error(failed, { description: errorText(cause) });
+        onFailure(`${failed}: ${errorText(cause)}`);
         kept(undefined);
       })
       .finally(() => setBusy(undefined));

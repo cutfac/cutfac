@@ -1,9 +1,9 @@
-import { useEffect } from "react";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
 
 import { Section } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field";
 import {
   Item,
   ItemActions,
@@ -33,6 +33,8 @@ export async function saveReportChoices(choices: ReportChoices): Promise<void> {
 function useErrorReports() {
   const t = useMessages();
   const { data, setData } = useLive("error-reports", api.errorReports);
+  const [failure, setFailure] = useState<string>();
+  const failed = (cause: unknown) => setFailure(`${t.reports.failed}: ${errorText(cause)}`);
 
   useEffect(() => {
     views.add(setData);
@@ -42,20 +44,22 @@ function useErrorReports() {
     };
   }, [setData]);
 
-  const save = (choices: ReportChoices) =>
-    saveReportChoices(choices).catch((cause) =>
-      toast.error(`${t.reports.failed}: ${errorText(cause)}`),
-    );
+  const save = (choices: ReportChoices) => {
+    setFailure(undefined);
+    saveReportChoices(choices).catch(failed);
+  };
 
-  const resetId = () =>
+  const resetId = () => {
+    setFailure(undefined);
     api
       .resetInstallId()
       .then((saved) => {
         for (const show of views) show(saved);
       })
-      .catch((cause) => toast.error(`${t.reports.failed}: ${errorText(cause)}`));
+      .catch(failed);
+  };
 
-  return { data, save, resetId };
+  return { data, failure, save, resetId };
 }
 
 /**
@@ -64,7 +68,7 @@ function useErrorReports() {
  */
 export function ErrorReportsCard() {
   const t = useMessages();
-  const { data, save, resetId } = useErrorReports();
+  const { data, failure, save, resetId } = useErrorReports();
 
   if (data?.available !== true) return null;
 
@@ -116,6 +120,7 @@ export function ErrorReportsCard() {
           </Item>
         )}
       </ItemGroup>
+      <FieldError className="mb-3 select-text">{failure}</FieldError>
     </Section>
   );
 }

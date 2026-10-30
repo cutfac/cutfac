@@ -32,7 +32,6 @@ export const libraryEn = {
     choose: "Choose…",
     dropHere: "Drop to add it",
     reading: (source: string) => `Adding ${source}…`,
-    learned: (title: string) => `Added "${title}"`,
     error: "Could not add that",
     warnings: "Added, with notes",
     emptyBody:
@@ -65,7 +64,6 @@ export const libraryEn = {
     forget: "Forget",
     forgetTitle: (title: string) => `Forget "${title}"?`,
     forgetBody: "Its saved files and what your agent wrote about it are removed.",
-    forgotten: (title: string) => `Forgot "${title}"`,
     forgetError: "Could not forget it",
     notesTitle: "Other notes",
     notesBody: "What you or your agent wrote in about.md that isn't about one source.",

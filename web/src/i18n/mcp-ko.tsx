@@ -30,15 +30,11 @@ export const mcpKo: McpMessages = {
   server: {
     ask: (name) => `${name} 서버를 영상 작업에 쓸까요?`,
     access: "쓰면 영상 작업 중에 에이전트가 이 서버의 도구를 모두 쓸 수 있어요.",
-    turnedOn: (name) => `이제 영상 작업에 ${name} 서버를 써요`,
-    turnedOff: (name) => `영상 작업에 ${name} 서버를 쓰지 않아요`,
     failed: (name) => `${name} 서버를 바꾸지 못했어요`,
   },
   plugin: {
     ask: (title) => `${title} 플러그인을 영상 작업에 쓸까요?`,
     access: (title) => `쓰면 영상 작업 중에 에이전트가 ${title}에 접근할 수 있어요.`,
-    turnedOn: (title) => `이제 영상 작업에 ${title} 플러그인을 써요`,
-    turnedOff: (title) => `영상 작업에 ${title} 플러그인을 쓰지 않아요`,
     failed: (title) => `${title} 플러그인을 바꾸지 못했어요`,
   },
 };

@@ -1,6 +1,5 @@
 import { FolderOpenIcon, LinkIcon, TriangleAlertIcon, UploadIcon } from "lucide-react";
 import { useRef, useState, type DragEvent, type ReactNode, type SubmitEvent } from "react";
-import { toast } from "sonner";
 
 import { ErrorAlert } from "@/components/page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -45,7 +44,6 @@ export function MaterialCard({
       .then((result) => {
         done?.();
         setWarnings(result.warnings);
-        toast.success(t.learn.learned(result.learned.doc.title));
         onLearned();
       })
       .catch((cause) => setError(errorText(cause)))

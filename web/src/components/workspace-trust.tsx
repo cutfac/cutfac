@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldError } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 
 import { api, type AgentChoice, type TrustItem } from "../api.ts";
@@ -36,6 +37,7 @@ export function TrustCard() {
   const t = useMessages();
   const { state: load, data: trust, reload } = useLive("trust", api.trust);
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string>();
 
   if (LiveState.$is("Failed")(load))
     return <ErrorAlert title={t.trust.error} message={load.error} />;
@@ -44,10 +46,11 @@ export function TrustCard() {
 
   const trustNow = () => {
     setBusy(true);
+    setFailure(undefined);
     api
       .trustWorkspace(trust.fingerprint)
       .then(() => toast.success(t.trust.trusted))
-      .catch((cause) => toast.error(t.trust.failed, { description: errorText(cause) }))
+      .catch((cause) => setFailure(`${t.trust.failed}: ${errorText(cause)}`))
       .finally(() => {
         setBusy(false);
         reload();
@@ -76,14 +79,17 @@ export function TrustCard() {
         </SelectionArea>
       </CardContent>
       <CardFooter>
-        <Button disabled={busy} onClick={trustNow}>
-          {busy ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <ShieldCheckIcon data-icon="inline-start" />
-          )}
-          {busy ? t.trust.trusting : t.trust.trust}
-        </Button>
+        <div className="flex flex-col items-start gap-2">
+          <Button disabled={busy} onClick={trustNow}>
+            {busy ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <ShieldCheckIcon data-icon="inline-start" />
+            )}
+            {busy ? t.trust.trusting : t.trust.trust}
+          </Button>
+          <FieldError className="select-text">{failure}</FieldError>
+        </div>
       </CardFooter>
     </Card>
   );

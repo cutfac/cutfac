@@ -2,9 +2,8 @@ import { FileTextIcon } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { toast } from "sonner";
 
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -40,6 +39,7 @@ function TextField({
   onSave,
 }: TextFieldProps) {
   const [draft, setDraft] = useState<string | undefined>(undefined);
+  const [emptied, setEmptied] = useState(false);
   const discard = useRef(false);
 
   function commit() {
@@ -54,7 +54,7 @@ function TextField({
     }
 
     if (next === "" && required !== undefined) {
-      toast.error(required);
+      setEmptied(true);
       setDraft(undefined);
 
       return;
@@ -78,14 +78,17 @@ function TextField({
   }
 
   return (
-    <Field>
+    <Field data-invalid={emptied}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       {multiline ? (
         <Textarea
           id={id}
           value={draft ?? value}
           placeholder={placeholder}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setEmptied(false);
+          }}
           onBlur={commit}
           onKeyDown={onKeyDown}
         />
@@ -94,11 +97,15 @@ function TextField({
           id={id}
           value={draft ?? value}
           placeholder={placeholder}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setEmptied(false);
+          }}
           onBlur={commit}
           onKeyDown={onKeyDown}
         />
       )}
+      {emptied ? <FieldError>{required}</FieldError> : null}
     </Field>
   );
 }

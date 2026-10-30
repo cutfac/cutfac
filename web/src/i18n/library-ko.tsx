@@ -28,7 +28,6 @@ export const libraryKo: LibraryMessages = {
     choose: "고르기…",
     dropHere: "놓으면 추가돼요",
     reading: (source) => `${source} 추가하는 중…`,
-    learned: (title) => `${withParticle(`"${title}"`, "을/를")} 추가했어요`,
     error: "추가하지 못했어요",
     warnings: "추가했지만 확인할 점이 있어요",
     emptyBody:
@@ -61,7 +60,6 @@ export const libraryKo: LibraryMessages = {
     forget: "지우기",
     forgetTitle: (title) => `${withParticle(`"${title}"`, "을/를")} 지울까요?`,
     forgetBody: "저장한 파일과 에이전트가 정리한 내용이 함께 지워져요.",
-    forgotten: (title) => `${withParticle(`"${title}"`, "을/를")} 지웠어요`,
     forgetError: "지우지 못했어요",
     notesTitle: "기타 메모",
     notesBody: "about.md에서 특정 자료에 관한 게 아닌, 직접 또는 에이전트가 적은 내용이에요.",

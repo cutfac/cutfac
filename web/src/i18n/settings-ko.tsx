@@ -21,7 +21,6 @@ export const settingsKo: SettingsMessages = {
     folder: "폴더",
     defaultAgent: "기본 에이전트",
     showFolder: "폴더 보기",
-    connected: (agent) => `${withParticle(agent, "을/를")} 연결했어요`,
     connectFailed: (agent) => `${withParticle(agent, "을/를")} 연결하지 못했어요`,
     agentReady: "연결됐어요. 에이전트 자체 채팅에서도 컷팩의 도구를 쓸 수 있어요.",
     agentFound:
