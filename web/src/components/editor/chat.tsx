@@ -21,6 +21,7 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "@/components/ui/message-scroller";
+import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
   api,
@@ -39,6 +40,7 @@ import { asksUser, inOrder, linePaused, savedVersions, waitingLine } from "../..
 import { liveFor, runView, type LiveRun, type OnRun } from "../../lib/run.ts";
 import { targetOf } from "../../lib/target.ts";
 import { Composer, type ComposerProps, editInput, sendRequest } from "./composer.tsx";
+import { SectionGrip } from "./dock-grip.tsx";
 import { Request, type RequestActions } from "./request.tsx";
 
 interface ChatProps {
@@ -260,7 +262,7 @@ function FollowNewRequests({ count }: { count: number }) {
   return null;
 }
 
-function Welcome({ hasMedia }: { hasMedia: boolean }) {
+export function Welcome({ hasMedia }: { hasMedia: boolean }) {
   const t = useMessages();
 
   return (
@@ -273,6 +275,26 @@ function Welcome({ hasMedia }: { hasMedia: boolean }) {
         <EmptyDescription>{hasMedia ? t.chat.editBody : t.chat.newBody}</EmptyDescription>
       </EmptyHeader>
     </Empty>
+  );
+}
+
+/**
+ * The chat panel's tabs, with the grip that moves the panel. Details opens once there is a video
+ * to show them for.
+ */
+export function ChatTabs({ details, grip }: { details: boolean; grip: boolean }) {
+  const t = useMessages();
+
+  return (
+    <div className="flex items-center gap-1 p-2">
+      <TabsList className="min-w-0 flex-1">
+        <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
+        <TabsTrigger value="details" disabled={!details}>
+          {t.item.details}
+        </TabsTrigger>
+      </TabsList>
+      {grip ? <SectionGrip section="chat" /> : null}
+    </div>
   );
 }
 

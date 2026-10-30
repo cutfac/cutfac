@@ -18,7 +18,8 @@ import { useMessages } from "../../i18n/index.ts";
 import { typingFeedbackCommand } from "../../lib/feedback.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
-import { type SentTo, VersionsPicker } from "./composer.tsx";
+import { VersionsPicker } from "./composer-box.tsx";
+import type { SentTo } from "./composer.tsx";
 
 /** Asking about the box just drawn on the frame, from a small request box beside it. */
 export interface BoxAsk {

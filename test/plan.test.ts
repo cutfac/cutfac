@@ -38,7 +38,6 @@ import {
   FreeLimitReached,
   PRICING_URL,
   createCountedItem,
-  createEmptyItem,
   freeVersionNote,
   planOf,
   planStatus,
@@ -357,22 +356,6 @@ describe("videos the desktop app didn't make", () => {
       expect(yield* Effect.flip(workOn("another"))).toBeInstanceOf(FreeLimitReached);
 
       yield* workOn("two");
-    }),
-  );
-
-  onThisMac.live("an empty one counts once work on it starts, and not before", () =>
-    Effect.gen(function* () {
-      yield* Effect.forEach(["One", "Two"], make);
-      yield* createEmptyItem({ title: "First" });
-
-      expect(yield* planStatus()).toEqual(free(2));
-
-      yield* workOn("first");
-
-      expect(yield* planStatus()).toEqual(free(3));
-      expect(yield* Effect.flip(createEmptyItem({ title: "Fourth" }))).toBeInstanceOf(
-        FreeLimitReached,
-      );
     }),
   );
 

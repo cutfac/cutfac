@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 import type { Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { openEmptyVideo } from "../../lib/firstVideo.ts";
+import { openNewVideo } from "../../lib/firstVideo.ts";
 import { type Player, usePlayer } from "../../lib/player.ts";
 import {
   endGuide,
@@ -71,8 +71,7 @@ const STEPS_SHOWN = GUIDE_STEPS.filter((step) => step !== "done");
 
 /** The card for the step the sample's guide is on, above the video. */
 export function SampleGuideCard({ guide }: { guide: SampleGuide }) {
-  const messages = useMessages();
-  const t = messages.guide;
+  const t = useMessages().guide;
 
   if (Option.isNone(guide.step)) return null;
   const step = guide.step.value;
@@ -94,7 +93,7 @@ export function SampleGuideCard({ guide }: { guide: SampleGuide }) {
             className="mt-1 self-start"
             onClick={() => {
               endGuide();
-              void openEmptyVideo(messages.newItem.untitled);
+              openNewVideo();
             }}
           >
             {t.done.make}

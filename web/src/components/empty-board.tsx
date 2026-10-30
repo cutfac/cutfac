@@ -47,7 +47,7 @@ export function EmptyBoard() {
         )}
       </EmptyHeader>
       <EmptyContent>
-        <Button size="lg" onClick={() => void openNewVideo()}>
+        <Button size="lg" onClick={() => openNewVideo()}>
           <PlusIcon data-icon="inline-start" />
           {t.newItem.open}
         </Button>

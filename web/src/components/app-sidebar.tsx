@@ -246,7 +246,8 @@ export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarPro
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip={withKeys(t.nav.newVideo, APP_KEYS.newVideo)}
-              onClick={() => void openNewVideo()}
+              isActive={view === "new"}
+              onClick={() => openNewVideo()}
             >
               <PlusIcon />
               <span>{t.nav.newVideo}</span>

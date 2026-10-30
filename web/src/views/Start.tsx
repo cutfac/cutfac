@@ -47,14 +47,13 @@ type Begun =
  */
 function Begin({ ws, initial }: { ws: WorkspaceInfo; initial: BriefDraft }) {
   const onboarding = desktop?.onboarding;
-  const untitled = useMessages().newItem.untitled;
   const asked: Begun = { kind: "ask", answers: { brief: initial, sources: [] } };
 
   const [begun, setBegun] = useState<Begun>(
     onboarding === undefined ? asked : { kind: "starting" },
   );
 
-  const skipSample = useCallback(() => void openFirstVideo(untitled), [untitled]);
+  const skipSample = useCallback(() => void openFirstVideo(), []);
   const offerSample = () => setBegun({ kind: "sample" });
 
   // Development mounts twice; the run starts once.

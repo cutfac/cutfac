@@ -1,23 +1,9 @@
 import { Option } from "effect";
-import { ArrowUpIcon, LayersIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { toast } from "sonner";
 
-import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
-import { FirstIdeaChips, type PickedIdea } from "@/components/first-ideas";
-import { OutdatedAgentNote } from "@/components/outdated-agent";
-import { Button } from "@/components/ui/button";
-import { Dropzone } from "@/components/ui/dropzone";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@/components/ui/input-group";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrustNote } from "@/components/workspace-trust";
-import { blurOnEscape, sendOnEnter } from "@/lib/utils";
+import { sendSlashFeedback } from "@/components/feedback-dialog";
+import type { PickedIdea } from "@/components/first-ideas";
 
 import {
   api,
@@ -25,6 +11,7 @@ import {
   type AgentName,
   type AgentStatus,
   type EditInput,
+  type EditReceipt,
   type ItemDetail,
   type Media,
   type ModelSettings,
@@ -32,26 +19,14 @@ import {
 import { agentInstalled } from "../../hooks.ts";
 import { currentLocale, useMessages } from "../../i18n/index.ts";
 import { copyPrompt } from "../../lib/clipboard.ts";
-import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
-import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
-import { draftFor, draftTitle, forgetDraft } from "../../lib/newVideo.ts";
+import { feedbackCommand } from "../../lib/feedback.ts";
+import { pickedSettings, type ModelPicks } from "../../lib/models.ts";
+import { draftTitle } from "../../lib/newVideo.ts";
 import { sendFailed } from "../../lib/notify.ts";
-import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
-import { describeTarget, hasRange, isEmptyTarget, type Target } from "../../lib/target.ts";
+import { isEmptyTarget, type Target } from "../../lib/target.ts";
 import { AttachmentChips, attachedReferences, type Attachments } from "./attachments.tsx";
-import { ModelPicker } from "./model-picker.tsx";
-
-/** What the request points at, which picks the starting points and the placeholder. */
-function scopeOf(target: Target, media: Media | undefined) {
-  if (media === undefined) return "new";
-
-  if (target.region !== undefined) return "box";
-
-  if (hasRange(target)) return "range";
-
-  return "whole";
-}
+import { ComposerBox, scopeOf } from "./composer-box.tsx";
 
 /** The agent to send to: the workspace default if it is installed, else one that is. */
 export function preferredAgent(
@@ -65,58 +40,6 @@ export function preferredAgent(
   if (preferred !== undefined && usable(preferred)) return preferred;
 
   return statuses.find((status) => status.installed)?.agent ?? "queue";
-}
-
-/** How many versions the agent should make of one request. */
-export function VersionsPicker({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (versions: number) => void;
-}) {
-  const t = useMessages();
-  // The hint would sit over the list while it's open.
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [hint, setHint] = useState(false);
-
-  const counts = Array.from({ length: MAX_VARIANTS }, (_, index) => ({
-    value: index + 1,
-    label: t.composer.versions.count(index + 1),
-  }));
-
-  return (
-    <Select
-      value={value}
-      onOpenChange={setMenuOpen}
-      onValueChange={(next) => {
-        if (next !== null) onChange(next);
-      }}
-    >
-      <Tooltip open={hint && !menuOpen} onOpenChange={setHint}>
-        <TooltipTrigger
-          render={
-            <SelectTrigger
-              variant="ghost"
-              size="sm"
-              aria-label={`${t.composer.versions.label}: ${value}`}
-            >
-              <LayersIcon />
-              <span className="tabular-nums">{t.composer.versions.count(value)}</span>
-            </SelectTrigger>
-          }
-        />
-        <TooltipContent>{t.composer.versions.label}</TooltipContent>
-      </Tooltip>
-      <SelectContent alignItemWithTrigger={false}>
-        {counts.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
 }
 
 /** The request as the server takes it, with only the parts of the target that are set. */
@@ -174,13 +97,9 @@ export async function sendRequest(
   onRun((run) => sendingRun(run, item, input));
 
   try {
-    const receipt = await api.requestEdit(item.id, { ...input, locale: currentLocale() });
+    const receipt = await postRequest(item, input);
     onItem(receipt.item);
     onRun((run) => sentRun(run, receipt, input));
-
-    for (const warning of receipt.warnings) toast.warning(warning);
-
-    if (receipt.sent === "queue") copyPrompt(receipt.prompt);
 
     return "item";
   } catch (cause) {
@@ -190,10 +109,24 @@ export async function sendRequest(
 }
 
 /**
- * A video made empty, as the first launch opens on, takes its title from its first request, as
- * New video titles one from what the user wrote.
+ * Put the request on the item for the agent, saying what it warned of; when it went to no agent,
+ * its prompt is copied to paste into one.
  */
-function nameNewVideo(item: ItemDetail, request: string, onItem: (item: ItemDetail) => void) {
+export async function postRequest(item: ItemDetail, input: EditInput): Promise<EditReceipt> {
+  const receipt = await api.requestEdit(item.id, { ...input, locale: currentLocale() });
+
+  for (const warning of receipt.warnings) toast.warning(warning);
+
+  if (receipt.sent === "queue") copyPrompt(receipt.prompt);
+
+  return receipt;
+}
+
+/**
+ * A video still untitled, such as one whose first request was only a link, takes its title from
+ * the next request it gets.
+ */
+function nameUntitled(item: ItemDetail, request: string, onItem: (item: ItemDetail) => void) {
   Option.match(draftTitle(request), {
     onNone: () => undefined,
     onSome: (title) => void api.updateItem(item.id, { title }).then(onItem, sendFailed),
@@ -249,25 +182,17 @@ export function Composer({
   onStop,
   onSent,
 }: ComposerProps) {
-  const [body, setBody] = useState(() => draftFor(item.id));
+  const [body, setBody] = useState("");
   const [picked, setPicked] = useState<PickedIdea>();
-  const openFiles = useRef<() => void>(null);
   const [sending, setSending] = useState(false);
   const [versions, setVersions] = useState(1);
-
-  useEffect(() => () => forgetDraft(item.id), [item.id]);
-
-  const empty = isEmptyTarget(target);
-  const text = body.trim();
   const t = useMessages();
+  const text = body.trim();
   const scope = scopeOf(target, media);
-  // Starting points help a first request, and one for a marked part; once the chat has requests,
-  // they only crowd it.
-  const ideas = answering || (empty && item.doc.feedback.length > 0) ? [] : t.composer.ideas[scope];
   // A file still uploading would be left out of the request.
   const ready = text !== "" && !sending && files.uploading === 0;
-
   const attaching = files.uploading > 0 || attachedReferences(item, files.paths).length > 0;
+  const settings = pickedSettings(statuses, picks, agent);
 
   async function send() {
     if (!ready) return;
@@ -287,7 +212,7 @@ export function Composer({
       if (sentTo === "kept") return;
 
       if (sentTo === "item" && item.doc.title === t.newItem.untitled) {
-        nameNewVideo(item, picked?.prompt === text ? picked.title : text, onItem);
+        nameUntitled(item, picked?.prompt === text ? picked.title : text, onItem);
       }
 
       setBody("");
@@ -307,124 +232,34 @@ export function Composer({
     }
   }
 
-  const onKeyDown = sendOnEnter({ onEnter: () => void send(), onEscape: blurOnEscape });
-
-  const settings = pickedSettings(statuses, picks, agent);
-  const status = statusOf(statuses, agent);
-
   return (
-    <Dropzone paste label={t.attachments.drop.composer} openRef={openFiles} onFiles={files.add}>
-      <div className="flex flex-col gap-2 p-3">
-        {ideas.length > 0 && scope === "new" ? (
-          <FirstIdeaChips
-            fallback={ideas}
-            onPick={(idea) => {
-              setBody(idea.prompt);
-              setPicked(idea);
-              inputRef.current?.focus();
-            }}
-          />
-        ) : ideas.length === 0 ? null : (
-          <div className="flex flex-wrap gap-1.5">
-            {ideas.map((idea) => (
-              <Button
-                key={idea}
-                variant="soft"
-                pill
-                size="xs"
-                onClick={() => {
-                  setBody(idea);
-                  inputRef.current?.focus();
-                }}
-              >
-                {idea}
-              </Button>
-            ))}
-          </div>
-        )}
-        {empty ? null : (
-          <span className="flex w-fit items-center gap-1 rounded-full bg-selection py-0.5 pr-0.5 pl-2.5 text-xs font-medium text-selection-foreground tabular-nums">
-            {describeTarget(target, t.target.boxAt)}
-            <Button
-              variant="ghost"
-              pill
-              size="icon-xs"
-              aria-label={t.composer.clear}
-              onClick={onClearTarget}
-            >
-              <XIcon />
-            </Button>
-          </span>
-        )}
-        {/* The text on top and the + and send in a row under it, as in Aside and the Codex app. */}
-        <InputGroup variant="floating">
-          {/* Files sent with the request sit in the box, as in Claude and ChatGPT. */}
-          {attaching ? (
-            <InputGroupAddon align="block-start">
-              <AttachmentChips item={item} files={files} />
-            </InputGroupAddon>
-          ) : null}
-          <InputGroupTextarea
-            ref={inputRef}
-            value={body}
-            rows={1}
-            placeholder={answering ? t.composer.placeholder.answer : t.composer.placeholder[scope]}
-            aria-label={t.composer.request}
-            onChange={(event) => setBody(event.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          <InputGroupAddon align="block-end" className="justify-between">
-            <InputGroupButton
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t.attachments.attach}
-              title={t.attachments.attach}
-              onClick={() => openFiles.current?.()}
-            >
-              <PlusIcon />
-            </InputGroupButton>
-            {running && text === "" ? (
-              <InputGroupButton
-                variant="secondary"
-                size="icon-sm"
-                aria-label={t.composer.stop}
-                onClick={onStop}
-              >
-                <SquareIcon />
-              </InputGroupButton>
-            ) : (
-              <InputGroupButton
-                variant="default"
-                size="icon-sm"
-                aria-label={t.composer.send}
-                disabled={!ready}
-                onClick={() => void send()}
-              >
-                <ArrowUpIcon />
-              </InputGroupButton>
-            )}
-          </InputGroupAddon>
-        </InputGroup>
-        {/* The settings for the request sit under it, quiet until pointed at. In a narrow chat the
-            model's name gives way first. */}
-        <div className="-mt-1 flex min-w-0 items-center gap-1">
-          <VersionsPicker value={versions} onChange={setVersions} />
-          <div className="ml-auto flex min-w-0 items-center gap-1">
-            <ModelPicker
-              statuses={statuses}
-              agent={agent}
-              picks={picks}
-              onAgent={onAgent}
-              onPick={onPick}
-            />
-          </div>
-        </div>
-        {typingFeedbackCommand(body) ? <SlashFeedbackHint /> : null}
-        <TrustNote agent={agent} className="px-1 text-xs text-muted-foreground" />
-        {Option.isNone(status) ? null : (
-          <OutdatedAgentNote status={status.value} className="px-1 text-xs text-muted-foreground" />
-        )}
-      </div>
-    </Dropzone>
+    <ComposerBox
+      scope={scope}
+      // Starting points help a first request, and one for a marked part; once the chat has
+      // requests, they only crowd it.
+      ideas={!answering && !(isEmptyTarget(target) && item.doc.feedback.length > 0)}
+      target={target}
+      onClearTarget={onClearTarget}
+      body={body}
+      onBody={setBody}
+      onIdea={(idea) => {
+        setBody(idea.prompt);
+        setPicked(idea);
+      }}
+      placeholder={answering ? t.composer.placeholder.answer : t.composer.placeholder[scope]}
+      chips={attaching ? <AttachmentChips item={item} files={files} /> : null}
+      onFiles={files.add}
+      ready={ready}
+      onSend={() => void send()}
+      onStop={running ? Option.some(onStop) : Option.none()}
+      versions={versions}
+      onVersions={setVersions}
+      statuses={statuses}
+      agent={agent}
+      onAgent={onAgent}
+      picks={picks}
+      onPick={onPick}
+      inputRef={inputRef}
+    />
   );
 }

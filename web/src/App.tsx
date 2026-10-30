@@ -26,6 +26,7 @@ import { DevTools } from "./views/DevTools.tsx";
 import { DragHelper } from "./views/DragHelper.tsx";
 import { ItemView } from "./views/ItemView.tsx";
 import { Learn } from "./views/Learn.tsx";
+import { NewVideo } from "./views/NewVideo.tsx";
 import { Setup } from "./views/Setup.tsx";
 import { Start } from "./views/Start.tsx";
 import { Templates } from "./views/Templates.tsx";
@@ -121,6 +122,8 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
           {editing !== undefined ? (
             // Keyed by item so the selection, playback and chat start fresh for each one.
             <ItemView key={editing} id={editing} defaultAgent={ws?.config.agent.default} />
+          ) : view === "new" ? (
+            <NewVideo defaultAgent={ws?.config.agent.default} />
           ) : (
             // Keyed by view so each view opens scrolled to the top.
             <div key={view} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">

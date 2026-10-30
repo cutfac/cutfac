@@ -8,7 +8,7 @@ import { openNewVideo } from "../lib/firstVideo.ts";
  * chat, for the user to look over and send. Mount it once.
  */
 export function NewVideoLinks() {
-  useEffect(() => desktop?.onNewVideoLink((link) => void openNewVideo(link.prompt)), []);
+  useEffect(() => desktop?.onNewVideoLink((link) => openNewVideo(link.prompt)), []);
 
   return null;
 }

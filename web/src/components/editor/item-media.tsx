@@ -85,6 +85,20 @@ export function NoMedia({
   onUploaded: (name: string) => void;
 }) {
   const { uploading, fromFiles } = useUpload(item, onItem, onUploaded);
+
+  return <EmptyStage maker={maker} uploading={uploading} onFiles={fromFiles} />;
+}
+
+/** The empty stage, which takes the first video or picture dropped or picked. */
+export function EmptyStage({
+  maker,
+  uploading,
+  onFiles,
+}: {
+  maker: Option.Option<string>;
+  uploading: boolean;
+  onFiles: (files: ReadonlyArray<DroppedFile>) => void;
+}) {
   const openFiles = useRef<() => void>(null);
   const t = useMessages();
   const making = Option.isSome(maker);
@@ -95,7 +109,7 @@ export function NoMedia({
       accept={MEDIA_ACCEPT}
       multiple={false}
       openRef={openFiles}
-      onFiles={fromFiles}
+      onFiles={onFiles}
       className="flex flex-1"
     >
       <div className="flex flex-1 rounded-3xl border border-dashed">

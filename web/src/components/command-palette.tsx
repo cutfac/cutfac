@@ -61,7 +61,7 @@ function PaletteCommands({ editing, onChoose }: PaletteCommandsProps) {
       <CommandList>
         <CommandEmpty>{t.palette.empty}</CommandEmpty>
         <CommandGroup heading={t.palette.actions}>
-          <CommandItem onSelect={choose(() => void openNewVideo())}>
+          <CommandItem onSelect={choose(() => openNewVideo())}>
             <PlusIcon />
             {t.nav.newVideo}
             <Keys command="newVideo" />
@@ -134,7 +134,7 @@ export function CommandPalette({ editing }: { editing: string | undefined }) {
 
   const run = useEffectEvent((command: AppCommand) => {
     if (command === "palette") setOpen((was) => !was);
-    else if (command === "newVideo") void openNewVideo();
+    else if (command === "newVideo") openNewVideo();
     else if (command === "toggleSidebar") toggleSidebar();
     else go(command);
   });

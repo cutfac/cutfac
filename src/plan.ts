@@ -282,19 +282,7 @@ export const createCountedItem = Effect.fn("plan.createItem")(function* (input: 
   return yield* createWithin(input, "now");
 });
 
-/**
- * Make an item with nothing asked of it yet, such as the empty editor the first launch opens on.
- * It counts once work on it starts, as {@link workOn} counts one Cutfac didn't make, so an editor
- * left empty costs no free video; past the limit it is refused as a counted one would be.
- */
-export const createEmptyItem = Effect.fn("plan.createEmptyItem")(function* (input: NewItemInput) {
-  return yield* createWithin(input, "onWork");
-});
-
-const createWithin = Effect.fnUntraced(function* (
-  input: NewItemInput,
-  counted: "now" | "onWork" | "sample",
-) {
+const createWithin = Effect.fnUntraced(function* (input: NewItemInput, counted: "now" | "sample") {
   const ws = yield* Workspace;
   const dir = yield* DesktopData;
 
@@ -321,7 +309,7 @@ const createWithin = Effect.fnUntraced(function* (
 
       const item = yield* createItem(input);
 
-      if (counted !== "onWork") yield* record(data, "made", videoKey(item));
+      yield* record(data, "made", videoKey(item));
 
       return item;
     }),

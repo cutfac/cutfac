@@ -29,12 +29,24 @@ export function draftTitle(text: string): Option.Option<string> {
   });
 }
 
-const drafts = new Map<string, string>();
+const draftListeners = new Set<(text: string) => void>();
 
-/** Leave `text` in the composer of the video `id`, for when its editor opens. */
-export const holdDraft = (id: string, text: string) => void drafts.set(id, text);
+let draft = "";
 
-/** What waits in the composer of the video `id`, if anything. */
-export const draftFor = (id: string): string => drafts.get(id) ?? "";
+/** Leave `text` in the new video's composer, as a `cutfac://new` link does, for the user to send. */
+export function holdDraft(text: string) {
+  draft = text;
 
-export const forgetDraft = (id: string) => void drafts.delete(id);
+  for (const listener of draftListeners) listener(text);
+}
+
+/** What waits in the new video's composer, if anything. */
+export const heldDraft = () => draft;
+
+/** Take what waits, and what comes later while `listener` is subscribed. Returns an unsubscribe. */
+export function takeDrafts(listener: (text: string) => void): () => void {
+  draft = "";
+  draftListeners.add(listener);
+
+  return () => void draftListeners.delete(listener);
+}

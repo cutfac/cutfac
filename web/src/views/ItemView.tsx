@@ -5,7 +5,7 @@ import { ErrorAlert, ListSkeleton } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { InTitleBar } from "@/components/title-bar";
 import type { DroppedFile } from "@/components/ui/dropzone";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 import { api, onAgentRun, type AgentChoice, type Feedback } from "../api.ts";
@@ -15,7 +15,7 @@ import {
   ReferenceStrip,
   useAttachments,
 } from "../components/editor/attachments.tsx";
-import { Chat, ChatComposer } from "../components/editor/chat.tsx";
+import { Chat, ChatComposer, ChatTabs } from "../components/editor/chat.tsx";
 import { editInput, preferredAgent, sendRequest } from "../components/editor/composer.tsx";
 import { Details } from "../components/editor/details.tsx";
 import { SectionGrip } from "../components/editor/dock-grip.tsx";
@@ -422,13 +422,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             {/* Kept mounted under the version history, so the chat keeps its scroll and drafts. */}
             <div className={cn("flex min-h-0 flex-1 flex-col", versionView.open && "hidden")}>
               <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
-                <div className="flex items-center gap-1 p-2">
-                  <TabsList className="min-w-0 flex-1">
-                    <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
-                    <TabsTrigger value="details">{t.item.details}</TabsTrigger>
-                  </TabsList>
-                  {versionView.open ? null : <SectionGrip section="chat" />}
-                </div>
+                <ChatTabs details grip={!versionView.open} />
                 {/* Kept mounted so the chat keeps its scroll and a half-written answer across tabs. */}
                 <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
                   <RenderProvider value={renderView}>

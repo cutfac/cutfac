@@ -208,7 +208,7 @@ export function Board() {
                 <ArchiveIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
                 <Label>{t.board.archived}</Label>
               </Toggle>
-              <Button size="sm" onClick={() => void openNewVideo()}>
+              <Button size="sm" onClick={() => openNewVideo()}>
                 <PlusIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
                 <Label>{t.newItem.open}</Label>
               </Button>
