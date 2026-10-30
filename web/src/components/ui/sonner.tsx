@@ -11,6 +11,8 @@ import { Toaster as Sonner, type ToasterProps } from "sonner";
 const Toaster = (props: ToasterProps) => (
   <Sonner
     theme="dark"
+    position="top-center"
+    offset={{ top: 60 }}
     className="group select-text [--border-radius:var(--radius-2xl)] [--normal-bg:var(--popover)] [--normal-border:var(--border)] [--normal-text:var(--popover-foreground)]"
     icons={{
       success: <CircleCheckIcon className="size-4" />,
