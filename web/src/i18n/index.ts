@@ -14,7 +14,7 @@ const DICTIONARIES: Record<Locale, Messages> = { en, ko };
 
 const STORAGE_KEY = "cutfac.locale";
 
-let current = resolveLocale(readStored(STORAGE_KEY), navigator.languages);
+let current = desktop?.locale() ?? resolveLocale(readStored(STORAGE_KEY), navigator.languages);
 
 const listeners = new Set<() => void>();
 

@@ -263,6 +263,11 @@ export interface CutfacDesktop {
    * Resolves whether it was saved.
    */
   downloadFile: (path: string, name: string) => Promise<boolean>;
+  /**
+   * The language the app saved. A page's own storage belongs to its address, and the first launch
+   * and a workspace's board load from different ones, so this is the choice both share.
+   */
+  locale: () => Locale | null;
   /** Tell the app which language the board shows, so its menus and dialogs match. */
   setLocale: (locale: Locale) => void;
   /**

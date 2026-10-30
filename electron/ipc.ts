@@ -13,6 +13,9 @@ export const REVEAL_PATH_CHANNEL = "cutfac:reveal-path";
 
 export const SET_LOCALE_CHANNEL = "cutfac:set-locale";
 
+/** The language the app saved, read as a page starts so it opens in that language. */
+export const LOCALE_CHANNEL = "cutfac:locale";
+
 /** Ask for a folder or file for agents to read, from an item's chat. */
 export const PICK_PATH_CHANNEL = "cutfac:pick-path";
 

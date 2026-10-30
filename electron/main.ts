@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Effect, Fiber, Option, Queue, Ref, Schema } from "effect";
-import { app, clipboard, dialog, Menu, nativeTheme, type BrowserWindow } from "electron";
+import { app, clipboard, dialog, ipcMain, Menu, nativeTheme, type BrowserWindow } from "electron";
 
 import { describeError } from "../src/core/errors.ts";
 import type { AppCommand, EditCommand, OnboardingStep } from "../web/src/desktop.ts";
@@ -31,6 +31,7 @@ import {
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
+  LOCALE_CHANNEL,
   START_DRAG_CHANNEL,
   DOWNLOAD_FILE_CHANNEL,
 } from "./ipc.ts";
@@ -239,6 +240,10 @@ function start(): void {
       yield* Effect.ignore(saveLocale(next));
     }),
   );
+  // A synchronous call holds the page until it has a return value, so every call gets one.
+  ipcMain.on(LOCALE_CHANNEL, (event) => {
+    event.returnValue = isFromApp(event) ? readNow(appState.locale) : null;
+  });
   handleUpdates({ quit, locale: () => readNow(appState.locale) });
   handleAttention({
     isFromApp,

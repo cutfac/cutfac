@@ -58,6 +58,7 @@ import {
   REVEAL_PATH_CHANNEL,
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
+  LOCALE_CHANNEL,
   START_APP_DRAG_CHANNEL,
   FOCUS_DRAG_HELPER_CHANNEL,
   START_DRAG_CHANNEL,
@@ -189,6 +190,7 @@ const bridge = {
   pickPath: (): Promise<string | undefined> => ipcRenderer.invoke(PICK_PATH_CHANNEL),
   startDrag: (target) => ipcRenderer.send(START_DRAG_CHANNEL, target),
   downloadFile: (target, name) => ipcRenderer.invoke(DOWNLOAD_FILE_CHANNEL, { path: target, name }),
+  locale: () => ipcRenderer.sendSync(LOCALE_CHANNEL),
   setLocale: (locale) => ipcRenderer.send(SET_LOCALE_CHANNEL, locale),
   setAttention: (attention) => ipcRenderer.send(ATTENTION_CHANNEL, attention),
   onEditCommand: (listener) => {
