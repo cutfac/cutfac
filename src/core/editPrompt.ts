@@ -4,6 +4,7 @@ import { ABOUT_FILE } from "./about.ts";
 import { BRIEF_FILE, briefLines, readBrief } from "./brief.ts";
 import { checkFormatDoc, itemFormat } from "./formatSpec.ts";
 import type { Item } from "./items.ts";
+import { languageName } from "./language.ts";
 import type { Format } from "./library.ts";
 import { mediaKind } from "./media.ts";
 import { REFERENCES } from "./references.ts";
@@ -301,20 +302,20 @@ const targetLines = Effect.fnUntraced(function* (
   return yield* newVideoLines(item, format);
 });
 
-const versionLines = (wanted: number) =>
+const versionLines = (wanted: number, language: string) =>
   wanted > 1
     ? [
         "",
         `The user asked for ${wanted} versions to compare side by side and pick from. Make ${wanted} clearly different takes on the request, not small tweaks of one.`,
-        "For each: render it in full over the same file name with the render tool and the version as its label, built from the request rather than from the previous version; check it as below; then call save_variant with this feedback id and a few words on how it differs. Saving under a label already used replaces that version.",
+        `For each: render it in full over the same file name with the render tool and the version as its label, built from the request rather than from the previous version; check it as below; then call save_variant with this feedback id and a few words in ${language} on how it differs. Saving under a label already used replaces that version.`,
         "Call resolve_feedback once, after the last version. The board then puts the media back as it was until the user picks one.",
         "",
       ]
     : [];
 
-const CLOSING_LINES = [
-  "Use ffmpeg/ffprobe or the format's render command, and run the final render through the render tool (not your shell) so the user sees its progress; call it again with just the id while it is running. Afterwards run verify_item; for a video, call review_media with `times` in and around the changed part and go through its checklist; for an image, open it at phone size. Then call resolve_feedback with this feedback id and one line on what changed, in the language of the request.",
-  "Finish with a short, plain summary for someone who does not use video editors, written in the language of the request, as any question you ask is. If the request is unclear, ask instead of guessing. If you have the AskUserQuestion or request_user_input tool, ask with it: the user answers on the board and you go on in the same run. Otherwise leave the feedback open and end your reply with the question in this block; the board shows each `- ` line as an answer to pick with one click, and the user's answer comes back as the next request:",
+const closingLines = (language: string) => [
+  `Use ffmpeg/ffprobe or the format's render command, and run the final render through the render tool (not your shell) so the user sees its progress; call it again with just the id while it is running. Afterwards run verify_item; for a video, call review_media with \`times\` in and around the changed part and go through its checklist; for an image, open it at phone size. Then call resolve_feedback with this feedback id and one line on what changed, in ${language}.`,
+  `Finish with a short, plain summary for someone who does not use video editors, written in ${language}, as any question you ask is. If the request is unclear, ask instead of guessing. If you have the AskUserQuestion or request_user_input tool, ask with it: the user answers on the board and you go on in the same run. Otherwise leave the feedback open and end your reply with the question in this block; the board shows each \`- \` line as an answer to pick with one click, and the user's answer comes back as the next request:`,
   "```question",
   "Should the caption sit above or below the face?",
   "- Above",
@@ -330,10 +331,21 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
 ) {
   const ws = yield* Workspace;
 
+  // The request alone can read as English among these instructions, so the board's language is named.
+  const language = Option.flatMap(Option.fromUndefinedOr(f.locale), languageName);
+  const writtenIn = Option.getOrElse(language, () => "the language of the request");
+
   const header = [
     `Edit request ${f.id} on content item "${item.id}" (${item.doc.title}) in the Cutfac workspace at ${ws.root}. Follow the cutfac skill.`,
     "",
     `Request: ${f.body}`,
+    ...Option.toArray(
+      Option.map(
+        language,
+        (name) =>
+          `The user reads the board in ${name}. Write everything they read in ${name}, though these instructions are in English.`,
+      ),
+    ),
     "",
   ];
 
@@ -360,7 +372,7 @@ export const buildEditPrompt = Effect.fn("edits.buildEditPrompt")(function* (
     ...missingLines(notes),
     "Target:",
     ...target,
-    ...versionLines(versionsWanted(f)),
-    ...CLOSING_LINES,
+    ...versionLines(versionsWanted(f), writtenIn),
+    ...closingLines(writtenIn),
   ].join("\n");
 });

@@ -130,6 +130,8 @@ export interface EditInput extends ModelSettings {
   attachments?: ReadonlyArray<string>;
   variants?: number;
   agent: AgentChoice;
+  /** The language the user reads the board in, which the agent writes to them in. */
+  locale?: string;
 }
 
 export interface NewFeedback {

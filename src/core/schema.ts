@@ -219,6 +219,14 @@ const rangeIsOrdered = Schema.makeFilter(
   { title: "ordered range" },
 );
 
+const locale = Schema.optional(
+  Schema.NonEmptyString.annotate(
+    describe(
+      "the language the user reads the board in, such as ko; the agent writes to them in it",
+    ),
+  ),
+);
+
 export const Feedback = Schema.Struct({
   id: Schema.String,
   at: Schema.String,
@@ -226,6 +234,7 @@ export const Feedback = Schema.Struct({
   body: Schema.String,
   ...targetFields,
   attachments,
+  locale,
   context: Schema.optional(EditContext),
   variants: Schema.optional(Variants),
   run: Schema.optional(AgentRun),
@@ -262,6 +271,7 @@ export const FeedbackInput = Schema.Struct({
   author: Schema.optional(Schema.String),
   ...targetFields,
   attachments,
+  locale,
   variants: Schema.optional(
     Schema.Finite.check(
       Schema.isInt(),

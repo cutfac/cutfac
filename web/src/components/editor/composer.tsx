@@ -30,7 +30,7 @@ import {
   type ModelSettings,
 } from "../../api.ts";
 import { agentInstalled } from "../../hooks.ts";
-import { useMessages } from "../../i18n/index.ts";
+import { currentLocale, useMessages } from "../../i18n/index.ts";
 import { copyPrompt } from "../../lib/clipboard.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
@@ -174,7 +174,7 @@ export async function sendRequest(
   onRun((run) => sendingRun(run, item, input));
 
   try {
-    const receipt = await api.requestEdit(item.id, input);
+    const receipt = await api.requestEdit(item.id, { ...input, locale: currentLocale() });
     onItem(receipt.item);
     onRun((run) => sentRun(run, receipt, input));
 

@@ -309,6 +309,7 @@ export const addFeedback = Effect.fn("items.addFeedback")(function* (
     end: input.end,
     region: input.region,
     attachments,
+    locale: input.locale,
     variants:
       input.variants === undefined || input.variants < 2
         ? undefined

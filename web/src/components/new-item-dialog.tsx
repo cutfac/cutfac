@@ -46,7 +46,7 @@ import {
 } from "../api.ts";
 import { desktop, type NewVideoLink } from "../desktop.ts";
 import { href, type Live, useAgentStatuses, useModelPicks } from "../hooks.ts";
-import { type Messages, useMessages } from "../i18n/index.ts";
+import { currentLocale, type Messages, useMessages } from "../i18n/index.ts";
 import { copyPrompt } from "../lib/clipboard.ts";
 import { freeVersion } from "../lib/license.ts";
 import { pickedSettings } from "../lib/models.ts";
@@ -206,7 +206,7 @@ export function NewItemDialog({ formats, plan, defaultAgent }: NewItemDialogProp
 
     if (attachments.length > 0) input.attachments = attachments;
 
-    await api.requestEdit(item.id, input).then(
+    await api.requestEdit(item.id, { ...input, locale: currentLocale() }).then(
       (receipt) => {
         for (const warning of receipt.warnings) toast.warning(warning);
 

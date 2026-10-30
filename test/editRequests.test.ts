@@ -101,6 +101,21 @@ describe("edit requests in a workspace", () => {
     }),
   );
 
+  it.live("the prompt has the agent write to the user in the board's language", () =>
+    Effect.gen(function* () {
+      const id = yield* newItem;
+      const inKorean = yield* requestEdit(id, { body: "자막을 키워 줘", locale: "ko" });
+      const unknown = yield* requestEdit(id, { body: "Bigger captions" });
+      const korean = yield* buildEditPrompt(inKorean.item, inKorean.feedback);
+      const fallback = yield* buildEditPrompt(unknown.item, unknown.feedback);
+
+      expect(korean).toContain("The user reads the board in Korean.");
+      expect(korean).toContain("one line on what changed, in Korean.");
+      expect(fallback).not.toContain("reads the board in");
+      expect(fallback).toContain("one line on what changed, in the language of the request.");
+    }),
+  );
+
   it.live("the prompt names the format's files, skills, inputs, and what it lacks", () =>
     Effect.gen(function* () {
       const ws = yield* Workspace;
