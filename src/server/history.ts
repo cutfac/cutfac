@@ -3,13 +3,11 @@ import { HttpRouter, HttpServerRequest } from "effect/http";
 
 import { RunRegistry } from "../core/agentRun.ts";
 import { Conflict } from "../core/errors.ts";
-import { goTo, redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
+import { redo, restoreVersion, undo, updateDetails } from "../core/history.ts";
 import type { Item } from "../core/items.ts";
 import { ItemPatch } from "../core/schema.ts";
 import { itemDetail } from "./items.ts";
 import { json, withId } from "./respond.ts";
-
-const GoToBody = Schema.Struct({ entryId: Schema.optional(Schema.NonEmptyString) });
 
 const VersionBody = Schema.Struct({ versionId: Schema.NonEmptyString });
 
@@ -47,13 +45,6 @@ export const historyRoutes = HttpRouter.addAll([
   ),
   json("POST", "/api/item/history/undo", travel(undo)),
   json("POST", "/api/item/history/redo", travel(redo)),
-  json(
-    "POST",
-    "/api/item/history/goto",
-    travel((id) =>
-      Effect.flatMap(HttpServerRequest.schemaBodyJson(GoToBody), (body) => goTo(id, body.entryId)),
-    ),
-  ),
   json(
     "POST",
     "/api/item/history/version",

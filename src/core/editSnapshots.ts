@@ -4,7 +4,7 @@ import { saveCode } from "./editCode.ts";
 import { afterFile, beforeFile, itemRel } from "./editFiles.ts";
 import { pendingVariants } from "./editVariants.ts";
 import { InvalidRequest } from "./errors.ts";
-import { type MediaCapture, putBack, recordMedia } from "./history.ts";
+import { type MediaCapture, putBack, recordMedia } from "./historyMedia.ts";
 import { type Item, findFeedback, getItem, mutateItem, updateFeedback } from "./items.ts";
 import type { Feedback } from "./schema.ts";
 import { isoMillis } from "./time.ts";

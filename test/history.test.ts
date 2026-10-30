@@ -5,18 +5,10 @@ import { Clock, Effect, FileSystem, Ref } from "effect";
 
 import { requestEdit, resolveEdit, restoreBefore } from "../src/core/edits.ts";
 import { InvalidRequest, NotFound } from "../src/core/errors.ts";
-import {
-  MAX_ENTRIES,
-  goTo,
-  pushEntry,
-  readHistory,
-  recordMedia,
-  redo,
-  restoreVersion,
-  undo,
-  updateDetails,
-} from "../src/core/history.ts";
-import type { HistoryDoc, HistoryEntry } from "../src/core/historySchema.ts";
+import { redo, restoreVersion, undo, updateDetails } from "../src/core/history.ts";
+import { recordMedia } from "../src/core/historyMedia.ts";
+import { type HistoryDoc, type HistoryEntry, sameContent } from "../src/core/historySchema.ts";
+import { MAX_ENTRIES, pushEntry, readHistory } from "../src/core/historyStore.ts";
 import { createItem, getItem, updateItem } from "../src/core/items.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
@@ -183,33 +175,42 @@ describe("item history", () => {
     }),
   );
 
-  it.live("restores a saved version and jumps through the history", () =>
+  it.live("puts an earlier version back as a new one, once", () =>
     Effect.gen(function* () {
       const { id, edit, history, content } = yield* fixture;
 
       yield* edit("edited");
-      const [first] = (yield* history).versions;
+      const [original] = (yield* history).versions;
 
-      yield* restoreVersion(id, first?.id ?? "");
+      yield* restoreVersion(id, original?.id ?? "");
+      yield* restoreVersion(id, original?.id ?? "");
 
-      expect(yield* content).toBe("original");
-      expect((yield* history).entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual([
-        "edit",
-        "version",
-      ]);
-
-      yield* goTo(id);
+      const { versions, entries } = yield* history;
 
       expect(yield* content).toBe("original");
-      expect((yield* history).cursor).toBe(0);
-
-      const entries = (yield* history).entries;
-      yield* goTo(id, entries[0]?.id);
-
-      expect(yield* content).toBe("edited");
-      expect((yield* history).cursor).toBe(1);
-      expect(yield* Effect.flip(goTo(id, "missing"))).toBeInstanceOf(NotFound);
+      expect(versions.map((v) => v.cause)).toEqual(["original", "edit", "version"]);
+      expect(versions.at(-1)).toMatchObject({ source: original?.id, file: original?.file });
+      expect(entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual(["edit", "version"]);
       expect(yield* Effect.flip(restoreVersion(id, "missing"))).toBeInstanceOf(NotFound);
+    }),
+  );
+
+  it.live("every version says what put it in, even one a new change cut off from redo", () =>
+    Effect.gen(function* () {
+      const { id, edit, history } = yield* fixture;
+
+      const first = yield* edit("first");
+      yield* undo(id);
+      const second = yield* edit("second");
+
+      const { versions, entries } = yield* history;
+
+      expect(versions.map((v) => [v.cause, v.feedbackId])).toEqual([
+        ["original", undefined],
+        ["edit", first],
+        ["edit", second],
+      ]);
+      expect(entries).toHaveLength(1);
     }),
   );
 
@@ -236,11 +237,18 @@ describe("item history", () => {
 
       yield* restoreBefore(id, feedbackId);
 
+      const { versions, entries } = yield* history;
+      const [original, , rolledBack] = versions;
+
       expect(yield* content).toBe("original");
-      expect((yield* history).entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual([
-        "edit",
-        "restore",
-      ]);
+      expect(entries.map((e) => (e.kind === "media" ? e.cause : ""))).toEqual(["edit", "restore"]);
+      expect(rolledBack).toMatchObject({ cause: "restore", feedbackId });
+      // Its copy is the request's own, but it holds what the request started from.
+      expect(
+        original !== undefined &&
+          rolledBack !== undefined &&
+          sameContent(versions, original, rolledBack),
+      ).toBe(true);
 
       yield* undo(id);
 

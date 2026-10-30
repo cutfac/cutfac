@@ -152,10 +152,6 @@ describe("routes", () => {
 
       expect(yield* jsonOf(redone)).toMatchObject({ doc: { title: "Final cut" } });
 
-      const start = yield* sendJson("POST", "/api/item/history/goto?id=cut", {});
-
-      expect(yield* jsonOf(start)).toMatchObject({ doc: { title: "Cut" } });
-
       const missing = yield* sendJson("POST", "/api/item/history/version?id=cut", {
         versionId: "x",
       });

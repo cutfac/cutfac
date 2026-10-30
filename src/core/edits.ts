@@ -6,7 +6,7 @@ import { itemRel, keptFile, variantCodeDir } from "./editFiles.ts";
 import { saveBefore, snapshotAfter } from "./editSnapshots.ts";
 import { hasVersions, markKept, pendingVariants } from "./editVariants.ts";
 import { InvalidRequest } from "./errors.ts";
-import { recordMedia } from "./history.ts";
+import { recordMedia } from "./historyMedia.ts";
 import {
   type Item,
   addFeedback,
@@ -176,6 +176,7 @@ export const pickVariant = Effect.fn("edits.pickVariant")(function* (
   yield* recordMedia(item, [{ media, file, base: f.context?.before }], {
     cause: "edit",
     feedbackId,
+    variant: chosen.label,
   });
 
   return yield* markKept(item, feedbackId, chosen.label, file);

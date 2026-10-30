@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test";
 
 import { Effect, Schema } from "effect";
+import { TestClock } from "effect/testing";
 
 import { buildEditPrompt } from "../src/core/editPrompt.ts";
 import {
@@ -12,9 +13,11 @@ import {
 } from "../src/core/edits.ts";
 import { awaitsDecision, saveVariant } from "../src/core/editVariants.ts";
 import { InvalidRequest } from "../src/core/errors.ts";
-import { readHistory, undo, updateDetails } from "../src/core/history.ts";
+import { restoreVersion, undo, updateDetails } from "../src/core/history.ts";
+import { readHistory } from "../src/core/historyStore.ts";
 import { addFeedback, createItem, getItem } from "../src/core/items.ts";
 import { type Feedback, FeedbackInput, MAX_VARIANTS } from "../src/core/schema.ts";
+import { nowIso } from "../src/core/time.ts";
 import { Workspace } from "../src/core/workspace.ts";
 import { testEffect } from "./effect.ts";
 import { tempWorkspace } from "./support.ts";
@@ -137,6 +140,34 @@ describe("versions to compare", () => {
       yield* pickVariant(id, feedbackId, other.id);
 
       expect((yield* readHistory(yield* getItem(id))).entries).toHaveLength(steps);
+    }),
+  );
+
+  it.effect("each switch is a version named by the one picked, and putting one back picks it", () =>
+    Effect.gen(function* () {
+      const { id, feedbackId } = yield* requestVersions();
+      const { variant: chosen } = yield* render(id, feedbackId, "Big captions");
+      const { variant: other } = yield* render(id, feedbackId, "Fast cuts");
+      yield* pickVariant(id, feedbackId, chosen.id);
+      yield* TestClock.adjust("1 minute");
+      yield* pickVariant(id, feedbackId, other.id);
+      yield* TestClock.adjust("1 minute");
+      yield* pickVariant(id, feedbackId, chosen.id);
+
+      const { versions } = yield* readHistory(yield* getItem(id));
+
+      expect(versions.map((v) => v.variant ?? v.cause)).toEqual([
+        "original",
+        "Big captions",
+        "Fast cuts",
+        "Big captions",
+      ]);
+      expect(versions.at(-1)?.at).toBe(yield* nowIso);
+
+      yield* restoreVersion(id, versions[2]?.id ?? "");
+
+      expect(yield* read(id, VIDEO)).toBe("Fast cuts");
+      expect(feedbackOf(yield* getItem(id), feedbackId)?.variants?.picked).toBe("Fast cuts");
     }),
   );
 

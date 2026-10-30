@@ -1,234 +1,22 @@
 import { Effect, type Types } from "effect";
 
 import { pruneVersions, verdictOn } from "./editVariants.ts";
-import { InvalidRequest, NotFound, type WorkspaceError } from "./errors.ts";
+import { InvalidRequest, NotFound } from "./errors.ts";
+import { capture, putVersion, versionOf } from "./historyMedia.ts";
 import {
   DETAIL_FIELDS,
   type DetailField,
   type DetailValues,
-  HistoryDoc,
+  type HistoryDoc,
   type HistoryEntry,
-  type MediaCause,
+  madeBy,
   type MediaVersion,
+  type VersionCause,
 } from "./historySchema.ts";
+import { mutateHistory, pushEntry, type SaveHistory } from "./historyStore.ts";
 import { type Decision, type Item, getItem, mutateItem, shortId, updateItem } from "./items.ts";
-import { extension } from "./media.ts";
 import { type Feedback, type ItemDoc, type ItemPatch, type ItemStatus } from "./schema.ts";
 import { nowIso } from "./time.ts";
-import { Workspace } from "./workspace.ts";
-
-/** Item subfolder with history.yaml and the media versions that are not edit snapshots. */
-export const HISTORY_DIR = "history";
-
-/** Changes kept for undo. Older ones drop off; the versions they point at stay listed. */
-export const MAX_ENTRIES = 200;
-
-const EMPTY: HistoryDoc = { cursor: 0, entries: [], versions: [], heads: {} };
-
-const historyFile = (item: Item) => `${item.dir}/${HISTORY_DIR}/history.yaml`;
-
-export const readHistory = Effect.fn("history.readHistory")(function* (item: Item) {
-  const ws = yield* Workspace;
-  const file = historyFile(item);
-
-  return (yield* ws.exists(file)) ? yield* ws.readYaml(file, HistoryDoc) : EMPTY;
-});
-
-type SaveHistory = (doc: HistoryDoc) => Effect.Effect<void, WorkspaceError>;
-
-/**
- * Read-modify-write an item's history, one at a time per item, so changes recorded together do
- * not drop each other's entries. `change` writes with the `save` it is given, as often as it
- * needs. Not reentrant, and the history is locked before item.yaml: `change` may use `mutateItem`,
- * but nothing inside `mutateItem` may come here.
- */
-export const mutateHistory = Effect.fn("history.mutateHistory")(function* <A, E, R>(
-  item: Item,
-  change: (doc: HistoryDoc, save: SaveHistory) => Effect.Effect<A, E, R>,
-) {
-  const ws = yield* Workspace;
-
-  return yield* ws.exclusive(
-    `history:${item.id}`,
-    Effect.gen(function* () {
-      const doc = yield* readHistory(item);
-
-      return yield* change(doc, (next) => ws.writeYaml(historyFile(item), HistoryDoc, next));
-    }),
-  );
-});
-
-/** Add a change at the cursor. Changes that could still have been redone are dropped. */
-export function pushEntry(doc: HistoryDoc, entry: HistoryEntry): HistoryDoc {
-  const entries = [...doc.entries.slice(0, doc.cursor), entry];
-  const dropped = Math.max(0, entries.length - MAX_ENTRIES);
-
-  return { ...doc, entries: entries.slice(dropped), cursor: entries.length - dropped };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Media versions
-
-/** One media file to check against its history, with copies the caller already made. */
-export interface MediaCapture {
-  readonly media: string;
-  /** Item-relative copy of the file as it is now. Without one, a changed file is copied. */
-  readonly file?: string | undefined;
-  /** Item-relative copy of the file before this change, for a file with no saved version yet. */
-  readonly base?: string | undefined;
-  /** Save a file with no saved version yet as its first version. */
-  readonly start?: boolean | undefined;
-}
-
-/** Why tracked media changed, for the history entry. */
-export interface Attribution {
-  readonly cause: MediaCause;
-  readonly feedbackId?: string | undefined;
-}
-
-const withVersion = (doc: HistoryDoc, version: MediaVersion): HistoryDoc =>
-  doc.versions.some((v) => v.id === version.id)
-    ? doc
-    : { ...doc, versions: [...doc.versions, version] };
-
-/** The saved version for `file`, reusing one that already points at it, or a new copy. */
-const versionFor = Effect.fnUntraced(function* (
-  item: Item,
-  doc: HistoryDoc,
-  media: string,
-  file: string | undefined,
-) {
-  const ws = yield* Workspace;
-  const existing = doc.versions.find((v) => v.media === media && v.file === file);
-
-  if (existing !== undefined) return existing;
-  const id = yield* shortId;
-  const saved = file ?? `${HISTORY_DIR}/${id}.${extension(media)}`;
-
-  if (file === undefined) yield* ws.copy(`${item.dir}/${media}`, `${item.dir}/${saved}`);
-  const { size } = yield* ws.stat(`${item.dir}/${saved}`);
-  const version: MediaVersion = { id, media, file: saved, at: yield* nowIso, size };
-
-  return version;
-});
-
-/**
- * Save media files whose content is not a saved version yet. A tracked file that no longer
- * matches the version it should hold becomes a new version and a change from that version.
- */
-const capture = Effect.fnUntraced(function* (
-  item: Item,
-  start: HistoryDoc,
-  captures: ReadonlyArray<MediaCapture>,
-  by: Attribution,
-) {
-  const ws = yield* Workspace;
-  let doc = start;
-
-  for (const { media, file, base, start: track } of captures) {
-    const path = `${item.dir}/${media}`;
-
-    if (!(yield* ws.exists(path))) continue;
-    const { size, mtime } = yield* ws.stat(path);
-    let head = doc.heads[media];
-
-    if (head === undefined && base !== undefined) {
-      const first = yield* versionFor(item, doc, media, base);
-      doc = withVersion(doc, first);
-      // An mtime no file has, so the file on disk is recorded as a change from the base.
-      head = { version: first.id, size: first.size, mtime: -1 };
-    }
-
-    if (head === undefined && file === undefined && track !== true) continue;
-
-    if (head !== undefined && head.size === size && head.mtime === mtime) continue;
-    const version = yield* versionFor(item, doc, media, file);
-
-    doc = {
-      ...withVersion(doc, version),
-      heads: { ...doc.heads, [media]: { version: version.id, size, mtime } },
-    };
-
-    if (head === undefined || head.version === version.id) continue;
-
-    doc = pushEntry(doc, {
-      kind: "media",
-      id: yield* shortId,
-      at: version.at,
-      media,
-      from: head.version,
-      to: version.id,
-      cause: by.cause,
-      feedbackId: by.feedbackId,
-    });
-  }
-
-  return doc;
-});
-
-/** Save changed media into the history. Edit requests and agent runs call this. */
-export const recordMedia = Effect.fn("history.recordMedia")(function* (
-  item: Item,
-  captures: ReadonlyArray<MediaCapture>,
-  by: Attribution,
-) {
-  yield* mutateHistory(item, (doc, save) =>
-    Effect.gen(function* () {
-      const next = yield* capture(item, doc, captures, by);
-
-      if (next !== doc) yield* save(next);
-    }),
-  );
-});
-
-/** Copy a saved version over its media file. */
-const putVersion = Effect.fnUntraced(function* (item: Item, doc: HistoryDoc, versionId: string) {
-  const ws = yield* Workspace;
-  const version = doc.versions.find((v) => v.id === versionId);
-
-  if (version === undefined) {
-    return yield* new NotFound({ message: `Version ${versionId} not found on ${item.id}` });
-  }
-
-  const path = `${item.dir}/${version.media}`;
-  yield* ws.copy(`${item.dir}/${version.file}`, path);
-  const { size, mtime } = yield* ws.stat(path);
-
-  const next: HistoryDoc = {
-    ...doc,
-    heads: { ...doc.heads, [version.media]: { version: version.id, size, mtime } },
-  };
-
-  return next;
-});
-
-/**
- * Put a media file back to the version it last held, if it changed since. A file with no saved
- * version did not exist before, so it is removed.
- */
-export const putBack = Effect.fn("history.putBack")(function* (item: Item, media: string) {
-  const ws = yield* Workspace;
-  const path = `${item.dir}/${media}`;
-
-  yield* mutateHistory(item, (doc, save) =>
-    Effect.gen(function* () {
-      const head = doc.heads[media];
-
-      if (head === undefined) return yield* ws.remove(path);
-
-      if (yield* ws.exists(path)) {
-        const { size, mtime } = yield* ws.stat(path);
-
-        if (head.size === size && head.mtime === mtime) return;
-      }
-
-      yield* save(yield* putVersion(item, doc, head.version));
-    }),
-  );
-});
-
-// ---------------------------------------------------------------------------------------------
-// Item fields
 
 interface DetailSource {
   readonly title?: string | undefined;
@@ -318,10 +106,32 @@ export const updateDetails = Effect.fn("history.updateDetails")(function* (
 type Direction = "undo" | "redo";
 
 /** The verdict on a request that matches the side of it now in the file. */
-const VERDICTS: Record<Direction, Partial<Record<MediaCause, Decision>>> = {
+const VERDICTS: Record<Direction, Partial<Record<VersionCause, Decision>>> = {
   undo: { edit: "restored", restore: "approved" },
   redo: { edit: "approved", restore: "restored" },
 };
+
+/** Record the verdict on a request about `media` that leaves its file holding `file`. */
+const decide = Effect.fnUntraced(function* (
+  item: Item,
+  feedbackId: string,
+  media: string,
+  decision: Decision,
+  file = "",
+) {
+  const now = yield* nowIso;
+
+  // Only the request about this media file gets a verdict; a request about the whole item can
+  // change several files.
+  const decided = (f: Feedback) => f.id === feedbackId && f.media === media;
+
+  yield* mutateItem(item.id, (current) =>
+    Effect.succeed({
+      ...current,
+      feedback: current.feedback.map((f) => (decided(f) ? verdictOn(f, decision, file, now) : f)),
+    }),
+  );
+});
 
 const applyEntry = Effect.fnUntraced(function* (
   item: Item,
@@ -345,24 +155,10 @@ const applyEntry = Effect.fnUntraced(function* (
 
   const landing = direction === "undo" ? entry.from : entry.to;
   const next = yield* putVersion(item, doc, landing);
-  const landed = next.versions.find((v) => v.id === landing)?.file ?? "";
   const decision = VERDICTS[direction][entry.cause];
-  const { feedbackId } = entry;
 
-  // Only the request about this media file gets a verdict; a request about the whole item can
-  // change several files.
-  const decided = (f: Feedback) => f.id === feedbackId && f.media === entry.media;
-
-  if (feedbackId !== undefined && decision !== undefined) {
-    const now = yield* nowIso;
-    yield* mutateItem(item.id, (current) =>
-      Effect.succeed({
-        ...current,
-        feedback: current.feedback.map((f) =>
-          decided(f) ? verdictOn(f, decision, landed, now) : f,
-        ),
-      }),
-    );
+  if (entry.feedbackId !== undefined && decision !== undefined) {
+    yield* decide(item, entry.feedbackId, entry.media, decision, versionOf(next, landing)?.file);
   }
 
   return next;
@@ -429,46 +225,59 @@ export const redo = Effect.fn("history.redo")((id: string) =>
   ),
 );
 
-/** Go to the state right after `entryId`, or to before the first change without one. */
-export const goTo = Effect.fn("history.goTo")((id: string, entryId?: string) =>
-  mutateSynced(id, (item, doc, save) => {
-    const index = entryId === undefined ? -1 : doc.entries.findIndex((e) => e.id === entryId);
-
-    return entryId !== undefined && index === -1
-      ? Effect.fail(new NotFound({ message: `History entry ${entryId} not found on ${id}` }))
-      : travel(item, doc, index + 1, save);
-  }),
-);
-
-/** Put a saved version back in its media file, as a change that can be undone. */
+/**
+ * Put an earlier version back in its media file, as a new version and a change that can be undone.
+ * A version a request put in leaves the request decided as it was then.
+ */
 export const restoreVersion = Effect.fn("history.restoreVersion")((id: string, versionId: string) =>
   mutateSynced(id, (item, doc, save) =>
     Effect.gen(function* () {
-      const version = doc.versions.find((v) => v.id === versionId);
+      const picked = versionOf(doc, versionId);
 
-      if (version === undefined) {
+      if (picked === undefined) {
         return yield* new NotFound({ message: `Version ${versionId} not found on ${id}` });
       }
 
-      const head = doc.heads[version.media];
+      const head = doc.heads[picked.media];
 
-      if (head?.version === versionId) return;
-      const placed = yield* putVersion(item, doc, versionId);
+      if (versionOf(doc, head?.version)?.file === picked.file) return;
 
-      const next =
+      const version: MediaVersion = {
+        id: yield* shortId,
+        media: picked.media,
+        file: picked.file,
+        at: yield* nowIso,
+        size: picked.size,
+        cause: "version",
+        source: picked.id,
+      };
+
+      const placed = yield* putVersion(
+        item,
+        { ...doc, versions: [...doc.versions, version] },
+        version.id,
+      );
+
+      yield* save(
         head === undefined
           ? placed
           : pushEntry(placed, {
               kind: "media",
               id: yield* shortId,
-              at: yield* nowIso,
-              media: version.media,
+              at: version.at,
+              media: picked.media,
               from: head.version,
-              to: versionId,
+              to: version.id,
               cause: "version",
-            });
+            }),
+      );
 
-      yield* save(next);
+      const made = madeBy(doc.versions, picked);
+      const decision = made.cause === undefined ? undefined : VERDICTS.redo[made.cause];
+
+      if (made.feedbackId !== undefined && decision !== undefined) {
+        yield* decide(item, made.feedbackId, made.media, decision, picked.file);
+      }
     }),
   ),
 );

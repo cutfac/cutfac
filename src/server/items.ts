@@ -4,7 +4,7 @@ import { HttpRouter, HttpServerRequest } from "effect/http";
 import { RunRegistry } from "../core/agentRun.ts";
 import type { Approval } from "../core/approval.ts";
 import { awaitsDecision } from "../core/editVariants.ts";
-import { readHistory } from "../core/history.ts";
+import { readHistory } from "../core/historyStore.ts";
 import { type Item, getItem, importMedia, listItems } from "../core/items.ts";
 import { addLinkedVideo } from "../core/linkedVideos.ts";
 import {

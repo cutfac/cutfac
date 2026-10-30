@@ -169,20 +169,21 @@ describe("the board's API client against the server's routes: items and the work
 
     const undone = await api.undo(id);
     const redone = await api.redo(id);
-    const start = await api.goTo(id, undefined);
 
     expect(undone.history.cursor).toBeLessThan(rolledBack.history.cursor);
     expect(redone.history.cursor).toBe(rolledBack.history.cursor);
-    expect(start.history.cursor).toBe(0);
 
-    const current = start.history.heads[video];
-    const other = start.history.versions.find((version) => version.id !== current?.version);
+    const { versions, heads } = redone.history;
+    const current = heads[video];
+    const held = versions.find((version) => version.id === current?.version);
+    const other = versions.find((version) => version.file !== held?.file);
 
     expect(current).toMatchObject({ size: expect.any(Number), mtime: expect.any(Number) });
-    expect(other).toMatchObject({ media: video, size: expect.any(Number) });
+    expect(other).toMatchObject({ media: video, size: expect.any(Number), cause: "original" });
 
     const restored = await api.restoreVersion(id, other?.id ?? "");
 
+    expect(restored.history.versions.at(-1)).toMatchObject({ cause: "version", source: other?.id });
     expect(restored.history.entries.at(-1)).toMatchObject({ kind: "media", cause: "version" });
 
     expect(await api.cancelWaiting(id)).toMatchObject({ id });
