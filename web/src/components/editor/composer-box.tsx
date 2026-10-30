@@ -199,7 +199,7 @@ export function ComposerBox({
           />
           <InputGroupAddon align="block-end" className="justify-between">
             <InputGroupButton
-              variant="secondary"
+              variant="quiet"
               size="icon-sm"
               aria-label={t.attachments.attach}
               title={t.attachments.attach}
