@@ -14,7 +14,6 @@ import { useEffect, type ReactNode } from "react";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { ItemMenu } from "@/components/item-menu";
-import { NewItemTrigger } from "@/components/new-item-dialog";
 import { PlanCard } from "@/components/plan-card";
 import { RenameField, useRenaming } from "@/components/rename-field";
 import { SidebarResizer } from "@/components/sidebar-resizer";
@@ -55,6 +54,7 @@ import {
   useMessages,
 } from "../i18n/index.ts";
 import { APP_KEYS } from "../lib/app-commands.ts";
+import { openNewVideo } from "../lib/firstVideo.ts";
 import { archiveItems, moveItems } from "../lib/items.ts";
 import { failureSeen } from "../lib/render-seen.ts";
 import { attention, inProgress } from "../lib/work.ts";
@@ -244,14 +244,13 @@ export function AppSidebar({ ws, plan, view, id, width, onWidth }: AppSidebarPro
             <WorkspaceMenu ws={ws} />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <NewItemTrigger
-              render={
-                <SidebarMenuButton tooltip={withKeys(t.nav.newVideo, APP_KEYS.newVideo)}>
-                  <PlusIcon />
-                  <span>{t.nav.newVideo}</span>
-                </SidebarMenuButton>
-              }
-            />
+            <SidebarMenuButton
+              tooltip={withKeys(t.nav.newVideo, APP_KEYS.newVideo)}
+              onClick={() => void openNewVideo()}
+            >
+              <PlusIcon />
+              <span>{t.nav.newVideo}</span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

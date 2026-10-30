@@ -1,10 +1,9 @@
-import { BookOpenIcon } from "lucide-react";
+import { BookOpenIcon, PlusIcon } from "lucide-react";
 
 import { AccessLink } from "@/components/mac-access";
-import { NewItemTrigger } from "@/components/new-item-dialog";
 import { NotifyLink } from "@/components/notify-row";
 import { StackMark } from "@/components/stack-mark";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -17,6 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { href } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
+import { openNewVideo } from "../lib/firstVideo.ts";
 import { useFirstReading } from "./first-ideas.tsx";
 
 /**
@@ -47,7 +47,10 @@ export function EmptyBoard() {
         )}
       </EmptyHeader>
       <EmptyContent>
-        <NewItemTrigger />
+        <Button size="lg" onClick={() => void openNewVideo()}>
+          <PlusIcon data-icon="inline-start" />
+          {t.newItem.open}
+        </Button>
         {!reading && titles.length > 0 ? <KnownLink label={t.board.known(titles)} /> : null}
         <div className="mt-2 flex flex-wrap justify-center gap-1">
           <AccessLink />

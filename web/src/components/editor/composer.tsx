@@ -1,6 +1,6 @@
 import { Option } from "effect";
 import { ArrowUpIcon, LayersIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
-import { useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 
 import { SlashFeedbackHint, sendSlashFeedback } from "@/components/feedback-dialog";
@@ -34,7 +34,7 @@ import { currentLocale, useMessages } from "../../i18n/index.ts";
 import { copyPrompt } from "../../lib/clipboard.ts";
 import { feedbackCommand, typingFeedbackCommand } from "../../lib/feedback.ts";
 import { pickedSettings, statusOf, type ModelPicks } from "../../lib/models.ts";
-import { draftTitle } from "../../lib/newVideo.ts";
+import { draftFor, draftTitle, forgetDraft } from "../../lib/newVideo.ts";
 import { sendFailed } from "../../lib/notify.ts";
 import { MAX_VARIANTS } from "../../lib/requests.ts";
 import { sendingRun, sentRun, settledRun, type OnRun } from "../../lib/run.ts";
@@ -249,11 +249,14 @@ export function Composer({
   onStop,
   onSent,
 }: ComposerProps) {
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(() => draftFor(item.id));
   const [picked, setPicked] = useState<PickedIdea>();
   const openFiles = useRef<() => void>(null);
   const [sending, setSending] = useState(false);
   const [versions, setVersions] = useState(1);
+
+  useEffect(() => () => forgetDraft(item.id), [item.id]);
+
   const empty = isEmptyTarget(target);
   const text = body.trim();
   const t = useMessages();

@@ -4,7 +4,6 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "rea
 
 import { EmptyBoard } from "@/components/empty-board";
 import { ItemMenu } from "@/components/item-menu";
-import { NewItemTrigger } from "@/components/new-item-dialog";
 import { ErrorAlert, PageHeader } from "@/components/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -22,6 +21,7 @@ import { api, STATUSES, type ItemSummary, type Status } from "../api.ts";
 import { href, useLive } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
 import { gridColumns } from "../lib/board-keys.ts";
+import { openNewVideo } from "../lib/firstVideo.ts";
 import { moveItems } from "../lib/items.ts";
 import { LiveState } from "../lib/live.ts";
 import { failureSeen } from "../lib/render-seen.ts";
@@ -208,14 +208,10 @@ export function Board() {
                 <ArchiveIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
                 <Label>{t.board.archived}</Label>
               </Toggle>
-              <NewItemTrigger
-                render={
-                  <Button size="sm">
-                    <PlusIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
-                    <Label>{t.newItem.open}</Label>
-                  </Button>
-                }
-              />
+              <Button size="sm" onClick={() => void openNewVideo()}>
+                <PlusIcon data-icon="inline-start" className="@max-2xl/title:translate-x-0.5" />
+                <Label>{t.newItem.open}</Label>
+              </Button>
             </>
           ) : null
         }

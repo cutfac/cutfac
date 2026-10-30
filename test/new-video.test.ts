@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Option } from "effect";
 
-import { draftTitle, shownLink, withoutLink, writtenLinks } from "../web/src/lib/newVideo.ts";
+import { draftTitle } from "../web/src/lib/newVideo.ts";
 
 describe("a new video from what the user wrote", () => {
   test("is titled from its first line, without links, cut at a word", () => {
@@ -16,23 +16,5 @@ describe("a new video from what the user wrote", () => {
       draftTitle("A thirty second video walking through the plant reminders, step by step"),
     ).toEqual(Option.some("A thirty second video walking through…"));
     expect(draftTitle("https://youtu.be/abc")).toEqual(Option.none());
-  });
-
-  test("tells video links, which are downloaded, from pages, which are passed on", () => {
-    expect(writtenLinks("like https://youtu.be/abc, see https://fernly.app.")).toEqual([
-      { url: "https://youtu.be/abc", video: true },
-      { url: "https://fernly.app", video: false },
-    ]);
-  });
-
-  test("shows a link without its scheme", () => {
-    expect(shownLink("https://www.youtube.com/shorts/abc")).toBe("youtube.com/shorts/abc");
-    expect(shownLink("http://fernly.app/a?b=1")).toBe("fernly.app/a?b=1");
-  });
-
-  test("drops a link without leaving a gap", () => {
-    expect(withoutLink("like https://youtu.be/abc but shorter", "https://youtu.be/abc")).toBe(
-      "like but shorter",
-    );
   });
 });

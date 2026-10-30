@@ -5,7 +5,7 @@ import { AnnouncementDialog } from "@/components/announcement-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
 import { DesktopLicense } from "@/components/desktop-license";
-import { NewItemDialog } from "@/components/new-item-dialog";
+import { NewVideoLinks } from "@/components/new-video-links";
 import { ErrorAlert } from "@/components/page";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { TitleBar } from "@/components/title-bar";
@@ -129,7 +129,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
           )}
         </TitleBar>
       </SidebarInset>
-      <NewItemDialog formats={ws?.formats} plan={plan} defaultAgent={ws?.config.agent.default} />
+      <NewVideoLinks />
       <CommandPalette editing={editing} />
       {desktop ? <DesktopLicense desktop={desktop} /> : null}
       <AnnouncementDialog />

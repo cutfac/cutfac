@@ -1,32 +1,9 @@
 import { Array, Option } from "effect";
 
-import { isVideoLink, linksIn } from "../../../src/core/videoLinks.ts";
+import { linksIn } from "../../../src/core/videoLinks.ts";
 
 /** Longest title taken from what the user wrote, before it is cut at a word. */
 const MAX_TITLE = 40;
-
-/** A link in what the user wrote: a video is downloaded into the item, a page is only passed on. */
-export interface WrittenLink {
-  url: string;
-  video: boolean;
-}
-
-/** The links in what the user wrote, each once, telling videos from pages. */
-export const writtenLinks = (text: string): ReadonlyArray<WrittenLink> =>
-  linksIn(text).map((url) => ({ url, video: isVideoLink(url) }));
-
-/** A link as people read it, such as `youtube.com/shorts/abc`, without its scheme or `www.`. */
-export const shownLink = (url: string): string => url.replace(/^https?:\/\/(www\.)?/, "");
-
-/** `text` without `link`, and without the gap it leaves. */
-export function withoutLink(text: string, link: string): string {
-  return text
-    .split(link)
-    .join("")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/[ \t]+$/gm, "")
-    .trim();
-}
 
 /**
  * A provisional title from what the user wrote: its first line without links, cut at a word past
@@ -51,3 +28,13 @@ export function draftTitle(text: string): Option.Option<string> {
     return `${word.replace(/[\s,.;:!?·-]+$/u, "")}…`;
   });
 }
+
+const drafts = new Map<string, string>();
+
+/** Leave `text` in the composer of the video `id`, for when its editor opens. */
+export const holdDraft = (id: string, text: string) => void drafts.set(id, text);
+
+/** What waits in the composer of the video `id`, if anything. */
+export const draftFor = (id: string): string => drafts.get(id) ?? "";
+
+export const forgetDraft = (id: string) => void drafts.delete(id);

@@ -65,10 +65,6 @@ export const settingsKo: SettingsMessages = {
     enterKey: "라이선스 키 넣기",
     openSource: "오픈소스 버전",
     getDesktop: "데스크톱 앱 받기",
-    lastFree: "마지막 무료 영상이에요.",
-    limitTitle: (limit) => `무료 영상 ${limit}개를 모두 만들었어요`,
-    limitBody:
-      "새 영상을 만들려면 업그레이드해 주세요. 지금 있는 영상은 계속 고치고 새 버전도 만들 수 있어요.",
     limitReached:
       "무료 버전의 영상을 모두 썼어요. 새 영상을 만들거나 컷팩 밖에서 만든 영상으로 작업하려면 업그레이드해 주세요. 컷팩에서 만든 영상은 계속 고칠 수 있어요.",
   },

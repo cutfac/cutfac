@@ -61,43 +61,7 @@ export const boardEn = {
   },
   newItem: {
     open: "New video",
-    title: "New video",
-    description:
-      "Say what to make. The agent starts on it right away. Add files and links it should use.",
-    promptLabel: "What video should we make?",
-    promptPlaceholder:
-      "A 30-second video showing the new reminders screen, like https://youtu.be/…",
-    files: "Files",
-    drop: "Drop files here, or click to browse",
-    removeFile: (name: string) => `Remove ${name}`,
-    videoLink: "Video · downloaded into the video's files",
-    pageLink: "Link · passed to the agent",
-    removeLink: "Remove link",
     untitled: "New video",
-    uploadFailed: (name: string, message: string) => `Couldn't add ${name}: ${message}`,
-    filesFailed: (message: string) => `Couldn't add the files: ${message}`,
-    linkFailed: (link: string) => `Couldn't download ${link}. The agent gets the link instead.`,
-    sendFailed: "The video was made, but the request couldn't reach the agent",
-    format: "Template",
-    noFormat: "No template",
-    optional: "Optional",
-    formatHint: "A template gives the agent a structure to follow.",
-    required: "Required",
-    choose: "Choose…",
-    none: "None",
-    createError: "Could not create the video",
-    creating: "Creating…",
-    uploading: "Adding files…",
-    downloading: "Downloading videos…",
-    sending: "Starting…",
-    create: "Create and start",
-    /** A request a `cutfac://new` link on a web page filled in, and the name the page gave. */
-    fromLink: (source: string | undefined) =>
-      source === undefined
-        ? "Filled in from a link on a web page. Check it before you start."
-        : `Filled in from a link (${source}). Check it before you start.`,
-    linkHeld: "A link brought another request. Your draft is kept.",
-    useLink: "Use the link's request",
   },
 };
 
