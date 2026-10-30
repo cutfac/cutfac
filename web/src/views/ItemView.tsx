@@ -307,7 +307,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                   version={preview}
                   running={running}
                   onRestore={() =>
-                    history.restore(item.id, preview).then(() => versionView.show(undefined))
+                    versionView.restore((version) => history.restore(item.id, version))
                   }
                   onClose={() => versionView.show(undefined)}
                 />

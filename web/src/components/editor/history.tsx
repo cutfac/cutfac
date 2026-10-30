@@ -32,13 +32,21 @@ export function useItemHistory(onItem: (item: ItemDetail) => void) {
   // Presses while a step is on its way would undo from a state the server has moved past.
   const pending = useRef(false);
 
-  function send(request: () => Promise<ItemDetail>): Promise<void> {
-    if (pending.current) return Promise.resolve();
+  /** Resolves to whether the change went through. */
+  function send(request: () => Promise<ItemDetail>): Promise<boolean> {
+    if (pending.current) return Promise.resolve(false);
 
     pending.current = true;
 
-    return request()
-      .then(onItem, sendFailed)
+    const sent = request().then(onItem);
+
+    sent.catch(sendFailed);
+
+    return sent
+      .then(
+        () => true,
+        () => false,
+      )
       .finally(() => {
         pending.current = false;
       });
@@ -86,6 +94,10 @@ export function useVersionPreview(
     show,
     close,
     toggle: () => (open ? close() : setOpen(true)),
+    /** Put the version previewed back with `put`; the player then shows the file, unless it failed. */
+    restore: async (put: (version: MediaVersion) => Promise<boolean>) => {
+      if (preview !== undefined && (await put(preview))) show(undefined);
+    },
     /** What the player shows of `media`: the version previewed, or the file. */
     src: (owner: ItemDetail, media: Media) =>
       preview === undefined ? mediaUrl(owner, media) : fileUrl(`${owner.dir}/${preview.file}`),
