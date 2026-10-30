@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
+import { cn } from "@/lib/utils";
 
 import type { AgentChoice, AgentName, AgentStatus, ModelSettings } from "../../api.ts";
 import { agentInstalled } from "../../hooks.ts";
@@ -71,7 +72,10 @@ function Setting({
           <InputGroupButton
             title={`${label}: ${shown}`}
             aria-label={`${label}: ${shown}`}
-            className="group/setting min-w-0 shrink"
+            className={cn(
+              "group/setting min-w-0 shrink",
+              bare && "-mr-1.5 hover:mr-0 data-popup-open:mr-0",
+            )}
           />
         }
       >
