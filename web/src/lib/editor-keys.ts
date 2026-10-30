@@ -1,4 +1,5 @@
 import { Data, Option } from "effect";
+import { useEffect, useEffectEvent } from "react";
 
 /** Where typing goes to the element, so the editor's single-key shortcuts stay out of the way. */
 const TEXT_ENTRY =
@@ -82,4 +83,21 @@ export function editorKey(event: KeyboardEvent): Option.Option<EditorKey> {
     default:
       return Option.none();
   }
+}
+
+/** Hand each of the editor's shortcuts pressed on the page to `press`; one it acts on stops there. */
+export function useEditorKeys(press: (key: EditorKey) => boolean) {
+  const onKey = useEffectEvent((event: KeyboardEvent) => {
+    const key = editorKey(event);
+
+    if (Option.isSome(key) && press(key.value)) event.preventDefault();
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey(event);
+
+    addEventListener("keydown", listener);
+
+    return () => removeEventListener("keydown", listener);
+  }, []);
 }

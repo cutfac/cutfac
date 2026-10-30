@@ -1,5 +1,3 @@
-import type { DetailField } from "../api.ts";
-
 export const editorEn = {
   item: {
     openError: "Cannot open this video",
@@ -10,7 +8,6 @@ export const editorEn = {
     imageHint: "Drag on the image to mark the area an edit is about.",
     chat: "Chat",
     details: "Details",
-    history: "History",
     editing: (agent: string) => `${agent} is editing`,
     /** The agent waits on the user: for an answer to its questions, or an OK to use a tool. */
     asking: (agent: string, question: boolean) =>
@@ -31,7 +28,7 @@ export const editorEn = {
     titleRequired: "The title cannot be empty.",
   },
   layout: {
-    /** The panel of chat, history and details, as the editor's sections name it. */
+    /** The panel of chat and details, as the editor's sections name it. */
     chat: "Chat panel",
     move: (section: string) => `Move ${section}`,
     place: (section: string) => `Where ${section} goes`,
@@ -49,38 +46,31 @@ export const editorEn = {
   history: {
     undo: "Undo",
     redo: "Redo",
-    backTo: (change: string) => `Back to right after: ${change}`,
-    backToOriginal: "Back to the original",
-    restoredVersion: (media: string) => `Restored an earlier ${media}`,
-    running: "An agent is working on this video. Wait for it or stop it before going back.",
-    emptyTitle: "No changes yet",
-    emptyBody:
-      "Edits, rollbacks, and changes to the details land here, and you can step back to any of them.",
-    changes: "Changes",
-    changesHint:
-      "Click a change to go back to right after it. Undone changes stay until you make a new one.",
-    original: "Original",
-    originalHint: "Before the first change recorded here",
-    now: "Now",
-    undoneHint: "Undone. Click to redo up to here.",
-    versions: "Saved versions",
-    versionsHint: "Every version each file has had. Restoring one is a change you can undo, too.",
-    restore: "Restore",
-    inUse: "In use",
-    edit: (request: string) => `Edit “${request}”`,
-    editMedia: (media: string) => `Edit to ${media}`,
-    rollback: (media: string) => `Rolled back ${media}`,
-    version: (media: string) => `Restored an earlier ${media}`,
-    outside: (media: string) => `Changed ${media} outside a request`,
-    renamed: (title: string) => `Renamed to “${title}”`,
-    moved: (status: string) => `Moved to ${status}`,
-    changed: (fields: string) => `Changed the ${fields}`,
-    fields: {
-      title: "title",
-      status: "status",
-      hook: "hook",
-      notes: "notes",
-    } satisfies Record<DetailField, string>,
+    title: "Version history",
+    close: "Close version history",
+    running:
+      "An agent is working on this video. Wait for it or stop it before restoring a version.",
+    emptyTitle: "No versions yet",
+    emptyBody: "Each time the video changes, the version it became lands here.",
+    hint: "Click a version to preview it, and restore it if you want it back. The current one stays too.",
+    now: "Current",
+    request: (number: number) => `Request #${number}`,
+    /** Opens the versions a request went through before its last. */
+    more: (count: number) => `${count} more`,
+    goneRequest: "Deleted request",
+    picked: "Picked version",
+    original: (media?: string) => (media === undefined ? "Original" : `Original ${media}`),
+    edited: (media?: string) => (media === undefined ? "Agent's edit" : `Edit to ${media}`),
+    rolledBack: (media?: string) =>
+      media === undefined ? "Rolled back to before" : `Rolled ${media} back to before`,
+    restored: (media?: string) =>
+      media === undefined ? "Restored an earlier version" : `Restored an earlier ${media}`,
+    outside: (media?: string) =>
+      media === undefined ? "Changed outside a request" : `Changed ${media} outside a request`,
+    earlier: "Earlier version",
+    previewing: "Previewing",
+    restore: "Restore this version",
+    stopPreview: "Back to current",
   },
   shortcuts: {
     open: "Keyboard shortcuts",

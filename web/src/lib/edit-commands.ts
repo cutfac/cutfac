@@ -1,4 +1,5 @@
 import { Option } from "effect";
+import { useEffect, useEffectEvent } from "react";
 
 import { desktop, type EditCommand } from "../desktop.ts";
 
@@ -85,4 +86,11 @@ export function installEditCommands(): () => void {
   addEventListener("keydown", fromKeyboard);
 
   return () => removeEventListener("keydown", fromKeyboard);
+}
+
+/** Hand Undo and Redo, from the keyboard or the app menu, to `listener` while mounted. */
+export function useEditCommands(listener: (command: EditCommand) => void) {
+  const onCommand = useEffectEvent(listener);
+
+  useEffect(() => onEditCommand((command) => onCommand(command)), []);
 }

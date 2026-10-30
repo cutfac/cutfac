@@ -1,18 +1,11 @@
 import { Array, Option } from "effect";
 
-import type {
-  DetailField,
-  DetailsChange,
-  Feedback,
-  HistoryDoc,
-  HistoryEntry,
-  MediaVersion,
-} from "../api.ts";
+import { sameContent } from "../../../src/core/historySchema.ts";
+import type { Feedback, HistoryDoc, HistoryEntry, MediaVersion } from "../api.ts";
 import type { Messages } from "../i18n/index.ts";
+import { targetOf } from "./target.ts";
 
-const FIELDS: ReadonlyArray<DetailField> = ["title", "status", "hook", "notes"];
-
-/** Longest request quoted in a change's name; the rest is in the chat. */
+/** Longest request quoted in a version's name; the rest is in the chat. */
 const QUOTE_LENGTH = 48;
 
 /** The change Undo would take back. */
@@ -23,93 +16,126 @@ export const undoable = (history: HistoryDoc): Option.Option<HistoryEntry> =>
 export const redoable = (history: HistoryDoc): Option.Option<HistoryEntry> =>
   Array.get(history.entries, history.cursor);
 
-export const changedFields = (entry: DetailsChange): DetailField[] =>
-  FIELDS.filter((field) => Object.hasOwn(entry.after, field) || Object.hasOwn(entry.before, field));
-
-/** The first line of a request, cut short enough to name a change. */
-function quote(text: string): string {
+/** The first line of a request, cut short enough to name a version by. */
+export function quote(text: string): string {
   const line = text.trim().split("\n")[0] ?? "";
 
   return line.length > QUOTE_LENGTH ? `${line.slice(0, QUOTE_LENGTH - 1).trimEnd()}…` : line;
 }
 
-/** A change in a few words: the request behind an edit, or which fields changed. */
-export function describeChange(
-  entry: HistoryEntry,
-  feedback: ReadonlyArray<Feedback>,
-  t: Messages,
-  locale: string,
-): string {
-  if (entry.kind === "details") {
-    const fields = changedFields(entry);
-    const { title, status } = entry.after;
+/** What put a media file in a version. */
+export type Origin = Pick<MediaVersion, "cause" | "feedbackId" | "variant" | "source">;
 
-    if (fields.length === 1 && title !== undefined) return t.history.renamed(title);
+/**
+ * What put a media file in `version`. Versions saved before they said so are told by the change
+ * that led to them, and a file's first one is its original.
+ */
+export function originOf(history: HistoryDoc, version: MediaVersion): Origin {
+  if (version.cause !== undefined) return version;
 
-    if (fields.length === 1 && status !== undefined) return t.history.moved(t.status[status]);
+  const change = history.entries.findLast((e) => e.kind === "media" && e.to === version.id);
 
-    const names = fields.map((field) => t.history.fields[field]);
+  if (change?.kind === "media") return { cause: change.cause, feedbackId: change.feedbackId };
 
-    return t.history.changed(new Intl.ListFormat(locale).format(names));
-  }
+  const first = history.versions.find((v) => v.media === version.media);
 
-  switch (entry.cause) {
-    case "edit": {
-      const request = feedback.find((f) => f.id === entry.feedbackId)?.body;
+  return { cause: first?.id === version.id ? "original" : undefined };
+}
 
-      return request === undefined
-        ? t.history.editMedia(entry.media)
-        : t.history.edit(quote(request));
-    }
+/**
+ * A version in a few words. A request's versions are listed under it, so they say only what
+ * happened; `media` names the file when the item has more than one.
+ */
+export function describeVersion(origin: Origin, t: Messages, media?: string): string {
+  switch (origin.cause) {
+    case "original":
+      return t.history.original(media);
+
+    case "edit":
+      return origin.variant ?? t.history.edited(media);
 
     case "restore":
-      return t.history.rollback(entry.media);
+      return t.history.rolledBack(media);
 
     case "version":
-      return t.history.version(entry.media);
+      return t.history.restored(media);
 
     case "outside":
-      return t.history.outside(entry.media);
+      return t.history.outside(media);
+
+    case undefined:
+      return t.history.earlier;
   }
 }
 
-/** `now` is the change the item is at; `undone` ones are still there to redo. */
-export type ChangeState = "done" | "now" | "undone";
+const versionById = (history: HistoryDoc, id: string | undefined) =>
+  Array.findFirst(history.versions, (v) => v.id === id);
 
-export interface ChangeRow {
-  entry: HistoryEntry;
-  state: ChangeState;
-}
-
-function stateAt(index: number, cursor: number): ChangeState {
-  if (index < cursor - 1) return "done";
-
-  return index === cursor - 1 ? "now" : "undone";
-}
-
-/** The undo stack, newest first. */
-export const changeRows = (history: HistoryDoc): ChangeRow[] =>
-  history.entries
-    .map((entry, index) => ({ entry, state: stateAt(index, history.cursor) }))
-    .toReversed();
-
-export interface VersionGroup {
-  media: string;
-  /** Newest first. */
-  versions: MediaVersion[];
-}
-
-/** Saved versions, one group per media file in the order each was first saved. */
-export function versionGroups(history: HistoryDoc): VersionGroup[] {
-  const groups = new Map<string, MediaVersion[]>();
-
-  for (const version of history.versions) {
-    groups.set(version.media, [version, ...(groups.get(version.media) ?? [])]);
-  }
-
-  return [...groups].map(([media, versions]) => ({ media, versions }));
-}
-
-/** Whether the media file holds this version right now. */
-export const inUse = (history: HistoryDoc, version: MediaVersion): boolean =>
+/** Whether `version` is the one its media file holds now. */
+export const isHeld = (history: HistoryDoc, version: MediaVersion) =>
   history.heads[version.media]?.version === version.id;
+
+/** A request's versions in a row, or one version no request made. */
+export interface VersionBlock {
+  readonly feedbackId: string | undefined;
+  readonly versions: ReadonlyArray<MediaVersion>;
+}
+
+export interface VersionDay {
+  readonly day: string;
+  readonly blocks: ReadonlyArray<VersionBlock>;
+}
+
+/** Every version newest first, by day, with each request's versions in a row kept together. */
+export function versionDays(history: HistoryDoc, dayOf: (at: string) => string): VersionDay[] {
+  const days: Array<{
+    day: string;
+    blocks: Array<{ feedbackId: string | undefined; versions: MediaVersion[] }>;
+  }> = [];
+
+  for (const version of history.versions.toReversed()) {
+    const day = dayOf(version.at);
+    const { feedbackId } = originOf(history, version);
+    const today = days.at(-1)?.day === day ? days.at(-1) : undefined;
+    const last = today?.blocks.at(-1);
+
+    if (today === undefined) days.push({ day, blocks: [{ feedbackId, versions: [version] }] });
+    else if (feedbackId !== undefined && last?.feedbackId === feedbackId)
+      last.versions.push(version);
+    else today.blocks.push({ feedbackId, versions: [version] });
+  }
+
+  return days;
+}
+
+/** A moment that shows what a request changed: its box's frame, else the middle of its range. */
+export function stillOf(request: Feedback): number | undefined {
+  const { start, end, region } = targetOf(request);
+
+  return region?.at ?? (start !== undefined && end !== undefined ? (start + end) / 2 : start);
+}
+
+/**
+ * The version to put back for the moment a kept request left the video in: the last one it put in.
+ * None while the file holds that content, or for a request not kept.
+ */
+export function pointOf(history: HistoryDoc, request: Feedback): Option.Option<MediaVersion> {
+  const media = request.variants?.media ?? request.media;
+
+  if (request.decision !== "approved" || media === undefined) return Option.none();
+
+  const made = Array.findLast(history.versions, (v) => {
+    const { cause, feedbackId } = originOf(history, v);
+
+    return v.media === media && cause === "edit" && feedbackId === request.id;
+  });
+
+  const held = versionById(history, history.heads[media]?.version);
+
+  return Option.filter(made, (version) =>
+    Option.match(held, {
+      onNone: () => true,
+      onSome: (current) => !sameContent(history.versions, current, version),
+    }),
+  );
+}

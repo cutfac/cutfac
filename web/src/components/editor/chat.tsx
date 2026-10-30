@@ -149,6 +149,14 @@ export function Chat({
           onApplied(feedback);
         })
         .catch(sendFailed),
+    backTo: (feedback, version) =>
+      api
+        .restoreVersion(item.id, version.id)
+        .then((next) => {
+          onItem(next);
+          onApplied(feedback);
+        })
+        .catch(sendFailed),
     reword: (feedback, body) => api.rewordWaiting(item.id, feedback.id, body).then(onItem),
     cancel: (feedback) => {
       api.cancelWaiting(item.id, feedback.id).then(onItem, sendFailed);

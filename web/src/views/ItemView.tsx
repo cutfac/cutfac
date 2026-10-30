@@ -1,11 +1,12 @@
 import { Match, Option } from "effect";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ErrorAlert, ListSkeleton } from "@/components/page";
 import { SelectionArea } from "@/components/selection-area";
 import { InTitleBar } from "@/components/title-bar";
 import type { DroppedFile } from "@/components/ui/dropzone";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 import { api, onAgentRun, type AgentChoice, type Feedback } from "../api.ts";
 import { ReplyTimesProvider, type ReplyTimes } from "../components/editor/agent-question.tsx";
@@ -19,8 +20,13 @@ import { editInput, preferredAgent, sendRequest } from "../components/editor/com
 import { Details } from "../components/editor/details.tsx";
 import { SectionGrip } from "../components/editor/dock-grip.tsx";
 import { EditorDock } from "../components/editor/dock.tsx";
-import { HistoryPanel, useItemHistory } from "../components/editor/history.tsx";
-import { mediaUrl, MediaStrip, NoMedia, shownMedia } from "../components/editor/item-media.tsx";
+import { PreviewBar } from "../components/editor/history-preview.tsx";
+import {
+  useItemHistory,
+  useVersionPreview,
+  VersionHistory,
+} from "../components/editor/history.tsx";
+import { MediaStrip, NoMedia, shownMedia } from "../components/editor/item-media.tsx";
 import { Toolbar } from "../components/editor/item-toolbar.tsx";
 import { RenderFrame, RenderProvider, useItemRender } from "../components/editor/render-card.tsx";
 import { SampleGuideCard, useSampleGuide } from "../components/editor/sample-guide.tsx";
@@ -30,8 +36,8 @@ import { Timeline } from "../components/editor/timeline.tsx";
 import { Transport } from "../components/editor/transport.tsx";
 import { useAgentStatuses, useLive, useModelPicks } from "../hooks.ts";
 import { useMessages } from "../i18n/index.ts";
-import { onEditCommand, type EditCommand } from "../lib/edit-commands.ts";
-import { editorKey, goTime, type EditorKey } from "../lib/editor-keys.ts";
+import { useEditCommands, type EditCommand } from "../lib/edit-commands.ts";
+import { goTime, useEditorKeys } from "../lib/editor-keys.ts";
 import { useFrameRate } from "../lib/frame-rate.ts";
 import { redoable, undoable } from "../lib/history.ts";
 import { LiveState } from "../lib/live.ts";
@@ -39,7 +45,7 @@ import { agentTitle, pickedSettings } from "../lib/models.ts";
 import { Player, usePlayer } from "../lib/player.ts";
 import { renderedName, shellRender } from "../lib/render.ts";
 import { pinsOn } from "../lib/requests.ts";
-import { NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
+import { askingOf, NO_RUN, reduceRun, type LiveRun } from "../lib/run.ts";
 import {
   anchorOf,
   isEmptyTarget,
@@ -78,7 +84,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   const agent = chosen ?? preferredAgent(defaultAgent, statuses);
   const [picks, setPick] = useModelPicks();
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const media = item === undefined ? undefined : shownMedia(item, mediaName);
+  const versionView = useVersionPreview(item, player, setMediaName);
+  const { preview } = versionView;
+  const media = item === undefined ? undefined : shownMedia(item, preview?.media ?? mediaName);
   const video = media?.kind === "video";
   const fps = useFrameRate(id, media);
   const videoRatio = usePlayer(player, (state) => state.ratio);
@@ -196,11 +204,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     if (Option.isSome(entry)) history.step(command, item.id);
   }
 
-  const onEdit = useEffectEvent(edit);
+  useEditCommands(edit);
 
-  useEffect(() => onEditCommand((command) => onEdit(command)), []);
-
-  const onKey = useEffectEvent((event: KeyboardEvent) => {
+  useEditorKeys((key) => {
     const now = () => roundTime(player.getState().time);
 
     const onVideo = (action: () => void) => {
@@ -211,45 +217,38 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
       return true;
     };
 
-    const press = (key: EditorKey) =>
-      Match.valueTags(key, {
-        Shortcuts: () => {
-          setShortcuts(true);
+    return Match.valueTags(key, {
+      Shortcuts: () => {
+        setShortcuts(true);
+
+        return true;
+      },
+      PlayPause: () => onVideo(() => player.toggle()),
+      Mute: () => onVideo(() => player.toggleMute()),
+      MarkIn: () => onVideo(() => point((current) => withStart(current, now()))),
+      MarkOut: () => onVideo(() => point((current) => withEnd(current, now()))),
+      Loop: () => onVideo(() => setLoop((current) => !current)),
+      Step: ({ frames }) => onVideo(() => player.step(frames / fps)),
+      Go: ({ to }) =>
+        Option.match(goTime(to, player.getState().duration, target), {
+          onNone: () => false,
+          onSome: (at) => onVideo(() => player.seek(at)),
+        }),
+      Clear: () => {
+        if (preview !== undefined) {
+          versionView.show(undefined);
 
           return true;
-        },
-        PlayPause: () => onVideo(() => player.toggle()),
-        Mute: () => onVideo(() => player.toggleMute()),
-        MarkIn: () => onVideo(() => point((current) => withStart(current, now()))),
-        MarkOut: () => onVideo(() => point((current) => withEnd(current, now()))),
-        Loop: () => onVideo(() => setLoop((current) => !current)),
-        Step: ({ frames }) => onVideo(() => player.step(frames / fps)),
-        Go: ({ to }) =>
-          Option.match(goTime(to, player.getState().duration, target), {
-            onNone: () => false,
-            onSome: (at) => onVideo(() => player.seek(at)),
-          }),
-        Clear: () => {
-          if (isEmptyTarget(target) && ghost === undefined) return false;
+        }
 
-          clear();
+        if (isEmptyTarget(target) && ghost === undefined) return false;
 
-          return true;
-        },
-      });
+        clear();
 
-    const key = editorKey(event);
-
-    if (Option.isSome(key) && press(key.value)) event.preventDefault();
+        return true;
+      },
+    });
   });
-
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => onKey(event);
-
-    addEventListener("keydown", listener);
-
-    return () => removeEventListener("keydown", listener);
-  }, []);
 
   if (LiveState.$is("Failed")(load) && item === undefined) {
     return (
@@ -267,7 +266,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
     );
   }
 
-  const pins = pinsOn(item, media?.name, run);
+  const pins = preview === undefined ? pinsOn(item, media?.name, run) : [];
 
   return (
     <>
@@ -277,15 +276,11 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
           media={media === undefined ? undefined : `${item.dir}/${media.name}`}
           running={running}
           agent={run.agent}
-          asking={
-            run.approvals.length === 0
-              ? undefined
-              : run.approvals.some((approval) => approval.kind !== "question")
-                ? "approval"
-                : "question"
-          }
+          asking={askingOf(run)}
+          versions={versionView.open}
           onItem={setData}
           onEdit={edit}
+          onVersions={versionView.toggle}
           onShortcuts={() => setShortcuts(true)}
         />
       </InTitleBar>
@@ -304,7 +299,19 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
             />
           ) : (
             <>
-              <SampleGuideCard guide={guide} />
+              {preview === undefined ? (
+                <SampleGuideCard guide={guide} />
+              ) : (
+                <PreviewBar
+                  item={item}
+                  version={preview}
+                  running={running}
+                  onRestore={() =>
+                    history.restore(item.id, preview).then(() => versionView.show(undefined))
+                  }
+                  onClose={() => versionView.show(undefined)}
+                />
+              )}
               <RenderFrame
                 view={renderView}
                 ratio={(video ? videoRatio : undefined) ?? aspectRatio(media.aspect) ?? 9 / 16}
@@ -315,11 +322,11 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
               >
                 <Stage
                   player={player}
-                  src={mediaUrl(item, media)}
+                  src={versionView.src(item, media)}
                   kind={media.kind}
                   ratio={aspectRatio(media.aspect)}
-                  region={target.region}
-                  ghost={ghost?.region}
+                  region={preview === undefined ? target.region : undefined}
+                  ghost={preview === undefined ? ghost?.region : undefined}
                   onRegion={(region) => point((current) => withRegion(current, region))}
                   ask={{
                     item,
@@ -342,6 +349,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                         setRun,
                       ).then((sentTo) => {
                         setTab("chat");
+                        versionView.close();
 
                         // `/feedback` leaves the box drawn, so the request about it can still follow.
                         if (sentTo === "item") {
@@ -358,13 +366,14 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     show(feedback);
                     setTab("chat");
                   }}
+                  drawable={preview === undefined}
                 />
               </RenderFrame>
               {video ? (
                 <>
                   <Timeline
                     player={player}
-                    src={mediaUrl(item, media)}
+                    src={versionView.src(item, media)}
                     target={target}
                     ghost={ghost}
                     onRange={(from, to) => point((current) => withRange(current, from, to))}
@@ -410,76 +419,77 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
         }
         chat={
           <aside className="flex min-h-0 flex-1 flex-col">
-            <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
-              <div className="flex items-center gap-1 p-2">
-                <TabsList className="min-w-0 flex-1">
-                  <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
-                  <TabsTrigger value="history">{t.item.history}</TabsTrigger>
-                  <TabsTrigger value="details">{t.item.details}</TabsTrigger>
-                </TabsList>
-                <SectionGrip section="chat" />
-              </div>
-              {/* Kept mounted so the chat keeps its scroll and a half-written answer across tabs. */}
-              <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
-                <RenderProvider value={renderView}>
-                  <ReplyTimesProvider value={replyTimes}>
-                    <Chat
-                      item={item}
-                      media={media}
-                      run={run}
-                      statuses={statuses}
-                      agent={agent}
-                      picks={picks}
-                      inputRef={inputRef}
-                      onItem={setData}
-                      onRun={setRun}
-                      onShow={show}
-                      onRetarget={(feedback: Feedback) =>
-                        retarget(targetOf(feedback), feedback.media)
-                      }
-                      onCompare={() => player.pause()}
-                      onApplied={(feedback: Feedback) => {
-                        goTo(feedback.media, undefined);
-                        player.seekOnLoad(anchorOf(targetOf(feedback)) ?? 0, true);
-                      }}
-                    />
-                  </ReplyTimesProvider>
-                </RenderProvider>
-              </TabsContent>
-              <TabsContent value="history" className="min-h-0 overflow-y-auto">
-                <div className="p-4">
-                  <HistoryPanel
-                    item={item}
-                    running={running}
-                    onGoTo={(entryId) => history.goTo(item.id, entryId)}
-                    onRestore={(version) => history.restore(item.id, version)}
-                    onPreview={() => player.pause()}
-                  />
+            {/* Kept mounted under the version history, so the chat keeps its scroll and drafts. */}
+            <div className={cn("flex min-h-0 flex-1 flex-col", versionView.open && "hidden")}>
+              <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
+                <div className="flex items-center gap-1 p-2">
+                  <TabsList className="min-w-0 flex-1">
+                    <TabsTrigger value="chat">{t.item.chat}</TabsTrigger>
+                    <TabsTrigger value="details">{t.item.details}</TabsTrigger>
+                  </TabsList>
+                  {versionView.open ? null : <SectionGrip section="chat" />}
                 </div>
-              </TabsContent>
-              <TabsContent value="details" className="min-h-0 overflow-y-auto">
-                <SelectionArea className="p-4">
-                  <Details item={item} onItem={setData} />
-                </SelectionArea>
-              </TabsContent>
-            </Tabs>
-            <ChatComposer
-              item={item}
-              media={media}
-              target={target}
-              statuses={statuses}
-              agent={agent}
-              onAgent={setChosen}
-              picks={picks}
-              onPick={setPick}
-              run={run}
-              inputRef={inputRef}
-              files={chatFiles}
-              onItem={setData}
-              onRun={setRun}
-              onClearTarget={clear}
-              onSent={() => setTab("chat")}
-            />
+                {/* Kept mounted so the chat keeps its scroll and a half-written answer across tabs. */}
+                <TabsContent value="chat" keepMounted className="flex min-h-0 flex-col">
+                  <RenderProvider value={renderView}>
+                    <ReplyTimesProvider value={replyTimes}>
+                      <Chat
+                        item={item}
+                        media={media}
+                        run={run}
+                        statuses={statuses}
+                        agent={agent}
+                        picks={picks}
+                        inputRef={inputRef}
+                        onItem={setData}
+                        onRun={setRun}
+                        onShow={show}
+                        onRetarget={(feedback: Feedback) =>
+                          retarget(targetOf(feedback), feedback.media)
+                        }
+                        onCompare={() => player.pause()}
+                        onApplied={(feedback: Feedback) => {
+                          goTo(feedback.media, undefined);
+                          player.seekOnLoad(anchorOf(targetOf(feedback)) ?? 0, true);
+                        }}
+                      />
+                    </ReplyTimesProvider>
+                  </RenderProvider>
+                </TabsContent>
+                <TabsContent value="details" className="min-h-0 overflow-y-auto">
+                  <SelectionArea className="p-4">
+                    <Details item={item} onItem={setData} />
+                  </SelectionArea>
+                </TabsContent>
+              </Tabs>
+              <ChatComposer
+                item={item}
+                media={media}
+                target={target}
+                statuses={statuses}
+                agent={agent}
+                onAgent={setChosen}
+                picks={picks}
+                onPick={setPick}
+                run={run}
+                inputRef={inputRef}
+                files={chatFiles}
+                onItem={setData}
+                onRun={setRun}
+                onClearTarget={clear}
+                onSent={() => setTab("chat")}
+              />
+            </div>
+            {versionView.open ? (
+              <VersionHistory
+                item={item}
+                running={running}
+                previewing={preview?.id}
+                onPreview={versionView.show}
+                onClose={versionView.close}
+                grip={<SectionGrip section="chat" />}
+              />
+            ) : null}
           </aside>
         }
       />

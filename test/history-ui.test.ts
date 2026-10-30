@@ -12,12 +12,13 @@ import type {
 import { en } from "../web/src/i18n/en.tsx";
 import { ko } from "../web/src/i18n/ko.tsx";
 import {
-  changeRows,
-  describeChange,
-  inUse,
+  describeVersion,
+  originOf,
+  pointOf,
+  quote,
   redoable,
   undoable,
-  versionGroups,
+  versionDays,
 } from "../web/src/lib/history.ts";
 import { formatAgo } from "../web/src/lib/time.ts";
 
@@ -34,31 +35,33 @@ const media = (id: string, overrides: Partial<MediaChange> = {}): MediaChange =>
   ...overrides,
 });
 
-const version = (id: string, file: string, at: string): MediaVersion => ({
+const version = (id: string, overrides: Partial<MediaVersion> = {}): MediaVersion => ({
   id,
-  media: file,
-  file: `history/${id}-${file}`,
-  at,
+  media: "final.mp4",
+  file: `history/${id}.mp4`,
+  at: AT,
   size: 1_000,
+  ...overrides,
 });
 
 const doc = (
   entries: HistoryEntry[],
   cursor: number,
   versions: MediaVersion[] = [],
-): HistoryDoc => ({
-  cursor,
-  entries,
-  versions,
-  heads: {},
-});
+  heads: HistoryDoc["heads"] = {},
+): HistoryDoc => ({ cursor, entries, versions, heads });
 
-const request = (id: string, body: string): Feedback => ({
+const holding = (id: string) => ({ "final.mp4": { version: id, size: 1_000, mtime: 0 } });
+
+const request = (id: string, overrides: Partial<Feedback> = {}): Feedback => ({
   id,
   at: AT,
   author: "me",
-  body,
-  status: "open",
+  body: "Punchier",
+  status: "resolved",
+  decision: "approved",
+  media: "final.mp4",
+  ...overrides,
 });
 
 describe("undo stack", () => {
@@ -72,124 +75,113 @@ describe("undo stack", () => {
     expect(undoable(doc(entries, 0))).toEqual(Option.none());
     expect(redoable(doc(entries, 3))).toEqual(Option.none());
   });
-
-  test("rows list the newest change first, marking where the item is", () => {
-    const rows = changeRows(doc(entries, 2));
-
-    expect(rows.map((row) => [row.entry.id, row.state])).toEqual([
-      ["c", "undone"],
-      ["b", "now"],
-      ["a", "done"],
-    ]);
-  });
-
-  test("at the original nothing is current", () => {
-    expect(changeRows(doc(entries, 0)).map((row) => row.state)).toEqual([
-      "undone",
-      "undone",
-      "undone",
-    ]);
-  });
 });
 
-describe("change names", () => {
-  test("an edit quotes the first line of its request, cut short", () => {
+describe("version names", () => {
+  test("a request is quoted by its first line, cut short", () => {
     const long = `${"Trim the pause before the punchline ".repeat(3)}\nand more`;
-    const name = describeChange(media("a", { feedbackId: "f1" }), [request("f1", long)], en, "en");
+    const name = quote(long);
 
-    expect(name.startsWith("Edit “Trim the pause")).toBe(true);
-    expect(name.endsWith("…”")).toBe(true);
+    expect(name.startsWith("Trim the pause")).toBe(true);
+    expect(name.endsWith("…")).toBe(true);
     expect(name).not.toContain("and more");
   });
 
-  test("an edit without its request names the file", () => {
-    expect(describeChange(media("a", { feedbackId: "gone" }), [], en, "en")).toBe(
-      "Edit to final.mp4",
+  test("a pick is named by the version picked, any other by what put it in", () => {
+    expect(describeVersion({ cause: "edit", variant: "v2: Fast cuts" }, en)).toBe("v2: Fast cuts");
+    expect(describeVersion({ cause: "edit" }, en)).toBe("Agent's edit");
+    expect(describeVersion({ cause: "original" }, en)).toBe("Original");
+    expect(describeVersion({ cause: undefined }, en)).toBe("Earlier version");
+  });
+
+  test("the file is named only when the item has others to tell it from", () => {
+    expect(describeVersion({ cause: "restore" }, en)).toBe("Rolled back to before");
+    expect(describeVersion({ cause: "restore" }, en, "final.mp4")).toBe(
+      "Rolled final.mp4 back to before",
+    );
+    expect(describeVersion({ cause: "outside" }, ko, "final.mp4")).toBe(
+      "final.mp4가 요청 밖에서 바뀜",
     );
   });
 
-  test("other media changes say why the file changed", () => {
-    expect(describeChange(media("a", { cause: "restore" }), [], en, "en")).toBe(
-      "Rolled back final.mp4",
-    );
-    expect(describeChange(media("a", { cause: "outside" }), [], en, "en")).toBe(
-      "Changed final.mp4 outside a request",
-    );
-  });
+  test("a version saved before versions said what made them is told by its change", () => {
+    const history = doc([media("a", { from: "v1", to: "v2", feedbackId: "f1" })], 1, [
+      version("v1"),
+      version("v2"),
+      version("v3"),
+    ]);
 
-  test("a single title or status change says what it became", () => {
-    const renamed: HistoryEntry = {
-      kind: "details",
-      id: "d1",
-      at: AT,
-      before: { title: "Old" },
-      after: { title: "New" },
-    };
+    const [first, second, third] = history.versions.map((v) => originOf(history, v));
 
-    const moved: HistoryEntry = {
-      kind: "details",
-      id: "d2",
-      at: AT,
-      before: { status: "drafting" },
-      after: { status: "review" },
-    };
-
-    expect(describeChange(renamed, [], en, "en")).toBe("Renamed to “New”");
-    expect(describeChange(moved, [], en, "en")).toBe(`Moved to ${en.status.review}`);
-  });
-
-  test("several fields, or a cleared one, are listed by name", () => {
-    const several: HistoryEntry = {
-      kind: "details",
-      id: "d3",
-      at: AT,
-      before: { title: "Old", hook: null },
-      after: { title: "New", hook: "Wait for it" },
-    };
-
-    const cleared: HistoryEntry = {
-      kind: "details",
-      id: "d4",
-      at: AT,
-      before: { notes: "Shoot at noon" },
-      after: { notes: null },
-    };
-
-    expect(describeChange(several, [], en, "en")).toBe("Changed the title and hook");
-    expect(describeChange(cleared, [], en, "en")).toBe("Changed the notes");
-    expect(describeChange(several, [], ko, "ko")).toBe(
-      ko.history.changed(`${ko.history.fields.title} 및 ${ko.history.fields.hook}`),
-    );
+    expect(first).toEqual({ cause: "original" });
+    expect(second).toEqual({ cause: "edit", feedbackId: "f1" });
+    expect(third).toEqual({ cause: undefined });
   });
 });
 
-describe("saved versions", () => {
-  test("group by file in first-saved order, newest version first", () => {
+const dayOf = (at: string) => at.slice(0, 10);
+
+const on = (date: string) => `${date}T09:00:00.000Z`;
+
+describe("one log of versions", () => {
+  test("lists them newest first by day, with a request's versions in a row together", () => {
     const versions = [
-      version("v1", "final.mp4", "2026-10-12T09:00:00.000Z"),
-      version("v2", "cover.png", "2026-10-12T09:01:00.000Z"),
-      version("v3", "final.mp4", "2026-10-12T09:02:00.000Z"),
+      version("original", { cause: "original", at: on("2026-10-11") }),
+      version("pick", { cause: "edit", feedbackId: "f1", at: on("2026-10-11") }),
+      version("switch", { cause: "edit", feedbackId: "f1", at: on("2026-10-12") }),
+      version("back", { cause: "version", source: "pick", at: on("2026-10-12") }),
+      version("edit", { cause: "edit", feedbackId: "f2", at: on("2026-10-12") }),
+      version("again", { cause: "edit", feedbackId: "f2", at: on("2026-10-12") }),
     ];
 
-    const groups = versionGroups(doc([], 0, versions));
+    const days = versionDays(doc([], 0, versions), dayOf);
 
-    expect(groups.map((group) => [group.media, group.versions.map((v) => v.id)])).toEqual([
-      ["final.mp4", ["v3", "v1"]],
-      ["cover.png", ["v2"]],
+    expect(
+      days.map(({ day, blocks }) => [
+        day,
+        blocks.map((block) => [block.feedbackId, block.versions.map(({ id }) => id)]),
+      ]),
+    ).toEqual([
+      [
+        "2026-10-12",
+        [
+          ["f2", ["again", "edit"]],
+          [undefined, ["back"]],
+          ["f1", ["switch"]],
+        ],
+      ],
+      [
+        "2026-10-11",
+        [
+          ["f1", ["pick"]],
+          [undefined, ["original"]],
+        ],
+      ],
     ]);
   });
 
-  test("the version a file holds now is the one in use", () => {
-    const current = version("v3", "final.mp4", AT);
-    const older = version("v1", "final.mp4", AT);
+  test("a kept request goes back to the last version it put in, unless the file has it", () => {
+    const versions = [
+      version("original", { cause: "original" }),
+      version("first", { cause: "edit", feedbackId: "f1" }),
+      version("picked", { cause: "edit", feedbackId: "f1", file: "edits/f1/kept-a.mp4" }),
+      version("later", { cause: "edit", feedbackId: "f2" }),
+      // Rolling f2 back put f1's content back from f2's own copy.
+      version("rolled", {
+        cause: "restore",
+        feedbackId: "f2",
+        file: "edits/f2/before.mp4",
+        source: "picked",
+      }),
+    ];
 
-    const history: HistoryDoc = {
-      ...doc([], 0, [older, current]),
-      heads: { "final.mp4": { version: "v3", size: 1_000, mtime: 0 } },
-    };
+    const at = (held: string) => doc([], 0, versions, holding(held));
+    const pointed = (held: string, f: Feedback) => Option.map(pointOf(at(held), f), ({ id }) => id);
 
-    expect(inUse(history, current)).toBe(true);
-    expect(inUse(history, older)).toBe(false);
+    expect(pointed("later", request("f1"))).toEqual(Option.some("picked"));
+    expect(pointed("picked", request("f1"))).toEqual(Option.none());
+    expect(pointed("rolled", request("f1"))).toEqual(Option.none());
+    expect(pointed("original", request("f1", { decision: "restored" }))).toEqual(Option.none());
   });
 });
 

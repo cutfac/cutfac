@@ -124,6 +124,14 @@ export function reduceRun(run: LiveRun, message: RunMessage): LiveRun {
 }
 
 /** Changes the run the chat shows, as React's `setState` does. */
+/** What the agent waits on the user for: a tool it asks to use, or its questions. */
+export const askingOf = (run: LiveRun): "approval" | "question" | undefined =>
+  run.approvals.length === 0
+    ? undefined
+    : run.approvals.some((approval) => approval.kind !== "question")
+      ? "approval"
+      : "question";
+
 export type OnRun = (update: (run: LiveRun) => LiveRun) => void;
 
 /**

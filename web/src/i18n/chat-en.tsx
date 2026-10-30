@@ -54,6 +54,10 @@ export const chatEn = {
     keep: "Keep",
     restore: "Restore before",
     askAgain: "Ask again",
+    /** Puts back the version a kept request left the video in, after later changes. */
+    backTo: "Back to this point",
+    backToHint:
+      "Put the video back as this request left it. The current one stays in the version history.",
     /** Under the agent's question while it waits; `choices` when it offered answers to pick. */
     answerHint: (choices: boolean): string =>
       choices

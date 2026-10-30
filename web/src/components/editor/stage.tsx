@@ -2,6 +2,7 @@ import { XIcon } from "lucide-react";
 import { useState, type PointerEvent, type ReactNode, type Ref } from "react";
 
 import { Dropzone, type DroppedFile } from "@/components/ui/dropzone";
+import { cn } from "@/lib/utils";
 
 import type { Feedback, Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
@@ -86,6 +87,8 @@ interface StageProps {
   /** The requests on this media still in play; the ones about a box are numbered on it. */
   pins: ReadonlyArray<Pin>;
   onPin: (feedback: Feedback) => void;
+  /** A box can be drawn; off while the frame shows something other than the file. */
+  drawable: boolean;
 }
 
 /**
@@ -106,6 +109,7 @@ export function Stage({
   onAttach,
   pins,
   onPin,
+  drawable,
 }: StageProps) {
   const [drag, setDrag] = useState<Drag | undefined>(undefined);
   const [imageRatio, setImageRatio] = useState<number | undefined>(undefined);
@@ -148,7 +152,7 @@ export function Stage({
 
     const moved = Math.hypot((to.x - drag.from.x) * rect.width, (to.y - drag.from.y) * rect.height);
 
-    const drawing = drag.drawing || moved > 4;
+    const drawing = drawable && (drag.drawing || moved > 4);
 
     if (drawing && !drag.drawing) player.pause();
 
@@ -246,7 +250,10 @@ export function Stage({
               }}
             />
           )}
-          <div aria-hidden="true" className="absolute inset-0 cursor-crosshair" />
+          <div
+            aria-hidden="true"
+            className={cn("absolute inset-0", drawable && "cursor-crosshair")}
+          />
           {ghost !== undefined && ghost !== region ? <AreaMark box={ghost} look="ghost" /> : null}
           {pins.map((pin) =>
             pin.feedback.region === undefined ? null : (

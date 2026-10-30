@@ -1,5 +1,12 @@
 import { Option } from "effect";
-import { ArrowLeftIcon, DownloadIcon, KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  DownloadIcon,
+  HistoryIcon,
+  KeyboardIcon,
+  Redo2Icon,
+  Undo2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { StatusDot } from "@/components/status-dot";
@@ -27,8 +34,8 @@ import type { LiveRun } from "../../lib/run.ts";
 import { Hint, keepFocus } from "./hint.tsx";
 
 /**
- * The item's title bar: back to the board, what the agent is doing, undo and redo, exporting the
- * media shown with a warning when it breaks an upload rule, and status.
+ * The item's title bar: back to the board, what the agent is doing, undo, redo and the version
+ * history, exporting the media shown with a warning when it breaks an upload rule, and status.
  */
 export function Toolbar({
   item,
@@ -36,8 +43,10 @@ export function Toolbar({
   running,
   agent,
   asking,
+  versions,
   onItem,
   onEdit,
+  onVersions,
   onShortcuts,
 }: {
   item: ItemDetail;
@@ -47,8 +56,11 @@ export function Toolbar({
   agent: LiveRun["agent"];
   /** What the agent waits on the user for: a tool it asks to use, or its questions. */
   asking: "approval" | "question" | undefined;
+  /** The version history is open. */
+  versions: boolean;
   onItem: (item: ItemDetail) => void;
   onEdit: (command: EditCommand) => void;
+  onVersions: () => void;
   onShortcuts: () => void;
 }) {
   const t = useMessages();
@@ -110,6 +122,18 @@ export function Toolbar({
             onClick={() => onEdit("redo")}
           >
             <Redo2Icon />
+          </Button>
+        </Hint>
+        <Hint label={t.history.title}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t.history.title}
+            aria-expanded={versions}
+            onMouseDown={keepFocus}
+            onClick={onVersions}
+          >
+            <HistoryIcon />
           </Button>
         </Hint>
         <Hint label={t.shortcuts.open} keys="?">

@@ -51,6 +51,8 @@ export const chatKo: ChatMessages = {
     keep: "유지",
     restore: "이전으로 되돌리기",
     askAgain: "다시 요청",
+    backTo: "이 시점으로",
+    backToHint: "이 요청이 끝났을 때의 영상으로 되돌려요. 지금 영상은 버전 기록에 남아요.",
     answerHint: (choices) =>
       choices
         ? "답을 기다려요. 하나를 고르거나 아래에 직접 적어 보내세요."

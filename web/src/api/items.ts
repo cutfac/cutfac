@@ -200,13 +200,6 @@ export const itemApi = {
   pruneVersions: (id: string) => send(ItemDetail, "POST", `/api/item/edit/prune${q(id)}`, {}),
   undo: (id: string) => send(ItemDetail, "POST", `/api/item/history/undo${q(id)}`, {}),
   redo: (id: string) => send(ItemDetail, "POST", `/api/item/history/redo${q(id)}`, {}),
-  goTo: (id: string, entryId: string | undefined) =>
-    send(
-      ItemDetail,
-      "POST",
-      `/api/item/history/goto${q(id)}`,
-      entryId === undefined ? {} : { entryId },
-    ),
   restoreVersion: (id: string, versionId: string) =>
     send(ItemDetail, "POST", `/api/item/history/version${q(id)}`, { versionId }),
   verify: (id: string) => request(Schema.Array(MediaReport), `/api/item/verify${q(id)}`),
