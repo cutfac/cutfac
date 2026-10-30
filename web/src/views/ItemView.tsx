@@ -53,6 +53,7 @@ import {
   roundTime,
   targetOf,
   withEnd,
+  withoutRange,
   withRange,
   withRegion,
   withStart,
@@ -379,6 +380,7 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
                     ghost={ghost}
                     onRange={(from, to) => point((current) => withRange(current, from, to))}
                     onMarked={focusComposer}
+                    onUnmarked={() => point(withoutRange)}
                     pins={pins}
                   />
                   <Transport player={player} target={target} loop={loop} onLoop={setLoop} />

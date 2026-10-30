@@ -20,6 +20,7 @@ import {
   NO_TARGET,
   targetOf,
   withEnd,
+  outsideRange,
   withoutRange,
   withRange,
   withRegion,
@@ -31,9 +32,24 @@ const BOX = { x: 0.1, y: 0.2, w: 0.3, h: 0.4, at: 4 };
 const boxAt = (time: string) => `box at ${time}`;
 
 describe("edit target", () => {
-  test("a range is ordered and rounded to a tenth of a second", () => {
-    expect(withRange(NO_TARGET, 5.04, 3.16)).toEqual({ start: 3.2, end: 5 });
-    expect(withRange(NO_TARGET, 2.01, 2.04)).toEqual({ start: 2 });
+  test("a click lets go of the range only outside it", () => {
+    const range = withRange(NO_TARGET, 2, 6);
+
+    expect([1.9, 2, 4, 6, 6.1].map((at) => outsideRange(range, at))).toEqual([
+      true,
+      false,
+      false,
+      false,
+      true,
+    ]);
+    expect(outsideRange(withRange(NO_TARGET, 3), 3.004)).toBe(false);
+    expect(outsideRange(withRange(NO_TARGET, 3), 4)).toBe(true);
+    expect(outsideRange(withRegion(NO_TARGET, BOX), 4)).toBe(false);
+  });
+
+  test("a range is ordered and rounded to a hundredth of a second", () => {
+    expect(withRange(NO_TARGET, 5.044, 3.166)).toEqual({ start: 3.17, end: 5.04 });
+    expect(withRange(NO_TARGET, 2.001, 2.004)).toEqual({ start: 2 });
     expect(withRange(NO_TARGET, -1, 1)).toEqual({ start: 0, end: 1 });
   });
 

@@ -4,7 +4,14 @@ import type { Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import type { Pin } from "../../lib/requests.ts";
-import { anchorOf, clampUnit, percent, targetOf, type Target } from "../../lib/target.ts";
+import {
+  anchorOf,
+  clampUnit,
+  outsideRange,
+  percent,
+  targetOf,
+  type Target,
+} from "../../lib/target.ts";
 import { formatTime } from "../../lib/time.ts";
 import { PinBadge } from "./pin.tsx";
 
@@ -113,6 +120,8 @@ interface Scrub {
   /** Past the wobble threshold: a range is being dragged out, not a click. */
   readonly dragging: boolean;
   readonly x: number;
+  /** Where the pointer is, unrounded, so the drawn range follows it smoothly. */
+  readonly to?: number;
 }
 
 /**
@@ -133,6 +142,13 @@ function grab(grabbed: Element | undefined, at: number, x: number, target: Targe
   return { mode: "edge", from, dragging: true, x };
 }
 
+/** The range to draw: the one being dragged, where the pointer is, else the selected one. */
+function drawnRange(scrub: Scrub | undefined, target: Target): Target {
+  if (scrub?.mode === "seek" || scrub?.to === undefined) return target;
+
+  return { start: Math.min(scrub.from, scrub.to), end: Math.max(scrub.from, scrub.to) };
+}
+
 /** The playhead holds still while a range is dragged out (where it began) or an edge moves. */
 function pinnedAt(scrub: Scrub | undefined, target: Target): number | undefined {
   if (scrub?.mode === "select") return scrub.from;
@@ -151,17 +167,28 @@ interface TimelineProps {
   onRange: (from: number, to?: number) => void;
   /** A range was dragged out: the moment to start typing what should change in it. */
   onMarked: () => void;
+  /** A plain click on the frames outside the selected range, which lets go of it. */
+  onUnmarked: () => void;
   /** The requests on this video still in play, numbered where they point. */
   pins: ReadonlyArray<Pin>;
 }
 
 /**
- * The video's length as a strip of frames under a thin ruler. Click to jump; drag across the frames
- * to select the part an edit is about; drag the playhead's head or the ruler to move through the
- * video without selecting. The selection shows in the editor's one colour, with the box's frame as
+ * The video's length as a strip of frames under a thin ruler. Click to jump, which outside the
+ * selection lets go of it; drag across the frames to select the part an edit is about; drag the
+ * playhead's head or the ruler to move through the video without selecting. The selection shows in the editor's one colour, with the box's frame as
  * a diamond on top.
  */
-export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }: TimelineProps) {
+export function Timeline({
+  player,
+  src,
+  target,
+  ghost,
+  onRange,
+  onMarked,
+  onUnmarked,
+  pins,
+}: TimelineProps) {
   const duration = usePlayer(player, (state) => state.duration);
   const frames = useFilmstrip(src);
   const [scrub, setScrub] = useState<Scrub | undefined>(undefined);
@@ -204,7 +231,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
 
     if (dragging) {
       onRange(scrub.from, at);
-      setScrub({ ...scrub, dragging });
+      setScrub({ ...scrub, dragging, to: at });
     }
 
     player.seek(at);
@@ -215,6 +242,12 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
 
     setScrub(undefined);
 
+    if (scrub.mode === "select" && !scrub.dragging && outsideRange(target, scrub.from)) {
+      onUnmarked();
+
+      return;
+    }
+
     if (scrub.mode === "seek" || !scrub.dragging) return;
 
     // Back to the start, so play shows the selection from its beginning.
@@ -223,6 +256,7 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
   }
 
   const fraction = (seconds: number) => percent(clampUnit(seconds / duration));
+  const range = drawnRange(scrub, target);
 
   return (
     <div className="flex flex-col gap-1.5 select-none">
@@ -270,12 +304,12 @@ export function Timeline({ player, src, target, ghost, onRange, onMarked, pins }
               point={false}
             />
           )}
-          {target.start === undefined ? null : (
+          {range.start === undefined ? null : (
             <Span
-              start={fraction(target.start)}
-              width={fraction((target.end ?? target.start) - target.start)}
+              start={fraction(range.start)}
+              width={fraction((range.end ?? range.start) - range.start)}
               ghost={false}
-              point={target.end === undefined}
+              point={range.end === undefined}
             />
           )}
           {target.region === undefined ? null : (

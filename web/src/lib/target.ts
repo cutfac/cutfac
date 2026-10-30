@@ -13,8 +13,8 @@ type TargetDraft = { -readonly [Key in keyof Target]: Target[Key] };
 
 export const NO_TARGET: Target = {};
 
-/** Times are kept to a tenth of a second; finer than that is noise from dragging. */
-export const roundTime = (seconds: number) => Math.round(seconds * 10) / 10;
+/** Times are kept to a hundredth of a second, finer than a frame step; beyond that is noise. */
+export const roundTime = (seconds: number) => Math.round(seconds * 100) / 100;
 
 export const clampUnit = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -60,7 +60,7 @@ function targetFrom(
   return target;
 }
 
-/** Keep the box, replace the range. A range shorter than a tenth of a second is a point. */
+/** Keep the box, replace the range. A range shorter than a hundredth of a second is a point. */
 export function withRange(target: Target, from: number, to?: number): Target {
   const a = roundTime(Math.max(0, from));
   const b = to === undefined ? undefined : roundTime(Math.max(0, to));
@@ -83,6 +83,15 @@ export const withEnd = (target: Target, at: number): Target =>
 
 export const withoutRange = (target: Target): Target =>
   targetFrom(undefined, undefined, target.region);
+
+/** Whether `at` falls outside the selected range, so a plain click there lets go of it. */
+export function outsideRange(target: Target, at: number): boolean {
+  if (target.start === undefined) return false;
+
+  const time = roundTime(at);
+
+  return time < target.start || time > (target.end ?? target.start);
+}
 
 export const withRegion = (target: Target, region: Region | undefined): Target =>
   targetFrom(target.start, target.end, region);
