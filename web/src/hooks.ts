@@ -93,18 +93,23 @@ export function usePlan(): Live<Plan> {
   return plan;
 }
 
+// The last list read, so a page that opens shows the agents at once while it checks again.
+let knownStatuses: ReadonlyArray<AgentStatus> | undefined;
+
 /**
  * Which agents are installed, loaded once per mount: that changes only when the user installs one.
  * Undefined until it loads or when it fails; then every agent stays selectable, and the server
  * says why when one cannot start.
  */
 export function useAgentStatuses(): ReadonlyArray<AgentStatus> | undefined {
-  const [statuses, setStatuses] = useState<ReadonlyArray<AgentStatus>>();
+  const [statuses, setStatuses] = useState(knownStatuses);
 
   useEffect(() => {
     let alive = true;
     api.agents().then(
       (list) => {
+        knownStatuses = list;
+
         if (alive) setStatuses(list);
       },
       () => undefined,

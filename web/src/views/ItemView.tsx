@@ -259,8 +259,9 @@ export function ItemView({ id, defaultAgent }: ItemViewProps) {
   }
 
   if (item === undefined) {
+    // Shows only once loading takes a moment, so a video that opens at once doesn't flash it.
     return (
-      <div className="flex-1 p-6">
+      <div className="flex-1 animate-in p-6 delay-300 duration-200 fill-mode-backwards fade-in">
         <ListSkeleton rows={4} />
       </div>
     );
