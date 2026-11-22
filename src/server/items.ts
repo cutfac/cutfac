@@ -74,7 +74,13 @@ const asked = (pending: ReadonlyArray<Approval>) => {
  */
 const itemSummary = Effect.fn("server.itemSummary")(function* (item: Item) {
   const runs = yield* RunRegistry;
-  const render = yield* readRender(item.id);
+
+  // One item's unreadable render shouldn't keep the whole gallery from loading.
+  const render = yield* readRender(item.id).pipe(
+    Effect.tapError(Effect.logWarning),
+    Effect.orElseSucceed(Option.none),
+  );
+
   const { feedback } = item.doc;
 
   return {

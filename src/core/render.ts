@@ -16,6 +16,7 @@ import {
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { CommandFailed, Conflict } from "./errors.ts";
+import { fileKey } from "./fileName.ts";
 import { getItem } from "./items.ts";
 import { commandOptions, spawnFailure, STOP_GRACE } from "./process.ts";
 import {
@@ -34,8 +35,6 @@ import { STATE_DIR } from "./workspaceRoot.ts";
  * reloads the board, from firing on every progress write.
  */
 export const RENDERS_DIR = `${STATE_DIR}/renders`;
-
-const fileKey = (item: string) => encodeURIComponent(item);
 
 const statePath = (item: string) => `${RENDERS_DIR}/${fileKey(item)}.json`;
 
@@ -86,9 +85,10 @@ const alive = (pid: number) =>
  * The item's latest render, if it had one. A render still marked running whose process is gone
  * was cut off, when its agent quit say, so it reads as stopped, ended at its last save.
  */
-export const readRender = Effect.fn("render.readRender")(function* (item: string) {
+export const readRender = (item: string) => readRenderAt(statePath(item));
+
+const readRenderAt = Effect.fn("render.readRenderAt")(function* (path: string) {
   const ws = yield* Workspace;
-  const path = statePath(item);
 
   if (!(yield* ws.exists(path))) return Option.none<RenderState>();
 
@@ -116,7 +116,7 @@ export const runningRenders = Effect.fn("render.runningRenders")(function* () {
   const files = (yield* ws.list(RENDERS_DIR)).filter((entry) => entry.name.endsWith(".json"));
 
   const states = yield* Effect.forEach(files, (entry) =>
-    readRender(decodeURIComponent(entry.name.slice(0, -".json".length))),
+    readRenderAt(`${RENDERS_DIR}/${entry.name}`),
   );
 
   return states.flatMap((state) =>

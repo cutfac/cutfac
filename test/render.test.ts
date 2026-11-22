@@ -153,6 +153,21 @@ describe("running a render", () => {
     }),
   );
 
+  it.live("tracks the render of an item with a long Korean title", () =>
+    Effect.gen(function* () {
+      const item = yield* createItem({
+        title: "일반적인 지식에 대한 컨텐츠를 만들고싶어. 학습 곡선이랑 망각 곡선에 대한 내용이야",
+      });
+
+      yield* (yield* makeRenders).start({ item: item.id, command: "sleep 5" });
+
+      expect(yield* runningRenders()).toEqual([item.id]);
+      expect(Option.map(yield* readRender(item.id), ({ status }) => status)).toEqual(
+        Option.some("running"),
+      );
+    }),
+  );
+
   it.live("a failing command fails with what it printed", () =>
     Effect.gen(function* () {
       const state = yield* render("echo 'Error: no composition named Foo' >&2; exit 3");

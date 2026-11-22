@@ -16,9 +16,12 @@ import type { PlatformError } from "effect/PlatformError";
 import { parse, stringify } from "yaml";
 
 import { WorkspaceError } from "./errors.ts";
+import { byteLength, MAX_FILE_NAME_BYTES } from "./fileName.ts";
 import { replaceFile } from "./replaceFile.ts";
 import { WorkspaceConfig } from "./schema.ts";
 import { CONFIG_FILE, fileFailure, findRoot, renameLegacyFiles } from "./workspaceRoot.ts";
+
+export { slugify } from "./fileName.ts";
 
 export interface FileStat {
   readonly size: number;
@@ -160,6 +163,14 @@ const open = Effect.fn("Workspace.open")(function* (start: string) {
 
       if (full !== root && !full.startsWith(root + path.sep)) {
         return Effect.fail(new WorkspaceError({ message: `Path escapes the workspace: ${rel}` }));
+      }
+
+      if (rel.split(/[\\/]/).some((name) => byteLength(name) > MAX_FILE_NAME_BYTES)) {
+        return Effect.fail(
+          new WorkspaceError({
+            message: `A name in ${rel} is longer than the ${MAX_FILE_NAME_BYTES} bytes a file name can have`,
+          }),
+        );
       }
 
       return Effect.succeed(full);
@@ -437,19 +448,3 @@ export const foldersWith = Effect.fn("Workspace.foldersWith")(function* (
 
   return found.flat();
 });
-
-/** A file-system-safe, readable id fragment: `"Hello, World!"` → `hello-world`. */
-export function slugify(text: string): string {
-  const slug = text
-    .toLowerCase()
-    // Drop accents ("café" → "cafe") but recompose Hangul and other scripts NFKD splits apart.
-    .normalize("NFKD")
-    .replace(/\p{Mark}+/gu, "")
-    .normalize("NFC")
-    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60)
-    .replace(/-+$/, "");
-
-  return slug === "" ? "untitled" : slug;
-}
