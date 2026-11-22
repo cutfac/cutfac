@@ -109,7 +109,7 @@ function Shell({ view, id }: { view: string; id: string | undefined }) {
         width={sidebarWidth}
         onWidth={setSidebarWidth}
       />
-      <SidebarInset className="min-h-0 min-w-0 [view-transition-name:page]">
+      <SidebarInset className="min-h-0 min-w-0">
         <TitleBar>
           {Match.value(workspace.state).pipe(
             Match.tag("Failed", ({ error }) => (

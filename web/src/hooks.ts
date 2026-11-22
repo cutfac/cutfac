@@ -1,6 +1,5 @@
 import { Option, Schema } from "effect";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import { Effort, ModelName } from "../../src/core/schema.ts";
 import {
@@ -132,34 +131,11 @@ export const agentInstalled = (
 
 const readRoute = () => routeOf(location.hash);
 
-/** Which way the page zooms when the route changes: into a video from the gallery, or back out. */
-function zoomOf(from: Route, to: Route) {
-  if (from[0] === "board" && to[0] === "item") return "zoom-in";
-
-  return from[0] === "item" && to[0] === "board" ? "zoom-out" : undefined;
-}
-
 export function useHashRoute(): Route {
   const [route, setRoute] = useState(readRoute);
-  const current = useRef(route);
+
   useEffect(() => {
-    const onHash = () => {
-      const next = readRoute();
-      const zoom = zoomOf(current.current, next);
-      current.current = next;
-
-      if (zoom === undefined || document.startViewTransition === undefined) {
-        setRoute(next);
-
-        return;
-      }
-
-      // The new page must be in the DOM when the browser takes its picture of it.
-      document.startViewTransition({
-        update: () => flushSync(() => setRoute(next)),
-        types: [zoom],
-      });
-    };
+    const onHash = () => setRoute(readRoute());
 
     addEventListener("hashchange", onHash);
 
