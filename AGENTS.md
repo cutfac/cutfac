@@ -58,6 +58,9 @@ Engineering:
 - All filesystem access goes through `Workspace` in `src/core/workspace.ts`; never bypass its root guard.
   Finding and creating a workspace before it opens, when there is no root to guard yet, lives in
   `src/core/workspaceRoot.ts`.
+- A file or folder named after an id or a title gets its name from `slugify` or `fileKey` in
+  `src/core/fileName.ts`, never from `encodeURIComponent` or the raw text: a file name holds 255
+  bytes, and Korean text takes three per character, nine once percent-encoded.
 - Keep `src/core` free of HTTP and MCP concerns; MCP tools and API routes are thin adapters.
 - Board text doesn't select by default, as in a native app. Content people would copy (chat, guides,
   errors, paths) opts in by wrapping it in `<SelectionArea>`; see `docs/ui.md`.
