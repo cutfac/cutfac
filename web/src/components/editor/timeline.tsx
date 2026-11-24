@@ -1,7 +1,9 @@
-import { useEffect, useState, type PointerEvent } from "react";
+import { Option } from "effect";
+import { useCallback, useState, useSyncExternalStore, type PointerEvent } from "react";
 
 import type { Region } from "../../api.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { filmstrips, type Frames } from "../../lib/filmstrip.ts";
 import { usePlayer, type Player } from "../../lib/player.ts";
 import type { Pin } from "../../lib/requests.ts";
 import {
@@ -15,98 +17,23 @@ import {
 import { formatTime } from "../../lib/time.ts";
 import { PinBadge } from "./pin.tsx";
 
-/** Thumbnails along the track; enough to recognise a scene, few enough to grab in a second. */
-const FRAMES = 16;
-
-/** Thumbnail height in pixels, about twice the track's so it stays sharp on dense screens. */
-const FRAME_HEIGHT = 112;
-
-interface Filmstrip {
-  readonly src: string;
-  readonly frames: ReadonlyArray<string>;
-}
-
-/** Resolve on the element's next `event`, or reject if the file cannot be read. */
-function once(target: HTMLMediaElement, event: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const done = () => {
-      target.removeEventListener(event, done);
-      target.removeEventListener("error", failed);
-      resolve();
-    };
-
-    const failed = () => {
-      target.removeEventListener(event, done);
-      target.removeEventListener("error", failed);
-      reject(new Error(`Cannot read ${target.currentSrc}`));
-    };
-
-    target.addEventListener(event, done);
-    target.addEventListener("error", failed);
-  });
-}
-
-/** Grab evenly spaced frames with an off-screen video, as small JPEG data URLs. */
-async function grabFrames(src: string, alive: () => boolean): Promise<string[]> {
-  const video = document.createElement("video");
-  video.muted = true;
-  video.preload = "auto";
-  video.src = src;
-
-  try {
-    await once(video, "loadedmetadata");
-
-    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-
-    if (duration <= 0 || video.videoHeight === 0 || context === null) return [];
-
-    canvas.height = FRAME_HEIGHT;
-    canvas.width = Math.round((FRAME_HEIGHT * video.videoWidth) / video.videoHeight);
-    const frames: string[] = [];
-
-    for (let index = 0; index < FRAMES && alive(); index++) {
-      video.currentTime = ((index + 0.5) / FRAMES) * duration;
-      await once(video, "seeked");
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      frames.push(canvas.toDataURL("image/jpeg", 0.6));
-    }
-
-    return frames;
-  } finally {
-    // Let the browser drop the decoder now rather than whenever the element is collected.
-    video.removeAttribute("src");
-    video.load();
-  }
-}
+/** Each slot of `strip`, or of `under` until its frame is drawn. */
+const overlay = (strip: Frames, under: Frames): Frames =>
+  strip.map((frame, slot) => Option.orElse(frame, () => under[slot] ?? Option.none()));
 
 /**
- * Frames of `src` along the track. The previous file's frames stay up until the new ones are
- * ready, so an agent's rewrite does not blank the track.
+ * Frames of `src` along the track, each as soon as it is drawn. Until the new file's frames
+ * arrive, the previous file's stay under them, so an agent's rewrite does not blank the track.
  */
-function useFilmstrip(src: string | undefined): ReadonlyArray<string> {
-  const [strip, setStrip] = useState<Filmstrip | undefined>(undefined);
+function useFilmstrip(src: string): Frames {
+  const watch = useCallback((onChange: () => void) => filmstrips.watch(src, onChange), [src]);
+  const frames = useSyncExternalStore(watch, () => filmstrips.frames(src));
+  const [under, setUnder] = useState<{ src: string; frames: Frames }>({ src, frames: [] });
 
-  useEffect(() => {
-    if (src === undefined) return undefined;
+  if (under.src !== src)
+    setUnder({ src, frames: overlay(filmstrips.frames(under.src), under.frames) });
 
-    let alive = true;
-
-    grabFrames(src, () => alive).then(
-      (frames) => {
-        if (alive) setStrip({ src, frames });
-      },
-      // A file the browser cannot decode or draw just has no filmstrip; the track still works.
-      () => undefined,
-    );
-
-    return () => {
-      alive = false;
-    };
-  }, [src]);
-
-  return strip?.frames ?? [];
+  return overlay(frames, under.frames);
 }
 
 interface Scrub {
@@ -194,7 +121,17 @@ export function Timeline({
   const [scrub, setScrub] = useState<Scrub | undefined>(undefined);
   const [hover, setHover] = useState<number | undefined>(undefined);
 
-  if (duration <= 0) return null;
+  // Until the video says how long it is, the same shape holds the timeline's place.
+  if (duration <= 0) {
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="h-3" />
+        <div className="relative h-14 overflow-hidden rounded-2xl bg-muted">
+          <FrameStrip frames={frames} />
+        </div>
+      </div>
+    );
+  }
 
   const timeAt = (event: PointerEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -284,18 +221,7 @@ export function Timeline({
           </span>
         )}
         <div className="group/track relative h-14 cursor-text overflow-hidden rounded-2xl bg-muted">
-          <div className="pointer-events-none absolute inset-0 flex">
-            {frames.map((frame, index) => (
-              <img
-                // oxlint-disable-next-line react/no-array-index-key -- frames are positional and the list is replaced whole
-                key={index}
-                src={frame}
-                alt=""
-                draggable={false}
-                className="h-full min-w-0 flex-1 object-cover"
-              />
-            ))}
-          </div>
+          <FrameStrip frames={frames} />
           {ghost?.start === undefined ? null : (
             <Span
               start={fraction(ghost.start)}
@@ -336,6 +262,27 @@ export function Timeline({
         </div>
         <Playhead player={player} duration={duration} pinned={pinnedAt(scrub, target)} />
       </div>
+    </div>
+  );
+}
+
+/** The frames side by side, each slot holding its place until its frame is drawn. */
+function FrameStrip({ frames }: { frames: Frames }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex">
+      {frames.map((frame, slot) => (
+        // oxlint-disable-next-line react/no-array-index-key -- a slot is a fixed position on the track
+        <div key={slot} className="h-full min-w-0 flex-1">
+          {Option.isSome(frame) ? (
+            <img
+              src={frame.value}
+              alt=""
+              draggable={false}
+              className="size-full animate-in object-cover duration-200 fade-in motion-reduce:animate-none"
+            />
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }
