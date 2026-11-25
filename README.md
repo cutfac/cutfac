@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://cutfac.com">Cutfac</a> is a local-first studio for short-form videos. Your own coding agent makes them; you point at what to change.</strong>
+  <strong><a href="https://cutfac.com">Cutfac</a> is a local-first studio for short-form videos, with a video editing MCP server for Claude Code and Codex. Your own coding agent makes them; you point at what to change.</strong>
 </p>
 
 <p align="center">
@@ -29,6 +29,10 @@
   <br />
   <br />
   <a href="https://cutfac.com">Website</a>
+  ·
+  <a href="https://cutfac.com/claude-video-editor">Claude video editor</a>
+  ·
+  <a href="https://cutfac.com/agents">MCP server</a>
   ·
   <a href="#quick-start">Build from source</a>
   ·
