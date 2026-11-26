@@ -72,10 +72,23 @@ const ItemDetail = Schema.Struct({
 });
 
 const ListItems = tool("list_items", {
-  description: "List content items, optionally filtered by status or format.",
+  description:
+    "Every item in the workspace as a summary: title, status, format, media file count, and open feedback. " +
+    "An item is one video and its folder. Call it to find an item's id or to see which items need work; " +
+    "get_item gives one item in full, and workspace_overview gives only the counts. Returns every match " +
+    "at once, with no paging.",
   parameters: Schema.Struct({
-    status: Schema.optional(ItemStatus),
-    format: Schema.optional(Schema.String),
+    status: Schema.optional(
+      ItemStatus.annotate(
+        describe(
+          "only items in this status: drafting (an agent is working on it), review (handed to the user), " +
+            "done or archived (the user decided)",
+        ),
+      ),
+    ),
+    format: Schema.optional(
+      Schema.String.annotate(describe("only items made in this format, by id from list_formats")),
+    ),
   }),
   success: Schema.Struct({ items: Schema.Array(ItemSummary) }),
   readonly: true,
@@ -83,7 +96,9 @@ const ListItems = tool("list_items", {
 
 const GetItem = tool("get_item", {
   description:
-    "Full item: item.yaml fields, media files, the user's reference files, absolute folder path, and any markdown docs.",
+    "One item in full: item.yaml fields with its feedback, media files, the user's reference files, absolute " +
+    "folder path, and any markdown docs. Call it before working on an item; list_items finds the id. " +
+    `A markdown doc is cut at ${DOC_PREVIEW_CHARS} characters, so read the file in the folder for the rest.`,
   parameters: Schema.Struct({ id: Id }),
   success: ItemDetail,
   readonly: true,
@@ -117,7 +132,11 @@ const CreateItem = tool("create_item", {
 
 const UpdateItem = tool("update_item", {
   description:
-    "Patch item fields. `sources` replaces the item's list of folders, files, and web pages that agents read when they work on it.",
+    "Change fields of an item's item.yaml. Fields left out stay as they are, and the user can undo the change " +
+    "on the board. Use it to hand an item over (`status: review`), retitle it, or record its post copy in " +
+    "`notes`. `sources` replaces the item's list of folders, files, and web pages that agents read when " +
+    "they work on it. Media and other files are written straight into the item's folder, and feedback is " +
+    "closed with resolve_feedback, not here.",
   parameters: Schema.Struct({ id: Id, ...ItemPatch.fields }),
   success: Schema.Struct({
     id: Schema.String,

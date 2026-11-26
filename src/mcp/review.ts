@@ -17,7 +17,9 @@ const Check = Schema.Struct({ name: Schema.String, ok: Schema.Boolean, detail: S
 
 const VerifyItem = tool("verify_item", {
   description:
-    "ffprobe each video in the item and check codec, aspect, resolution, audio, stream start, and format rules.",
+    "Run ffprobe on each video in the item and check codec, aspect, resolution, audio, stream start, and the " +
+    "format's rules. Call it after every render and fix each failed check before the item goes to review. " +
+    "It checks the files' technical properties only and changes nothing; review_media shows what a viewer sees.",
   parameters: Schema.Struct({ id: Id }),
   success: Schema.Struct({
     ok: Schema.Boolean.annotate(describe("every check on every video passed")),
