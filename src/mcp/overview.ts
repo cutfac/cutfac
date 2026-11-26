@@ -29,8 +29,10 @@ const countBy = <A>(values: ReadonlyArray<A>, key: (value: A) => string) => {
 
 const WorkspaceOverview = tool("workspace_overview", {
   description:
-    "Workspace config, its brief and about.md and what was learned for it, item counts by status, formats, " +
-    "and open feedback count.",
+    "The state of the workspace in one call, and the first call of a session: its config, the paths of " +
+    "brief.md and about.md, what was learned for it, item counts by status, formats, and open feedback " +
+    "counts. `notices` lists problems to fix before the task. For the items themselves call list_items; " +
+    "for one format, get_format.",
   success: Schema.Struct({
     root: Schema.String,
     config: WorkspaceConfig,

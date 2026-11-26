@@ -322,14 +322,28 @@ export type ItemDoc = typeof ItemDoc.Type;
 
 /** A partial update to item.yaml from the board or an agent. */
 export const ItemPatch = Schema.Struct({
-  title: Schema.optionalKey(Schema.String),
-  status: Schema.optionalKey(ItemStatus),
-  format: Schema.optionalKey(Schema.String),
+  title: Schema.optionalKey(Schema.String.annotate(describe("the name the board shows"))),
+  status: Schema.optionalKey(
+    ItemStatus.annotate(
+      describe(
+        "drafting while an agent works on it, review to hand it to the user; done and archived are the user's to set",
+      ),
+    ),
+  ),
+  format: Schema.optionalKey(
+    Schema.String.annotate(describe("the id of the format it is made in")),
+  ),
   sources: Schema.optionalKey(
     Schema.Array(ItemSource).annotate(describe("replaces the item's whole list")),
   ),
-  hook: Schema.optionalKey(Schema.String),
-  notes: Schema.optionalKey(Schema.String),
+  hook: Schema.optionalKey(
+    Schema.String.annotate(describe("what the first seconds of the video say or show")),
+  ),
+  notes: Schema.optionalKey(
+    Schema.String.annotate(
+      describe("post copy, caption, CTA, and where music, footage, and fonts came from"),
+    ),
+  ),
 });
 
 export type ItemPatch = typeof ItemPatch.Type;

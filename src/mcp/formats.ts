@@ -28,7 +28,11 @@ const FormatProblem = Schema.Struct({
 });
 
 const ListFormats = tool("list_formats", {
-  description: "Reusable format recipes.",
+  description:
+    "Every format in the workspace with its format.yaml fields. A format is a reusable recipe for one kind " +
+    "of video. Call it to choose a format before create_item, or to see which format ids exist; get_format " +
+    "then gives one format's README and folder. Returns them all at once, with no paging. A format whose " +
+    "format.yaml doesn't read is left out and named in `notices`.",
   success: Schema.Struct({
     formats: Schema.Array(Schema.Struct({ id: Schema.String, ...FormatDoc.fields })),
     notices: Schema.Array(Schema.String).annotate(

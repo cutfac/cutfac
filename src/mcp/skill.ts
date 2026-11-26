@@ -25,7 +25,9 @@ export const absoluteCopies = Effect.fn("mcpSkill.absoluteCopies")(function* (
 
 const GetSkill = tool("get_skill", {
   description:
-    "The cutfac skill this version of Cutfac ships, and the workspace's copies of it. " +
+    "The cutfac skill this version of Cutfac ships, and the workspace's copies of it. The skill is the " +
+    "guide to making and editing videos with these tools, so read `markdown` when no copy of it is loaded, " +
+    "or when a workspace_overview notice sends you here. " +
     "Missing and outdated copies are replaced on their own; an edited copy is the user's, so change it only with their consent.",
   success: Schema.Struct({
     markdown: Schema.String.annotate(describe("the bundled SKILL.md")),
