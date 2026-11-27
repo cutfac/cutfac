@@ -22,9 +22,11 @@ jobs:
       # The media tests skip without ffmpeg, so CI installs BtbN's static build; apt-get update
       # sometimes stalled for over ten minutes. BtbN rebuilds "latest" daily and can replace a
       # release's files, so CI takes one dated build and checks it against a hash kept here.
-      FFMPEG_RELEASE: autobuild-2026-10-27-18-38
-      FFMPEG_BUILD: ffmpeg-n8.1.3-24-g92611900bb-linux64-gpl-8.1
-      FFMPEG_SHA256: 292e10a463befababcd31e0c7d0c1e068d46342398d9674534eb07517c1ba38e
+      # BtbN deletes a daily build after about two weeks and keeps the last of each month for
+      # about two years, so the build pinned here is a month's last.
+      FFMPEG_RELEASE: autobuild-2026-10-31-12-59
+      FFMPEG_BUILD: ffmpeg-n8.1.3-27-g8dca1586f4-linux64-gpl-8.1
+      FFMPEG_SHA256: 41e9c565594c390622cf968d82fa4135d9e9a11d06c1515644288cbc844e3380
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
