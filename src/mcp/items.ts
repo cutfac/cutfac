@@ -81,7 +81,7 @@ const ListItems = tool("list_items", {
     status: Schema.optional(
       ItemStatus.annotate(
         describe(
-          "only items in this status: drafting (an agent is working on it), review (handed to the user), " +
+          "only items in this status: drafting (still being made), review (handed to the user), " +
             "done or archived (the user decided)",
         ),
       ),
@@ -132,9 +132,9 @@ const CreateItem = tool("create_item", {
 
 const UpdateItem = tool("update_item", {
   description:
-    "Change fields of an item's item.yaml. Fields left out stay as they are, and the user can undo the change " +
-    "on the board. Use it to hand an item over (`status: review`), retitle it, or record its post copy in " +
-    "`notes`. `sources` replaces the item's list of folders, files, and web pages that agents read when " +
+    "Change fields of an item's item.yaml. Fields left out stay as they are, and the user can undo a change " +
+    "to title, status, hook, or notes on the board. Use it to hand an item over (`status: review`), " +
+    "retitle it, or record its post copy in `notes`. `sources` replaces the item's list of folders, files, and web pages that agents read when " +
     "they work on it. Media and other files are written straight into the item's folder, and feedback is " +
     "closed with resolve_feedback, not here.",
   parameters: Schema.Struct({ id: Id, ...ItemPatch.fields }),
