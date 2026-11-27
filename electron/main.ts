@@ -253,8 +253,6 @@ function start(): void {
   });
   handleOnboarding({
     isFromApp,
-    boardUrl,
-    preload: preloadPath,
     window: boardWindow,
     bringToFront,
     openWorkspace: (folder) =>

@@ -5,17 +5,18 @@ import { Button } from "@/components/ui/button";
 
 import type { CutfacOnboarding } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
-import { AccessPreview } from "./access-preview.tsx";
+import { AccessGuide } from "./access-guide.tsx";
 import { AccessRows, useAccess } from "./access-rows.tsx";
 import { StepActions, StepHeader } from "./frame.tsx";
 
 /**
  * Screen recording and accessibility, which the agents act under: recording the user's screen and
  * apps as footage, and using other apps when asked, so they can do either from the first video on.
- * Each opens its list in System Settings with the app ready to drag into it. Accessibility shows as
- * soon as it is on; screen recording shows once the app reopens, which macOS offers itself, and the
- * step picks up again then, with the answers kept. Once both are on, Next moves on, focused so
- * Enter does too; until then it can be skipped, and macOS asks when an agent first needs either.
+ * Each opens its list in System Settings and has macOS ask for it, with the steps to take there
+ * spelled out. Accessibility shows as soon as it is on; screen recording shows once the app
+ * reopens, which macOS offers itself, and the step picks up again then, with the answers kept. Once
+ * both are on, Next moves on, focused so Enter does too; until then it can be skipped, and macOS
+ * asks when an agent first needs either.
  */
 export function AccessStep({
   onboarding,
@@ -34,14 +35,15 @@ export function AccessStep({
     if (access.allGranted) next.current?.focus();
   }, [access.allGranted]);
 
-  // The picture shows the list the user is on, or the next one to turn on.
-  const shown = access.waiting ?? access.next ?? "screen";
+  const guided = access.waiting ?? access.next;
 
   return (
     <>
       <StepHeader title={t.title} body={t.body} />
       <div className="flex flex-col gap-4 rounded-2xl bg-muted p-4">
-        <AccessPreview app={access.app} list={access.copy[shown].list} />
+        {guided === undefined ? null : (
+          <AccessGuide permission={guided} list={access.copy[guided].list} app={access.app} />
+        )}
         <AccessRows access={access} />
       </div>
       <StepActions onBack={onBack}>

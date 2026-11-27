@@ -6,11 +6,10 @@ import { Spinner } from "@/components/ui/spinner";
 
 import type { CutfacOnboarding, Permission } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { accessProgress, PERMISSIONS, type Granted } from "../../lib/access.ts";
 import { sendFailed } from "../../lib/notify.ts";
 
-export const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
-
-/** A permission as its row and the picture name it. */
+/** A permission as its row and the guide name it. */
 interface Copy {
   name: string;
   why: string;
@@ -27,7 +26,7 @@ const ICONS = {
 } satisfies Record<Permission, ReactNode>;
 
 export interface Access {
-  granted: Partial<Record<Permission, true>>;
+  granted: Granted;
   /** The one whose list in System Settings the user was sent to and hasn't turned on yet. */
   waiting: Permission | undefined;
   /** The next one to turn on. */
@@ -40,13 +39,13 @@ export interface Access {
 
 /**
  * Screen recording and accessibility as macOS has them for the app, checked again whenever the
- * window comes back, with a way to open each one's list in System Settings and the app ready to
- * drag into it. The first launch asks for both; the board and Settings offer them again.
+ * window comes back, with a way to open each one's list in System Settings and have macOS ask for
+ * it. The first launch asks for both; the board and Settings offer them again.
  */
 export function useAccess(onboarding: CutfacOnboarding): Access {
   const t = useMessages().onboarding.access;
-  const [granted, setGranted] = useState<Partial<Record<Permission, true>>>({});
-  const [waiting, setWaiting] = useState<Permission>();
+  const [granted, setGranted] = useState<Granted>({});
+  const [opened, setOpened] = useState<Permission>();
   const [app, setApp] = useState<{ icon: string; name: string }>();
   const [version, setVersion] = useState(0);
 
@@ -86,9 +85,9 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
   );
 
   const open = (permission: Permission) => {
-    setWaiting(permission);
+    setOpened(permission);
     onboarding.openAccessSettings(permission).catch((cause) => {
-      setWaiting(undefined);
+      setOpened(undefined);
       sendFailed(cause);
     });
   };
@@ -101,13 +100,9 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
         : t.accessibility,
   };
 
-  const next = PERMISSIONS.find((permission) => !granted[permission]);
-
   return {
     granted,
-    waiting: waiting !== undefined && !granted[waiting] ? waiting : undefined,
-    next,
-    allGranted: next === undefined,
+    ...accessProgress(granted, opened),
     copy,
     app,
     open,

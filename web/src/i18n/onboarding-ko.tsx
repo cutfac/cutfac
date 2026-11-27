@@ -57,19 +57,29 @@ export const onboardingKo: OnboardingMessages = {
     screen: {
       name: "화면 기록",
       why: "화면과 앱을 녹화해서 영상에 써요.",
-      waiting: "목록에서 컷팩을 켜 주세요. macOS가 앱을 다시 열자고 하면 그대로 따라 주세요.",
+      waiting:
+        "목록에서 컷팩을 켜 주세요. 없으면 +로 추가하면 돼요. macOS가 앱을 다시 열자고 하면 그대로 따라 주세요.",
       list: "화면 및 시스템 오디오 기록",
     },
     accessibility: {
       name: "손쉬운 사용",
       why: "에이전트가 다른 앱을 누르고 입력할 수 있어요.",
-      waiting: "목록에서 컷팩을 켜 주세요…",
+      waiting: "목록에서 컷팩을 켜 주세요. 없으면 +로 추가하면 돼요…",
       list: "손쉬운 사용",
     },
     deviceControl: "기기 제어 및 데이터 접근",
-    preview: {
-      pane: "개인정보 보호 및 보안",
-      search: "검색",
+    how: {
+      open: (list) => (
+        <>
+          켜기를 누르면 시스템 설정의 <b className="font-medium text-foreground">{list}</b> 목록이
+          열려요.
+        </>
+      ),
+      switchOn: (app) => <>목록에서 {app} 옆의 스위치를 켜 주세요.</>,
+      add: (app) => (
+        <>목록에 없으면 아래 + 버튼을 누르고 응용 프로그램에서 {app} 앱을 골라 주세요.</>
+      ),
+      reopen: "그러면 macOS가 앱을 종료하고 다시 열자고 해요. 그대로 따르면 여기서 이어져요.",
     },
   },
   ready: {
@@ -80,8 +90,5 @@ export const onboardingKo: OnboardingMessages = {
     defaultName: "내 영상",
     start: "만들기 시작",
     creating: "준비하는 중…",
-  },
-  dragHelper: {
-    hint: "위 목록으로 끌어다 놓으세요",
   },
 };

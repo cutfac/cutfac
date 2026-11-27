@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { AgentSetup } from "../desktop.ts";
 
 type FixState = Exclude<AgentSetup["state"], "ready">;
@@ -61,26 +63,35 @@ export const onboardingEn = {
     next: "Next",
     /**
      * Each permission: its name, what it lets the agent do, what to do while its list is open, and
-     * the list's title in System Settings, for the picture.
+     * the list's title in System Settings.
      */
     screen: {
       name: "Screen Recording",
       why: "Record your screen and apps to use in videos.",
-      waiting: "Turn on Cutfac in the list. When macOS offers to reopen it, go ahead.",
+      waiting:
+        "Switch on Cutfac in the list, or add it with +. When macOS offers to reopen it, go ahead.",
       list: "Screen & System Audio Recording",
     },
     accessibility: {
       name: "Accessibility",
       why: "Let your agent click and type in other apps.",
-      waiting: "Turn on Cutfac in the list…",
+      waiting: "Switch on Cutfac in the list, or add it with +…",
       list: "Accessibility",
     },
     /** What macOS 27 and later call accessibility, which they widened. */
     deviceControl: "Device Control and Data Access",
-    /** The picture of System Settings with the panel under it. */
-    preview: {
-      pane: "Privacy & Security",
-      search: "Search",
+    /** How to turn one on, in order. `app` is the app as the list shows it. */
+    how: {
+      open: (list: string) => (
+        <>
+          Turn on opens <b className="font-medium text-foreground">{list}</b> in System Settings.
+        </>
+      ),
+      switchOn: (app: ReactNode) => <>Find {app} in the list and switch it on.</>,
+      add: (app: ReactNode) => (
+        <>Not in the list? Click + under it and choose {app} from Applications.</>
+      ),
+      reopen: "macOS then offers to quit and reopen the app. Go ahead: setup picks up here.",
     },
   },
   ready: {
@@ -91,10 +102,6 @@ export const onboardingEn = {
     defaultName: "My videos",
     start: "Start making",
     creating: "Setting up…",
-  },
-  dragHelper: {
-    /** Under the app's name on the card, saying where it goes. */
-    hint: "Drag into the list above",
   },
 };
 

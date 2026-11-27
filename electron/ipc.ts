@@ -103,19 +103,13 @@ export const PERMISSION_CHANNEL = "cutfac:permission";
 /** Put up a sample notification, which has macOS ask whether the app may notify. */
 export const ASK_NOTIFICATIONS_CHANNEL = "cutfac:ask-notifications";
 
-/** Open a permission's list in System Settings, with the helper window beside it. */
+/** Open a permission's list in System Settings, and have macOS ask for it. */
 export const OPEN_ACCESS_SETTINGS_CHANNEL = "cutfac:open-access-settings";
 
 /** A permission was granted while System Settings was open. */
 export const ACCESS_GRANTED_CHANNEL = "cutfac:access-granted";
 
-/** Drag the app itself out of the helper window, into a list in System Settings. */
-export const START_APP_DRAG_CHANNEL = "cutfac:start-app-drag";
-
-/** Make the helper window the key one as the pointer reaches it, so it shows its cursor. */
-export const FOCUS_DRAG_HELPER_CHANNEL = "cutfac:focus-drag-helper";
-
-/** The app's icon, for the helper window to show as the thing to drag. */
+/** The app's icon and name, as macOS shows them. */
 export const APP_ICON_CHANNEL = "cutfac:app-icon";
 
 /** Make the first workspace from the answers so far, and start the agent reading. */

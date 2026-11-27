@@ -111,8 +111,8 @@ export interface CutfacOnboarding {
   /** Whether macOS grants the app a permission. Screen recording shows only after the app reopens. */
   permission: (permission: Permission) => Promise<boolean>;
   /**
-   * Open a permission's list in System Settings, with a small window beside it to drag the app
-   * from. The app comes back to the front once the permission is granted.
+   * Open a permission's list in System Settings and have macOS ask for it, which puts the app in
+   * the list. The app comes back to the front once the permission is granted.
    */
   openAccessSettings: (permission: Permission) => Promise<void>;
   /** A permission was granted while System Settings was open. Returns an unsubscribe. */
@@ -122,11 +122,7 @@ export interface CutfacOnboarding {
    * Electron has no other way to ask.
    */
   askNotifications: (sample: { title: string; body: string }) => Promise<void>;
-  /** Drag the app itself into a list in System Settings, from the helper window. */
-  startAppDrag: () => void;
-  /** Makes the helper window the one that shows the cursor, as the pointer reaches it. */
-  focusDragHelper: () => void;
-  /** The app as a list in System Settings shows it, for the helper window to show as the thing to drag. */
+  /** The app's icon and name, as macOS shows them in its lists. */
   appIcon: () => Promise<{ icon: string; name: string }>;
   /**
    * Make the first workspace from the answers so far, named `name` unless the build names it, with

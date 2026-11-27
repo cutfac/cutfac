@@ -37,7 +37,7 @@ a small language menu in the window's top-right corner, out of the way of the st
 | 1. Welcome      | What Cutfac does in one sentence, and Start                                                                                                                                                                                                                    | Start is pressed                        |
 | 2. Agent        | Claude Code and Codex as found on this Mac: ready, needs an update, needs a sign-in, or missing, each with a button that fixes it. With both ready, the user picks the one they pay for, Claude Code until they do; the workspace is made with it as its agent | One agent is ready, and Next is pressed |
 | 3. What to make | What the user does, a website and a folder to read, where the videos go, then anything else, a part at a time. The app keeps the answers until there is a workspace                                                                                            | Next is pressed on the last part        |
-| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. A panel under System Settings is the app to drag into the list                                                                                                         | Next once both are on, or Skip          |
+| 4. Permissions  | Screen Recording and Accessibility, what each lets the agents do, and Turn on for each. The steps to take in System Settings, with + for when the app isn't in the list                                                                                        | Next once both are on, or Skip          |
 | 5. Ready        | Where the workspace was made (`~/Movies/Cutfac/workspaces/<name>`), whether to share error reports and usage statistics with the Cutfac team, each on its own, and Start making. The agents from step 2 connect to the workspace                               | The board opens on the folder           |
 
 ### Before the workspace
@@ -108,17 +108,19 @@ them. The step asks for the two they use from the first video on, each with Turn
   and Codex's computer use do. macOS 27 calls it Device Control and Data Access and widens it, and
   the step names it so there.
 
-Both are granted only by adding the app to a list in System Settings. Apps like Codex make that one
-motion, after [PermissionFlow](https://github.com/jaywcjlove/PermissionFlow):
+Both are granted in a list in System Settings, the way most apps ask:
 
-1. The step shows a picture of System Settings with the panel under it, and a pointer dragging the
-   app into the list the user is on, or the next one to turn on.
+1. The step spells out what to do for the permission the user is on, or the next one to turn on:
+   the list Turn on opens, the app's switch in it, the + under the list for when the app isn't
+   there, and, for screen recording, reopening the app.
 2. Turn on opens the pane (`x-apple.systempreferences:` with `Privacy_ScreenCapture` or
-   `Privacy_Accessibility`).
-3. A small panel sits under the Settings window, lined up with the list, and follows the window as
-   it moves. It is one card with Cutfac's icon and name; dragging it drags the app bundle itself
-   (`webContents.startDrag` with the `.app` path), which is what the list accepts. The user never
-   hunts for the app with +.
+   `Privacy_Accessibility`) and has macOS ask in its own dialog, which also puts the app in the
+   list, switched off: `isTrustedAccessibilityClient(true)` for accessibility, and reading the
+   screens once (`desktopCapturer.getSources`) for screen recording, which Electron has no call to
+   ask for. Nothing of Cutfac's sits over System Settings.
+3. While System Settings is open the app checks every second, for up to ten minutes, and comes
+   back to the front once the permission is on. The board also checks again whenever its window
+   gets the focus.
 4. Accessibility shows as soon as it is on (`isTrustedAccessibilityClient`). macOS reads screen
    recording once per process (`getMediaAccessStatus`), so that grant shows only after the app
    reopens. macOS offers that itself once it is on, and the app opens again on this step, with the
