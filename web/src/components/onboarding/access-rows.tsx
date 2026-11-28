@@ -9,12 +9,6 @@ import { useMessages } from "../../i18n/index.ts";
 import { accessProgress, PERMISSIONS, type Granted } from "../../lib/access.ts";
 import { sendFailed } from "../../lib/notify.ts";
 
-/** A permission as its row names it. */
-interface Copy {
-  name: string;
-  why: string;
-}
-
 /** From this macOS on, accessibility is Device Control and Data Access, wider than before. */
 const DEVICE_CONTROL_FROM = 27;
 
@@ -30,7 +24,7 @@ export interface Access {
   /** The next one to turn on. */
   next: Permission | undefined;
   allGranted: boolean;
-  copy: Record<Permission, Copy>;
+  names: Record<Permission, string>;
   open: (permission: Permission) => void;
 }
 
@@ -87,26 +81,21 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
     });
   };
 
-  const copy: Record<Permission, Copy> = {
+  const names: Record<Permission, string> = {
     screen: t.screen,
-    accessibility:
-      version >= DEVICE_CONTROL_FROM
-        ? { ...t.accessibility, name: t.deviceControl }
-        : t.accessibility,
+    accessibility: version >= DEVICE_CONTROL_FROM ? t.deviceControl : t.accessibility,
   };
 
   return {
     granted,
     ...accessProgress(granted, opened),
-    copy,
+    names,
     open,
   };
 }
 
-/** Both permissions, each with what it lets the agent do and its button, or that it is on. */
+/** Both permissions, each with its button, or that it is on. */
 export function AccessRows({ access }: { access: Access }) {
-  const t = useMessages().onboarding.access;
-
   return (
     <ul className="flex flex-col gap-3">
       {PERMISSIONS.map((permission) => {
@@ -116,8 +105,7 @@ export function AccessRows({ access }: { access: Access }) {
           <Row
             key={permission}
             icon={ICONS[permission]}
-            name={access.copy[permission].name}
-            why={opened ? t.waiting : access.copy[permission].why}
+            name={access.names[permission]}
             waiting={opened}
             done={access.granted[permission] === true}
             primary={permission === access.next && !opened}
@@ -132,7 +120,6 @@ export function AccessRows({ access }: { access: Access }) {
 function Row({
   icon,
   name,
-  why,
   waiting,
   done,
   primary,
@@ -140,7 +127,6 @@ function Row({
 }: {
   icon: ReactNode;
   name: string;
-  why: string;
   waiting: boolean;
   done: boolean;
   primary: boolean;
@@ -155,10 +141,12 @@ function Row({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm font-medium">{name}</span>
-        <span className="flex items-center gap-1.5 text-xs text-pretty text-muted-foreground">
-          {waiting ? <Spinner className="size-3 shrink-0" /> : null}
-          {why}
-        </span>
+        {waiting ? (
+          <span className="flex items-center gap-1.5 text-xs text-pretty text-muted-foreground">
+            <Spinner className="size-3 shrink-0" />
+            {t.waiting}
+          </span>
+        ) : null}
       </div>
       {done ? (
         <span className="flex shrink-0 items-center gap-1 text-xs font-medium">

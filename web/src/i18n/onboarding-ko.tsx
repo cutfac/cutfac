@@ -48,21 +48,15 @@ export const onboardingKo: OnboardingMessages = {
   access: {
     title: "에이전트가 화면을 보고 쓸 수 있게 해 주세요",
     body: "영상에 쓸 화면을 녹화하고, 부탁하면 앱을 직접 써요.",
-    waiting: "시스템 설정에서 켜 주세요. 목록에 없으면 +로 추가해요.",
+    waiting: "목록에 없으면 +로 추가해요.",
     turnOn: "켜기",
     on: "켜짐",
     skip: "나중에 하기",
     next: "다음",
     link: "화면 녹화·앱 쓰기 켜기",
     settingsTitle: "Mac 권한",
-    screen: {
-      name: "화면 기록",
-      why: "화면과 앱을 녹화해서 영상에 써요.",
-    },
-    accessibility: {
-      name: "손쉬운 사용",
-      why: "에이전트가 다른 앱을 누르고 입력할 수 있어요.",
-    },
+    screen: "화면 기록",
+    accessibility: "손쉬운 사용",
     deviceControl: "기기 제어 및 데이터 접근",
   },
   ready: {

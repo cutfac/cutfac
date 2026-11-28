@@ -53,7 +53,7 @@ export const onboardingEn = {
   access: {
     title: "Let your agent see and use your screen",
     body: "It records your screen for your videos, and uses your apps when you ask.",
-    waiting: "Switch it on in System Settings. Not listed? Add it with +.",
+    waiting: "Not listed? Add it with +.",
     turnOn: "Turn on",
     on: "On",
     link: "Turn on screen recording and app use",
@@ -61,14 +61,8 @@ export const onboardingEn = {
     skip: "Skip for now",
     next: "Next",
     /** Each permission: its name, what it lets the agent do, and what it lets the agent do. */
-    screen: {
-      name: "Screen Recording",
-      why: "Record your screen and apps to use in videos.",
-    },
-    accessibility: {
-      name: "Accessibility",
-      why: "Let your agent click and type in other apps.",
-    },
+    screen: "Screen Recording",
+    accessibility: "Accessibility",
     /** What macOS 27 and later call accessibility, which they widened. */
     deviceControl: "Device Control and Data Access",
   },
