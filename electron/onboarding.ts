@@ -3,7 +3,6 @@ import path from "node:path";
 import { Effect, Option, Schema } from "effect";
 import {
   app,
-  ipcMain,
   Notification,
   type BrowserWindow,
   type IpcMainEvent,
@@ -26,12 +25,10 @@ import {
   DRAFT_CHANNEL,
   FIX_AGENT_CHANNEL,
   FIX_OUTPUT_CHANNEL,
-  FOCUS_DRAG_HELPER_CHANNEL,
   OPEN_ACCESS_SETTINGS_CHANNEL,
   PERMISSION_CHANNEL,
   SAVE_DRAFT_CHANNEL,
   SHARING_CHANNEL,
-  START_APP_DRAG_CHANNEL,
   START_WORKSPACE_CHANNEL,
   SYSTEM_VERSION_CHANNEL,
   WORKSPACE_FOLDER_CHANNEL,
@@ -39,7 +36,7 @@ import {
 import { type Decodable, ANY_INPUT } from "./ipcCall.ts";
 import { answer as answerCall } from "./ipcHandlers.ts";
 import { decodeWorkspaceName, MakingWorkspace, WORKSPACES } from "./library.ts";
-import { runNow, type AppServices } from "./runtime.ts";
+import type { AppServices } from "./runtime.ts";
 import { clearDraft, loadDraft, loadLibrary, OnboardingDraft, saveDraft } from "./settings.ts";
 import { sharingChoice } from "./sharing.ts";
 import { Install } from "./sidecar.ts";
@@ -85,9 +82,6 @@ export const macChecks: OnboardingChecks = {
 
 export interface OnboardingHost {
   isFromApp: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
-  /** The board's address before there is a workspace, where the helper window's page is. */
-  boardUrl: string;
-  preload: string;
   window: () => BrowserWindow | undefined;
   bringToFront: () => void;
   openWorkspace: (folder: string) => Effect.Effect<void, Failure, AppServices>;
@@ -176,8 +170,6 @@ export function handleOnboarding(host: OnboardingHost): void {
     Effect.flatMap(SystemAccess, (access) =>
       access.openSettings({
         permission,
-        boardUrl: host.boardUrl,
-        preload: host.preload,
         onGranted: Effect.sync(() => {
           app.focus({ steal: true });
           host.bringToFront();
@@ -186,14 +178,6 @@ export function handleOnboarding(host: OnboardingHost): void {
       }),
     ),
   );
-  ipcMain.on(FOCUS_DRAG_HELPER_CHANNEL, (event) => {
-    if (host.isFromApp(event)) runNow(Effect.flatMap(SystemAccess, (access) => access.focusHelper));
-  });
-  ipcMain.on(START_APP_DRAG_CHANNEL, (event) => {
-    if (!host.isFromApp(event)) return;
-
-    runNow(Effect.flatMap(SystemAccess, (access) => access.dragApp(event.sender)));
-  });
   answer(APP_ICON_CHANNEL, () => appBadge);
   // It runs while the user goes on; the last step waits for it, and tries again if it failed.
   answerWith(START_WORKSPACE_CHANNEL, MakingWorkspace, "workspace", ({ name, agent }) =>

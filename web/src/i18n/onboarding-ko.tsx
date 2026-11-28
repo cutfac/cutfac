@@ -47,30 +47,17 @@ export const onboardingKo: OnboardingMessages = {
   },
   access: {
     title: "에이전트가 화면을 보고 쓸 수 있게 해 주세요",
-    body: "에이전트는 영상에 쓸 앱 화면을 녹화하고, 부탁하면 앱을 직접 써요. 에이전트는 컷팩의 권한으로 움직이니, 컷팩에 이 두 가지를 켜 주세요.",
+    body: "영상에 쓸 화면을 녹화하고, 부탁하면 앱을 직접 써요.",
+    waiting: "목록에 없으면 +로 추가해요.",
     turnOn: "켜기",
     on: "켜짐",
     skip: "나중에 하기",
     next: "다음",
     link: "화면 녹화·앱 쓰기 켜기",
     settingsTitle: "Mac 권한",
-    screen: {
-      name: "화면 기록",
-      why: "화면과 앱을 녹화해서 영상에 써요.",
-      waiting: "목록에서 컷팩을 켜 주세요. macOS가 앱을 다시 열자고 하면 그대로 따라 주세요.",
-      list: "화면 및 시스템 오디오 기록",
-    },
-    accessibility: {
-      name: "손쉬운 사용",
-      why: "에이전트가 다른 앱을 누르고 입력할 수 있어요.",
-      waiting: "목록에서 컷팩을 켜 주세요…",
-      list: "손쉬운 사용",
-    },
+    screen: "화면 기록",
+    accessibility: "손쉬운 사용",
     deviceControl: "기기 제어 및 데이터 접근",
-    preview: {
-      pane: "개인정보 보호 및 보안",
-      search: "검색",
-    },
   },
   ready: {
     title: "첫 영상을 만들 준비가 됐어요",
@@ -80,8 +67,5 @@ export const onboardingKo: OnboardingMessages = {
     defaultName: "내 영상",
     start: "만들기 시작",
     creating: "준비하는 중…",
-  },
-  dragHelper: {
-    hint: "위 목록으로 끌어다 놓으세요",
   },
 };

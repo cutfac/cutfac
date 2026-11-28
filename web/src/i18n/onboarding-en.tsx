@@ -52,36 +52,19 @@ export const onboardingEn = {
   },
   access: {
     title: "Let your agent see and use your screen",
-    body: "Your agent records your apps for your videos, and uses them when you ask. It works under Cutfac's permissions, so turn these on for Cutfac.",
+    body: "It records your screen for your videos, and uses your apps when you ask.",
+    waiting: "Not listed? Add it with +.",
     turnOn: "Turn on",
     on: "On",
     link: "Turn on screen recording and app use",
     settingsTitle: "Mac permissions",
     skip: "Skip for now",
     next: "Next",
-    /**
-     * Each permission: its name, what it lets the agent do, what to do while its list is open, and
-     * the list's title in System Settings, for the picture.
-     */
-    screen: {
-      name: "Screen Recording",
-      why: "Record your screen and apps to use in videos.",
-      waiting: "Turn on Cutfac in the list. When macOS offers to reopen it, go ahead.",
-      list: "Screen & System Audio Recording",
-    },
-    accessibility: {
-      name: "Accessibility",
-      why: "Let your agent click and type in other apps.",
-      waiting: "Turn on Cutfac in the list…",
-      list: "Accessibility",
-    },
+    /** Each permission: its name, what it lets the agent do, and what it lets the agent do. */
+    screen: "Screen Recording",
+    accessibility: "Accessibility",
     /** What macOS 27 and later call accessibility, which they widened. */
     deviceControl: "Device Control and Data Access",
-    /** The picture of System Settings with the panel under it. */
-    preview: {
-      pane: "Privacy & Security",
-      search: "Search",
-    },
   },
   ready: {
     title: "Ready to make your first video",
@@ -91,10 +74,6 @@ export const onboardingEn = {
     defaultName: "My videos",
     start: "Start making",
     creating: "Setting up…",
-  },
-  dragHelper: {
-    /** Under the app's name on the card, saying where it goes. */
-    hint: "Drag into the list above",
   },
 };
 

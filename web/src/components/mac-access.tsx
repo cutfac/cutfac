@@ -27,7 +27,7 @@ function AccessLinkOn({ onboarding }: { onboarding: CutfacOnboarding }) {
     return (
       <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
         <Spinner className="size-3" />
-        {access.copy[access.waiting].waiting}
+        {t.waiting}
       </span>
     );
   }

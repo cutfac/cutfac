@@ -6,17 +6,8 @@ import { Spinner } from "@/components/ui/spinner";
 
 import type { CutfacOnboarding, Permission } from "../../desktop.ts";
 import { useMessages } from "../../i18n/index.ts";
+import { accessProgress, PERMISSIONS, type Granted } from "../../lib/access.ts";
 import { sendFailed } from "../../lib/notify.ts";
-
-export const PERMISSIONS: ReadonlyArray<Permission> = ["screen", "accessibility"];
-
-/** A permission as its row and the picture name it. */
-interface Copy {
-  name: string;
-  why: string;
-  waiting: string;
-  list: string;
-}
 
 /** From this macOS on, accessibility is Device Control and Data Access, wider than before. */
 const DEVICE_CONTROL_FROM = 27;
@@ -27,31 +18,28 @@ const ICONS = {
 } satisfies Record<Permission, ReactNode>;
 
 export interface Access {
-  granted: Partial<Record<Permission, true>>;
+  granted: Granted;
   /** The one whose list in System Settings the user was sent to and hasn't turned on yet. */
   waiting: Permission | undefined;
   /** The next one to turn on. */
   next: Permission | undefined;
   allGranted: boolean;
-  copy: Record<Permission, Copy>;
-  app: { icon: string; name: string } | undefined;
+  names: Record<Permission, string>;
   open: (permission: Permission) => void;
 }
 
 /**
  * Screen recording and accessibility as macOS has them for the app, checked again whenever the
- * window comes back, with a way to open each one's list in System Settings and the app ready to
- * drag into it. The first launch asks for both; the board and Settings offer them again.
+ * window comes back, with a way to open each one's list in System Settings and have macOS ask for
+ * it. The first launch asks for both; the board and Settings offer them again.
  */
 export function useAccess(onboarding: CutfacOnboarding): Access {
   const t = useMessages().onboarding.access;
-  const [granted, setGranted] = useState<Partial<Record<Permission, true>>>({});
-  const [waiting, setWaiting] = useState<Permission>();
-  const [app, setApp] = useState<{ icon: string; name: string }>();
+  const [granted, setGranted] = useState<Granted>({});
+  const [opened, setOpened] = useState<Permission>();
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
-    onboarding.appIcon().then(setApp, () => undefined);
     onboarding.systemVersion().then(setVersion, () => undefined);
   }, [onboarding]);
 
@@ -86,35 +74,27 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
   );
 
   const open = (permission: Permission) => {
-    setWaiting(permission);
+    setOpened(permission);
     onboarding.openAccessSettings(permission).catch((cause) => {
-      setWaiting(undefined);
+      setOpened(undefined);
       sendFailed(cause);
     });
   };
 
-  const copy: Record<Permission, Copy> = {
+  const names: Record<Permission, string> = {
     screen: t.screen,
-    accessibility:
-      version >= DEVICE_CONTROL_FROM
-        ? { ...t.accessibility, name: t.deviceControl, list: t.deviceControl }
-        : t.accessibility,
+    accessibility: version >= DEVICE_CONTROL_FROM ? t.deviceControl : t.accessibility,
   };
-
-  const next = PERMISSIONS.find((permission) => !granted[permission]);
 
   return {
     granted,
-    waiting: waiting !== undefined && !granted[waiting] ? waiting : undefined,
-    next,
-    allGranted: next === undefined,
-    copy,
-    app,
+    ...accessProgress(granted, opened),
+    names,
     open,
   };
 }
 
-/** Both permissions, each with what it lets the agent do and its button, or that it is on. */
+/** Both permissions, each with its button, or that it is on. */
 export function AccessRows({ access }: { access: Access }) {
   return (
     <ul className="flex flex-col gap-3">
@@ -125,8 +105,7 @@ export function AccessRows({ access }: { access: Access }) {
           <Row
             key={permission}
             icon={ICONS[permission]}
-            name={access.copy[permission].name}
-            why={opened ? access.copy[permission].waiting : access.copy[permission].why}
+            name={access.names[permission]}
             waiting={opened}
             done={access.granted[permission] === true}
             primary={permission === access.next && !opened}
@@ -141,7 +120,6 @@ export function AccessRows({ access }: { access: Access }) {
 function Row({
   icon,
   name,
-  why,
   waiting,
   done,
   primary,
@@ -149,7 +127,6 @@ function Row({
 }: {
   icon: ReactNode;
   name: string;
-  why: string;
   waiting: boolean;
   done: boolean;
   primary: boolean;
@@ -164,10 +141,12 @@ function Row({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm font-medium">{name}</span>
-        <span className="flex items-center gap-1.5 text-xs text-pretty text-muted-foreground">
-          {waiting ? <Spinner className="size-3 shrink-0" /> : null}
-          {why}
-        </span>
+        {waiting ? (
+          <span className="flex items-center gap-1.5 text-xs text-pretty text-muted-foreground">
+            <Spinner className="size-3 shrink-0" />
+            {t.waiting}
+          </span>
+        ) : null}
       </div>
       {done ? (
         <span className="flex shrink-0 items-center gap-1 text-xs font-medium">

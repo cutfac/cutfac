@@ -59,8 +59,6 @@ import {
   SET_LICENSE_KEY_CHANNEL,
   SET_LOCALE_CHANNEL,
   LOCALE_CHANNEL,
-  START_APP_DRAG_CHANNEL,
-  FOCUS_DRAG_HELPER_CHANNEL,
   START_DRAG_CHANNEL,
   DOWNLOAD_FILE_CHANNEL,
   UPDATE_NOTICE_CHANNEL,
@@ -127,8 +125,6 @@ const onboarding = {
       ipcRenderer.removeListener(ACCESS_GRANTED_CHANNEL, forward);
     };
   },
-  startAppDrag: () => ipcRenderer.send(START_APP_DRAG_CHANNEL),
-  focusDragHelper: () => ipcRenderer.send(FOCUS_DRAG_HELPER_CHANNEL),
   appIcon: () => ipcRenderer.invoke(APP_ICON_CHANNEL),
   startWorkspace: (name, agent) => ipcRenderer.invoke(START_WORKSPACE_CHANNEL, { name, agent }),
   workspaceFolder: (name) => ipcRenderer.invoke(WORKSPACE_FOLDER_CHANNEL, name),
