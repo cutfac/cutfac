@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import type { AgentSetup } from "../desktop.ts";
 
 type FixState = Exclude<AgentSetup["state"], "ready">;
@@ -54,45 +52,25 @@ export const onboardingEn = {
   },
   access: {
     title: "Let your agent see and use your screen",
-    body: "Your agent records your apps for your videos, and uses them when you ask. It works under Cutfac's permissions, so turn these on for Cutfac.",
+    body: "It records your screen for your videos, and uses your apps when you ask.",
+    waiting: "Switch it on in System Settings. Not listed? Add it with +.",
     turnOn: "Turn on",
     on: "On",
     link: "Turn on screen recording and app use",
     settingsTitle: "Mac permissions",
     skip: "Skip for now",
     next: "Next",
-    /**
-     * Each permission: its name, what it lets the agent do, what to do while its list is open, and
-     * the list's title in System Settings.
-     */
+    /** Each permission: its name, what it lets the agent do, and what it lets the agent do. */
     screen: {
       name: "Screen Recording",
       why: "Record your screen and apps to use in videos.",
-      waiting:
-        "Switch on Cutfac in the list, or add it with +. When macOS offers to reopen it, go ahead.",
-      list: "Screen & System Audio Recording",
     },
     accessibility: {
       name: "Accessibility",
       why: "Let your agent click and type in other apps.",
-      waiting: "Switch on Cutfac in the list, or add it with +…",
-      list: "Accessibility",
     },
     /** What macOS 27 and later call accessibility, which they widened. */
     deviceControl: "Device Control and Data Access",
-    /** How to turn one on, in order. `app` is the app as the list shows it. */
-    how: {
-      open: (list: string) => (
-        <>
-          Turn on opens <b className="font-medium text-foreground">{list}</b> in System Settings.
-        </>
-      ),
-      switchOn: (app: ReactNode) => <>Find {app} in the list and switch it on.</>,
-      add: (app: ReactNode) => (
-        <>Not in the list? Click + under it and choose {app} from Applications.</>
-      ),
-      reopen: "macOS then offers to quit and reopen the app. Go ahead: setup picks up here.",
-    },
   },
   ready: {
     title: "Ready to make your first video",

@@ -6,11 +6,21 @@ import { app, desktopCapturer, nativeImage, shell, systemPreferences } from "ele
 import type { Permission } from "../web/src/desktop.ts";
 import { awaitGrant } from "./accessWatch.ts";
 
-const SETTINGS_URL: Record<Permission, string> = {
-  screen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+const PANE: Record<Permission, string> = {
+  screen: "Privacy_ScreenCapture",
   // Device Control and Data Access from macOS 27 on, which the same link opens.
-  accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+  accessibility: "Privacy_Accessibility",
 };
+
+// System Settings replaced System Preferences in macOS 13, and macOS 27 no longer follows the old name.
+const SETTINGS_FROM = 13;
+
+const settingsUrl = (permission: Permission, version: number) =>
+  `x-apple.systempreferences:${
+    version >= SETTINGS_FROM
+      ? "com.apple.settings.PrivacySecurity.extension"
+      : "com.apple.preference.security"
+  }?${PANE[permission]}`;
 
 const ICON_SIZE = { width: 256, height: 256 };
 
@@ -53,9 +63,8 @@ export interface AccessWatch {
 }
 
 /**
- * Has macOS ask in its own dialog, which also puts the app in the permission's list, switched off.
- * Electron has no call that asks for screen recording, so listing the screens stands in for it:
- * macOS asks the first time an app reads them.
+ * Has macOS ask in its own dialog where it still does. Electron has no call that asks for screen
+ * recording, so listing the screens stands in for it.
  */
 const askSystem = (permission: Permission) =>
   permission === "accessibility"
@@ -64,7 +73,7 @@ const askSystem = (permission: Permission) =>
       })
     : Effect.tryPromise(() =>
         desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } }),
-      ).pipe(Effect.ignore({ log: "Warn", message: "Asking macOS for screen recording failed" }));
+      ).pipe(Effect.ignore);
 
 export class SystemAccess extends Context.Service<
   SystemAccess,
@@ -116,7 +125,9 @@ const make = Effect.gen(function* () {
       const waiting = yield* awaitGrant(hasPermission(watch.permission)).pipe(Effect.forkIn(scope));
 
       yield* endWatchOnGrant(waiting, watch);
-      yield* Effect.promise(() => shell.openExternal(SETTINGS_URL[watch.permission]));
+      const url = settingsUrl(watch.permission, yield* systemVersion);
+
+      yield* Effect.promise(() => shell.openExternal(url));
     });
 
   yield* Effect.addFinalizer(() => stopWatching);

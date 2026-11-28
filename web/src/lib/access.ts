@@ -21,6 +21,3 @@ export function accessProgress(granted: Granted, opened: Permission | undefined)
     allGranted: next === undefined,
   };
 }
-
-/** macOS reads screen recording once per process, so the app finds it on only after it reopens. */
-export const showsAfterReopen = (permission: Permission) => permission === "screen";

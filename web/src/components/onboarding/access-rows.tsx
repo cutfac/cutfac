@@ -9,12 +9,10 @@ import { useMessages } from "../../i18n/index.ts";
 import { accessProgress, PERMISSIONS, type Granted } from "../../lib/access.ts";
 import { sendFailed } from "../../lib/notify.ts";
 
-/** A permission as its row and the guide name it. */
+/** A permission as its row names it. */
 interface Copy {
   name: string;
   why: string;
-  waiting: string;
-  list: string;
 }
 
 /** From this macOS on, accessibility is Device Control and Data Access, wider than before. */
@@ -33,7 +31,6 @@ export interface Access {
   next: Permission | undefined;
   allGranted: boolean;
   copy: Record<Permission, Copy>;
-  app: { icon: string; name: string } | undefined;
   open: (permission: Permission) => void;
 }
 
@@ -46,11 +43,9 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
   const t = useMessages().onboarding.access;
   const [granted, setGranted] = useState<Granted>({});
   const [opened, setOpened] = useState<Permission>();
-  const [app, setApp] = useState<{ icon: string; name: string }>();
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
-    onboarding.appIcon().then(setApp, () => undefined);
     onboarding.systemVersion().then(setVersion, () => undefined);
   }, [onboarding]);
 
@@ -96,7 +91,7 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
     screen: t.screen,
     accessibility:
       version >= DEVICE_CONTROL_FROM
-        ? { ...t.accessibility, name: t.deviceControl, list: t.deviceControl }
+        ? { ...t.accessibility, name: t.deviceControl }
         : t.accessibility,
   };
 
@@ -104,13 +99,14 @@ export function useAccess(onboarding: CutfacOnboarding): Access {
     granted,
     ...accessProgress(granted, opened),
     copy,
-    app,
     open,
   };
 }
 
 /** Both permissions, each with what it lets the agent do and its button, or that it is on. */
 export function AccessRows({ access }: { access: Access }) {
+  const t = useMessages().onboarding.access;
+
   return (
     <ul className="flex flex-col gap-3">
       {PERMISSIONS.map((permission) => {
@@ -121,7 +117,7 @@ export function AccessRows({ access }: { access: Access }) {
             key={permission}
             icon={ICONS[permission]}
             name={access.copy[permission].name}
-            why={opened ? access.copy[permission].waiting : access.copy[permission].why}
+            why={opened ? t.waiting : access.copy[permission].why}
             waiting={opened}
             done={access.granted[permission] === true}
             primary={permission === access.next && !opened}
